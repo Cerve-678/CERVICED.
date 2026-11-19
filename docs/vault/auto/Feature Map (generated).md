@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **120 files**
 - … +90 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **235 files**
+Curated: [[Availability & Slots]] · **234 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **235 files**
 - `src/types/database.ts` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- … +205 more
+- … +204 more
 
 ## Payments
 Curated: [[Payments]] · **202 files**
@@ -142,11 +142,11 @@ Curated: [[Booking Flow]] · **416 files**
 - … +386 more
 
 ## Notifications
-Curated: [[Notifications]] · **212 files**
+Curated: [[Notifications]] · **213 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(346)_
+- `src/screens/shared/NotificationsScreen.tsx` _(364)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
-- `src/services/database/notifications.ts` _(107)_
+- `src/services/database/notifications.ts` _(117)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(103)_
 - `supabase/notification_recipient_role.sql` _(91)_
 - `supabase/provider_reminder_jobs.sql` _(86)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **212 files**
 - `src/services/databaseService.ts` _(26)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(25)_
 - `supabase/chat_two_way_fix.sql` _(25)_
-- … +182 more
+- … +183 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **107 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **241 files**
 - … +211 more
 
 ## Auth
-Curated: [[Contexts]] · **247 files**
+Curated: [[Contexts]] · **248 files**
 - `src/contexts/AuthContext.tsx` _(205)_
 - `src/services/database/account.ts` _(152)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **247 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
 - `src/screens/client/CartScreen.tsx` _(16)_
-- … +217 more
+- … +218 more
 
 ## Becca / AI
 Curated: [[Services]] · **66 files**

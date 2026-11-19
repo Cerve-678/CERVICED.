@@ -35,6 +35,7 @@ import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
 import { useRevealTogether } from '../../features/home/useRevealTogether';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
@@ -42,7 +43,7 @@ import { resolveClientLocation, savePhoneLocationChoice } from '../../services/c
 import { geocodeUkPlace } from '../../services/ukGeocode';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
-import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
+import { getOwnProviderIds, getProviders, getActivePromotions, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
@@ -382,7 +383,7 @@ export default function HomeScreen() {
   const [viewAllServices, setViewAllServices] = useState(false);
   const [viewAllMaleServices, setViewAllMaleServices] = useState(false);
   const [viewAllKidsServices, setViewAllKidsServices] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount('client');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     sortBy: 'recommended',
@@ -423,25 +424,6 @@ export default function HomeScreen() {
     return Array.from(uniqueProviders.values());
   }, [bookings, liveProviders]);
 
-  // Load unread notification count — reads the same Supabase notifications
-  // table NotificationsScreen shows, so the bell badge always matches what's
-  // actually in the list it opens (previously read from a local-only
-  // AsyncStorage store that screen never wrote to or read from).
-  const loadUnreadCount = useCallback(async () => {
-    try {
-      const unread = await getUnreadNotificationCount('client');
-      setUnreadCount(unread);
-    } catch (error) {
-      logger.error('Failed to load unread count:', error);
-    }
-  }, []);
-
-  // Refresh count when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadUnreadCount();
-    }, [loadUnreadCount])
-  );
 
   const [services, setServices] = useState(['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS']);
 
@@ -1331,7 +1313,7 @@ export default function HomeScreen() {
               <BellIcon size={18} color={P.sub} />
               {unreadCount > 0 && (
                 <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                  <Text style={styles.notificationBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>

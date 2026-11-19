@@ -47,7 +47,6 @@ import {
   hasMyProviderGoLiveAddress,
   getServiceDurationsByIds,
   subscribeToProviderBookingChanges,
-  getUnreadNotificationCount,
   countProviderServices,
   getCurrentAccountDetailsPending,
   getOrCreateConversation,
@@ -59,6 +58,7 @@ import { assignOverlapColumns, resolveTimelineRange } from '../../utils/dayTimel
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
 import { useAutoCalendarSync } from '../../features/providers/calendarBusySync';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { withTimeout } from '../../utils/withTimeout';
 import type {
   DbProviderAvailability,
@@ -1141,7 +1141,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const [loading,   setLoading]     = useState(true);
   // Provider-role unread badge for the header bell. Counts only recipient_role
   // = 'provider' rows, so it never reflects the same user's client-side unread.
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount('provider');
   const [refreshing,setRefreshing]  = useState(false);
 
   // Provider availability
@@ -1464,11 +1464,6 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Availability stop clients booking those times. Does nothing until they
   // connect one.
   useAutoCalendarSync();
-
-  // Keep the header bell's unread badge in sync (provider-role notifications only)
-  useFocusEffect(useCallback(() => {
-    getUnreadNotificationCount('provider').then(setUnreadCount).catch((err) => logger.error('[ProviderHome] unread count load failed:', err));
-  }, []));
 
   // Bookings + availability/blocked-dates, reloaded together on every focus
   // (e.g. after editing in ProviderScheduleScreen) from ONE profile fetch —

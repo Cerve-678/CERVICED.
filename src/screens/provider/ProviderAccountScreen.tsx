@@ -31,7 +31,8 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getCurrentRefreshToken, getProviderDisplayNameByUserId, getUnreadNotificationCount } from '../../services/databaseService';
+import { getCurrentRefreshToken, getProviderDisplayNameByUserId } from '../../services/databaseService';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 import { dobToParts } from '../../utils/dateUtils';
@@ -163,12 +164,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const [providerDisplayName, setProviderDisplayName] = useState<string | null>(null);
   // Unread notifications waiting in the *other* (client) hat, surfaced on the
   // switch control so a dual-role user never misses them while in provider mode.
-  const [clientUnread, setClientUnread] = useState(0);
-
-  useFocusEffect(useCallback(() => {
-    if (!hatState.owned.client) { setClientUnread(0); return; }
-    getUnreadNotificationCount('client').then(setClientUnread).catch(() => {});
-  }, [hatState.owned.client]));
+  const clientUnread = useUnreadNotificationCount('client', hatState.owned.client);
 
   // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
   // screen that never unmounts, so a one-time check could get permanently

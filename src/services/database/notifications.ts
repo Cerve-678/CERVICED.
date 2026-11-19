@@ -14,27 +14,59 @@ import { DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT, getMyProviderProfile, LIVE_SERVI
 // NOTIFICATIONS
 // ─────────────────────────────────────────────────────────
 
-/** Fetch all notifications for the current user */
+/** Where the previous page ended: the last row the caller already has. */
+export interface NotificationPageCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** One page of the current user's notifications for one hat, newest first.
+ *  Pass the last row you already have as `before` for the next page. */
 export async function getMyNotifications(
   role: "provider" | "client",
   limit = 50,
+  before?: NotificationPageCursor,
 ): Promise<DbNotification[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("notifications")
     .select(
       "id, user_id, type, title, message, priority, is_read, is_actionable, booking_id, provider_id, metadata, created_at, recipient_role",
     )
-    .eq("recipient_role", role)
+    .eq("recipient_role", role);
+  if (before) {
+    // Rows written in one transaction share a created_at, so the id breaks
+    // ties — otherwise a page boundary inside such a batch would skip rows.
+    // Quoted because timestamps contain the filter syntax's "." and ":".
+    query = query.or(
+      `created_at.lt."${before.createdAt}",and(created_at.eq."${before.createdAt}",id.lt.${before.id})`,
+    );
+  }
+  const { data, error } = await query
     .order("created_at", { ascending: false })
-    // The notification drawer is an inbox preview, not an archive. A smaller
-    // first page gets the recent, actionable items onto screen faster; older
-    // history remains available through the notification centre's pagination
-    // when that is added.
+    .order("id", { ascending: false })
+    // One page at a time: the screen asks for the next page as you scroll,
+    // so every unread notification the bell counts can be reached.
     .limit(Math.min(Math.max(Math.trunc(limit), 1), 100));
 
   if (error) throw error;
   return data ?? [];
 }
+
+type NotificationListener = {
+  onInsert: (notification: DbNotification) => void;
+  onUpdate: (notification: DbNotification) => void;
+};
+
+// ONE realtime channel per signed-in user, shared by every screen that
+// listens (each bell, the Notifications screen). Separate channels would each
+// carry their own server-side subscriptions — paid for on every change — and
+// supabase.channel() hands back the existing channel for a reused name, so
+// naïvely sharing a name meant whichever screen closed first cut the others
+// off. Listeners are counted; the channel closes when the last one leaves.
+const notificationChannels = new Map<string, {
+  channel: ReturnType<typeof supabase.channel>;
+  listeners: Set<NotificationListener>;
+}>();
 
 /** Realtime notification changes for one authenticated user. */
 export function subscribeToNotificationChanges(
@@ -42,37 +74,52 @@ export function subscribeToNotificationChanges(
   onInsert: (notification: DbNotification) => void,
   onUpdate: (notification: DbNotification) => void,
 ): () => void {
-  const channel = supabase
-    .channel(`notifications-${userId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        clearCachedReads();
-        onInsert(payload.new as DbNotification);
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        clearCachedReads();
-        onUpdate(payload.new as DbNotification);
-      },
-    )
-    .subscribe();
+  const listener: NotificationListener = { onInsert, onUpdate };
+  let entry = notificationChannels.get(userId);
+  if (!entry) {
+    const listeners = new Set<NotificationListener>();
+    const channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          clearCachedReads();
+          const row = payload.new as DbNotification;
+          for (const l of [...listeners]) l.onInsert(row);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          clearCachedReads();
+          const row = payload.new as DbNotification;
+          for (const l of [...listeners]) l.onUpdate(row);
+        },
+      )
+      .subscribe();
+    entry = { channel, listeners };
+    notificationChannels.set(userId, entry);
+  }
+  const shared = entry;
+  shared.listeners.add(listener);
   return () => {
-    void supabase.removeChannel(channel);
+    shared.listeners.delete(listener);
+    if (shared.listeners.size === 0 && notificationChannels.get(userId) === shared) {
+      notificationChannels.delete(userId);
+      void supabase.removeChannel(shared.channel);
+    }
   };
 }
 
@@ -128,29 +175,21 @@ export async function insertProviderNotification(params: {
   }
 }
 
-/** Count unread notifications for the given recipient role */
-const unreadNotificationCountCache = new Map<"provider" | "client", {
-  value: number;
-  fetchedAt: number;
-}>();
-const UNREAD_NOTIFICATION_COUNT_TTL_MS = 15_000;
-
+/** Count unread notifications for the given recipient role.
+ *  No cache of its own: the shared read cache (utils/readCache.ts) already
+ *  answers repeats and forgets on every mark-read/delete RPC and realtime
+ *  event. A separate 15s cache here was never cleared on mark-read, so the
+ *  bell kept showing the old number after you'd read everything. */
 export async function getUnreadNotificationCount(
   role: "provider" | "client",
 ): Promise<number> {
-  const cached = unreadNotificationCountCache.get(role);
-  if (cached && Date.now() - cached.fetchedAt < UNREAD_NOTIFICATION_COUNT_TTL_MS) {
-    return cached.value;
-  }
   const { count, error } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("recipient_role", role);
-  if (error) return 0;
-  const value = count ?? 0;
-  unreadNotificationCountCache.set(role, { value, fetchedAt: Date.now() });
-  return value;
+  if (error) throw error;
+  return count ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────

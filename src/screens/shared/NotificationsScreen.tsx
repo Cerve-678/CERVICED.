@@ -9,6 +9,7 @@ import {
   Modal,
   ScrollView,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Ionicons } from '@expo/vector-icons';
@@ -229,6 +230,9 @@ const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Ligh
 const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
 const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 
+/** One page of notifications; older pages load as you scroll. */
+const NOTIFICATION_PAGE_SIZE = 50;
+
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { textStyles } = useFont();
@@ -252,6 +256,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // reappears unexplained on the next load.
   const [actionError, setActionError] = useState<string | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  // Older pages load as you scroll, so every unread notification the bell
+  // counts can actually be reached and read here.
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Unread rows on the server that aren't in the loaded pages yet. The header
+  // number is loaded unread + this, so it agrees with the bell even before
+  // you've scrolled back to them.
+  const [olderUnread, setOlderUnread] = useState(0);
+  // Bumped on every fresh load (and hat switch) so a page that arrives late
+  // for the old list is dropped instead of appended.
+  const loadGenerationRef = useRef(0);
   // Unread count for the hat the user is NOT currently in, so an empty list can
   // say where the missing notifications actually are. Only meaningful for
   // dual-hat accounts — stays 0 otherwise, and the empty state falls back to
@@ -346,19 +361,63 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   });
 
   const loadNotifications = useCallback(async () => {
+    const generation = ++loadGenerationRef.current;
     try {
       setNotificationsLoading(true);
       setLoadError(null);
       const role = isProvider ? 'provider' : 'client';
-      const dbRows = await getMyNotifications(role);
-      setNotifications(dbRows.map(mapDbNotification));
+      const [rowsResult, countResult] = await Promise.allSettled([
+        getMyNotifications(role, NOTIFICATION_PAGE_SIZE),
+        getUnreadNotificationCount(role),
+      ]);
+      if (generation !== loadGenerationRef.current) return;
+      if (rowsResult.status === 'rejected') throw rowsResult.reason;
+      const rows = rowsResult.value.map(mapDbNotification);
+      setNotifications(rows);
+      setHasMore(rowsResult.value.length === NOTIFICATION_PAGE_SIZE);
+      if (countResult.status === 'fulfilled') {
+        const loadedUnread = rows.filter(n => !n.read).length;
+        setOlderUnread(Math.max(0, countResult.value - loadedUnread));
+      } else {
+        // The list still works; the header just counts what's loaded.
+        logger.error('Failed to load unread notification count:', countResult.reason);
+        setOlderUnread(0);
+      }
     } catch (error) {
+      if (generation !== loadGenerationRef.current) return;
       logger.error('Failed to load notifications:', error);
       setLoadError('Failed to load notifications. Pull down to retry.');
     } finally {
-      setNotificationsLoading(false);
+      if (generation === loadGenerationRef.current) setNotificationsLoading(false);
     }
   }, [isProvider]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || notificationsLoading) return;
+    const last = notificationsRef.current[notificationsRef.current.length - 1];
+    if (!last) return;
+    const generation = loadGenerationRef.current;
+    setLoadingMore(true);
+    try {
+      const role = isProvider ? 'provider' : 'client';
+      const dbRows = await getMyNotifications(role, NOTIFICATION_PAGE_SIZE, {
+        createdAt: last.timestamp,
+        id: last.id,
+      });
+      if (generation !== loadGenerationRef.current) return;
+      const known = new Set(notificationsRef.current.map(n => n.id));
+      const page = dbRows.map(mapDbNotification).filter(n => !known.has(n.id));
+      setNotifications(prev => [...prev, ...page]);
+      setHasMore(dbRows.length === NOTIFICATION_PAGE_SIZE);
+      const pageUnread = page.filter(n => !n.read).length;
+      setOlderUnread(prev => Math.max(0, prev - pageUnread));
+    } catch (error) {
+      // Leave hasMore set so the next scroll to the bottom tries again.
+      logger.error('Failed to load older notifications:', error);
+    } finally {
+      if (generation === loadGenerationRef.current) setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, notificationsLoading, isProvider]);
 
   // Reload and re-subscribe whenever the active role changes so the list
   // switches cleanly between provider and client notifications.
@@ -367,6 +426,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // is loading. The lightweight loading state below gives immediate feedback
     // without a full-screen spinner.
     setNotifications([]);
+    setHasMore(false);
+    setLoadingMore(false);
+    setOlderUnread(0);
     loadNotifications();
     Notifications.setBadgeCountAsync(0).catch(() => {});
 
@@ -376,7 +438,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       user.id,
       (row) => {
         if (row.recipient_role === role) {
-          setNotifications(prev => [mapDbNotification(row), ...prev].slice(0, 100));
+          // No cap: older pages you've scrolled to stay put, and the list is
+          // only as long as you've chosen to scroll.
+          setNotifications(prev =>
+            prev.some(n => n.id === row.id) ? prev : [mapDbNotification(row), ...prev]);
         }
       },
       (row) => {
@@ -472,9 +537,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // Only the rows we actually flipped get rolled back, so anything that
     // arrives over realtime mid-request isn't clobbered by a stale snapshot.
     const flippedIds = notificationsRef.current.filter(n => !n.read).map(n => n.id);
-    if (flippedIds.length === 0) return;
+    const olderBefore = olderUnread;
+    if (flippedIds.length === 0 && olderBefore === 0) return;
 
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    // The server marks every unread row, including pages not loaded yet.
+    setOlderUnread(0);
 
     try {
       await markAllNotificationsRead();
@@ -487,6 +555,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       setNotifications(prev =>
         prev.map(n => flipped.has(n.id) ? { ...n, read: false } : n)
       );
+      setOlderUnread(olderBefore);
       setActionError(
         toUserMessage(
           error,
@@ -495,7 +564,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         ),
       );
     }
-  }, []);
+  }, [olderUnread]);
 
   // ✅ Delete notification (no confirmation for swipe)
   //
@@ -874,7 +943,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Loaded unread plus the ones further back, so this matches the bell.
+  const unreadCount = notifications.filter(n => !n.read).length + olderUnread;
 
   // ✅ Refresh control
   const onRefresh = useCallback(async () => {
@@ -1320,6 +1390,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               </View>
             </View>
           }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? <ActivityIndicator style={styles.loadMoreSpinner} color={P.accent} /> : undefined
+          }
           contentContainerStyle={styles.notificationsContent}
         />
 
@@ -1751,6 +1826,7 @@ const styles = StyleSheet.create({
 
   // Empty State
   emptyState: { marginTop: 100, paddingHorizontal: spacing.lg + 20 },
+  loadMoreSpinner: { paddingVertical: spacing.lg },
   emptyStateBlur: {
     padding: 40,
     borderRadius: 25,

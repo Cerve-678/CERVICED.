@@ -1,7 +1,8 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { FlatList } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
-import { getMyNotifications } from '../services/databaseService';
+import { getMyNotifications, getUnreadNotificationCount, markAllNotificationsRead } from '../services/databaseService';
 import { navigateAfterDismiss, navigateNested } from '../navigation/rootNavigate';
 
 jest.mock('../services/databaseService', () => ({
@@ -162,4 +163,41 @@ test('a shorter fully booked run promises no certificate', async () => {
   fireEvent.press(ui.getByText("You're Fully Booked!"));
   await waitFor(() => expect(ui.getByText('Open My Profile')).toBeTruthy());
   expect(ui.queryByText('View Certificate')).toBeNull();
+});
+
+test('the unread number counts notifications further back than the first page, like the bell', async () => {
+  (getMyNotifications as jest.Mock).mockResolvedValue([
+    row({ id: 'recent', title: 'Recent one' }),
+  ]);
+  (getUnreadNotificationCount as jest.Mock).mockResolvedValueOnce(60);
+  const ui = renderScreen();
+  await waitFor(() => expect(ui.getByText('60')).toBeTruthy());
+
+  // Mark All Read clears the older ones on the server too, so the number goes.
+  fireEvent.press(ui.getByText('Mark All Read'));
+  await waitFor(() => expect(markAllNotificationsRead).toHaveBeenCalled());
+  expect(ui.queryByText('60')).toBeNull();
+  expect(ui.queryByText('Mark All Read')).toBeNull();
+});
+
+test('scrolling to the end loads the next page from where the list stops', async () => {
+  const firstPage = Array.from({ length: 50 }, (_, i) =>
+    row({ id: `n${i}`, title: `Note ${i}`, created_at: new Date(Date.UTC(2026, 10, 19, 12, 0, 50 - i)).toISOString() }),
+  );
+  const last = firstPage[49]!;
+  (getMyNotifications as jest.Mock)
+    .mockResolvedValueOnce(firstPage)
+    .mockResolvedValueOnce([row({ id: 'older', title: 'An older one', created_at: '2026-11-01T09:00:00.000Z' })]);
+  const ui = renderScreen();
+  await waitFor(() => expect(ui.getByText('Note 0')).toBeTruthy());
+
+  await act(async () => { ui.UNSAFE_getByType(FlatList).props['onEndReached'](); });
+
+  expect(getMyNotifications).toHaveBeenLastCalledWith('provider', 50, {
+    createdAt: last.created_at,
+    id: 'n49',
+  });
+  // The list only draws rows near the screen, so check what it was handed.
+  await waitFor(() => expect(ui.UNSAFE_getByType(FlatList).props['data']).toHaveLength(51));
+  expect(ui.UNSAFE_getByType(FlatList).props['data'].at(-1).title).toBe('An older one');
 });
