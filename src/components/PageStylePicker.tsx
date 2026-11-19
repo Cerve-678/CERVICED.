@@ -134,6 +134,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   ledger: { text: 'Services' },
   portfolio: { text: 'Services' },
   atelier: { text: 'Services' },
+  pinboard: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -190,6 +191,14 @@ function MiniProfile({
   // Work first (Posy, Noir): a row of their photos in the style's own layout.
   const photoRow = (() => {
     switch (style.photoLayout) {
+      case 'pins':
+        return (
+          <View style={[mini.photoRow, { alignItems: 'flex-start', gap: 4, paddingVertical: 3 }]}>
+            {[25, 18, 28].map((height, i) => (
+              <View key={i} style={{ flex: 1, height, borderRadius: 7, backgroundColor: photoFill }} />
+            ))}
+          </View>
+        );
       case 'portfolioWall':
         return (
           <View style={[mini.photoRow, { alignItems: 'center', gap: 3, paddingVertical: 3 }]}>
@@ -593,7 +602,18 @@ function MiniProfile({
       ) : null}
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
-        {style.hero === 'atelierLetterhead' ? (
+        {style.hero === 'pinboardHeader' ? (
+          <View style={{ paddingHorizontal: 7, paddingTop: 13 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <View style={mini.smallLogo}>{logo}</View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'Manrope-Bold', fontSize: 13, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>Name</Text>
+                <View style={[mini.heroBar, { width: 35, marginTop: 4 }]} />
+              </View>
+            </View>
+            <View style={[mini.heroBar, { marginTop: 11, opacity: 0.35 }]} />
+          </View>
+        ) : style.hero === 'atelierLetterhead' ? (
           <View style={{ paddingHorizontal: 8, paddingTop: 9 }}>
             <View style={{ height: 1, backgroundColor: withAlpha(isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E', 0.6) }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>

@@ -277,6 +277,25 @@ export function ProfileHeroLayout({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "pinboardHeader": {
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.pinboardWrap}>
+          <View style={layout.pinboardIdentity}>
+            {renderLogo(82)}
+            <View style={layout.pinboardText} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <View style={layout.tickRow}>
+                <Text style={[layout.pinboardName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+                {tick}
+              </View>
+              {phrase ? <Text style={[layout.pinboardPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.pinboardDetails}>{details}</View>
+          <View style={[layout.pinboardRule, { backgroundColor: withAlpha(heroText, 0.28) }]} />
+        </View>
+      );
+    }
     case "atelierLetterhead":
       return (
         <View style={layout.atelierFront}>
@@ -1297,6 +1316,13 @@ const TEXT_FIRST_DROP = 48;
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  pinboardWrap: { paddingHorizontal: 20, marginTop: 42, marginBottom: 12 },
+  pinboardIdentity: { flexDirection: "row", alignItems: "center", gap: 16 },
+  pinboardText: { flex: 1, minWidth: 0 },
+  pinboardName: { fontFamily: "Manrope-Bold", fontSize: 27, lineHeight: 33, flexShrink: 1 },
+  pinboardPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 4 },
+  pinboardDetails: { alignItems: "flex-start", marginTop: 16 },
+  pinboardRule: { height: 1, marginTop: 22 },
   atelierFront: { paddingHorizontal: 28, marginTop: 38, marginBottom: 28 },
   atelierTopRule: { height: StyleSheet.hairlineWidth, alignSelf: "stretch" },
   atelierTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginTop: 13 },

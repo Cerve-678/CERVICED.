@@ -67,6 +67,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
+      'pinboard',
     ]);
   });
 
@@ -84,6 +85,13 @@ describe('page styles', () => {
     expect(atelier.hero).toBe('atelierLetterhead');
     expect(atelier.custom?.headingFont).toBe('Bellefair-Regular');
     expect(atelier.portfolioFirst).toBeFalsy();
+  });
+
+  it('carries Pinboard from the hero through cards, services and photo pins', () => {
+    expect(getPageStyle('pinboard')).toMatchObject({
+      hero: 'pinboardHeader', heading: 'custom', cards: 'soft', policies: 'softTiles',
+      serviceLayout: 'tiles', photoLayout: 'pins', portfolioFirst: true,
+    });
   });
 
   it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
