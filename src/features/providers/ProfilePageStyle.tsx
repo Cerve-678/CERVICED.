@@ -176,6 +176,24 @@ export function PageSectionHeading({
   const a11y = { accessibilityRole: "header" as const, accessibilityLabel: title };
 
   switch (style?.heading) {
+    case "ticketPunch":
+      return (
+        <View {...a11y} accessible style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <View style={{ backgroundColor: accent, width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 6 }}>
+            <Text style={{ color: onAccentInk(accent).text, fontSize: 12, fontWeight: "800" }}>{SECTION_NUMBERS[section]}</Text>
+          </View>
+          <Text style={{ color: ink, fontSize: 16, fontWeight: "800", letterSpacing: 1.3, textTransform: "uppercase", flexShrink: 1 }}>{title}</Text>
+          <View style={{ height: 1, flex: 1, borderTopWidth: 1, borderStyle: "dashed", borderColor: withAlpha(accent, 0.6) }} />
+        </View>
+      );
+    case "prismFacet":
+      return (
+        <View {...a11y} accessible style={{ flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 }}>
+          <Svg width={26} height={28} viewBox="0 0 26 28"><Path d="M1 8 19 0 26 15 8 28Z" fill={accent} /><Path d="M8 28 19 0 26 15Z" fill={withAlpha(ink, 0.24)} /></Svg>
+          <Text style={{ color: ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.8, flexShrink: 1 }}>{title}</Text>
+          <View style={{ height: 3, flex: 1, backgroundColor: withAlpha(accent, 0.45), transform: [{ skewX: "-25deg" }] }} />
+        </View>
+      );
     case "bigLower":
       return (
         <Text {...a11y} style={[headingStyles.bigLower, { color: ink }]}>
@@ -670,6 +688,24 @@ function PageSectionSurface({
     </HeadingLine>
   );
 
+  if (pageStyle.cards === "ticketPass" || pageStyle.cards === "prismPlane") {
+    const ticket = pageStyle.cards === "ticketPass";
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        {bare ? children : (
+          <View style={{ backgroundColor: palette.cardBackground, borderRadius: ticket ? 12 : 4, borderWidth: 1, borderColor: withAlpha(palette.accent, ticket ? 0.45 : 0.3), overflow: "hidden", flexDirection: "row", shadowColor: palette.accent, shadowOpacity: ticket ? 0.08 : 0.18, shadowRadius: ticket ? 8 : 14, shadowOffset: { width: 0, height: 5 } }}>
+            {ticket ? <View style={{ width: 9, backgroundColor: palette.accent, borderRightWidth: 2, borderRightColor: palette.background, borderStyle: "dashed" }} /> : null}
+            <View style={{ flex: 1 }}>
+              {!ticket ? <View pointerEvents="none" style={{ height: 9, flexDirection: "row" }}><View style={{ flex: 2, backgroundColor: palette.accent }} /><View style={{ flex: 1, backgroundColor: withAlpha(palette.accent, 0.36), transform: [{ skewX: "-30deg" }] }} /></View> : null}
+              {children}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "stripes") {
     // Stripes: the section on a full-width strip, bled out of the sheet's
     // 20pt side padding. Every other section is tinted, with fine rules along
@@ -957,6 +993,10 @@ export function serviceCardSurface(
 ): ViewStyle | null {
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
+    case "ticketPass":
+      return { backgroundColor: colours.card, borderWidth: 1, borderLeftWidth: 8, borderColor: withAlpha(colours.accent, 0.5), borderLeftColor: colours.accent, borderRadius: 10, shadowOpacity: 0.08, shadowRadius: 7 };
+    case "prismPlane":
+      return { backgroundColor: blend(colours.accent, colours.card, 0.9), borderWidth: 1, borderTopWidth: 6, borderColor: withAlpha(colours.accent, 0.38), borderTopColor: colours.accent, borderRadius: 4, shadowColor: colours.accent, shadowOpacity: 0.18, shadowRadius: 12 };
     case "none":
     case "open":
       return {
@@ -1230,6 +1270,8 @@ const bandStyles = StyleSheet.create({
 export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
   return (
+    layout === "prismFacets"
+    ||
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
     || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion" || layout === "columns"
@@ -1257,6 +1299,24 @@ export function StyledPolicyList({
   const page = sheetInk(palette.background);
   // Custom's text font, on the policy layouts Custom uses.
   const tf = customTextStyle(palette.pageStyle);
+
+  if (layout === "ticketRules") {
+    return <View style={{ paddingLeft: 5 }}>
+      {rows.map((row, index) => <View key={row.label} style={{ flexDirection: "row", gap: 12, paddingVertical: 11, borderBottomWidth: index === rows.length - 1 ? 0 : 1, borderBottomColor: withAlpha(palette.accent, 0.35), borderStyle: "dashed" }}>
+        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: palette.accent, alignItems: "center", justifyContent: "center" }}><Text style={{ color: onAccentInk(palette.accent).text, fontWeight: "800", fontSize: 11 }}>{String(index + 1).padStart(2, "0")}</Text></View>
+        <View style={{ flex: 1 }}><Text style={{ color: ink.text, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>{row.label}</Text><Text style={{ color: ink.sub, marginTop: 3 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: ink.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 4, fontSize: 11, fontWeight: "700" }}>{row.tag}</Text> : null}</View>
+      </View>)}
+    </View>;
+  }
+
+  if (layout === "prismFacets") {
+    return <View style={{ gap: 9 }}>
+      {rows.map((row, index) => <View key={row.label} style={{ flexDirection: "row", borderRadius: 3, overflow: "hidden", backgroundColor: blend(palette.accent, palette.cardBackground, index % 2 ? 0.92 : 0.82), marginLeft: index % 2 ? 16 : 0, marginRight: index % 2 ? 0 : 16 }}>
+        <View style={{ width: 10, backgroundColor: index % 2 ? withAlpha(palette.accent, 0.55) : palette.accent, transform: [{ skewX: "-18deg" }] }} />
+        <View style={{ flex: 1, padding: 14 }}><Text style={{ color: palette.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.6 }}>{row.label}</Text><Text style={{ color: palette.sub, marginTop: 4 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: palette.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 5, fontWeight: "700", fontSize: 11 }}>{row.tag}</Text> : null}</View>
+      </View>)}
+    </View>;
+  }
 
   if (layout === "numerals") {
     // Heritage's House Rules (I, II…) and Apothecary's "Before your visit" (i., ii.).
