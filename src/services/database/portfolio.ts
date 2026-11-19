@@ -3,7 +3,8 @@
 // ../databaseService, never from this file directly.
 import { supabase } from "../../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../../features/providers/venuePhotos";
-import type { DbPortfolioItem, DiscoverServiceWithProvider, PortfolioItemWithProvider } from "../../types/database";
+import type { DbPortfolioItem, DiscoverServiceWithProvider, HeroPhotoFrame, PortfolioItemWithProvider } from "../../types/database";
+import { parseHeroPhotoFrame } from "../../utils/heroPhotoFrame";
 import { COLLECTION_COLORS, type CollectionColor, type ExploreCollection } from "../../types/collections";
 import { getSessionUser, ownProviderIdExclusion } from "./account";
 import { DEFAULT_PROVIDER_QUERY_LIMIT } from "./providers";
@@ -13,12 +14,20 @@ import { DEFAULT_PROVIDER_QUERY_LIMIT } from "./providers";
 // ─────────────────────────────────────────────────────────
 
 const PORTFOLIO_WORK_LIMIT = 30;
+
+/** A fetched row with its hero frame checked: jsonb arrives as whatever was stored. */
+function toPortfolioItem(row: Record<string, unknown>): DbPortfolioItem {
+  return { ...(row as unknown as DbPortfolioItem), hero_frame: parseHeroPhotoFrame(row["hero_frame"]) };
+}
+function toPortfolioItems(rows: readonly Record<string, unknown>[] | null): DbPortfolioItem[] {
+  return (rows ?? []).map(toPortfolioItem);
+}
 /** Venue shots are an "about the business" detail, not a gallery to browse —
  *  a handful is the whole point of them, so they get their own small budget. */
 const PORTFOLIO_VENUE_LIMIT = 12;
 
 const PORTFOLIO_ITEM_COLUMNS =
-  "id, provider_id, service_id, image_url, caption, category, tags, price, aspect_ratio, is_featured, created_at, vibe_tags, occasion_tags, trend_names, hair_type_shown, skin_tone_shown";
+  "id, provider_id, service_id, image_url, caption, category, tags, price, aspect_ratio, is_featured, hero_frame, created_at, vibe_tags, occasion_tags, trend_names, hair_type_shown, skin_tone_shown";
 
 /**
  * One provider's photos, already separated into the work gallery and the
@@ -58,7 +67,7 @@ export async function getProviderPortfolio(
   if (!options?.includeVenue) {
     const { data, error } = await workQuery;
     if (error) throw error;
-    return { work: (data ?? []) as DbPortfolioItem[], venue: [] };
+    return { work: toPortfolioItems(data), venue: [] };
   }
 
   const [workResult, venueResult] = await Promise.all([
@@ -75,8 +84,8 @@ export async function getProviderPortfolio(
   if (workResult.error) throw workResult.error;
   if (venueResult.error) throw venueResult.error;
   return {
-    work: (workResult.data ?? []) as DbPortfolioItem[],
-    venue: (venueResult.data ?? []) as DbPortfolioItem[],
+    work: toPortfolioItems(workResult.data),
+    venue: toPortfolioItems(venueResult.data),
   };
 }
 
@@ -146,6 +155,31 @@ export async function setHeroPortfolioPhotos(providerId: string, itemIds: readon
     .eq("provider_id", providerId)
     .in("id", [...itemIds]);
   if (error) throw error;
+}
+
+/**
+ * Branding → Your Photos: saves how each hero photo is framed
+ * (portfolio_items.hero_frame; null puts it back to centred and unzoomed).
+ * Only the photos whose frame changed are sent, and at most the
+ * HERO_PHOTO_LIMIT the hero shows, so these few row updates run side by side
+ * rather than as a batch (each row gets its own value). The provider's own
+ * rows only: RLS portfolio_owner_all, and the provider_id filter.
+ */
+export async function setHeroPhotoFrames(
+  providerId: string,
+  frames: Readonly<Record<string, HeroPhotoFrame | null>>,
+): Promise<void> {
+  const results = await Promise.all(
+    Object.entries(frames).map(([itemId, frame]) =>
+      supabase
+        .from("portfolio_items")
+        .update({ hero_frame: frame })
+        .eq("provider_id", providerId)
+        .eq("id", itemId),
+    ),
+  );
+  const failed = results.find(result => result.error);
+  if (failed?.error) throw failed.error;
 }
 
 /** Delete a portfolio item by id */

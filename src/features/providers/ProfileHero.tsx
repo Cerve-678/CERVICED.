@@ -22,6 +22,7 @@ import type { HeroNameFont, PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import type { LogoFraming } from "../../types/database";
+import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroPhoto";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
@@ -212,6 +213,9 @@ export interface ProfileHeroLayoutProps {
   /** The Business Name Font they picked, on a style that lets it replace its
    *  own lettering (pickedNameFont); null keeps the style's own. */
   pickedNameFont?: string | null;
+  /** How the provider framed each hero photo, by URL (Branding → Your Photos).
+   *  Pass a memoized value: it feeds a context. Missing = centred, unzoomed. */
+  photoFrames?: HeroPhotoFrames;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -241,7 +245,13 @@ function splitFirst(name: string): [string, string] {
  * the others move the name, the logo and the words round them as their
  * template did on the 2026-11-13 canvas.
  */
-export function ProfileHeroLayout({
+export function ProfileHeroLayout(props: ProfileHeroLayoutProps) {
+  const { photoFrames } = props;
+  const body = <ProfileHeroLayoutBody {...props} />;
+  return photoFrames ? <HeroPhotoFramesContext.Provider value={photoFrames}>{body}</HeroPhotoFramesContext.Provider> : body;
+}
+
+function ProfileHeroLayoutBody({
   pageStyle,
   name,
   kicker,
@@ -278,15 +288,16 @@ export function ProfileHeroLayout({
 
   switch (pageStyle.hero) {
     case "pinboardHeader": {
-      // Pinboard: up to three of their photos as a short board of rounded pins
-      // (one tall beside two uneven, like a Pinterest board), then the logo
-      // beside the name in the picked font, what they do and their area.
+      // Pinboard: up to three of their photos side by side as rounded pins of
+      // uneven heights, like a Pinterest board, then the logo beside the name
+      // in the picked font, what they do and their area.
       const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
       const pins = (photoUris ?? []).slice(0, 3);
       const pinFill = blend(accent, "#FFFFFF", 0.6);
+      // Uneven heights, tops level: 150, 124, 138 (one photo: 156 across).
+      const pinHeights = [layout.pinboardPinTall, layout.pinboardPinShort, layout.pinboardPinMid];
       const pin = (index: number, size: object) => (
         <TouchableOpacity
-          key={pins[index] ?? index}
           activeOpacity={onOpenHeroPhoto ? 0.88 : 1}
           disabled={!onOpenHeroPhoto}
           onPress={() => onOpenHeroPhoto?.(index)}
@@ -294,26 +305,18 @@ export function ProfileHeroLayout({
           accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
           accessibilityLabel={`Photo ${index + 1} of ${pins.length}`}
         >
-          {pins[index] ? <Image source={{ uri: pins[index] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+          {pins[index] ? <HeroPhoto uri={pins[index]} /> : null}
         </TouchableOpacity>
       );
       return (
         <View style={[layout.pinboardWrap, { marginTop: pins.length ? 12 : TEXT_FIRST_DROP }]}>
           {pins.length ? (
             <View style={layout.pinboardBoard}>
-              <View style={layout.pinboardColumn}>{pin(0, layout.pinboardPinTall)}</View>
-              {pins.length > 1 ? (
-                <View style={layout.pinboardColumn}>
-                  {pins.length > 2 ? (
-                    <>
-                      {pin(1, layout.pinboardPinShort)}
-                      {pin(2, layout.pinboardPinMid)}
-                    </>
-                  ) : (
-                    pin(1, layout.pinboardPinTall)
-                  )}
+              {pins.map((uri, index) => (
+                <View key={uri} style={layout.pinboardColumn}>
+                  {pin(index, pins.length === 1 ? layout.pinboardPinOnly : pinHeights[index] ?? layout.pinboardPinTall)}
                 </View>
-              ) : null}
+              ))}
             </View>
           ) : null}
           <View style={[layout.pinboardIdentity, pins.length ? layout.pinboardIdentityUnderPins : null]}>
@@ -367,7 +370,7 @@ export function ProfileHeroLayout({
             accessibilityLabel={cover ? `${name} cover photo` : undefined}
             style={[layout.portfolioCover, { backgroundColor: blend(heroColour, "#282322", 0.45) }]}
           >
-            {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+            {cover ? <HeroPhoto uri={cover} /> : null}
             <LinearGradient colors={["transparent", "rgba(0,0,0,0.42)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
             <Text style={layout.portfolioCoverLabel}>SELECTED WORK</Text>
           </TouchableOpacity>
@@ -500,7 +503,7 @@ export function ProfileHeroLayout({
             <View style={layout.edCards}>
               <View style={[layout.edBack, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]}>
                 {photoUris?.[0] ? (
-                  <Image source={{ uri: photoUris[0] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                  <HeroPhoto uri={photoUris[0]} />
                 ) : null}
               </View>
               <View style={layout.edFront}>{renderLogo(86)}</View>
@@ -716,7 +719,7 @@ export function ProfileHeroLayout({
             {(["left", "middle", "right"] as const).map((slot, i) => (
               <View key={slot} style={[layout.blockPhoto, { backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.4 : 0.6) }]}>
                 {photoUris?.[i] ? (
-                  <Image source={{ uri: photoUris[i] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                  <HeroPhoto uri={photoUris[i]} />
                 ) : null}
               </View>
             ))}
@@ -1109,7 +1112,7 @@ export function ProfileHeroLayout({
         <View style={layout.archWrap}>
           <View style={[layout.archWindow, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
             {photo ? (
-              <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+              <HeroPhoto uri={photo} />
             ) : (
               <View style={layout.logoNoGap}>{renderLogo(92)}</View>
             )}
@@ -1163,7 +1166,7 @@ export function ProfileHeroLayout({
           <View style={layout.splitRow}>
             <View style={[layout.splitPhoto, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
               {photo ? (
-                <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                <HeroPhoto uri={photo} />
               ) : (
                 <View style={layout.logoNoGap}>{renderLogo(96)}</View>
               )}
@@ -1353,15 +1356,16 @@ const layout = StyleSheet.create({
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },
   // Short on purpose: the board is a taste of their work, not a wall (156pt).
-  pinboardBoard: { flexDirection: "row", gap: 8 },
-  pinboardColumn: { flex: 1, gap: 8 },
+  pinboardBoard: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  pinboardColumn: { flex: 1 },
   pinboardPin: {
     borderRadius: 18, overflow: "hidden",
     shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
   },
-  pinboardPinTall: { height: 156 },
-  pinboardPinShort: { height: 62 },
-  pinboardPinMid: { height: 86 },
+  pinboardPinTall: { height: 150 },
+  pinboardPinShort: { height: 124 },
+  pinboardPinMid: { height: 138 },
+  pinboardPinOnly: { height: 156 },
   pinboardIdentity: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 4 },
   pinboardIdentityUnderPins: { marginTop: 16, gap: 12 },
   pinboardText: { flex: 1, minWidth: 0 },
