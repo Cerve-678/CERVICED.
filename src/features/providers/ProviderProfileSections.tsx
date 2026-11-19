@@ -23,6 +23,7 @@ import { BulldogClip, CALLING_CARD_PAPER } from "./heroes/CallingCardHero";
 import {
   PageSection,
   PageSectionHeading,
+  onAccentInk,
   sectionInk,
   showsDividerAbove,
   type PageStylePalette,
@@ -442,6 +443,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const feature = palette.pageStyle?.photoLayout === "feature";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
+  const ticketStrip = palette.pageStyle?.photoLayout === "ticketStrip";
+  const prismMosaic = palette.pageStyle?.photoLayout === "prismMosaic";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
     <TouchableOpacity
       key={item.id}
@@ -482,7 +485,24 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           </TouchableOpacity>
         ) : null}
       </View>
-      {swipe ? (
+      {ticketStrip ? (
+        <View style={{ gap: 8 }}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ height: 110, flexDirection: "row", borderRadius: 10, overflow: "hidden", backgroundColor: palette.cardBackground, borderWidth: 1, borderColor: palette.accent }}>
+              <View style={{ width: 43, backgroundColor: palette.accent, alignItems: "center", justifyContent: "center", borderRightWidth: 2, borderRightColor: palette.background, borderStyle: "dashed" }}><Text style={{ color: onAccentInk(palette.accent).text, fontSize: 14, fontWeight: "800" }}>{String(index + 1).padStart(2, "0")}</Text></View>
+              <Image source={{ uri: item.image_url }} style={{ flex: 1 }} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : prismMosaic ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: index % 3 === 0 ? "62%" : "35%", height: index % 3 === 0 ? 150 : 110, padding: 5, backgroundColor: index % 2 ? palette.cardBackground : palette.accent, borderTopLeftRadius: index % 2 ? 30 : 2, borderBottomRightRadius: index % 2 ? 2 : 30, overflow: "hidden" }}>
+              <Image source={{ uri: item.image_url }} style={{ flex: 1, borderTopLeftRadius: index % 2 ? 24 : 0, borderBottomRightRadius: index % 2 ? 0 : 24 }} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : swipe ? (
         <>
           {/* A list, not a ScrollView: the whole portfolio is in this row, so
               only the photos near the screen are drawn. */}

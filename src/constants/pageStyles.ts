@@ -84,6 +84,8 @@ export type PageHeading =
   | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
+  | 'ticketPunch' // a numbered punch and perforated rule
+  | 'prismFacet' // an angular colour marker and strong title
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -113,7 +115,9 @@ export type PageCards =
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
-  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
+  | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
+  | 'ticketPass' // a pass with a coloured spine and perforated edge
+  | 'prismPlane'; // layered angular colour planes
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -129,6 +133,8 @@ export type PagePolicies =
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
+  | 'ticketRules' // numbered pass conditions on a dotted track
+  | 'prismFacets' // staggered angular information panes
   | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
   | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
@@ -297,7 +303,9 @@ export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Noir)
-  | 'swipe';     // one row of tall photos that scrolls sideways (Muse)
+  | 'swipe'     // one row of tall photos that scrolls sideways (Muse)
+  | 'ticketStrip' // numbered landscape frames like a strip of passes
+  | 'prismMosaic'; // offset image panes with angular corners
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
@@ -564,18 +572,18 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // Graphic concepts that still use only the provider's own name, categories
   // and colours, so the same layout works for every kind of service.
   {
-    key: 'ticket', name: 'Ticket', description: 'Your profile as a crisp two-part pass with a perforated detail line',
-    heading: 'indexed', cards: 'stationery', policies: 'definition', logo: 'rounded',
+    key: 'ticket', name: 'Ticket', description: 'An appointment pass from cover to services, rules and numbered photo strip',
+    heading: 'ticketPunch', cards: 'ticketPass', policies: 'ticketRules', logo: 'rounded',
     hero: 'ticketHeader', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
-    divider: 'line', buttonShape: 'square',
+    photoLayout: 'ticketStrip', divider: 'line', buttonShape: 'square', portfolioFirst: true,
   },
   {
-    key: 'prism', name: 'Prism', description: 'Angled colour planes frame your name; glossy cards and a feature gallery',
-    heading: 'dotCaps', cards: 'gloss', policies: 'tiles', logo: 'sharp',
+    key: 'prism', name: 'Prism', description: 'A faceted page with layered sections, angular details and a colour framed mosaic',
+    heading: 'prismFacet', cards: 'prismPlane', policies: 'prismFacets', logo: 'sharp',
     hero: 'prismHeader', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    photoLayout: 'feature', divider: 'dots', buttonShape: 'outline',
+    photoLayout: 'prismMosaic', divider: 'dots', buttonShape: 'outline', portfolioFirst: true,
   },
   // 2026-11-19: styles built from Custom's parts, each its own fixed mix
   // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).

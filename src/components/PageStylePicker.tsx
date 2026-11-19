@@ -127,7 +127,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   slate: { text: 'SERVICES' },
   halo: { text: 'SERVICES' },
   ticket: { lead: '03', text: 'Services' },
-  prism: { lead: 'The', text: 'SERVICES' },
+  prism: { text: 'Services' },
   custom: { text: 'Services' },
   posy: { lead: 'the', text: 'Services' },
   riviera: { text: 'Services' },
@@ -219,6 +219,10 @@ function MiniProfile({
             </View>
           </View>
         );
+      case 'ticketStrip':
+        return <View style={{ gap: 2 }}>{[0, 1].map(i => <View key={i} style={{ height: 13, flexDirection: 'row', borderRadius: 3, overflow: 'hidden', borderWidth: 0.5, borderColor: accent }}><View style={{ width: 12, backgroundColor: accent }} /><View style={{ flex: 1, backgroundColor: photoFill }} /></View>)}</View>;
+      case 'prismMosaic':
+        return <View style={{ flexDirection: 'row', gap: 3, height: 30 }}><View style={{ flex: 2, backgroundColor: photoFill, borderTopLeftRadius: 10, borderWidth: 3, borderColor: accent }} /><View style={{ flex: 1, backgroundColor: photoFill, borderBottomRightRadius: 10, borderWidth: 3, borderColor: blend(accent, '#FFFFFF', 0.55) }} /></View>;
       case 'swipe':
         return (
           <View style={[mini.photoRow, mini.swipeRow]}>
@@ -377,6 +381,10 @@ function MiniProfile({
             <Text style={[mini.indexTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
+      case 'ticketPunch':
+        return <View style={mini.indexRow}><View style={{ backgroundColor: accent, paddingHorizontal: 4, borderRadius: 2 }}><Text style={{ color: '#FFFFFF', fontSize: 7, fontWeight: '800' }}>{heading.lead}</Text></View><Text style={[mini.indexTitle, { color: ink, textTransform: 'uppercase' }]}>{heading.text}</Text><View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: accent }} /></View>;
+      case 'prismFacet':
+        return <View style={mini.indexRow}><View style={{ width: 9, height: 10, backgroundColor: accent, transform: [{ skewX: '-20deg' }] }} /><Text style={[mini.appBold, { color: ink }]}>{heading.text}</Text><View style={{ flex: 1, height: 2, backgroundColor: withAlpha(accent, 0.5) }} /></View>;
       case 'labelCaps':
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
@@ -517,6 +525,10 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'stationery':
         return <View key={key} style={[mini.card, mini.paper, mini.stationeryCard, { borderColor: withAlpha(accent, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'ticketPass':
+        return <View key={key} style={[mini.card, { flexDirection: 'row', borderWidth: 1, borderColor: accent, borderRadius: 4, overflow: 'hidden', backgroundColor: cardColour }]}><View style={{ width: 6, backgroundColor: accent, borderRightWidth: 1, borderStyle: 'dashed', borderRightColor: sheet }} /><View style={[mini.bar, { backgroundColor: line, margin: 5, flex: 1 }]} /></View>;
+      case 'prismPlane':
+        return <View key={key} style={[mini.card, { borderTopWidth: 5, borderTopColor: accent, borderRadius: 2, backgroundColor: blend(accent, cardColour, 0.9), shadowColor: accent, shadowOpacity: 0.25, shadowRadius: 4 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'sheer':
         return <View key={key} style={[mini.card, mini.sheerCard, { borderColor: withAlpha(ink, 0.42) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'raised':
