@@ -921,7 +921,12 @@ export default function BrandingScreen({ navigation }: any) {
             <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
               <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
               {fontShows ? (
-                <Text style={[styles.sectionSub, { color: P.sub }]}>How your business name appears on your profile.</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {getPageStyle(pageStyle, customChoices).nameFontPickable
+                    // Noir, Muse, Ledger, Hush, Quiet, Signature: Classic keeps their own lettering.
+                    ? `How your business name appears on your profile. Leave it on Classic to keep ${getPageStyle(pageStyle).name}'s own lettering.`
+                    : 'How your business name appears on your profile.'}
+                </Text>
               ) : (
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
                   {`${getPageStyle(pageStyle).name} writes your name in its own lettering, so this font doesn't show on your page. It shows on ${BRAND_FONT_STYLE_NAMES}.`}

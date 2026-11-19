@@ -20,6 +20,7 @@ import { NovelHero } from "./heroes/NovelHero";
 import { outlineInk } from "./ProfilePageStyle";
 import type { HeroNameFont, PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
+import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import type { LogoFraming } from "../../types/database";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
@@ -208,6 +209,9 @@ export interface ProfileHeroLayoutProps {
   sheetColour?: string;
   /** Opens one of Hush's photos full size. Left out in the preview. */
   onOpenHeroPhoto?: ((index: number) => void) | undefined;
+  /** The Business Name Font they picked, on a style that lets it replace its
+   *  own lettering (pickedNameFont); null keeps the style's own. */
+  pickedNameFont?: string | null;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -259,7 +263,11 @@ export function ProfileHeroLayout({
   onBookNow,
   sheetColour,
   onOpenHeroPhoto,
+  pickedNameFont = null,
 }: ProfileHeroLayoutProps) {
+  // Quiet, Signature and Hush draw the name themselves: in the picked font,
+  // when there is one, at the size that top draws it.
+  const pickedName = (size: number): TextStyle | null => (pickedNameFont ? pickedNameFontStyle(pickedNameFont, size) : null);
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
     <Ionicons name="checkmark-circle" size={18} color={heroIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
@@ -647,7 +655,7 @@ export function ProfileHeroLayout({
           <View style={layout.signedLogo}>{renderLogo(148)}</View>
           <View style={layout.signedNameRow} pointerEvents="none" accessible accessibilityRole="header" accessibilityLabel={name}>
             <Text
-              style={[layout.signedName, { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
+              style={[layout.signedName, pickedName(40), { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.45}
@@ -674,7 +682,7 @@ export function ProfileHeroLayout({
             <View style={layout.quietRow}>
               <View style={layout.quietText} accessible accessibilityRole="header" accessibilityLabel={name}>
                 <View style={layout.tickRow}>
-                  <Text style={layout.quietName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+                  <Text style={[layout.quietName, pickedName(36)]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
                   {tick}
                 </View>
                 {phrase ? <Text style={layout.quietPhrase}>{phrase}</Text> : null}
@@ -836,6 +844,7 @@ export function ProfileHeroLayout({
           photoUris={photoUris ?? []}
           paper={sheetColour ?? cardColour}
           onOpenPhoto={onOpenHeroPhoto}
+          nameStyle={pickedName(44)}
         />
       );
 
@@ -1172,17 +1181,36 @@ function SealRing({
 const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
-  return BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont;
+  return (BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont) || !!pageStyle.nameFontPickable;
+}
+
+/** The Business Name Font to draw the name in on a style that keeps its own
+ *  lettering until one is picked: their font once it's anything but Classic
+ *  (the default), otherwise null for the style's own. */
+export function pickedNameFont(pageStyle: PageStyle, brandFont: string | null | undefined): string | null {
+  return pageStyle.nameFontPickable && brandFont && brandFont !== DEFAULT_PROVIDER_FONT ? brandFont : null;
+}
+
+/** The picked font at a top's own name size, thin scripts drawn larger and
+ *  given the taller line their loops need, as everywhere else. */
+export function pickedNameFontStyle(fontKey: string, size: number): TextStyle {
+  const fontSize = size * resolveProviderFontScale(fontKey);
+  return {
+    fontFamily: resolveProviderFontFamily(fontKey),
+    fontSize,
+    lineHeight: resolveProviderNameLineHeight(fontKey, fontSize),
+  };
 }
 
 /** The name's face, size and line on a top that letters it in the style's own
- *  font (heroNameFont) instead of the Branding name font. */
-export function heroNameFontStyle(font: HeroNameFont, size: number): TextStyle {
+ *  font (heroNameFont) instead of the Branding name font. With a picked font
+ *  (pickedNameFont), that face at the style's size, capitals and spacing. */
+export function heroNameFontStyle(font: HeroNameFont, size: number, pickedFont: string | null = null): TextStyle {
   const fontSize = size * (font.scale ?? 1);
   return {
-    fontFamily: font.fontFamily,
-    fontSize,
-    lineHeight: Math.round(fontSize * (font.lineRatio ?? 1.35)),
+    ...(pickedFont
+      ? pickedNameFontStyle(pickedFont, fontSize)
+      : { fontFamily: font.fontFamily, fontSize, lineHeight: Math.round(fontSize * (font.lineRatio ?? 1.35)) }),
     ...(font.transform ? { textTransform: font.transform } : null),
     ...(font.letterSpacing ? { letterSpacing: font.letterSpacing } : null),
   };

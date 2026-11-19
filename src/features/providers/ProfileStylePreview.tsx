@@ -31,7 +31,7 @@ import { formatDurationMinutes } from "../../utils/dateUtils";
 import { formatAddOnExtraTime } from "../bookings/addOnTime";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { PagePattern, SectionDivider } from "./pageParts";
-import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle, heroNameFontStyle } from "./ProfileHero";
+import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle, heroNameFontStyle, pickedNameFont } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
@@ -349,6 +349,7 @@ export function ProfileStylePreview({
         <View style={styles.heroInfo}>
           {zone("top", "Top", <ProfileHeroLayout
             pageStyle={pageStyle}
+            pickedNameFont={pickedNameFont(pageStyle, brandFont)}
             name={name}
             kicker={kicker}
             location={location}
@@ -381,7 +382,7 @@ export function ProfileStylePreview({
                 style={[
                   styles.name,
                   pageStyle.heroNameFont
-                    ? { color: heroText, ...heroNameFontStyle(pageStyle.heroNameFont, HERO_NAME_SIZE * scale) }
+                    ? { color: heroText, ...heroNameFontStyle(pageStyle.heroNameFont, HERO_NAME_SIZE * scale, pickedNameFont(pageStyle, brandFont)) }
                     : {
                         color: heroText,
                         fontFamily: resolveProviderFontFamily(brandFont),

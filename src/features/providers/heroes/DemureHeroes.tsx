@@ -22,7 +22,7 @@
 // Hush's boxes show the photos picked in Branding (heroPhotos).
 
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, type TextStyle } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
@@ -243,11 +243,14 @@ export function HushHero({
   photoUris,
   paper,
   onOpenPhoto,
+  nameStyle = null,
 }: DemureHeroProps & {
   photoUris: readonly string[];
   /** The print border: the content sheet's colour. */
   paper: string;
   onOpenPhoto?: ((index: number) => void) | undefined;
+  /** The Business Name Font they picked, in place of the light italic. */
+  nameStyle?: TextStyle | null;
 }) {
   const top = [kicker, location.toUpperCase()].filter(Boolean).join(" · ");
   return (
@@ -255,7 +258,7 @@ export function HushHero({
       {top ? <Text style={[hush.top, { color: heroSub }, shadow]} numberOfLines={2}>{top}</Text> : null}
       <View style={hush.logo}>{renderLogo(66)}</View>
       <View style={hush.nameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-        <Text style={[hush.name, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+        <Text style={[hush.name, nameStyle, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
           {name.toLowerCase()}
         </Text>
         {tick}

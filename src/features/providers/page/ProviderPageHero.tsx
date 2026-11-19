@@ -31,6 +31,7 @@ import {
   HeroLogo,
   HeroPills,
   heroNameFontStyle,
+  pickedNameFont,
   ProfileHeroLayout,
 } from "../ProfileHero";
 import { BUSINESS_TYPE_ICON, BUSINESS_TYPE_LABEL } from "../profilePresentation";
@@ -121,6 +122,7 @@ export function ProviderPageHero({
           with Branding's preview). Classic is the profile as it was. */}
       <ProfileHeroLayout
         pageStyle={pageStyle}
+        pickedNameFont={pickedNameFont(pageStyle, provider.brandFont)}
         name={provider.displayName}
         kicker={heroKicker}
         location={provider.location}
@@ -163,8 +165,9 @@ export function ProviderPageHero({
                   style={[
                     styles.providerDisplayName,
                     pageStyle.heroNameFont
-                      // A parts style letters the name in its own face (Noir's Gloock).
-                      ? { color: heroText, ...heroNameFontStyle(pageStyle.heroNameFont, NAME_SIZE * scale) }
+                      // A parts style letters the name in its own face (Noir's
+                      // Gloock), or in the font they picked once they pick one.
+                      ? { color: heroText, ...heroNameFontStyle(pageStyle.heroNameFont, NAME_SIZE * scale, pickedNameFont(pageStyle, provider.brandFont)) }
                       : {
                           color: heroText,
                           fontFamily: resolveProviderFontFamily(provider.brandFont),
