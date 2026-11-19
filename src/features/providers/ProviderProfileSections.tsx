@@ -32,7 +32,7 @@ import { SectionDivider } from "./pageParts";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
-/** Noir's feature grid holds five: one big, four small. */
+/** The feature grid (Ledger) holds five: one big, four small. */
 const FEATURE_PHOTO_LIMIT = 5;
 /** Riviera's prints lean a little each way, as if dropped on a table. */
 const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
@@ -438,7 +438,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const arches = palette.pageStyle?.photoLayout === "arches";
   // Riviera: three across as white-bordered prints, each tilted a little.
   const polaroids = palette.pageStyle?.photoLayout === "polaroids";
-  // Noir: one big photo beside two small ones, then two more under them.
+  // Feature (Ledger): one big photo beside two small ones, then two more under them.
   const feature = palette.pageStyle?.photoLayout === "feature";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
   swipeContent: { gap: 8, paddingRight: 20 },
   swipeTile: { width: 140, height: 188, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.06)" },
   swipeHint: { fontSize: 11, marginTop: 8, textAlign: "center" },
-  // Noir: a big photo two rows tall, then square-ish small ones beside and under it.
+  // Feature (Ledger): a big photo two rows tall, then square-ish small ones beside and under it.
   featureGrid: { gap: 6 },
   featureRow: { flexDirection: "row", gap: 6 },
   featureSide: { flex: 1, gap: 6 },

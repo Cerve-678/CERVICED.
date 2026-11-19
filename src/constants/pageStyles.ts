@@ -302,8 +302,8 @@ export type ServiceLayout =
 export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
-  | 'feature'    // one big photo beside two small, then two more under them (Noir)
-  | 'swipe'     // one row of tall photos that scrolls sideways (Muse)
+  | 'feature'    // one big photo beside two small, then two more under them (Ledger)
+  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
   | 'ticketStrip' // quiet two-column photo gallery
   | 'prismMosaic'; // soft colour-framed photo gallery
 
@@ -612,7 +612,8 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'cover', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
     heroNameFont: { fontFamily: 'Gloock-Regular' },
-    photoLayout: 'feature', divider: 'line', buttonShape: 'square', pinnedBookBar: true, portfolioFirst: true,
+    // No pinned Book bar, and the portfolio scrolls sideways (user, 2026-11-19).
+    photoLayout: 'swipe', divider: 'line', buttonShape: 'square', portfolioFirst: true,
     custom: { headingFont: 'Gloock-Regular', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined', centred: false },
   },
   {

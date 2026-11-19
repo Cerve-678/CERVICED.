@@ -930,7 +930,7 @@ function MiniProfile({
           </>
         )}
       </View>
-      {/* Riviera, Noir, Clinic: the Book bar pinned over the foot of the page. */}
+      {/* Riviera, Clinic: the Book bar pinned over the foot of the page. */}
       {style.pinnedBookBar ? (
         <View style={[mini.pinnedBar, style.buttonShape === 'square' && mini.pinnedBarSquare, { backgroundColor: cardColour }]}>
           <View style={[mini.bar, mini.pinnedBarText, { backgroundColor: pinnedInk }]} />
