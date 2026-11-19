@@ -1,5 +1,6 @@
 // One booking payment, opened from Payments & payouts: what it's worth to the
-// provider, any tip, and a timeline from booked to their bank.
+// provider, any tip or late/no-show fee charged on it, and a timeline from
+// booked to their bank.
 import React, { useMemo } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -10,13 +11,18 @@ import { ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKi
 import {
   bookingPaymentTimeline, payoutNeedsAttention, payoutStatusLabel, shortDay, tipPence, type TimelineStep,
 } from '../features/payments/bookingPaymentTimeline';
-import type { ProviderPayout, ProviderTipEarning } from '../services/providerPaymentService';
+import type { ProviderFeeEarning, ProviderPayout, ProviderTipEarning } from '../services/providerPaymentService';
+import { feeCountsToYou, feeKindLabel } from '../features/bookings/bookingFeeRules';
 
 const money = (pence: number, currency = 'gbp') => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(pence / 100);
 
-export default function BookingPaymentTimeline({ row, tips, scheduleSentence, onClose, onRefund }: {
+const feePence = (fee: ProviderFeeEarning) => fee.payoutPence ?? fee.amountPence;
+
+export default function BookingPaymentTimeline({ row, tips, fees = [], scheduleSentence, onClose, onRefund }: {
   row: ProviderPayout;
   tips: readonly ProviderTipEarning[];
+  /** Late, no-show or late-cancel fees charged on this booking. */
+  fees?: readonly ProviderFeeEarning[];
   scheduleSentence: string;
   onClose: () => void;
   /** Absent when this payment can't be refunded from here. */
@@ -26,6 +32,8 @@ export default function BookingPaymentTimeline({ row, tips, scheduleSentence, on
   const insets = useSafeAreaInsets();
   const steps = useMemo(() => bookingPaymentTimeline(row, tips, { now: new Date(), scheduleSentence }), [row, tips, scheduleSentence]);
   const tipTotal = tips.reduce((sum, tip) => sum + tipPence(tip), 0);
+  const feeTotal = fees.filter(feeCountsToYou).reduce((sum, fee) => sum + feePence(fee), 0);
+  const extras = [tipTotal > 0 && 'tip', feeTotal > 0 && 'fee'].filter(Boolean).join(' and ');
   const day = row.booking?.booking_date ? shortDay(new Date(`${row.booking.booking_date.slice(0, 10)}T12:00:00`)) : null;
   // A page sheet on iOS sits below the status bar already; a full-screen modal
   // on Android doesn't, and SafeAreaView does nothing inside a Modal.
@@ -51,11 +59,16 @@ export default function BookingPaymentTimeline({ row, tips, scheduleSentence, on
             <StatusChip label={payoutStatusLabel(row)} attention={payoutNeedsAttention(row)} />
           </View>
           <View style={st.totalRow}>
-            <Text style={[st.total, { color: C.text }]}>{money(row.payout_amount + tipTotal, row.currency)}</Text>
-            <Text style={[st.sub, { color: C.sub }]}>{tipTotal > 0 ? 'to you, with tip' : 'to you'}</Text>
+            <Text style={[st.total, { color: C.text }]}>{money(row.payout_amount + tipTotal + feeTotal, row.currency)}</Text>
+            <Text style={[st.sub, { color: C.sub }]}>{extras ? `to you, with ${extras}` : 'to you'}</Text>
           </View>
           <Line label="Your share" value={money(row.payout_amount, row.currency)} />
           {tips.map(tip => <Line key={tip.id} label="Tip, all yours" value={money(tipPence(tip))} />)}
+          {fees.map(fee => {
+            const label = feeKindLabel(fee.kind);
+            const name = label.charAt(0).toUpperCase() + label.slice(1);
+            return <Line key={fee.id} label={feeCountsToYou(fee) ? name : `${name}, ${fee.status === 'refunded' ? 'refunded' : 'taken back'}`} value={money(feePence(fee))} />;
+          })}
 
           <View style={[st.section, { borderTopColor: C.border }]}>
             <Text style={[st.eyebrow, { color: C.accentText }]}>WHERE IT IS</Text>
