@@ -76,7 +76,6 @@ import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
-import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderDepositPoliciesByDisplayNames,
   getMyWaitlist,
@@ -106,11 +105,9 @@ import {
   isDarkColor,
   type ProviderThemeTokens,
 } from "../../constants/providerThemes";
-import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { dateToYMD, formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
-import { placeInLineLabel } from "../../features/bookings/waitlist";
 import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
@@ -118,10 +115,10 @@ import { useProviderProfileData } from "../../features/providers/useProviderProf
 import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
 import { ProviderPageHero } from "../../features/providers/page/ProviderPageHero";
 import { ProviderPageSheet } from "../../features/providers/page/ProviderPageSheet";
+import { ProviderPageServices } from "../../features/providers/page/ProviderPageServices";
 import { revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { heroPhotoPickLimit, menuNumber, type PageSectionKey } from "../../constants/pageStyles";
+import { heroPhotoPickLimit, type PageSectionKey } from "../../constants/pageStyles";
 import { heroPhotos } from "../../features/providers/heroPhotos";
-import { GlossShine } from "../../features/providers/ProfilePageStyle";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
@@ -145,91 +142,6 @@ const sidePanelWidth = (screenWidth: number) => screenWidth * 0.85;
 const SHEET_LIP_RADIUS = 36;
 
 type ServiceData = ProviderProfileService;
-
-// Most dots the 60px pill ever shows, however many images the service has.
-const MAX_PILL_DOTS = 3;
-
-// 60px circle pill for multi-image services — tap opens modal, swipe pages through images
-/** Posy's service tiles: the gap between the two and the padding inside each. */
-const SERVICE_TILE_GAP = 10;
-const SERVICE_TILE_PADDING = 8;
-/** The padding inside a usual service card (styles.serviceItem). */
-const SERVICE_CARD_PADDING = 15;
-
-const MultiImagePill: React.FC<{
-  images: any[];
-  onPress: (images: any[], index: number) => void;
-  imageStyle: any;
-  containerStyle: any;
-  /** Drops the gap the pill keeps on its right (a tile's photo sits on its own line). */
-  noGap?: boolean;
-}> = React.memo(({ images, onPress, imageStyle, containerStyle, noGap }) => {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const w = imageStyle.width ?? 60;
-
-  // The pill is only 60px wide, so a dot per image turns into an unreadable
-  // smear the moment a service has more than a handful of photos. Show a
-  // three-dot window that slides with the active image instead — it still
-  // says "there's more this way" without pretending to be a countable index.
-  const dotWindow = useMemo(() => {
-    const total = images.length;
-    if (total <= MAX_PILL_DOTS) {
-      return Array.from({ length: total }, (_, i) => i);
-    }
-    const start = Math.min(
-      Math.max(activeIdx - 1, 0),
-      total - MAX_PILL_DOTS,
-    );
-    return Array.from({ length: MAX_PILL_DOTS }, (_, i) => start + i);
-  }, [images.length, activeIdx]);
-
-  return (
-    <View style={{ alignItems: "center", marginRight: noGap ? 0 : 15, marginBottom: noGap ? 10 : 0 }}>
-      <View style={containerStyle}>
-        <ScrollView
-          horizontal
-          pagingEnabled
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          nestedScrollEnabled
-          onMomentumScrollEnd={(e) => {
-            setActiveIdx(Math.round(e.nativeEvent.contentOffset.x / w));
-          }}
-          style={{ width: w, height: imageStyle.height ?? 60 }}
-        >
-          {images.map((img, i) => (
-            <TouchableOpacity
-              key={i}
-              activeOpacity={0.85}
-              onPress={() => onPress(images, i)}
-            >
-              <Image source={img} style={imageStyle} contentFit="cover" transition={0} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-      {images.length > 1 && (
-        <View style={{ flexDirection: "row", gap: 3, marginTop: 5 }}>
-          {dotWindow.map((i) => (
-            <View
-              key={i}
-              style={{
-                width: activeIdx === i ? 10 : 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor:
-                  activeIdx === i ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.2)",
-              }}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-});
-
-MultiImagePill.displayName = "MultiImagePill";
 
 // Success Message Component
 /** The structured half of the cart confirmation. The service, when it is,
@@ -1187,56 +1099,6 @@ const unclaimedStyles = StyleSheet.create({
 // The provider's theme isn't known yet, so it stays on the pale 'app' preset
 // even in dark mode: the page never follows the viewer's dark mode, and the
 // back button's tint already assumes this background.
-/** A service description clamped to two lines, with See more only when the
- *  clamp actually cuts something off. A character count can't tell: the card
- *  is narrow, and a line break ends a line however few letters are on it. */
-function ServiceDescription({
-  text,
-  expanded,
-  onToggle,
-  textColor,
-  linkColor,
-  fontStyle,
-}: {
-  text: string;
-  expanded: boolean;
-  onToggle: () => void;
-  textColor: string;
-  linkColor: string;
-  /** Branding → Custom's text font; null keeps the app's. */
-  fontStyle?: { fontFamily: string; fontWeight: "400" } | null;
-}) {
-  const [overflows, setOverflows] = useState(false);
-  return (
-    <View>
-      <Text
-        style={[styles.serviceDescription, { color: textColor }, fontStyle]}
-        numberOfLines={expanded ? undefined : 2}
-      >
-        {text}
-      </Text>
-      {/* Invisible, unclamped copy at the same width, only to count the
-          lines the whole description takes. */}
-      <Text
-        style={[styles.serviceDescription, styles.serviceDescriptionMeasure, fontStyle]}
-        onTextLayout={(e) => setOverflows(e.nativeEvent.lines.length > 2)}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        pointerEvents="none"
-      >
-        {text}
-      </Text>
-      {(overflows || expanded) && (
-        <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
-          <Text style={[styles.seeMoreText, { color: linkColor }]}>
-            {expanded ? "See less" : "See more"}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
 function ProviderProfileSkeleton() {
   const { height: screenHeight } = useWindowDimensions();
   const shimmer = useRef(new Animated.Value(0)).current;
@@ -1346,12 +1208,6 @@ function ProviderProfileSkeleton() {
   );
 }
 
-// ⚠️ TEMP TESTING FLAG — forces every service into the "fully booked" state
-// (disabled "Fully Booked" button + Waitlist button/chip) so both can be
-// eyeballed without seeding real booking data. Re-requested by user for
-// visual QA on 2026-08-02 — set back to false (or delete this block and its
-// three call sites below) when they say testing is done. Search
-// DEBUG_FORCE_FULLY_BOOKED to find every use.
 /**
  * The profile's status bar. At the top of the page the hero sits behind the
  * clock; once scrolled, the header background does. The scrolled flag is held
@@ -1377,8 +1233,6 @@ const ProfileStatusBar = React.memo(function ProfileStatusBar({
   const dark = scrolled ? headerIsDark : heroIsDark;
   return <FocusAwareStatusBar barStyle={dark ? "light-content" : "dark-content"} />;
 });
-
-const DEBUG_FORCE_FULLY_BOOKED = false;
 
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
@@ -3602,594 +3456,72 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     </View>
   );
 
+  const toggleServiceExpanded = (serviceId: string | number) =>
+    setExpandedServices((prev) => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  const openBookings = () => navigation.navigate("Bookings" as never);
+  const openWaitlistJoin = (service: ServiceData) => {
+    setWaitlistNotes("");
+    setWaitlistModal({ visible: true, service });
+  };
+
   // Category tabs + service cards — shared by the capped inline list and the
   // fullscreen "Show all" sheet, so the two never drift out of sync. Pass
   // `onShowAll` to get the trailing expand button (inline view); pass null
-  // for the sheet, which already shows everything.
-  // Posy's services sit two across as tiles, the photo on top; Riviera's are
-  // one across with a wide photo on top. MultiImagePill pages by a fixed
-  // width, so the photo's size comes from the list's measured width rather
-  // than a percentage.
-  const serviceTiles = pageStyle.serviceLayout === "tiles";
-  // Noir's Book buttons are barely rounded, the word in spaced capitals.
-  const squareButtons = pageStyle.buttonShape === "square";
-  // Muse: no button, just "Book" underlined in the accent.
-  const textLinkButtons = pageStyle.buttonShape === "textLink";
-  // Retreat: a round outline in the ink, no fill.
-  const outlineButtons = pageStyle.buttonShape === "outline";
-  // Muse's services read as a printed menu: no photos, the name, a dotted
-  // leader and the price on one line, the length under it.
-  const serviceMenu = pageStyle.serviceLayout === "menu";
-  const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
-  const serviceStacked = serviceTiles || servicePhotoCards;
-  const serviceTileImageWidth = serviceTileGridWidth > 0 ? Math.floor((serviceTileGridWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
-  const serviceWideImageWidth = serviceTileGridWidth > 0 ? Math.floor(serviceTileGridWidth) - SERVICE_CARD_PADDING * 2 : 280;
-  const serviceTopImage = serviceTiles
-    ? { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 }
-    : { width: serviceWideImageWidth, height: Math.round(serviceWideImageWidth * 0.5), borderRadius: 16 };
-
+  // for the sheet, which already shows everything. `runAction` is how the
+  // sheet closes itself before Book or Waitlist opens their own modal.
   const renderServiceCategoryBlock = (
     services: ServiceData[],
     onShowAll: (() => void) | null,
-    // Book / Waitlist open their own <Modal> (BookingSheet, the waitlist
-    // modals). React Native doesn't reliably support one Modal opening on
-    // top of another — on Android especially, the new one can render behind
-    // or eat no touches at all. When this block is rendered inside the "All
-    // Services" sheet, runAction closes that sheet and waits for its slide-out
-    // before opening the next modal. Closing and opening in the same frame can
-    // leave BookingSheet behind the dismissing sheet (or make Book look dead),
-    // especially in Expo Go. Image taps deliberately don't use this —
-    // the viewer renders as an internal overlay instead, so tapping a photo
-    // doesn't kick you out of the sheet you were browsing.
-    runAction: (action: () => void) => void = (action) => action(),
+    runAction?: (action: () => void) => void,
   ) => (
-    <>
-      {/* ── Service-type switch ───────────────────────────────────────────
-          Only when the provider genuinely offers more than one macro type —
-          a single-type provider's menu opens straight onto the category
-          tabs, exactly as it did before this existed.
-
-          Deliberately a plain underline row, NOT a filled pill: the category
-          tabs immediately below are already filled pills, and two filled
-          controls stacked read as one confused level instead of two. Same
-          treatment (and same reasoning) as the History / To Do switch on
-          ProviderBookingHistoryScreen. */}
-      {provider.serviceTypes.length > 1 ? (
-        <View style={[styles.serviceTypeSwitch, { borderBottomColor: SV.border }]}>
-          {provider.serviceTypes.map((serviceType) => {
-            const active = serviceType === selectedServiceType;
-            const count = serviceCountsByType[serviceType] ?? 0;
-            return (
-              <TouchableOpacity
-                key={serviceType}
-                style={[
-                  styles.serviceTypeTab,
-                  active && { borderBottomColor: adaptiveAccentColor },
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setSelectedServiceType(serviceType);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.serviceTypeTabText,
-                    {
-                      color: active ? SV.text : SV.sub,
-                      fontWeight: active ? "700" : "600",
-                    },
-                  ]}
-                >
-                  {serviceType}
-                  {count > 0 ? `  ${count}` : ""}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {/* Enhanced Category Tabs */}
-      {categoryNamesForType.length > 0 ? (
-        <FlatList
-          data={categoryNamesForType}
-          renderItem={({ item: category }) => (
-            <CategoryTabItem
-              category={category}
-              isSelected={selectedCategory === category}
-              onPress={() => setSelectedCategory(category)}
-              cardBg={
-                selectedCategory === category ? adaptiveAccentColor : cardBg
-              }
-              blurIntensity={cardBlurIntensity}
-              blurTint={cardBlurTint}
-              borderColor={
-                selectedCategory === category ? "transparent" : SV.border
-              }
-              textColor={selectedCategory === category ? "#FFFFFF" : SV.text}
-              square={squareCards}
-            />
-          )}
-          keyExtractor={(item) => `cat-${item}`}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryTabs}
-          contentContainerStyle={styles.categoryTabsContent}
-          nestedScrollEnabled={true}
-        />
-      ) : (
-        <Text style={[styles.emptyServiceTypeText, { color: SV.sub }]}>
-          Services for {selectedServiceType} are coming soon.
-        </Text>
-      )}
-
-      {/* Selected category's description — what it includes, benefits, etc. */}
-      {provider.categoryDescriptions[selectedCategory] ? (
-        <Text style={[styles.categoryDescriptionText, { color: SV.sub }, bodyFont]}>
-          {provider.categoryDescriptions[selectedCategory]}
-        </Text>
-      ) : null}
-
-      {/* Small text link, not a pill/icon — sits below the category tabs,
-          away from the "Services" title. Shared here (not per call site) so
-          it appears identically in the inline list and the "All Services"
-          sheet without a second control. */}
-      {/* Multi-service select flow is gated off (MULTI_SERVICE_BOOKING_ENABLED)
-          — with the "Select" entry point hidden, select mode can never be
-          entered, so the floating bar and MultiBookingSheet below never show
-          either. Single-service "Book" is unaffected. See FUTURE_LOGIC.md. */}
-      {canBookProvider && MULTI_SERVICE_BOOKING_ENABLED && !provider.isLinkOnly && (
-        <TouchableOpacity
-          onPress={toggleSelectMode}
-          activeOpacity={0.6}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          style={styles.selectModeLinkRow}
-        >
-          <Text style={[styles.selectModeLinkText, { color: adaptiveAccentColor }]}>
-            {selectMode ? "Cancel" : "Select"}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Services List */}
-      <View
-        style={[styles.categoryServicesContainer, serviceTiles && styles.serviceTilesGrid]}
-        onLayout={serviceStacked ? (e) => setServiceTileGridWidth(e.nativeEvent.layout.width) : undefined}
-      >
-        {services.map((service, serviceIndex) => (
-          <BlurView
-            key={service.id}
-            // A page style other than Classic draws its own surface (see
-            // serviceCardSurface), so the frosted blur and its highlight go.
-            intensity={serviceSurfaceStyle ? 0 : cardBlurIntensity}
-            tint={cardBlurTint}
-            style={[
-              styles.serviceItemCard,
-              { backgroundColor: cardBg, borderColor: SV.border },
-              serviceSurfaceStyle,
-              squareCards && styles.squareCard,
-              serviceTiles && styles.serviceTile,
-            ]}
-          >
-            {serviceSurfaceStyle ? null : (
-              <LinearGradient
-                colors={cardHighlightColors}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={[styles.cardHighlight, squareCards && styles.squareCard]}
-              />
-            )}
-            {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
-            <View style={styles.serviceCardBlur}>
-              <View style={[styles.serviceItem, serviceTiles && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard]}>
-                {serviceMenu ? null : (() => {
-                  const isMulti = (service.images?.length ?? 0) > 1;
-                  const hasSingle = (service.images?.length ?? 0) === 1;
-                  const hasLocal = !!service.image;
-
-                  if (isMulti) {
-                    return (
-                      <MultiImagePill
-                        images={service.images!}
-                        onPress={(imgs, idx) => openImageViewer(imgs, idx)}
-                        imageStyle={serviceStacked ? serviceTopImage : styles.serviceImage}
-                        noGap={serviceStacked}
-                        containerStyle={[
-                          styles.serviceImageContainer,
-                          { marginRight: 0 },
-                          serviceStacked && serviceTopImage,
-                        ]}
-                      />
-                    );
-                  }
-
-                  if (!hasSingle && !hasLocal) {
-                    // No photo — placeholder keeps every card's text starting
-                    // at the same x position as cards that do have images.
-                    return (
-                      <View
-                        style={[
-                          styles.serviceImageContainer,
-                          serviceStacked && [serviceTopImage, styles.serviceImageTileGap],
-                          styles.serviceImagePlaceholder,
-                          {
-                            backgroundColor: adaptiveAccentColor + "1C",
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.serviceImagePlaceholderText,
-                            { color: adaptiveAccentColor },
-                          ]}
-                        >
-                          {/* Spa numbers its menu (01, 02…) */}
-                          {pageStyle.numberedServices
-                            ? menuNumber(serviceIndex)
-                            : service.name.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    );
-                  }
-                  const imgSrc = hasSingle ? service.images![0] : service.image;
-                  return (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        if (imgSrc) {
-                          const imgs = service.images?.length
-                            ? service.images
-                            : [imgSrc];
-                          openImageViewer(imgs, 0);
-                        }
-                      }}
-                    >
-                      <View style={[styles.serviceImageContainer, serviceStacked && [serviceTopImage, styles.serviceImageTileGap]]}>
-                        <Image
-                          source={imgSrc}
-                          style={serviceStacked ? serviceTopImage : styles.serviceImage}
-                          contentFit="cover"
-                          transition={0}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })()}
-
-                <View style={[styles.serviceInfo, serviceTiles && styles.serviceInfoTile]}>
-                  {serviceMenu ? (
-                    <View style={styles.menuNameRow}>
-                      <Text style={[styles.serviceName, styles.menuName, { color: SV.text }, bodyFont]}>{service.name}</Text>
-                      <View style={[styles.menuLeader, { borderBottomColor: SV.sub }]} />
-                      <Text style={[styles.servicePrice, styles.menuPrice, { color: SV.text }, bodyFont]}>£{service.price}</Text>
-                    </View>
-                  ) : (
-                  <Text style={[styles.serviceName, { color: SV.text }, bodyFont]}>
-                    {service.name}
-                  </Text>
-                  )}
-                  {service.serviceType === "consultation" &&
-                    provider.onlineConsultationsAvailable && (
-                      <Text
-                        style={[
-                          styles.serviceVirtualBadge,
-                          { color: adaptiveAccentColor },
-                        ]}
-                      >
-                        Available virtually
-                      </Text>
-                    )}
-                  <ServiceDescription
-                    fontStyle={bodyFont}
-                    text={service.description ?? ""}
-                    expanded={expandedServices.has(service.id)}
-                    onToggle={() =>
-                      setExpandedServices((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(service.id)) {
-                          next.delete(service.id);
-                        } else {
-                          next.add(service.id);
-                        }
-                        return next;
-                      })
-                    }
-                    textColor={SV.sub}
-                    linkColor={SV.text}
-                  />
-
-                  {/* Treatment Safety — plain text, no box/border — only shown
-                    when the provider actually filled this in (real
-                    treatments), directly under the description so clients
-                    see it before booking. */}
-                  {(service.patchTestRequired ||
-                    !!service.minAge ||
-                    (service.contraindications?.length ?? 0) > 0) && (
-                    <View style={styles.serviceSafetyInline}>
-                      <Text
-                        style={[styles.serviceSafetyTitle, { color: SV.text }]}
-                      >
-                        Treatment Safety
-                      </Text>
-                      {service.patchTestRequired && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
-                        >
-                          • Patch test required before this treatment
-                        </Text>
-                      )}
-                      {!service.isPregnancySafe && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
-                        >
-                          • Not recommended during pregnancy
-                        </Text>
-                      )}
-                      {!!service.minAge && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
-                        >
-                          • Minimum age {service.minAge}
-                        </Text>
-                      )}
-                      {(service.contraindications?.length ?? 0) > 0 && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
-                        >
-                          • Not suitable if:{" "}
-                          {service.contraindications!.join(", ")}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                  <View style={styles.serviceDetails}>
-                    <Text style={[styles.serviceDuration, { color: SV.sub }, bodyFont]}>
-                      {service.duration}
-                    </Text>
-                    {serviceMenu ? null : (
-                    <Text style={[styles.servicePrice, { color: SV.text }, bodyFont]}>
-                      £{service.price}
-                    </Text>
-                    )}
-                  </View>
-                </View>
-
-                {/* Booking controls are absent, rather than merely disabled,
-                    on the provider's own profile and while ownership loads. */}
-                {canBookProvider && (
-                <View style={[styles.serviceActionColumn, serviceTiles && styles.serviceActionTile]}>
-                  {(() => {
-                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
-
-                    if (selectMode) {
-                      const isSelected = selectedServiceIds.has(service.dbId);
-                      const hasAddOns = (service.addOns?.length ?? 0) > 0;
-                      const pickedAddOns = addOnsBySelectedService[service.dbId] ?? [];
-                      return (
-                        <>
-                          <TouchableOpacity
-                            disabled={fullyBooked}
-                            // Checking a service that HAS add-ons opens the
-                            // add-on popup — another Modal — so runAction has
-                            // to close the "All Services"
-                            // sheet when this row is rendered inside it, same
-                            // as Book/Waitlist below. Unchecking, and checking
-                            // a service with no add-ons, opens nothing, so the
-                            // sheet stays open for those.
-                            onPress={() => {
-                              const isSelecting = !selectedServiceIds.has(service.dbId);
-                              if (isSelecting && hasAddOns) {
-                                runAction(() => toggleServiceSelected(service));
-                              } else {
-                                toggleServiceSelected(service);
-                              }
-                            }}
-                            style={[
-                              styles.selectCheckbox,
-                              { borderColor: fullyBooked ? SV.border : adaptiveAccentColor },
-                              isSelected && {
-                                backgroundColor: adaptiveAccentColor,
-                                borderColor: adaptiveAccentColor,
-                              },
-                              fullyBooked && { opacity: 0.4 },
-                            ]}
-                            activeOpacity={0.8}
-                          >
-                            {isSelected && (
-                              <Ionicons name="checkmark" size={16} color="#fff" />
-                            )}
-                          </TouchableOpacity>
-                          {isSelected && hasAddOns && (
-                            <TouchableOpacity
-                              onPress={() => {
-                                runAction(() => {
-                                  Haptics.selectionAsync().catch(() => {});
-                                  setAddOnPickerService(service);
-                                });
-                              }}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <Text style={[styles.editAddOnsLink, { color: adaptiveAccentColor }]}>
-                                {pickedAddOns.length > 0 ? 'Edit' : 'Add extras'}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </>
-                      );
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        disabled={fullyBooked}
-                        style={[
-                          styles.bookButton,
-                          squareButtons && styles.squareButton,
-                          {
-                            backgroundColor:
-                              fullyBooked
-                                ? withAlpha(SV.sub, 0.18)
-                                : adaptiveAccentColor,
-                          },
-                          textLinkButtons && styles.textLinkButton,
-                          outlineButtons && [styles.outlineButton, { borderColor: fullyBooked ? SV.border : SV.text }],
-                        ]}
-                        onPress={() => {
-                          runAction(() => handleBook(service));
-                        }}
-                        activeOpacity={0.8}
-                        accessibilityState={{ disabled: fullyBooked }}
-                      >
-                        <Text
-                          style={[
-                            styles.bookButtonText,
-                            squareButtons && styles.squareButtonText,
-                            fullyBooked
-                              ? { color: SV.sub, fontSize: 10 }
-                              : { color: "#fff" },
-                            // After the colour above: a text link is the accent, or grey when full.
-                            textLinkButtons && [styles.textLinkButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
-                            outlineButtons && !fullyBooked && { color: SV.text },
-                          ]}
-                        >
-                          {!takingBookings
-                              ? "Not taking bookings"
-                              : fullyBooked
-                              ? "Fully Booked"
-                              // Boutique says "Add to basket"; it still opens the booking sheet.
-                              : pageStyle.bookLabel ?? "Book"}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-
-                  {(() => {
-                    const wEntry = userWaitlistMap[service.dbId];
-                    // Held: the slot is theirs for WAITLIST_HOLD_MINUTES; it's paid for
-                    // from Bookings, so the chip goes there. No ✕ while held:
-                    // they pass on it from Bookings instead.
-                    if (wEntry?.status === "notified") {
-                      return (
-                        <TouchableOpacity
-                          style={[styles.waitlistChip, { borderColor: adaptiveAccentColor, backgroundColor: adaptiveAccentColor }]}
-                          onPress={() => {
-                            runAction(() => navigation.navigate("Bookings" as never));
-                          }}
-                          activeOpacity={0.8}
-                          accessibilityRole="button"
-                          accessibilityLabel="A slot is held for you. Open Bookings to confirm and pay."
-                        >
-                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
-                          <Ionicons name="chevron-forward" size={11} color="#fff" />
-                        </TouchableOpacity>
-                      );
-                    }
-                    if (wEntry) {
-                      return (
-                        <View
-                          style={[
-                            styles.waitlistChip,
-                            { borderColor: adaptiveAccentColor + "70", backgroundColor: adaptiveAccentColor + "0D" },
-                          ]}
-                        >
-                          <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
-                            {placeInLineLabel(wEntry.placeInLine)}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => {
-                              runAction(() => setLeaveConfirmEntry(wEntry));
-                            }}
-                            activeOpacity={0.6}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Leave the ${service.name} waitlist`}
-                          >
-                            <Text style={[styles.waitlistChipX, { color: adaptiveAccentColor }]}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    }
-                    // undefined means "still checking" and true means
-                    // "still has openings" — both stay quiet here. A closed
-                    // schedule reads as "has openings" (the free-slot check
-                    // skips closed providers), but its waitlist still takes
-                    // people: a slot freed while full goes to them.
-                    if (!DEBUG_FORCE_FULLY_BOOKED && takingBookings && serviceNearTermAvailability[service.dbId] !== false)
-                      return null;
-                    // Provider turned waitlists off in Automations — still
-                    // surface the scarcity so the client isn't only told
-                    // "nothing this fortnight" after tapping Book and paging
-                    // through empty weeks in the calendar. Skipped when
-                    // the Book button above already reads "Fully Booked" —
-                    // this note would just repeat the same claim.
-                    if (!DEBUG_FORCE_FULLY_BOOKED && !provider.waitlistEnabled) {
-                      if (!takingBookings || serviceFullyBooked[service.dbId] === true) return null;
-                      return (
-                        <Text
-                          style={[
-                            styles.fullyBookedNote,
-                            { color: SV.sub },
-                          ]}
-                        >
-                          No openings next 2 wks
-                        </Text>
-                      );
-                    }
-                    return (
-                      <TouchableOpacity
-                        style={[
-                          styles.waitlistJoinBtn,
-                          squareButtons && styles.squareButton,
-                          {
-                            borderColor: adaptiveAccentColor + "70",
-                            backgroundColor: adaptiveAccentColor + "0D",
-                          },
-                        ]}
-                        onPress={() => {
-                          runAction(() => {
-                            setWaitlistNotes("");
-                            setWaitlistModal({
-                              visible: true,
-                              service,
-                            });
-                          });
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.waitlistJoinText,
-                            { color: adaptiveAccentColor },
-                          ]}
-                        >
-                          Waitlist
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-                </View>
-                )}
-              </View>
-            </View>
-          </BlurView>
-        ))}
-        {onShowAll && selectedCategoryServices.length > SERVICES_COLLAPSED_LIMIT && (
-          <TouchableOpacity
-            style={styles.showAllServicesBtn}
-            activeOpacity={0.7}
-            onPress={onShowAll}
-          >
-            <Text
-              style={[styles.showAllServicesText, { color: adaptiveAccentColor }]}
-            >
-              {`Show all ${selectedCategoryServices.length} services`}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={adaptiveAccentColor} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </>
+    <ProviderPageServices
+      provider={provider}
+      palette={palette}
+      services={services}
+      showAll={
+        onShowAll && selectedCategoryServices.length > SERVICES_COLLAPSED_LIMIT
+          ? { count: selectedCategoryServices.length, onPress: onShowAll }
+          : null
+      }
+      runAction={runAction}
+      selectedServiceType={selectedServiceType}
+      serviceCountsByType={serviceCountsByType}
+      onSelectServiceType={setSelectedServiceType}
+      categoryNames={categoryNamesForType}
+      selectedCategory={selectedCategory}
+      onSelectCategory={setSelectedCategory}
+      listWidth={serviceTileGridWidth}
+      onListWidth={setServiceTileGridWidth}
+      expandedServiceIds={expandedServices}
+      onToggleExpanded={toggleServiceExpanded}
+      onOpenImages={openImageViewer}
+      canBook={canBookProvider}
+      takingBookings={takingBookings}
+      serviceFullyBooked={serviceFullyBooked}
+      serviceNearTermAvailability={serviceNearTermAvailability}
+      onBook={handleBook}
+      selectMode={selectMode}
+      onToggleSelectMode={toggleSelectMode}
+      selectedServiceIds={selectedServiceIds}
+      addOnsBySelectedService={addOnsBySelectedService}
+      onToggleServiceSelected={toggleServiceSelected}
+      onEditAddOns={setAddOnPickerService}
+      waitlistPlaces={userWaitlistMap}
+      onOpenHeldPlace={openBookings}
+      onLeaveWaitlist={setLeaveConfirmEntry}
+      onJoinWaitlist={openWaitlistJoin}
+    />
   );
+  // Noir's pinned Book bar uses the square buttons too.
+  const squareButtons = pageStyle.buttonShape === "square";
 
   // The price list as it sits on the page; "See all" opens the full sheet.
   // The pinned bar's "From £…": the lowest price on the menu, as the menu shows it.
@@ -5463,15 +4795,6 @@ const styles = StyleSheet.create({
   pinnedBookText: { flex: 1, minWidth: 0 },
   pinnedBookBarSquare: { borderRadius: 6 },
   squareButton: { borderRadius: 2 },
-  // Muse: the Book button is just the word, underlined.
-  textLinkButton: { backgroundColor: "transparent", paddingHorizontal: 4, shadowOpacity: 0, elevation: 0 },
-  textLinkButtonText: { textDecorationLine: "underline", fontSize: 13 },
-  outlineButton: { backgroundColor: "transparent", borderWidth: 1.5, shadowOpacity: 0, elevation: 0 },
-  // Muse's printed menu line.
-  menuNameRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
-  menuName: { flexShrink: 1, marginBottom: 0, fontSize: 15 },
-  menuLeader: { flex: 1, minWidth: 16, borderBottomWidth: 1, borderStyle: "dotted", marginBottom: 4 },
-  menuPrice: { fontSize: 14 },
   squareButtonText: { textTransform: "uppercase", letterSpacing: 1.4 },
   pinnedBookName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
   pinnedBookPrice: { fontSize: 12, marginTop: 2 },
@@ -5694,15 +5017,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
-  cardHighlight: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-  },
   moreButton: {
     alignSelf: "flex-start",
   },
@@ -5716,83 +5030,15 @@ const styles = StyleSheet.create({
   servicesSection: {
     marginBottom: 20,
   },
-  // Plain small text link, right-aligned under the category tabs — not a
-  // pill or icon, and deliberately away from the "Services" title.
-  selectModeLinkRow: {
-    alignItems: "flex-end",
-    paddingHorizontal: 20,
-    marginTop: -8,
-    marginBottom: 10,
-  },
-  selectModeLinkText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  // Service-type switch — plain underline indicator, mirroring the
-  // History / To Do row on ProviderBookingHistoryScreen: enough to show
-  // selection without a second filled control competing with the category
-  // pills directly beneath it.
-  serviceTypeSwitch: {
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  serviceTypeTab: {
-    paddingTop: 4,
-    // More space below the label than above, so the 2px indicator doesn't sit
-    // tight against the text — same spacing as the booking-history switch.
-    paddingBottom: 12,
-    marginRight: 24,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  serviceTypeTabText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 15,
-    letterSpacing: -0.1,
-  },
   categoryTabs: {
     marginBottom: 20,
     maxHeight: 60, // Increased to accommodate animation
     paddingHorizontal: 20,
   },
-  categoryTabsContent: {
-    paddingRight: 20,
-    gap: 12,
-    paddingVertical: 8, // Add vertical padding to prevent cutoff
-  },
-  categoryDescriptionText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: 20,
-    marginTop: -12, // categoryTabs already carries a 20px marginBottom
-    marginBottom: 14,
-  },
 
   categoryServicesContainer: {
     gap: 15,
     paddingHorizontal: 20,
-  },
-  emptyServiceTypeText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  showAllServicesBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 14,
-  },
-  showAllServicesText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    letterSpacing: 0.5,
   },
   serviceItemCard: {
     borderRadius: 26,
@@ -5818,9 +5064,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
-  serviceCardBlur: {
-    flex: 1,
-  },
   serviceItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -5834,19 +5077,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginRight: 15,
   },
-  serviceImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  serviceImagePlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  serviceImagePlaceholderText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 22,
-  },
   serviceImageOverlay: {
     position: "absolute",
     top: 0,
@@ -5858,54 +5088,6 @@ const styles = StyleSheet.create({
   serviceInfo: {
     flex: 1,
     marginRight: 15,
-  },
-  serviceName: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  serviceVirtualBadge: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 10,
-    marginBottom: 5,
-  },
-  serviceDescription: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  serviceDescriptionMeasure: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    opacity: 0,
-  },
-  seeMoreText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
-    fontWeight: "800",
-    textDecorationLine: "underline",
-    marginBottom: 6,
-  },
-  serviceSafetyInline: {
-    marginBottom: 6,
-    gap: 2,
-  },
-  serviceSafetyTitle: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 1,
-  },
-  serviceSafetyLine: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
-    lineHeight: 15,
   },
   imageModalOverlay: {
     flex: 1,
@@ -5929,27 +5111,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "80%",
   },
-  serviceDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    // At a larger text size the length and price can be wider than the card's
-    // middle column; the price drops under the length instead of being cut off.
-    flexWrap: "wrap",
-    columnGap: 8,
-  },
-  serviceDuration: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 11,
-    flexShrink: 1,
-  },
-  servicePrice: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    fontWeight: "bold",
-    // Color will be set dynamically using adaptiveAccentColor
-  },
 
   // Enhanced Action Buttons with Reflective Effects
   actionButtons: {
@@ -5972,36 +5133,6 @@ const styles = StyleSheet.create({
     height: "50%",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-  },
-  bookButton: {
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#B87E92",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  bookButtonText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    fontWeight: "bold",
-    letterSpacing: 0.4,
-  },
-  selectCheckbox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  editAddOnsLink: {
-    fontSize: 11,
-    fontWeight: "700",
   },
   quickBookButton: {
     borderRadius: 18,
@@ -6562,55 +5693,6 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
 
-  // Waitlist — service card
-  serviceActionColumn: { alignItems: "center", gap: 6 },
-  // Posy: two tiles across, each a column of photo, details and Book.
-  serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP },
-  serviceTile: { width: "48.5%" },
-  serviceItemTile: { flexDirection: "column", alignItems: "stretch", padding: SERVICE_TILE_PADDING },
-  serviceImageTileGap: { marginRight: 0, marginBottom: 10 },
-  serviceInfoTile: { marginRight: 0 },
-  // Riviera: the wide photo takes the first line; the details and Book wrap under it.
-  serviceItemPhotoCard: { flexWrap: "wrap" },
-  serviceActionTile: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", marginTop: 10 },
-  waitlistJoinBtn: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  waitlistJoinText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  fullyBookedNote: {
-    fontSize: 10,
-    fontWeight: "600",
-    textAlign: "right",
-    maxWidth: 90,
-  },
-  waitlistChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  waitlistChipText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  waitlistChipX: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    opacity: 0.7,
-  },
   waitlistRow: {
     flexDirection: "row",
     alignItems: "center",

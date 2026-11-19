@@ -1,7 +1,9 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const screen = readFileSync(join(__dirname, '..', 'screens', 'client', 'ProviderProfileScreen.tsx'), 'utf8');
+// The service card lives in the shared price list (ProviderPageServices),
+// used by the profile screen and the website.
+const screen = readFileSync(join(__dirname, '..', 'features', 'providers', 'page', 'ProviderPageServices.tsx'), 'utf8');
 
 describe("the client's service card", () => {
   it('keeps findability picks for Search, off the card', () => {
