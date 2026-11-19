@@ -11,10 +11,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
-import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
@@ -109,7 +108,6 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
-  sealed: { text: 'THE SERVICES' },
   sheer: { text: 'THE SERVICES' },
   embossed: { text: 'THE SERVICES' },
   callingCard: { text: 'THE SERVICES' },
@@ -126,8 +124,6 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   grid: { lead: '03', text: 'Services' },
   slate: { text: 'SERVICES' },
   halo: { text: 'SERVICES' },
-  ticket: { text: 'Services' },
-  prism: { text: 'Services' },
   custom: { text: 'Services' },
   posy: { lead: 'the', text: 'Services' },
   riviera: { text: 'Services' },
@@ -135,7 +131,6 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   muse: { lead: 'the', text: 'Services' },
   retreat: { text: 'Services' },
   bonbon: { text: 'Services' },
-  clinic: { text: 'Services' },
   ledger: { text: 'Services' },
 };
 
@@ -219,10 +214,6 @@ function MiniProfile({
             </View>
           </View>
         );
-      case 'ticketStrip':
-        return <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1].map(i => <View key={i} style={{ flex: 1, height: 27, borderRadius: 3, padding: 2, backgroundColor: cardColour }}><View style={{ flex: 1, borderRadius: 2, backgroundColor: photoFill }} /></View>)}</View>;
-      case 'prismMosaic':
-        return <View style={{ flexDirection: 'row', gap: 3, height: 30 }}>{[0, 1].map(i => <View key={i} style={{ flex: 1, padding: 2, borderRadius: 6, backgroundColor: i ? cardColour : accent }}><View style={{ flex: 1, borderRadius: 4, backgroundColor: photoFill }} /></View>)}</View>;
       case 'swipe':
         return (
           <View style={[mini.photoRow, mini.swipeRow]}>
@@ -381,21 +372,10 @@ function MiniProfile({
             <Text style={[mini.indexTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
-      case 'ticketPunch':
-        return <View style={mini.indexRow}><View style={{ width: 3, height: 10, borderRadius: 2, backgroundColor: accent }} /><Text style={[mini.indexTitle, { color: ink, textTransform: 'uppercase' }]}>{heading.text}</Text></View>;
-      case 'prismFacet':
-        return <View style={mini.indexRow}><Text style={[mini.appBold, { color: ink }]}>{heading.text}</Text><View style={{ width: 12, height: 2, borderRadius: 1, backgroundColor: accent }} /></View>;
       case 'labelCaps':
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
-      case 'sealCaps':
-        return (
-          <View style={mini.sealRow}>
-            <WaxSeal size={11} wax={waxColour(accent)} />
-            <Text style={[mini.sealCaps, { color: ink }]}>{heading.text}</Text>
-          </View>
-        );
       case 'sheerCaps':
         return <Text style={[mini.sheerCaps, { color: ink }]}>{heading.text}</Text>;
       case 'embossCaps':
@@ -523,12 +503,6 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
-      case 'stationery':
-        return <View key={key} style={[mini.card, mini.paper, mini.stationeryCard, { borderColor: withAlpha(accent, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
-      case 'ticketPass':
-        return <View key={key} style={[mini.card, { flexDirection: 'row', borderWidth: 1, borderColor: accent, borderRadius: 4, overflow: 'hidden', backgroundColor: cardColour }]}><View style={{ width: 4, backgroundColor: accent }} /><View style={[mini.bar, { backgroundColor: line, margin: 5, flex: 1 }]} /></View>;
-      case 'prismPlane':
-        return <View key={key} style={[mini.card, { borderTopWidth: 5, borderTopColor: accent, borderRadius: 2, backgroundColor: blend(accent, cardColour, 0.9), shadowColor: accent, shadowOpacity: 0.25, shadowRadius: 4 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'sheer':
         return <View key={key} style={[mini.card, mini.sheerCard, { borderColor: withAlpha(ink, 0.42) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'raised':
@@ -695,26 +669,6 @@ function MiniProfile({
             <View style={[mini.haloHeroRing, { borderColor: withAlpha(accent, 0.8) }]}>{logo}</View>
             <Text style={[mini.haloHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
           </View>
-        ) : style.hero === 'ticketHeader' ? (
-          <View style={[mini.ticketHero, { backgroundColor: cardColour }]}>
-            <View style={[mini.ticketAccent, { backgroundColor: accent }]} />
-            <View style={mini.ticketTop}>
-              <View style={mini.smallLogo}>{logo}</View>
-              <Text style={[mini.ticketName, { color: isDarkColor(cardColour) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
-            </View>
-            <View style={[mini.ticketFoot, { borderTopColor: withAlpha(accent, 0.5) }]}>
-              <View style={[mini.heroBar, mini.heroBarShort, { backgroundColor: withAlpha(accent, 0.55) }]} />
-            </View>
-          </View>
-        ) : style.hero === 'prismHeader' ? (
-          <View style={mini.prismHero}>
-            <Svg width="100%" height="100%" viewBox="0 0 100 70" style={StyleSheet.absoluteFill} pointerEvents="none">
-              <Polygon points="0,0 60,0 30,70 0,70" fill={accent} opacity={0.55} />
-              <Polygon points="75,0 100,0 100,70 48,70" fill="#FFFFFF" opacity={0.2} />
-            </Svg>
-            <View style={mini.prismLogo}>{logo}</View>
-            <Text style={[mini.prismName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
-          </View>
         ) : style.hero === 'spa' ? (
           // Spa: a quiet line, the name spaced out, the ringed logo.
           <>
@@ -778,19 +732,6 @@ function MiniProfile({
         ) : style.hero === 'quietBand' ? (
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
-          </View>
-        ) : style.hero === 'envelope' ? (
-          // Sealed: an envelope closed with a wax seal, a card peeking from its corner.
-          <View style={mini.envelopeStage}>
-            <View style={mini.envelopeCard} />
-            <Svg width={56} height={36} viewBox="0 0 56 36" style={mini.envelope}>
-              <Polygon points="0,0 56,0 56,36 0,36" fill="#EADCC8" />
-              <Polygon points="0,36 28,16 56,36" fill="#E2D2BC" />
-              <Polygon points="0,0 56,0 28,22" fill="#F3E9DA" />
-            </Svg>
-            <View style={mini.envelopeSeal}>
-              <WaxSeal size={16} wax={waxColour(accent)} />
-            </View>
           </View>
         ) : style.hero === 'veil' ? (
           // Sheer: an oval round the logo and spaced caps, on the page's veil.
@@ -930,7 +871,7 @@ function MiniProfile({
           </>
         )}
       </View>
-      {/* Riviera, Clinic: the Book bar pinned over the foot of the page. */}
+      {/* Riviera: the Book bar pinned over the foot of the page. */}
       {style.pinnedBookBar ? (
         <View style={[mini.pinnedBar, style.buttonShape === 'square' && mini.pinnedBarSquare, { backgroundColor: cardColour }]}>
           <View style={[mini.bar, mini.pinnedBarText, { backgroundColor: pinnedInk }]} />
@@ -1010,13 +951,6 @@ const mini = StyleSheet.create({
     textShadowColor: 'rgba(50,36,28,0.55)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5,
   },
   root: { height: 180 },
-  sealRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sealCaps: { fontFamily: 'EBGaramond-SemiBold', fontSize: 8, lineHeight: 12, letterSpacing: 1.6 },
-  stationeryCard: { borderRadius: 2, borderWidth: 1 },
-  envelopeStage: { width: 70, height: 50 },
-  envelope: { position: 'absolute', left: 4, top: 4 },
-  envelopeCard: { position: 'absolute', left: 44, top: 24, width: 22, height: 24, backgroundColor: '#FBF6EE', borderRadius: 2, transform: [{ rotate: '-9deg' }] },
-  envelopeSeal: { position: 'absolute', left: 24, top: 18 },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   // Over a background photo the sheet is inset, as on the profile.
@@ -1081,14 +1015,6 @@ const mini = StyleSheet.create({
   haloHero: { alignItems: 'center', gap: 3 },
   haloHeroRing: { width: 39, height: 39, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   haloHeroName: { fontFamily: 'Manrope-Bold', fontSize: 10, lineHeight: 14 },
-  ticketHero: { alignSelf: 'stretch', marginHorizontal: 9, borderRadius: 8, overflow: 'hidden' },
-  ticketAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
-  ticketTop: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingTop: 4, paddingBottom: 2 },
-  ticketName: { fontFamily: 'Manrope-Bold', fontSize: 9, lineHeight: 13, flexShrink: 1 },
-  ticketFoot: { borderTopWidth: 1, borderStyle: 'dashed', paddingHorizontal: 8, paddingVertical: 4 },
-  prismHero: { alignSelf: 'stretch', height: 65, marginHorizontal: 8, borderRadius: 9, overflow: 'hidden', justifyContent: 'flex-end', paddingHorizontal: 8, paddingBottom: 7 },
-  prismLogo: { position: 'absolute', right: 5, top: 4, transform: [{ scale: 0.6 }] },
-  prismName: { fontFamily: 'Manrope-Bold', fontSize: 15, lineHeight: 20 },
   groupedCard: { borderRadius: 7 },
   gridCard: { borderRadius: 0, borderWidth: 1 },
   sideLines: { flex: 1, gap: 4, alignItems: 'center' },

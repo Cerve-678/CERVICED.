@@ -206,9 +206,7 @@ export default Sentry.wrap(function App() {
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
     // Sealed (round 4, 2026-11-15).
-    'Corinthia-Bold': require('./assets/fonts/Corinthia-Bold.ttf'),
     'EBGaramond-SemiBold': require('./assets/fonts/EBGaramond-SemiBold.ttf'),
-    'EBGaramond-Italic': require('./assets/fonts/EBGaramond-Italic.ttf'),
     // Branding → Custom's Gilda heading font (first loaded for Lace, since removed).
     'GildaDisplay-Regular': require('./assets/fonts/GildaDisplay-Regular.ttf'),
     // Sheer (page style, round 4, 2026-11-15).
