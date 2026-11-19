@@ -338,23 +338,6 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: false, numberedServices: false,
   },
   {
-    key: 'portfolio', name: 'Portfolio', description: 'A chosen cover photo, your image and a calm gallery of your work',
-    heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
-    hero: 'portfolioFront', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    photoLayout: 'portfolioWall', portfolioFirst: true,
-    heroNameFont: { fontFamily: 'GildaDisplay-Regular', scale: 1.1, lineRatio: 1.2 },
-    custom: { headingFont: 'GildaDisplay-Regular', headingScale: 1.1, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
-  },
-  {
-    key: 'atelier', name: 'Atelier', description: 'Tall elegant lettering, fine rules and plenty of breathing room',
-    heading: 'custom', cards: 'open', policies: 'definition', logo: 'circle',
-    hero: 'atelierLetterhead', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    divider: 'line',
-    custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
-  },
-  {
     key: 'cover', name: 'Cover', description: 'Your name huge across your photo, big lowercase headings',
     heading: 'bigLower', cards: 'none', policies: 'boxes', logo: 'circle',
     hero: 'cover', aboutInHero: false,
@@ -656,6 +639,23 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     serviceLayout: 'tiles', photoLayout: 'pins', portfolioFirst: true, roundedPhotos: true,
     nameFontPickable: true,
     custom: { headingFont: 'Manrope-Bold', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'portfolio', name: 'Portfolio', description: 'A chosen cover photo, your image and a calm gallery of your work',
+    heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
+    hero: 'portfolioFront', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'portfolioWall', portfolioFirst: true,
+    heroNameFont: { fontFamily: 'GildaDisplay-Regular', scale: 1.1, lineRatio: 1.2 },
+    custom: { headingFont: 'GildaDisplay-Regular', headingScale: 1.1, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'atelier', name: 'Atelier', description: 'Tall elegant lettering, fine rules and plenty of breathing room',
+    heading: 'custom', cards: 'open', policies: 'definition', logo: 'circle',
+    hero: 'atelierLetterhead', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    divider: 'line',
+    custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
   },
 ];
 
