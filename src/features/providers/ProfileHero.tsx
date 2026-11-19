@@ -271,6 +271,56 @@ export function ProfileHeroLayout({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "atelierLetterhead":
+      return (
+        <View style={layout.atelierFront}>
+          <View style={[layout.atelierTopRule, { backgroundColor: withAlpha(heroText, 0.58) }]} />
+          <View style={layout.atelierTopRow}>
+            <Text style={[layout.atelierOverline, { color: heroSub }, shadow]}>A PLACE FOR YOUR NEXT APPOINTMENT</Text>
+            {renderLogo(54)}
+          </View>
+          <View style={layout.atelierNameRow}>
+            <Text
+              accessible
+              accessibilityRole="header"
+              style={[layout.atelierName, { color: heroText }, shadow]}
+              numberOfLines={3}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >{name}</Text>
+            {tick}
+          </View>
+          <View style={[layout.atelierUnderRule, { backgroundColor: withAlpha(heroText, 0.58) }]} />
+          <View style={layout.atelierMeta}>{meta}</View>
+          <View style={layout.atelierDetails}>{details}</View>
+        </View>
+      );
+    case "portfolioFront": {
+      const cover = photoUris?.[0];
+      return (
+        <View style={layout.portfolioFront}>
+          <TouchableOpacity
+            activeOpacity={cover && onOpenHeroPhoto ? 0.88 : 1}
+            disabled={!cover || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={cover && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={cover ? `${name} cover photo` : undefined}
+            style={[layout.portfolioCover, { backgroundColor: blend(heroColour, "#282322", 0.45) }]}
+          >
+            {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+            <LinearGradient colors={["transparent", "rgba(0,0,0,0.42)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <Text style={layout.portfolioCoverLabel}>SELECTED WORK</Text>
+          </TouchableOpacity>
+          <View style={layout.portfolioIdentity}>
+            <View style={layout.portfolioLogo}>{renderLogo(70)}</View>
+            <Text style={[layout.portfolioEyebrow, { color: heroSub }, shadow]}>THE ARTIST & THE WORK</Text>
+          </View>
+          <View style={layout.portfolioName}>{renderName({ scale: 1.08 })}</View>
+          <View style={layout.portfolioMeta}>{meta}</View>
+          <View style={layout.portfolioDetails}>{details}</View>
+        </View>
+      );
+    }
     case "cover":
       // The name is the cover line, low over the photo, with a small logo
       // sitting on top of it at the right.
@@ -1278,6 +1328,24 @@ const TEXT_FIRST_DROP = 48;
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  atelierFront: { paddingHorizontal: 28, marginTop: 38, marginBottom: 28 },
+  atelierTopRule: { height: StyleSheet.hairlineWidth, alignSelf: "stretch" },
+  atelierTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginTop: 13 },
+  atelierOverline: { flex: 1, fontFamily: "HankenGrotesk-Medium", fontSize: 9, letterSpacing: 2.1, lineHeight: 15 },
+  atelierNameRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, marginTop: 14 },
+  atelierName: { flexShrink: 1, fontFamily: "Bellefair-Regular", fontSize: 52, lineHeight: 57, letterSpacing: 0.3, textAlign: "left" },
+  atelierUnderRule: { height: StyleSheet.hairlineWidth, alignSelf: "stretch", marginTop: 16 },
+  atelierMeta: { alignItems: "flex-start", marginTop: 16 },
+  atelierDetails: { alignItems: "flex-start", marginTop: 8 },
+  portfolioFront: { paddingHorizontal: 20, marginBottom: 24 },
+  portfolioCover: { height: 230, borderRadius: 18, overflow: "hidden", justifyContent: "flex-end", padding: 18 },
+  portfolioCoverLabel: { color: "#FFFFFF", fontFamily: "HankenGrotesk-Medium", fontSize: 10, letterSpacing: 2.6 },
+  portfolioIdentity: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: -12 },
+  portfolioLogo: { width: 74, alignItems: "center", justifyContent: "center" },
+  portfolioEyebrow: { fontFamily: "HankenGrotesk-Medium", fontSize: 9, letterSpacing: 2, flexShrink: 1 },
+  portfolioName: { alignItems: "center", paddingHorizontal: 8, marginTop: -2 },
+  portfolioMeta: { alignItems: "center", marginTop: 2 },
+  portfolioDetails: { alignItems: "center", marginTop: 10 },
   appWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
   appRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   appText: { flex: 1, minWidth: 0 },

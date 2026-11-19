@@ -137,6 +137,8 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   bonbon: { text: 'Services' },
   clinic: { text: 'Services' },
   ledger: { text: 'Services' },
+  portfolio: { text: 'Services' },
+  atelier: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -193,6 +195,14 @@ function MiniProfile({
   // Work first (Posy, Noir): a row of their photos in the style's own layout.
   const photoRow = (() => {
     switch (style.photoLayout) {
+      case 'portfolioWall':
+        return (
+          <View style={[mini.photoRow, { alignItems: 'center', gap: 3, paddingVertical: 3 }]}>
+            {[18, 27, 18].map((height, i) => (
+              <View key={i} style={{ flex: 1, height, borderRadius: 3, backgroundColor: photoFill }} />
+            ))}
+          </View>
+        );
       case 'arches':
         return (
           <View style={mini.photoRow}>
@@ -609,7 +619,27 @@ function MiniProfile({
       ) : null}
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
-        {style.hero === 'cover' ? (
+        {style.hero === 'atelierLetterhead' ? (
+          <View style={{ paddingHorizontal: 8, paddingTop: 9 }}>
+            <View style={{ height: 1, backgroundColor: withAlpha(isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E', 0.6) }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
+              <View style={{ width: 28, height: 2, backgroundColor: withAlpha(accent, 0.8) }} />
+              <View style={mini.smallLogo}>{logo}</View>
+            </View>
+            <Text style={{ fontFamily: 'Bellefair-Regular', fontSize: 21, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>Atelier</Text>
+            <View style={{ height: 1, backgroundColor: withAlpha(isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E', 0.6) }} />
+          </View>
+        ) : style.hero === 'portfolioFront' ? (
+          <View style={{ paddingHorizontal: 5, paddingTop: 5 }}>
+            <View style={{ height: 41, borderRadius: 5, backgroundColor: photoFill, overflow: 'hidden' }}>
+              {backgroundImage ? <Image source={{ uri: backgroundImage }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 }}>
+              <View style={mini.smallLogo}>{logo}</View>
+              <Text style={{ fontFamily: 'GildaDisplay-Regular', fontSize: 13, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>Name</Text>
+            </View>
+          </View>
+        ) : style.hero === 'cover' ? (
           <>
             <View style={[mini.coverLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
             <Text style={mini.coverName} numberOfLines={1}>Name</Text>

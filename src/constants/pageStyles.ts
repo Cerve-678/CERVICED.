@@ -49,6 +49,8 @@ export type PageStyleKey =
   | 'bonbon'
   | 'clinic'
   | 'ledger'
+  | 'portfolio'
+  | 'atelier'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -197,6 +199,8 @@ export type PageHero =
   | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
   | 'colourBlock' // a block of the accent: what they do, the name huge in a fat italic, the logo over its corner (Riviera)
   | 'split'    // their chosen photo down the left half, the logo, name and details on the right (Posy)
+  | 'portfolioFront' // a chosen work photo above a compact provider identity and booking details
+  | 'atelierLetterhead' // a tall noncursive wordmark, fine rules and a small provider image
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -301,6 +305,7 @@ export type ServiceLayout =
 /** Portfolio layouts beyond the usual columns. */
 export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
+  | 'portfolioWall' // three airy cover images with the middle print set higher
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Noir)
   | 'swipe'     // one row of tall photos that scrolls sideways (Muse)
@@ -341,6 +346,23 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'plain', cards: 'frosted', policies: 'rows', logo: 'circle',
     hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: false, numberedServices: false,
+  },
+  {
+    key: 'portfolio', name: 'Portfolio', description: 'A chosen cover photo, your image and a calm gallery of your work',
+    heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
+    hero: 'portfolioFront', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'portfolioWall', portfolioFirst: true,
+    heroNameFont: { fontFamily: 'GildaDisplay-Regular', scale: 1.1, lineRatio: 1.2 },
+    custom: { headingFont: 'GildaDisplay-Regular', headingScale: 1.1, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'atelier', name: 'Atelier', description: 'Tall elegant lettering, fine rules and plenty of breathing room',
+    heading: 'custom', cards: 'open', policies: 'definition', logo: 'circle',
+    hero: 'atelierLetterhead', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    divider: 'line',
+    custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
   },
   {
     key: 'cover', name: 'Cover', description: 'Your name huge across your photo, big lowercase headings',
@@ -678,6 +700,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'bow': return 1;
     case 'split': return 1;    // Posy's left half
     case 'archWindow': return 1; // Retreat's window
+    case 'portfolioFront': return 1; // Portfolio's cover image
     default: return 0;
   }
 }

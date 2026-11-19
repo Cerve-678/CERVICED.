@@ -34,6 +34,7 @@ import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSect
 const INLINE_PORTFOLIO_LIMIT = 6;
 /** Noir's feature grid holds five: one big, four small. */
 const FEATURE_PHOTO_LIMIT = 5;
+const PORTFOLIO_WALL_LIMIT = 3;
 /** Riviera's prints lean a little each way, as if dropped on a table. */
 const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
 const COLUMN_GAP = 12;
@@ -440,6 +441,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const polaroids = palette.pageStyle?.photoLayout === "polaroids";
   // Noir: one big photo beside two small ones, then two more under them.
   const feature = palette.pageStyle?.photoLayout === "feature";
+  const portfolioWall = palette.pageStyle?.photoLayout === "portfolioWall";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
   const ticketStrip = palette.pageStyle?.photoLayout === "ticketStrip";
@@ -478,13 +480,29 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         ) : (
           <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
         )}
-        {!swipe && items.length > (feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
+        {!swipe && items.length > (portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
-      {ticketStrip ? (
+      {portfolioWall ? (
+        <View style={styles.portfolioWall}>
+          {items.slice(0, PORTFOLIO_WALL_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+              style={[styles.portfolioWallTile, index === 1 && styles.portfolioWallMiddle, { backgroundColor: palette.cardBackground }]}
+            >
+              <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : ticketStrip ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
             <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: "48.5%", height: 135, borderRadius: 8, overflow: "hidden", backgroundColor: palette.cardBackground, padding: 4 }}>
@@ -769,6 +787,9 @@ const styles = StyleSheet.create({
   featureBig: { flex: 1, height: 236 },
   featureOnly: { flex: 1, height: 300 },
   featureSmall: { flex: 1, height: 115 },
+  portfolioWall: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 8 },
+  portfolioWallTile: { flex: 1, height: 164, borderRadius: 10, overflow: "hidden" },
+  portfolioWallMiddle: { height: 204 },
   // Riviera: white prints with a deep bottom border, a soft shadow under each.
   polaroidGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 14, paddingVertical: 6 },
   polaroid: {
