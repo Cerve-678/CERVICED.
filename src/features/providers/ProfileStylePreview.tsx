@@ -10,12 +10,13 @@
 // service card) copy ProviderProfileScreen's.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
+import type { CustomPartKey } from "../../constants/customPageStyle";
 import { getPageStyle, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
 import CategoryTabPill from "../../components/CategoryTabPill";
 import { ExpandableAboutText } from "./ExpandableAboutText";
@@ -100,6 +101,9 @@ export interface ProfileStylePreviewProps {
   full?: boolean;
   /** More of the page after Reviews (Info Reg adds Contact, Portfolio, Venue). */
   children?: React.ReactNode;
+  /** Branding → Custom's Tap Your Page: each part of the page is outlined,
+   *  and tapping one picks that part to change. */
+  editParts?: { active: CustomPartKey; onPress: (part: CustomPartKey) => void; accent: string } | undefined;
 }
 
 export interface PreviewService {
@@ -155,7 +159,33 @@ export function ProfileStylePreview({
   rating,
   full = false,
   children,
+  editParts,
 }: ProfileStylePreviewProps) {
+  // Tap Your Page: a part of the page in a dashed outline with its name on
+  // it; the one they're changing is drawn solid. Its content takes no
+  // touches, so a tap anywhere on it picks the part.
+  const zone = (part: CustomPartKey, label: string, node: React.ReactNode, onHero = false) => {
+    if (!editParts) return node;
+    const on = editParts.active === part;
+    return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => editParts.onPress(part)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: on }}
+        accessibilityLabel={`${label}. Tap to change`}
+        style={[
+          onHero ? styles.zoneHero : styles.zone,
+          { borderColor: editParts.accent, borderStyle: on ? "solid" : "dashed", borderWidth: on ? 2.5 : 1.5 },
+        ]}
+      >
+        <View pointerEvents="none">{node}</View>
+        <View pointerEvents="none" style={[styles.zoneLabel, { backgroundColor: editParts.accent }]}>
+          <Text style={[styles.zoneLabelText, { color: onAccentInk(editParts.accent).text }]}>{label}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
   const { finish, shape, pageStyle: styleKey, custom } = parseThemeKey(themeKey);
   const pageStyle = getPageStyle(styleKey, custom);
   const bodyFont = customTextStyle(pageStyle);
@@ -259,7 +289,7 @@ export function ProfileStylePreview({
         </View>
 
         <View style={styles.heroInfo}>
-          <ProfileHeroLayout
+          {zone("top", "Top", <ProfileHeroLayout
             pageStyle={pageStyle}
             name={name}
             kicker={kicker}
@@ -334,7 +364,7 @@ export function ProfileStylePreview({
               </>
             }
             about={pageStyle.aboutInHero ? lines(withAlpha(heroText, 0.45), [100, 94, 70]) : null}
-          />
+          />, true)}
         </View>
 
         <View style={[styles.sheet, { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg }, veilTheme && styles.sheetGlass]}>
@@ -381,15 +411,17 @@ export function ProfileStylePreview({
                   {aboutBody(onAccentInk(accent).text, withAlpha(onAccentInk(accent).text, 0.35))}
                 </AccentBandSection>
               ) : !pageStyle.aboutInHero ? (
-                <PageSection section="about" palette={palette}>
-                  {aboutBody(cardInk.text, cardInk.separator)}
-                </PageSection>
+                zone("surface", "Sections", (
+                  <PageSection section="about" palette={palette}>
+                    {aboutBody(cardInk.text, cardInk.separator)}
+                  </PageSection>
+                ))
               ) : null}
               {pageStyle.policies === "band" ? (
                 <AccentBandSection section="policies" palette={palette}>
                   <StyledPolicyList rows={PREVIEW_POLICY_ROWS} palette={palette} ink={onAccentInk(accent)} />
                 </AccentBandSection>
-              ) : (
+              ) : zone("policies", "Policies", (
                 <PageSection section="policies" palette={palette} bare={policiesBringOwnSurface(pageStyle)}>
                   <StyledPolicyList
                     rows={PREVIEW_POLICY_ROWS}
@@ -397,18 +429,18 @@ export function ProfileStylePreview({
                     ink={policiesBringOwnSurface(pageStyle) ? page : cardInk}
                   />
                 </PageSection>
-              )}
+              ))}
             </>
           )}
 
           {/* Services */}
           {pageStyle.heading === "plain" ? (
             <Text style={[styles.servicesTitle, { color: OP.text }]}>Services</Text>
-          ) : (
+          ) : zone("headingStyle", "Headings", (
             <View style={pageStyle.cards === "none" ? [styles.servicesRule, { borderTopColor: page.separator }] : undefined}>
               <PageSectionHeading section="services" palette={palette} />
             </View>
-          )}
+          ))}
           {categories.length > 0 ? (
             // The profile's own pills: frosted, springing on press, and the
             // row scrolls rather than cutting names off.
@@ -455,7 +487,7 @@ export function ProfileStylePreview({
           {categoryDescription ? (
             <Text style={[styles.categoryDescription, { color: OP.sub }]}>{categoryDescription}</Text>
           ) : null}
-          {(services.length > 0 ? services.map((_, index) => index) : [0, 1]).map(index => (
+          {zone("services", "Services", <View>{(services.length > 0 ? services.map((_, index) => index) : [0, 1]).map(index => (
             <BlurView
               key={index}
               intensity={surface ? 0 : blurIntensity}
@@ -505,7 +537,7 @@ export function ProfileStylePreview({
                 </View>
               ) : null}
             </BlurView>
-          ))}
+          ))}</View>)}
 
           {showPolicyPages && policyPlacement === "afterServices" ? (
             policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
@@ -611,4 +643,8 @@ const styles = StyleSheet.create({
   bookPill: { height: 32, paddingHorizontal: 14, borderRadius: 100, justifyContent: "center" },
   bookText: { fontFamily: "BakbakOne-Regular", fontSize: 12 },
   reviews: { marginTop: 12 },
+  zone: { marginHorizontal: -8, paddingHorizontal: 6.5, paddingTop: 6, borderRadius: 20, marginBottom: 12 },
+  zoneHero: { marginHorizontal: 8, paddingTop: 6, borderRadius: 24, marginBottom: 12 },
+  zoneLabel: { position: "absolute", top: -11, left: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
+  zoneLabelText: { fontFamily: "BakbakOne-Regular", fontSize: 11 },
 });

@@ -16,7 +16,7 @@
 // Each style is a small set of switches the profile reads, not a layout of its
 // own: the profile keeps one structure, and these decide how each part looks.
 
-import { customPageStyle, DEFAULT_CUSTOM_CHOICES, type CustomChoices, type CustomLayout } from './customPageStyle';
+import { customPageStyle, DEFAULT_CUSTOM_CHOICES, type CustomChoices, type CustomHeadingStyle, type CustomLayout } from './customPageStyle';
 
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
@@ -235,7 +235,9 @@ export interface PageStyle {
     headingFont: string;
     headingScale: number;
     textFont: string;
-    caps: boolean;
+    headingStyle: CustomHeadingStyle;
+    /** Headings sit in the middle of the page (a centred top on an open page, or Script Word). */
+    centred: boolean;
   };
 }
 
