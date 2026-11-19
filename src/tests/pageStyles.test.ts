@@ -90,8 +90,10 @@ describe('page styles', () => {
   it('carries Pinboard from the hero through cards, services and photo pins', () => {
     expect(getPageStyle('pinboard')).toMatchObject({
       hero: 'pinboardHeader', heading: 'custom', cards: 'soft', policies: 'softTiles',
-      serviceLayout: 'tiles', photoLayout: 'pins', portfolioFirst: true,
+      serviceLayout: 'tiles', photoLayout: 'pins', portfolioFirst: true, nameFontPickable: true,
     });
+    // Up to three of their photos as the board at the top.
+    expect(heroPhotoPickLimit(getPageStyle('pinboard'))).toBe(3);
   });
 
   it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
@@ -334,7 +336,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['portfolio', 'editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['portfolio', 'editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -400,7 +402,7 @@ describe('which styles show the picked name font', () => {
     expect(PAGE_STYLES.filter(heroUsesBrandFont).map(s => s.key).sort()).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'slate', 'halo',
-      'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature',
+      'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard',
     ].sort());
   });
 
@@ -576,9 +578,9 @@ describe('Ledger', () => {
 });
 
 describe('the picked name font on styles with their own lettering (owner, 2026-11-19)', () => {
-  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature'] as const;
+  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard'] as const;
 
-  it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet and Signature', () => {
+  it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet, Signature and Pinboard', () => {
     for (const key of keys) expect(heroUsesBrandFont(getPageStyle(key))).toBe(true);
     expect(PAGE_STYLES.filter(style => style.nameFontPickable).map(style => style.key).sort()).toEqual([...keys].sort());
   });

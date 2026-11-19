@@ -603,15 +603,19 @@ function MiniProfile({
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
         {style.hero === 'pinboardHeader' ? (
-          <View style={{ paddingHorizontal: 7, paddingTop: 13 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-              <View style={mini.smallLogo}>{logo}</View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Manrope-Bold', fontSize: 13, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>Name</Text>
-                <View style={[mini.heroBar, { width: 35, marginTop: 4 }]} />
+          // Pinboard: a short board of rounded pins, then the logo beside the name.
+          <View style={mini.pinHero}>
+            <View style={mini.pinBoard}>
+              <View style={[mini.pinTall, { backgroundColor: photoFill }]} />
+              <View style={mini.pinColumn}>
+                <View style={[mini.pinShort, { backgroundColor: photoFill }]} />
+                <View style={[mini.pinMid, { backgroundColor: photoFill }]} />
               </View>
             </View>
-            <View style={[mini.heroBar, { marginTop: 11, opacity: 0.35 }]} />
+            <View style={mini.pinIdentity}>
+              <View style={mini.pinLogo}>{logo}</View>
+              <Text style={[mini.pinName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }]} numberOfLines={1}>Name</Text>
+            </View>
           </View>
         ) : style.hero === 'atelierLetterhead' ? (
           <View style={{ paddingHorizontal: 8, paddingTop: 9 }}>
@@ -1207,6 +1211,15 @@ const mini = StyleSheet.create({
   productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: 'hidden' },
   productPanel: { paddingHorizontal: 8, paddingVertical: 5, gap: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
   productTitle: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 12, lineHeight: 15 },
+  pinHero: { alignSelf: 'stretch', flex: 1, paddingHorizontal: 6, paddingTop: 5 },
+  pinBoard: { flexDirection: 'row', gap: 3, height: 44 },
+  pinColumn: { flex: 1, gap: 3 },
+  pinTall: { flex: 1, borderRadius: 6 },
+  pinShort: { height: 18, borderRadius: 6 },
+  pinMid: { flex: 1, borderRadius: 6 },
+  pinIdentity: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
+  pinLogo: { transform: [{ scale: 0.6 }], marginHorizontal: -6, marginVertical: -6 },
+  pinName: { fontFamily: 'Manrope-Bold', fontSize: 11, flex: 1 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
   blockPhotos: { flexDirection: 'row', height: 48 },
   blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },

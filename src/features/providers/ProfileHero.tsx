@@ -265,7 +265,7 @@ export function ProfileHeroLayout({
   onOpenHeroPhoto,
   pickedNameFont = null,
 }: ProfileHeroLayoutProps) {
-  // Quiet, Signature and Hush draw the name themselves: in the picked font,
+  // Quiet, Signature, Hush and Pinboard draw the name themselves: in the picked font,
   // when there is one, at the size that top draws it.
   const pickedName = (size: number): TextStyle | null => (pickedNameFont ? pickedNameFontStyle(pickedNameFont, size) : null);
   const shadow = heroIsDark ? layout.shadow : null;
@@ -278,14 +278,49 @@ export function ProfileHeroLayout({
 
   switch (pageStyle.hero) {
     case "pinboardHeader": {
+      // Pinboard: up to three of their photos as a short board of rounded pins
+      // (one tall beside two uneven, like a Pinterest board), then the logo
+      // beside the name in the picked font, what they do and their area.
       const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      const pins = (photoUris ?? []).slice(0, 3);
+      const pinFill = blend(accent, "#FFFFFF", 0.6);
+      const pin = (index: number, size: object) => (
+        <TouchableOpacity
+          key={pins[index] ?? index}
+          activeOpacity={onOpenHeroPhoto ? 0.88 : 1}
+          disabled={!onOpenHeroPhoto}
+          onPress={() => onOpenHeroPhoto?.(index)}
+          style={[layout.pinboardPin, { backgroundColor: pinFill }, size]}
+          accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+          accessibilityLabel={`Photo ${index + 1} of ${pins.length}`}
+        >
+          {pins[index] ? <Image source={{ uri: pins[index] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+        </TouchableOpacity>
+      );
       return (
-        <View style={layout.pinboardWrap}>
-          <View style={layout.pinboardIdentity}>
-            {renderLogo(82)}
+        <View style={[layout.pinboardWrap, { marginTop: pins.length ? 12 : TEXT_FIRST_DROP }]}>
+          {pins.length ? (
+            <View style={layout.pinboardBoard}>
+              <View style={layout.pinboardColumn}>{pin(0, layout.pinboardPinTall)}</View>
+              {pins.length > 1 ? (
+                <View style={layout.pinboardColumn}>
+                  {pins.length > 2 ? (
+                    <>
+                      {pin(1, layout.pinboardPinShort)}
+                      {pin(2, layout.pinboardPinMid)}
+                    </>
+                  ) : (
+                    pin(1, layout.pinboardPinTall)
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          <View style={[layout.pinboardIdentity, pins.length ? layout.pinboardIdentityUnderPins : null]}>
+            {renderLogo(pins.length ? 64 : 82)}
             <View style={layout.pinboardText} accessible accessibilityRole="header" accessibilityLabel={name}>
               <View style={layout.tickRow}>
-                <Text style={[layout.pinboardName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+                <Text style={[layout.pinboardName, pickedName(27), { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
                 {tick}
               </View>
               {phrase ? <Text style={[layout.pinboardPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
@@ -1316,13 +1351,24 @@ const TEXT_FIRST_DROP = 48;
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
-  pinboardWrap: { paddingHorizontal: 20, marginTop: 42, marginBottom: 12 },
-  pinboardIdentity: { flexDirection: "row", alignItems: "center", gap: 16 },
+  pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },
+  // Short on purpose: the board is a taste of their work, not a wall (156pt).
+  pinboardBoard: { flexDirection: "row", gap: 8 },
+  pinboardColumn: { flex: 1, gap: 8 },
+  pinboardPin: {
+    borderRadius: 18, overflow: "hidden",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
+  pinboardPinTall: { height: 156 },
+  pinboardPinShort: { height: 62 },
+  pinboardPinMid: { height: 86 },
+  pinboardIdentity: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 4 },
+  pinboardIdentityUnderPins: { marginTop: 16, gap: 12 },
   pinboardText: { flex: 1, minWidth: 0 },
   pinboardName: { fontFamily: "Manrope-Bold", fontSize: 27, lineHeight: 33, flexShrink: 1 },
   pinboardPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 4 },
-  pinboardDetails: { alignItems: "flex-start", marginTop: 16 },
-  pinboardRule: { height: 1, marginTop: 22 },
+  pinboardDetails: { alignItems: "flex-start", marginTop: 16, paddingHorizontal: 4 },
+  pinboardRule: { height: 1, marginTop: 22, marginHorizontal: 4 },
   atelierFront: { paddingHorizontal: 28, marginTop: 38, marginBottom: 28 },
   atelierTopRule: { height: StyleSheet.hairlineWidth, alignSelf: "stretch" },
   atelierTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginTop: 13 },
