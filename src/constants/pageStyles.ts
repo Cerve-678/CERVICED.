@@ -260,6 +260,10 @@ export interface PageStyle {
    *  Branding name font (Cover, Big Name, Centred, Side by Side), so the parts
    *  styles can reuse those tops in their own type. */
   heroNameFont?: HeroNameFont;
+  /** The name is in the style's own lettering until the provider picks a
+   *  Business Name Font other than Classic; then it's in that font, keeping
+   *  the style's size, capitals and spacing (owner, 2026-11-19). */
+  nameFontPickable?: boolean;
   /** The shape of the Book buttons, when not the usual round pill. */
   buttonShape?: ButtonShape;
   /** The heading and text fonts and the heading treatment. Custom fills it
@@ -413,12 +417,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'indexed', cards: 'topRule', policies: 'boxes', logo: 'accentRing',
     hero: 'signed', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
   },
   {
     key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    nameFontPickable: true,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
   // a see-through black veil over their photo, like the owner's sheer-black reference.
@@ -503,6 +509,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'hushRule', cards: 'open', policies: 'gentleNotes', logo: 'doubleRing',
     hero: 'hushFan', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
   },
   {
     key: 'stripes', name: 'Stripes', description: 'Each section on a strip of your colour, everything in fine outlined boxes',
@@ -573,6 +580,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'custom', cards: 'outline', policies: 'accordion', logo: 'circle',
     hero: 'cover', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    nameFontPickable: true,
     heroNameFont: { fontFamily: 'Gloock-Regular' },
     // No pinned Book bar, and the portfolio scrolls sideways (user, 2026-11-19).
     photoLayout: 'swipe', divider: 'line', buttonShape: 'square', portfolioFirst: true,
@@ -583,6 +591,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'custom', cards: 'paper', policies: 'gentleNotes', logo: 'circle',
     hero: 'customBig', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
     heroNameFont: { fontFamily: 'Italiana_400Regular', scale: 1.05 },
     serviceLayout: 'menu', photoLayout: 'swipe', divider: 'stars', buttonShape: 'textLink',
     custom: {
@@ -612,6 +621,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'custom', cards: 'paper', policies: 'hairline', logo: 'circle',
     hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
     heroNameFont: { fontFamily: 'LibreCaslonDisplay-Regular', scale: 0.8, transform: 'uppercase', letterSpacing: 2 },
     serviceLayout: 'menu', photoLayout: 'feature', divider: 'line', buttonShape: 'square', pagePattern: 'lined',
     custom: { headingFont: 'Oswald-Medium', headingScale: 1, textFont: 'OldStandardTT-Regular', headingStyle: 'caps', centred: true },

@@ -25,7 +25,7 @@ import {
   showsDividerAbove,
   STRIPE_TINT,
 } from '../features/providers/ProfilePageStyle';
-import { heroNameFontStyle, heroUsesBrandFont, kickerPhrase } from '../features/providers/ProfileHero';
+import { heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -372,15 +372,16 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
 });
 
 describe('which styles show the picked name font', () => {
-  it('is only the styles whose hero draws the name in it', () => {
-    expect(PAGE_STYLES.filter(heroUsesBrandFont).map(s => s.key)).toEqual([
+  it('is the styles whose hero draws the name in it, and those that let it replace their own lettering', () => {
+    expect(PAGE_STYLES.filter(heroUsesBrandFont).map(s => s.key).sort()).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'slate', 'halo',
-    ]);
+      'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature',
+    ].sort());
   });
 
-  it('leaves the font off the demure set, which letters the name itself', () => {
-    ['lounge', 'softFocus', 'hush', 'stripes', 'bow'].forEach(key => {
+  it('leaves the font off the rest of the demure set, which letters the name itself', () => {
+    ['lounge', 'softFocus', 'stripes', 'bow'].forEach(key => {
       expect(heroUsesBrandFont(getPageStyle(key))).toBe(false);
     });
   });
@@ -458,8 +459,9 @@ describe('Noir', () => {
     expect(noir.custom).toMatchObject({ headingFont: 'Gloock-Regular', textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined' });
   });
 
-  it('letters the name in its own face, so the Branding name font is not offered', () => {
-    expect(heroUsesBrandFont(noir)).toBe(false);
+  it('letters the name in its own face until they pick a Business Name Font', () => {
+    expect(heroUsesBrandFont(noir)).toBe(true);
+    expect(pickedNameFont(noir, 'default')).toBeNull();
     // Cover itself still uses the Branding name font.
     expect(heroUsesBrandFont(getPageStyle('cover'))).toBe(true);
   });
@@ -481,7 +483,7 @@ describe('Muse', () => {
     });
     expect(muse.heroNameFont?.fontFamily).toBe('Italiana_400Regular');
     expect(muse.custom).toMatchObject({ headingFont: 'Bellefair-Regular', textFont: 'Bellefair-Regular', headingStyle: 'script', scriptFont: 'Italianno-Regular' });
-    expect(heroUsesBrandFont(muse)).toBe(false);
+    expect(heroUsesBrandFont(muse)).toBe(true);
   });
 
   it('opens on its About, so the stars sit above every section after it', () => {
@@ -534,7 +536,7 @@ describe('Ledger', () => {
     });
     expect(ledger.heroNameFont).toMatchObject({ fontFamily: 'LibreCaslonDisplay-Regular', transform: 'uppercase' });
     expect(ledger.custom).toMatchObject({ headingFont: 'Oswald-Medium', textFont: 'OldStandardTT-Regular', headingStyle: 'caps' });
-    expect(heroUsesBrandFont(ledger)).toBe(false);
+    expect(heroUsesBrandFont(ledger)).toBe(true);
   });
 
   it('gives each of the seven parts styles a different mix of parts', () => {
@@ -546,5 +548,27 @@ describe('Ledger', () => {
     expect(new Set(mixes).size).toBe(keys.length);
     // Each has its own pair of heading and text fonts.
     expect(new Set(keys.map(key => `${getPageStyle(key).custom?.headingFont}/${getPageStyle(key).custom?.textFont}`)).size).toBe(keys.length);
+  });
+});
+
+describe('the picked name font on styles with their own lettering (owner, 2026-11-19)', () => {
+  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature'] as const;
+
+  it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet and Signature', () => {
+    for (const key of keys) expect(heroUsesBrandFont(getPageStyle(key))).toBe(true);
+    expect(PAGE_STYLES.filter(style => style.nameFontPickable).map(style => style.key).sort()).toEqual([...keys].sort());
+  });
+
+  it('keeps the style\'s own lettering on Classic, and uses any other picked font', () => {
+    expect(pickedNameFont(getPageStyle('noir'), 'default')).toBeNull();
+    expect(pickedNameFont(getPageStyle('noir'), 'syne')).toBe('syne');
+    // A style without the switch never swaps its lettering.
+    expect(pickedNameFont(getPageStyle('bonbon'), 'syne')).toBeNull();
+  });
+
+  it('keeps Ledger\'s capitals and spacing in the picked font', () => {
+    const ledger = getPageStyle('ledger');
+    const style = heroNameFontStyle(ledger.heroNameFont!, 30, pickedNameFont(ledger, 'syne'));
+    expect(style).toMatchObject({ fontFamily: 'Syne_700Bold', textTransform: 'uppercase', letterSpacing: 2 });
   });
 });
