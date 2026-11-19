@@ -31,7 +31,7 @@ import {
   type CustomLayout,
 } from '../../constants/customPageStyle';
 import { PROVIDER_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
-import { CARD_SHAPES, type CardShape } from '../../constants/providerThemes';
+import { CARD_SHAPES, isDarkColor, type CardShape } from '../../constants/providerThemes';
 
 export interface CustomPageMakerPalette {
   surface: string;
@@ -365,12 +365,68 @@ export function CustomPartPicker({
             accessibilityState={{ selected }}
             accessibilityLabel={`${config.name}: ${option.name}. ${option.description}`}
           >
-            <Text style={[styles.optionName, { color: P.text }]} numberOfLines={1}>{option.name}</Text>
+            <Text style={[styles.optionName, styles.partName, { color: P.text }]} numberOfLines={1}>{option.name}</Text>
             <Text style={[styles.optionDesc, { color: P.sub }]} numberOfLines={2}>{option.description}</Text>
           </TouchableOpacity>
         );
       })}
     </ScrollView>
+  );
+}
+
+/** The dark panel along the bottom of the full preview, on its glass. */
+const PANEL_P: CustomPageMakerPalette = {
+  surface: 'rgba(255,255,255,0.08)',
+  card: 'rgba(255,255,255,0.16)',
+  text: '#FFFFFF',
+  sub: 'rgba(255,255,255,0.78)',
+  border: 'rgba(255,255,255,0.32)',
+};
+
+/**
+ * Tap Your Page's panel, along the bottom of the full preview: the part they
+ * tapped on the page (or picked here) and its choices. Picking one changes
+ * the page above straight away; nothing saves until Save, as everywhere in
+ * Branding.
+ */
+export function CustomTapPanel({
+  part,
+  onPartChange,
+  choices,
+  onPick,
+  accent,
+  bottomInset,
+}: {
+  part: CustomPartKey;
+  onPartChange: (part: CustomPartKey) => void;
+  choices: CustomChoices;
+  onPick: (part: CustomPartKey, value: string) => void;
+  accent: string;
+  bottomInset: number;
+}) {
+  const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
+  return (
+    <View style={[styles.panel, { paddingBottom: bottomInset + 12 }]}>
+      <Text style={styles.panelHint}>Tap a part of your page, or pick one here</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.panelTabs}>
+        {CUSTOM_PARTS.map(p => {
+          const selected = p.key === part;
+          return (
+            <TouchableOpacity
+              key={p.key}
+              style={[styles.panelTab, selected && { backgroundColor: accent, borderColor: accent }]}
+              onPress={() => { tap(); onPartChange(p.key); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text style={[styles.panelTabText, selected && { color: onAccent }]}>{p.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      <CustomPartPicker part={part} choices={choices} active onPick={onPick} P={PANEL_P} bleed={0} />
+    </View>
   );
 }
 
@@ -509,6 +565,15 @@ const styles = StyleSheet.create({
   // Bleeds to the section card's edges (its padding is 18) so the row scrolls edge to edge.
   setScroll: { marginHorizontal: -18 },
   setRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 18 },
+  partName: { marginTop: 0 },
+  panel: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 12, paddingHorizontal: 16, gap: 10, backgroundColor: 'rgba(20,16,14,0.86)' },
+  panelHint: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12, color: 'rgba(255,255,255,0.78)', textAlign: 'center' },
+  panelTabs: { gap: 8 },
+  panelTab: { minHeight: 36, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', justifyContent: 'center' },
+  panelTabText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, color: '#FFFFFF' },
+  partChip: { width: 136, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, minHeight: 74 },
+  tapEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 4 },
+  tapEditTitle: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '800', fontSize: 14 },
   setCard: { width: 132, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 10, minHeight: 92 },
   setName: { paddingHorizontal: 3 },
   setHeading: { marginTop: 2 },
