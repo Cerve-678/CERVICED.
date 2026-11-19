@@ -227,6 +227,7 @@ export function ProfileStylePreview({
   const cardInk = sectionInk(palette);
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
   const tiles = pageStyle.serviceLayout === "tiles";
+  const photoCards = pageStyle.serviceLayout === "photoCards";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -502,10 +503,10 @@ export function ProfileStylePreview({
             >
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
-              <View style={[styles.serviceRow, tiles && styles.tileColumn]}>
-                <View style={[styles.serviceThumb, tiles && styles.tileThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
+              <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow]}>
+                <View style={[styles.serviceThumb, tiles && styles.tileThumb, photoCards && styles.photoCardThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
                   {services[index]?.imageUri && !pageStyle.numberedServices ? (
-                    <Image source={{ uri: services[index]!.imageUri! }} style={tiles ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
+                    <Image source={{ uri: services[index]!.imageUri! }} style={tiles || photoCards ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
                   ) : (
                     <Text style={[styles.serviceThumbText, { color: accent }]}>
                       {pageStyle.numberedServices ? `${index + 1 < 10 ? "0" : ""}${index + 1}` : (services[index]?.name.trim().charAt(0).toUpperCase() || "S")}
@@ -632,6 +633,9 @@ const styles = StyleSheet.create({
   tile: { width: "48.5%", padding: 8 },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },
+  // Riviera: a wide photo on top, the details and Book wrapping under it.
+  photoCardRow: { flexWrap: "wrap" },
+  photoCardThumb: { width: "100%", height: undefined, aspectRatio: 2, overflow: "hidden" },
   sheetPattern: { borderTopLeftRadius: 36, borderTopRightRadius: 36, overflow: "hidden" },
   categoryPill: { height: 34, width: 96, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   pillBar: { height: 7, width: 48, borderRadius: 4 },

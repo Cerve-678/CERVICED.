@@ -38,6 +38,7 @@ export type PageStyleKey =
   | 'pure'
   | 'grid'
   | 'posy'
+  | 'riviera'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -173,6 +174,7 @@ export type PageHero =
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
+  | 'colourBlock' // a block of the accent: what they do, the name huge in a fat italic, the logo over its corner (Riviera)
   | 'split'    // their chosen photo down the left half, the logo, name and details on the right (Posy)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -242,6 +244,10 @@ export interface PageStyle {
   pagePattern?: PagePattern;
   /** The portfolio comes straight after the top of the page, before the About ("work first"). */
   portfolioFirst?: boolean;
+  /** On the Stripes strips, the content sits straight on its strip with no outlined box (Riviera). */
+  openStrips?: boolean;
+  /** A bar pinned over the foot of the page: the name, the lowest price and Book, which jumps to Services. */
+  pinnedBookBar?: boolean;
   /** The heading and text fonts and the heading treatment. Custom fills it
    *  from the provider's picks (constants/customPageStyle); the styles built
    *  from Custom's parts (Posy on, owner 2026-11-19) set their own. */
@@ -261,11 +267,13 @@ export interface PageStyle {
 
 /** Service layouts beyond the usual row (owner, 2026-11-19, the parts canvas). */
 export type ServiceLayout =
-  | 'tiles'; // two across: the photo on top, then the name, length and price, Book under them (Posy)
+  | 'tiles'      // two across: the photo on top, then the name, length and price, Book under them (Posy)
+  | 'photoCards'; // one across: a wide photo on top, then the name and price beside Book (Riviera)
 
 /** Portfolio layouts beyond the usual columns. */
 export type PhotoLayout =
-  | 'arches'; // three across, each photo with a round arched top (Posy)
+  | 'arches'     // three across, each photo with a round arched top (Posy)
+  | 'polaroids'; // three across as white-bordered prints, each tilted a little (Riviera)
 
 export type SectionDivider =
   | 'wave'; // a fine wavy line in the accent (Posy)
@@ -505,6 +513,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
       headingFont: 'YoungSerif-Regular', headingScale: 0.95, textFont: 'Figtree-SemiBold',
       headingStyle: 'script', centred: true, scriptFont: 'Ephesis-Regular',
     },
+  },
+  {
+    key: 'riviera', name: 'Riviera', description: 'A holiday postcard: your name on a block of your colour, stripes and polaroids',
+    heading: 'custom', cards: 'stripes', policies: 'gentleNotes', logo: 'circle',
+    hero: 'colourBlock', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    openStrips: true, serviceLayout: 'photoCards', photoLayout: 'polaroids', pinnedBookBar: true,
+    custom: { headingFont: 'Jost-Light', headingScale: 1, textFont: 'Jost-Light', headingStyle: 'caps', centred: true },
   },
 ];
 

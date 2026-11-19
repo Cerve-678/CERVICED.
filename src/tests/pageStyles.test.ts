@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-one picked styles plus Classic, each once', () => {
+  it('has the thirty-two picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy',
+      'posy', 'riviera',
     ]);
   });
 
@@ -427,5 +427,29 @@ describe('the styles built from Custom\'s parts', () => {
 
   it('round-trips in the stored theme key', () => {
     expect(parseThemeKey(encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'posy')).pageStyle).toBe('posy');
+  });
+});
+
+describe('Riviera', () => {
+  const riviera = getPageStyle('riviera');
+  const colours = { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG };
+
+  it('has its colour block top, open stripes, photo cards, polaroids and the pinned Book bar', () => {
+    expect(riviera).toMatchObject({
+      hero: 'colourBlock', cards: 'stripes', openStrips: true, policies: 'gentleNotes', heading: 'custom',
+      serviceLayout: 'photoCards', photoLayout: 'polaroids', pinnedBookBar: true,
+    });
+    expect(riviera.custom).toMatchObject({ headingFont: 'Jost-Light', headingStyle: 'caps' });
+    expect(heroUsesBrandFont(riviera)).toBe(false);
+  });
+
+  it('sets its content straight on the strips, and its services on plain solid cards', () => {
+    expect(sectionsSitOnPage(riviera)).toBe(true);
+    expect(sectionsSitOnPage(getPageStyle('stripes'))).toBe(false);
+    expect(serviceCardSurface(riviera, colours)).toMatchObject({ backgroundColor: colours.card, borderWidth: 0, borderRadius: 18 });
+  });
+
+  it('has no photo to pick in its top', () => {
+    expect(heroPhotoPickLimit(riviera)).toBe(0);
   });
 });

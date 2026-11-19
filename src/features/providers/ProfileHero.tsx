@@ -968,6 +968,31 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "colourBlock": {
+      // Riviera: a block of their colour from the very top, what they do in
+      // small caps, the name huge in Fraunces' soft black italic, and the logo
+      // sitting over the block's lower corner. The details follow under it.
+      const blockInk = isDarkColor(accent) ? "#FFFFFF" : "#1A1512";
+      return (
+        <View style={layout.colourBlockWrap}>
+          <View style={[layout.colourBlock, { backgroundColor: accent }]}>
+            {kicker ? <Text style={[layout.colourBlockKicker, { color: withAlpha(blockInk, 0.85) }]} numberOfLines={2}>{kicker}</Text> : null}
+            <View style={layout.colourBlockNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.colourBlockName, { color: blockInk }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>
+                {name}
+              </Text>
+              {tick}
+            </View>
+            <View style={layout.colourBlockLogo}>{renderLogo(68)}</View>
+          </View>
+          <View style={layout.colourBlockDetails}>
+            {location ? <Text style={[layout.colourBlockPlace, { color: heroSub }, shadow]} numberOfLines={2}>{location}</Text> : null}
+            {details}
+          </View>
+        </View>
+      );
+    }
+
     case "split": {
       // Posy: their chosen photo down the left half with a soft corner, the
       // logo, the name in Young Serif and what they do on the right, then the
@@ -1146,6 +1171,17 @@ const layout = StyleSheet.create({
   gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
   gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
   // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
+  // Riviera: the block runs from the very top, under the header buttons; its
+  // words start below them. The logo hangs over the block's lower right corner.
+  colourBlockWrap: { marginBottom: 26 },
+  colourBlock: { paddingTop: TEXT_FIRST_DROP + 22, paddingBottom: 30, paddingLeft: 22, paddingRight: 104 },
+  colourBlockKicker: { fontFamily: "Jost-Light", fontSize: 11, lineHeight: 15, letterSpacing: 2.6 },
+  colourBlockNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  // Fraunces' soft black italic leans past its box: 1.3× and a little room on the right.
+  colourBlockName: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 46, lineHeight: 60, paddingRight: 6, flexShrink: 1 },
+  colourBlockLogo: { position: "absolute", right: 20, bottom: -54 },
+  colourBlockDetails: { alignItems: "flex-start", paddingLeft: 20, paddingRight: 104, marginTop: 12, gap: 8 },
+  colourBlockPlace: { fontFamily: "Jost-Light", fontSize: 13, lineHeight: 18 },
   // Posy: the photo half runs from the very top (under the header buttons, as
   // Snapshot's strip does); the text half starts below them.
   splitWrap: { marginBottom: 26 },

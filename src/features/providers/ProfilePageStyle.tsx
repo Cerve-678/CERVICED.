@@ -80,7 +80,9 @@ export function customTextStyle(style: PageStyle | undefined): { fontFamily: str
 
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
-  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer" || style?.cards === "ruled";
+  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer" || style?.cards === "ruled"
+    // Riviera: content straight on its strip, with no box.
+    || (style?.cards === "stripes" && !!style.openStrips);
 }
 
 /** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
@@ -685,7 +687,7 @@ function PageSectionSurface({
         <HeadingLine headingRight={headingRight} centered>
           <PageSectionHeading section={section} palette={palette} title={title} color={sheetInk(strip ?? palette.background).text} />
         </HeadingLine>
-        {bare ? children : (
+        {bare || pageStyle.openStrips ? children : (
           <View style={[surfaceStyles.solid, surfaceStyles.stripeBox, { backgroundColor: palette.cardBackground, borderColor: colours.line }]}>
             {children}
           </View>
@@ -1096,6 +1098,8 @@ export function serviceCardSurface(
     case "soft":
       return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
     case "stripes":
+      // Riviera: the strips are open, so the services are plain solid cards.
+      if (style.openStrips) return { ...flat, backgroundColor: colours.card, borderRadius: 18 };
       // Stripes: a fine outlined box, like the section boxes.
       return { backgroundColor: colours.card, borderWidth: 1, borderColor: stripeColours(colours.accent).line, borderRadius: 16, shadowOpacity: 0 };
     case "bow":
