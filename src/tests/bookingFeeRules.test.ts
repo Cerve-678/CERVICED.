@@ -102,6 +102,13 @@ describe('fee buttons on the booking page', () => {
     expect(bookingFeeButtons({ ...terms, status: 'cancelled' }, start)).toEqual([]);
     expect(bookingFeeButtons({ ...terms, status: 'pending' }, start)).toEqual([]);
   });
+
+  test('a late cancellation fee gets its button while it can be charged', () => {
+    const cancelledAt = Date.parse(lateCancelled.cancelledAt!);
+    expect(state(bookingFeeButtons(lateCancelled, cancelledAt + 60e3))).toEqual(['late_cancel:on']);
+    expect(bookingFeeButtons(lateCancelled, end + 24 * 3600e3 + 1)).toEqual([]);
+    expect(bookingFeeButtons({ ...lateCancelled, cancelledBy: 'provider' }, cancelledAt + 60e3)).toEqual([]);
+  });
 });
 
 describe('feeCountsToYou', () => {
