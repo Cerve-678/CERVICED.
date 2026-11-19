@@ -43,6 +43,7 @@ export type PageStyleKey =
   | 'muse'
   | 'retreat'
   | 'bonbon'
+  | 'clinic'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -593,6 +594,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroNameFont: { fontFamily: 'Sniglet_800ExtraBold', scale: 0.95, lineRatio: 1.4 },
     serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave', pagePattern: 'dots',
     custom: { headingFont: 'Fredoka_600SemiBold', headingScale: 1, textFont: 'VarelaRound_400Regular', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'clinic', name: 'Clinic', description: 'Clean and clinical: your name in lowercase beside your logo, numbered sections and treatments',
+    heading: 'custom', cards: 'flat', policies: 'accordion', logo: 'circle',
+    hero: 'customLeft', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    heroNameFont: { fontFamily: 'LeagueSpartan-Light', scale: 1.05, transform: 'lowercase' },
+    buttonShape: 'outline', pinnedBookBar: true,
+    custom: { headingFont: 'LeagueSpartan-ExtraBold', headingScale: 0.85, textFont: 'Jura-VariableFont_wght', headingStyle: 'numbered', centred: false },
   },
 ];
 
