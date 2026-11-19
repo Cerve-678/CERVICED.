@@ -1,8 +1,8 @@
 // src/features/providers/heroPhotos.ts
 //
 // The portfolio photos a page style's hero opens on: Editorial's tilted card
-// (1), Snapshot's strip (3) and Hush's boxes (3); see pageStyles
-// heroPhotoPickLimit. Bow keeps its newest photo, unpicked. The provider
+// (1), Bow's photo under the ribbon (1), Snapshot's strip (3) and Hush's
+// boxes (3); see pageStyles heroPhotoPickLimit. The provider
 // picks them in Branding → Your Photos, stored as portfolio_items.is_featured
 // (a column nothing else sets, so no migration). One set of picks serves every style: each takes as many
 // as it shows, picks first, then their newest photos fill any slot left, so a

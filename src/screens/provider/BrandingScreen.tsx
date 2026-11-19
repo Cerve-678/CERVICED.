@@ -643,7 +643,7 @@ export default function BrandingScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Your Photos (Editorial, Snapshot, Hush): the photos their hero opens on. */}
+              {/* Your Photos (Editorial, Bow, Snapshot, Hush): the photos their hero opens on. */}
               {picksHeroPhotos && (
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>Your Photos</Text>

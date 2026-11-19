@@ -470,8 +470,9 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'editorial': return 1; // the tilted card
     case 'blockName': return 3; // Snapshot's strip
     case 'hushFan': return 3;   // three boxes
-    // Bow keeps its newest photo under the ribbon, unpicked (owner,
-    // 2026-11-17: "leave Bow alone").
+    // The photo under the ribbon. Owner, 2026-11-19: every template that
+    // needs a photo lets the provider pick it (the design itself is unchanged).
+    case 'bow': return 1;
     default: return 0;
   }
 }
