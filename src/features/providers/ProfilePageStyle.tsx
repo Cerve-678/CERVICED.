@@ -27,7 +27,6 @@ import {
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { BulldogClip } from "./heroes/CallingCardHero";
-import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
@@ -176,20 +175,6 @@ export function PageSectionHeading({
   const a11y = { accessibilityRole: "header" as const, accessibilityLabel: title };
 
   switch (style?.heading) {
-    case "ticketPunch":
-      return (
-        <View {...a11y} accessible style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <View style={{ width: 6, height: 20, borderRadius: 3, backgroundColor: accent }} />
-          <Text style={{ color: ink, fontSize: 16, fontWeight: "800", letterSpacing: 1.1, textTransform: "uppercase", flexShrink: 1 }}>{title}</Text>
-        </View>
-      );
-    case "prismFacet":
-      return (
-        <View {...a11y} accessible style={{ flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 }}>
-          <Text style={{ color: ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.8, flexShrink: 1 }}>{title}</Text>
-          <View style={{ width: 28, height: 3, borderRadius: 2, backgroundColor: accent }} />
-        </View>
-      );
     case "bigLower":
       return (
         <Text {...a11y} style={[headingStyles.bigLower, { color: ink }]}>
@@ -318,19 +303,6 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <Text style={[headingStyles.quietCaps, { color: ink }]} numberOfLines={1}>
-            {words.toUpperCase()}
-          </Text>
-          <View style={[headingStyles.rule, { backgroundColor: line }]} />
-        </View>
-      );
-    }
-    case "sealCaps": {
-      // Sealed: a small wax seal, spaced serif caps, a hairline running out.
-      const line = sheetInk(palette.background).border;
-      return (
-        <View {...a11y} accessible style={headingStyles.ruledRow}>
-          <WaxSeal size={26} wax={waxColour(accent)} />
-          <Text style={[headingStyles.sealCaps, { color: ink }]} numberOfLines={1}>
             {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
@@ -684,24 +656,6 @@ function PageSectionSurface({
     </HeadingLine>
   );
 
-  if (pageStyle.cards === "ticketPass" || pageStyle.cards === "prismPlane") {
-    const ticket = pageStyle.cards === "ticketPass";
-    return (
-      <View style={[surfaceStyles.block, style]}>
-        {heading}
-        {bare ? children : (
-          <View style={{ backgroundColor: palette.cardBackground, borderRadius: ticket ? 12 : 4, borderWidth: 1, borderColor: withAlpha(palette.accent, ticket ? 0.45 : 0.3), overflow: "hidden", flexDirection: "row", shadowColor: palette.accent, shadowOpacity: ticket ? 0.08 : 0.18, shadowRadius: ticket ? 8 : 14, shadowOffset: { width: 0, height: 5 } }}>
-            {ticket ? <View style={{ width: 6, backgroundColor: palette.accent }} /> : null}
-            <View style={{ flex: 1 }}>
-              {!ticket ? <View pointerEvents="none" style={{ height: 9, flexDirection: "row" }}><View style={{ flex: 2, backgroundColor: palette.accent }} /><View style={{ flex: 1, backgroundColor: withAlpha(palette.accent, 0.36), transform: [{ skewX: "-30deg" }] }} /></View> : null}
-              {children}
-            </View>
-          </View>
-        )}
-      </View>
-    );
-  }
-
   if (pageStyle.cards === "stripes") {
     // Stripes: the section on a full-width strip, bled out of the sheet's
     // 20pt side padding. Every other section is tinted, with fine rules along
@@ -790,7 +744,6 @@ function PageSectionSurface({
   const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
     : pageStyle.cards === "clipped" ? 2
-    : pageStyle.cards === "stationery" ? 3
     : pageStyle.cards === "raised" ? 3
     : pageStyle.cards === "flat" || pageStyle.cards === "product" ? 6
     : pageStyle.cards === "gloss" || pageStyle.cards === "outlineRound" ? 28
@@ -886,7 +839,6 @@ function PageSectionSurface({
           pageStyle.cards === "topRule" && [surfaceStyles.topRule, { borderTopColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "block" && [surfaceStyles.blockCard, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "gloss" && [surfaceStyles.gloss, { borderColor: withAlpha(palette.accent, 0.35) }],
-          pageStyle.cards === "stationery" && [surfaceStyles.paper, surfaceStyles.stationery, { borderColor: withAlpha(palette.accent, 0.28) }],
           pageStyle.cards === "raised" && [surfaceStyles.raised, raisedEdges(palette.cardBackground)],
           pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
@@ -894,9 +846,6 @@ function PageSectionSurface({
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
-        {pageStyle.cards === "stationery" ? (
-          <View style={[surfaceStyles.innerRule, { borderColor: withAlpha(palette.accent, 0.22) }]} pointerEvents="none" />
-        ) : null}
         {pageStyle.cards === "clipped" ? (
           <View style={[surfaceStyles.clippedRule, { borderColor: withAlpha(palette.accent, 0.28) }]} pointerEvents="none" />
         ) : null}
@@ -989,10 +938,6 @@ export function serviceCardSurface(
 ): ViewStyle | null {
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
-    case "ticketPass":
-      return { backgroundColor: colours.card, borderWidth: 1, borderLeftWidth: 8, borderColor: withAlpha(colours.accent, 0.5), borderLeftColor: colours.accent, borderRadius: 10, shadowOpacity: 0.08, shadowRadius: 7 };
-    case "prismPlane":
-      return { backgroundColor: blend(colours.accent, colours.card, 0.9), borderWidth: 1, borderTopWidth: 6, borderColor: withAlpha(colours.accent, 0.38), borderTopColor: colours.accent, borderRadius: 4, shadowColor: colours.accent, shadowOpacity: 0.18, shadowRadius: 12 };
     case "none":
     case "open":
       return {
@@ -1065,19 +1010,6 @@ export function serviceCardSurface(
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 2, borderColor: outlineInk(colours.card) };
     case "topRule":
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderTopWidth: 3, borderTopColor: outlineInk(colours.card) };
-    case "stationery":
-      // Sealed: writing paper with a soft shadow; the fine edge is a border here
-      // (a service card has no room for Sealed's inset rule).
-      return {
-        backgroundColor: colours.card,
-        borderWidth: 1,
-        borderColor: withAlpha(colours.accent, 0.28),
-        borderRadius: 3,
-        shadowColor: "#26201E",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-      };
     case "sheer":
       return { ...flat, ...sheerBox(colours.sheet), borderWidth: 1, borderRadius: 0 };
     case "raised":
@@ -1266,10 +1198,8 @@ const bandStyles = StyleSheet.create({
 export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
   return (
-    layout === "prismFacets"
-    ||
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
-    || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
+    || layout === "tiles" || layout === "divided" || layout === "stickers"
     || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion" || layout === "columns"
     || layout === "membership" || layout === "loungeGrid" || layout === "ribbonBand"
   );
@@ -1295,23 +1225,6 @@ export function StyledPolicyList({
   const page = sheetInk(palette.background);
   // Custom's text font, on the policy layouts Custom uses.
   const tf = customTextStyle(palette.pageStyle);
-
-  if (layout === "ticketRules") {
-    return <View style={{ gap: 14, paddingVertical: 4 }}>
-      {rows.map(row => <View key={row.label} style={{ paddingLeft: 10 }}>
-        <Text style={{ color: ink.text, fontSize: 12, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" }}>{row.label}</Text><Text style={{ color: ink.sub, marginTop: 3 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: ink.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 4, fontSize: 11, fontWeight: "700" }}>{row.tag}</Text> : null}
-      </View>)}
-    </View>;
-  }
-
-  if (layout === "prismFacets") {
-    return <View style={{ gap: 9 }}>
-      {rows.map((row, index) => <View key={row.label} style={{ flexDirection: "row", borderRadius: 3, overflow: "hidden", backgroundColor: blend(palette.accent, palette.cardBackground, index % 2 ? 0.92 : 0.82), marginLeft: index % 2 ? 16 : 0, marginRight: index % 2 ? 0 : 16 }}>
-        <View style={{ width: 10, backgroundColor: index % 2 ? withAlpha(palette.accent, 0.55) : palette.accent, transform: [{ skewX: "-18deg" }] }} />
-        <View style={{ flex: 1, padding: 14 }}><Text style={{ color: palette.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.6 }}>{row.label}</Text><Text style={{ color: palette.sub, marginTop: 4 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: palette.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 5, fontWeight: "700", fontSize: 11 }}>{row.tag}</Text> : null}</View>
-      </View>)}
-    </View>;
-  }
 
   if (layout === "numerals") {
     // Heritage's House Rules (I, II…) and Apothecary's "Before your visit" (i., ii.).
@@ -1530,38 +1443,6 @@ export function StyledPolicyList({
                 <Text key={note} style={[policyStyles.note, { color: ink.sub }, tf]}>{note}</Text>
               ))}
             </View>
-          </View>
-        ))}
-      </View>
-    );
-  }
-
-  if (layout === "sealedNotes") {
-    // Sealed: folded notes, the fold a shade darker, each closed with a wax
-    // seal of its first letter. The notes are the card colour, so the card ink.
-    const wax = waxColour(palette.accent);
-    const fold = blend(palette.cardBackground, isDarkColor(palette.cardBackground) ? "#FFFFFF" : "#000000", 0.05);
-    return (
-      <View style={policyStyles.grid}>
-        {rows.map(row => (
-          <View
-            key={row.label}
-            style={[policyStyles.cell, policyStyles.note2, { backgroundColor: palette.cardBackground }, square && policyStyles.square]}
-          >
-            <View style={[policyStyles.noteFold, { backgroundColor: fold, borderBottomColor: withAlpha(palette.accent, 0.18) }]} />
-            <View style={policyStyles.noteSeal}>
-              <WaxSeal size={44} wax={wax} letter={sealLetter(row.label)} />
-            </View>
-            <Text style={[policyStyles.noteLabel, { color: palette.text }]}>{row.label.toUpperCase()}</Text>
-            <Text style={[policyStyles.smallValue, policyStyles.centreText, { color: palette.sub }]}>{row.value}</Text>
-            {row.notes?.map(note => (
-              <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: palette.sub }]}>{note}</Text>
-            ))}
-            {row.tag ? (
-              <View style={[policyStyles.tag, { backgroundColor: palette.accent }]}>
-                <Text style={[policyStyles.tagText, { color: onAccentInk(palette.accent).text }]}>{row.tag}</Text>
-              </View>
-            ) : null}
           </View>
         ))}
       </View>
@@ -2002,8 +1883,6 @@ const headingStyles = StyleSheet.create({
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
   labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
-  // Sealed's own face (EB Garamond), a seal beside it.
-  sealCaps: { fontFamily: "EBGaramond-SemiBold", fontSize: 15, lineHeight: 21, letterSpacing: 3.5, flexShrink: 1 },
   // Quiet's own face, so it no longer reads as Apothecary (owner, 2026-11-15).
   quietCaps: { fontFamily: "JosefinSans_600SemiBold", fontSize: 14, lineHeight: 20, letterSpacing: 4, flexShrink: 1 },
   // Calling Card's engraved caps (Forum), its own face.
@@ -2099,7 +1978,6 @@ const surfaceStyles = StyleSheet.create({
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
-  stationery: { borderWidth: 1, padding: 22 },
   headingFlex: { flexShrink: 1 },
   // Calling Card: room at the top for the clip, and a fine rule inset from the edge.
   clippedCard: { marginTop: 22, paddingTop: 34 },
@@ -2166,13 +2044,6 @@ const policyStyles = StyleSheet.create({
   outlined: { borderWidth: 1, paddingVertical: 16, paddingHorizontal: 10, alignItems: "center", gap: 6 },
   outlinedLabel: { fontFamily: "Bellefair-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 2, textAlign: "center" },
   hairFirst: { borderTopWidth: 0 },
-  note2: {
-    borderRadius: 3, paddingHorizontal: 12, paddingTop: 70, paddingBottom: 16, alignItems: "center",
-    shadowColor: "#26201E", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 2,
-  },
-  noteFold: { position: "absolute", top: 0, left: 0, right: 0, height: 50, borderBottomWidth: 1, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
-  noteSeal: { position: "absolute", top: 28, alignSelf: "center" },
-  noteLabel: { fontFamily: "EBGaramond-SemiBold", fontSize: 13, lineHeight: 18, letterSpacing: 2, textAlign: "center" },
   recessed: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 6 },
   recessedLabel: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 11, lineHeight: 15, letterSpacing: 1.8, width: 104, paddingTop: 2 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },

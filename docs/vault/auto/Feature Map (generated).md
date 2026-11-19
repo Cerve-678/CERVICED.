@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **82 files**
 - … +52 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **241 files**
+Curated: [[Booking Flow]] · **240 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(243)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **241 files**
 - `src/types/booking.ts` _(41)_
 - `src/types/database.ts` _(39)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
-- … +211 more
+- … +210 more
 
 ## Auth
 Curated: [[Contexts]] · **248 files**

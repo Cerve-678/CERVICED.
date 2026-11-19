@@ -414,8 +414,8 @@ export function ProfileStylePreview({
                   {rating !== undefined ? (
                     <Text style={[
                       styles.ratingText,
-                      { color: pageStyle.hero === 'ticketHeader' ? (isDarkColor(OP.card) ? '#FFFFFF' : '#1F1A1C') : heroText },
-                      heroIsDark && pageStyle.hero !== 'ticketHeader' && styles.textShadow,
+                      { color: heroText },
+                      heroIsDark && styles.textShadow,
                     ]}>{rating}</Text>
                   ) : null}
                 </View>

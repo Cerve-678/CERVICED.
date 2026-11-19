@@ -134,12 +134,12 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   // Duet and Calling Card draw the stars, years and link-only caption on a
   // card, so they take that card's ink whatever is behind the hero.
   const detailsOnCard = detailsSitOnCard(pageStyle);
-  // Boutique's panel, Duet's welcome card and Ticket's pass are their card
+  // Boutique's panel and Duet's welcome card are their card
   // colour, so their ink follows that colour. Calling Card's cream card is dark ink.
   // Lounge's sit on a strip of the page colour under its panel, Stripes' on
   // its strip of the accent.
   const sheetColour = veilTheme ? veilTheme.sheetFill : OP.bg;
-  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" || pageStyle.hero === "ticketHeader"
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet"
     ? cardInk(OP.card)
     : pageStyle.hero === "stripes"
       ? cardInk(stripesHeroColour(adaptiveAccentColor))
