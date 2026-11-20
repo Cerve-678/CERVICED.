@@ -54,6 +54,9 @@ export type PageStyleKey =
   | 'poster'
   | 'hibiscus'
   | 'storefront'
+  | 'orbit'
+  | 'typeblock'
+  | 'filmstrip'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -201,6 +204,9 @@ export type PageHero =
   | 'posterCover' // a pill label, the name in huge two-tone caps, a taped photo and a handwritten line in a sparkle loop (Poster)
   | 'echoName'   // the name repeated large and faint behind a chosen photo, a dark round panel over it with the name (Hibiscus)
   | 'storefrontBanner' // a chosen photo the full width of the page, then a soft band with the name in slanted caps (Storefront)
+  | 'orbitMark' // identity held inside offset orbital rings, with the name below
+  | 'typeblockMark' // asymmetric typographic block with a vertical accent rail
+  | 'filmstripMark' // two chosen images in a numbered film strip above the identity
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -687,6 +693,30 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     nameFontPickable: true,
   },
   {
+    key: 'orbit', name: 'Orbit', description: 'Concentric rings, a floating mark and spacious modern lettering',
+    heading: 'custom', cards: 'outline', policies: 'divided', logo: 'circle',
+    hero: 'orbitMark', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    divider: 'dots', nameFontPickable: true,
+    custom: { headingFont: 'PoiretOne_400Regular', headingScale: 1.25, textFont: 'HankenGrotesk-Medium', headingStyle: 'caps', centred: true },
+  },
+  {
+    key: 'typeblock', name: 'Typeblock', description: 'An offset colour rail, oversized name and graphic section rhythm',
+    heading: 'custom', cards: 'block', policies: 'columns', logo: 'square',
+    hero: 'typeblockMark', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    serviceLayout: 'menu', photoLayout: 'feature', buttonShape: 'square', nameFontPickable: true,
+    custom: { headingFont: 'BebasNeue_400Regular', headingScale: 1.3, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'filmstrip', name: 'Filmstrip', description: 'Two frames of your work, numbered like a contact sheet',
+    heading: 'custom', cards: 'topRule', policies: 'numberedRules', logo: 'sharp',
+    hero: 'filmstripMark', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'swipe', portfolioFirst: true, nameFontPickable: true,
+    custom: { headingFont: 'TenorSans_400Regular', headingScale: 1.05, textFont: 'HankenGrotesk-Medium', headingStyle: 'caps', centred: false },
+  },
+  {
     key: 'portfolio', name: 'Portfolio', description: 'A chosen cover photo, your image and a calm gallery of your work',
     heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
     hero: 'portfolioFront', aboutInHero: false,
@@ -725,6 +755,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'posterCover': return 1;  // Poster's taped print
     case 'echoName': return 1;     // Hibiscus's photo in front of the echoed name
     case 'storefrontBanner': return 1; // Storefront's full-width photo
+    case 'filmstripMark': return 2;
     default: return 0;
   }
 }
@@ -745,6 +776,7 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'posterCover': return 138 / 168;   // Poster's taped print
     case 'echoName': return 190 / 230;      // Hibiscus's photo
     case 'storefrontBanner': return 390 / 300; // Storefront's full-width photo
+    case 'filmstripMark': return 158 / 190;
     case 'pinboardHeader': {
       // Side by side at uneven heights (150, 124, 138); one photo is 156 across.
       if (count <= 1) return 358 / 156;
