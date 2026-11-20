@@ -7,7 +7,7 @@ import type { DbProvider, DbProviderAvailability, DbProviderAvailabilityOverride
 import { logger } from "../../utils/logger";
 import { parseSearchQuery } from "../../utils/searchQuery";
 import { BoundedTtlCache } from "../../utils/boundedTtlCache";
-import { isProviderProfileUuid } from "../../utils/providerProfileDeepLink";
+import { isProviderProfileUuid } from "../../utils/providerProfileLink";
 import { isReleaseTime } from "../../utils/bookingHorizon";
 import { getSessionUser, sanitizeIlikeTerm } from "./account";
 import { getUserBasicInfo } from "./users";

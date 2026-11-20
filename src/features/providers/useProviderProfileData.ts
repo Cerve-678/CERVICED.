@@ -20,7 +20,7 @@ import type { UnclaimedProviderDetail } from "../../services/providerClaimServic
 import userLearningService from "../../services/userLearningService";
 import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
-import { isProviderProfileUuid } from "../../utils/providerProfileDeepLink";
+import { isProviderProfileUuid } from "../../utils/providerProfileLink";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
 import { mapProviderReviews } from "./reviewPresentation";
