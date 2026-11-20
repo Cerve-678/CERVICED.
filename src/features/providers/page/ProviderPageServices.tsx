@@ -502,7 +502,7 @@ export function ProviderPageServices({
                       <View
                         style={[
                           styles.serviceImageContainer,
-                          serviceStacked && [serviceTopImage, styles.serviceImageTileGap],
+                          serviceStacked && [serviceTopImage, styles.serviceImageTileGap, styles.serviceImageCentred],
                           styles.serviceImagePlaceholder,
                           archFrame,
                           {
@@ -527,6 +527,9 @@ export function ProviderPageServices({
                   const imgSrc = hasSingle ? service.images![0] : service.image;
                   return (
                     <TouchableOpacity
+                      // A tile stretches what's in it, so a stacked photo is
+                      // centred rather than sitting against the left edge.
+                      style={serviceStacked ? styles.serviceImageCentred : undefined}
                       activeOpacity={0.85}
                       onPress={() => {
                         if (imgSrc) {
@@ -1039,6 +1042,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   serviceImageTileGap: { marginRight: 0, marginBottom: 10 },
+  serviceImageCentred: { alignSelf: "center" },
   serviceInfo: {
     flex: 1,
     marginRight: 15,
