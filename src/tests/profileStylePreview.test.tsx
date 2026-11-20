@@ -278,7 +278,8 @@ describe('the 2026-11-15 templates', () => {
           full
         />,
       );
-      expect(screen.getAllByText('Amara Lashes').length).toBeGreaterThan(0);
+      // Some tops write the name in capitals (Hibiscus), so match either case.
+      expect(screen.getAllByText(/^amara lashes$/i).length).toBeGreaterThan(0);
       expect(screen.getByText('Soft lash sets.')).toBeTruthy();
     },
   );
