@@ -808,10 +808,10 @@ const styles = StyleSheet.create({
   // Posy: two tiles across, the photo on top, as on the profile.
   tilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   tile: { width: "48.5%", padding: 8 },
-  spotlightColumn: { flexDirection: "column", alignItems: "center", gap: 10 },
-  spotlightThumb: { width: 140, height: 140, borderRadius: 70, overflow: "hidden" },
+  spotlightColumn: { flexDirection: "column", alignItems: "center", gap: 6 },
+  spotlightThumb: { width: 96, height: 96, borderRadius: 48, overflow: "hidden" },
   spotlightText: { alignItems: "center", alignSelf: "stretch" },
-  spotlightName: { fontFamily: "Oswald-Bold", fontSize: 20, lineHeight: 28 },
+  spotlightName: { fontFamily: "Oswald-Bold", fontSize: 17, lineHeight: 23 },
   archThumb: { width: "100%", height: undefined, aspectRatio: 0.82, padding: 6, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, overflow: "hidden" },
   archThumbImage: { flex: 1, width: "100%", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 3, borderBottomRightRadius: 3 },
   pillName: { borderRadius: 30, paddingHorizontal: 12, paddingVertical: 6, flexShrink: 1 },
