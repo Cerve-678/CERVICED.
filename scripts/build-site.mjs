@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Builds www.cerviced.co. Vercel runs this from waitlist/vercel.json with the
-// output in waitlist/dist (Vercel's Root Directory is waitlist/, and the
-// output has to sit inside it). Run it locally with `npm run build:site`,
+// Builds www.cerviced.co. Vercel runs this from vercel.json (read from the
+// repo root, run inside waitlist/, its Root Directory) with the output in
+// waitlist/dist, where Vercel looks for it. Run it locally with `npm run build:site`,
 // which builds into dist/.
 //
 //   1. The web app (App.web.tsx → src/web/SiteApp.tsx) is exported by Expo as
