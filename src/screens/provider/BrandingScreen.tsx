@@ -1032,7 +1032,7 @@ function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<Pol
     <View style={styles.smallPreview}>
       {look === 'story' ? (
         <View style={styles.smallRings}>
-          {[0, 1, 2].map(i => <View key={i} style={[styles.smallRing, { borderColor: pageColour }]} />)}
+          <View style={[styles.smallRing, { borderColor: pageColour }]} />
         </View>
       ) : null}
       {lines}

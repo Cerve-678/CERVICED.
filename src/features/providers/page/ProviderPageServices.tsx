@@ -33,10 +33,17 @@ const SERVICE_TILE_GAP = 10;
 const SERVICE_TILE_PADDING = 8;
 /** The padding inside a usual service card (styles.serviceItem). */
 const SERVICE_CARD_PADDING = 15;
+/** The list's own side padding (styles.categoryServicesContainer). The list's
+ *  measured width includes it, so the cards get that width less this twice. */
+const SERVICE_LIST_SIDE_PADDING = 20;
+/** Room for a card's own border (at most 1.5pt a side) so the photo never
+ *  runs under the card's rounded, clipped edge. */
+const SERVICE_CARD_BORDER_ROOM = 4;
 /** Storefront: the soft frame round each service's arched photo. */
 const SERVICE_ARCH_FRAME = 7;
-/** Hibiscus: the round plate each service's photo sits on. */
-const SERVICE_PLATE = 168;
+/** Hibiscus: the round plate each service's photo sits on. Was 168, which
+ *  made each service nearly a screen tall (owner, 2026-11-20: "too big"). */
+const SERVICE_PLATE = 108;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
@@ -299,8 +306,12 @@ export function ProviderPageServices({
   const arrowPillButtons = pageStyle.buttonShape === "arrowPill";
   const shopBoxButtons = pageStyle.buttonShape === "shopBox";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
-  const serviceTileImageWidth = listWidth > 0 ? Math.floor((listWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
-  const serviceWideImageWidth = listWidth > 0 ? Math.floor(listWidth) - SERVICE_CARD_PADDING * 2 : 280;
+  // The width the cards actually get: inside the list's side padding.
+  const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
+  const serviceTileWidth = cardsWidth > 0 ? Math.floor((cardsWidth - SERVICE_TILE_GAP) / 2) : 0;
+  const serviceTileImageWidth = serviceTileWidth > 0 ? serviceTileWidth - SERVICE_TILE_PADDING * 2 - SERVICE_CARD_BORDER_ROOM : 132;
+  const serviceWideImageWidth = cardsWidth > 0 ? Math.floor(cardsWidth) - SERVICE_CARD_PADDING * 2 - SERVICE_CARD_BORDER_ROOM : 280;
+  // Storefront's arch sits inside its frame, which takes the tile photo's width.
   const serviceArchWidth = serviceTileImageWidth - SERVICE_ARCH_FRAME * 2;
   const serviceTopImage = serviceArches
     ? { width: serviceArchWidth, height: Math.round(serviceArchWidth * 1.25), borderTopLeftRadius: 999, borderTopRightRadius: 999, borderRadius: 4 }
@@ -448,7 +459,7 @@ export function ProviderPageServices({
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
               squareCards && styles.squareCard,
-              serviceTwoUp && styles.serviceTile,
+              serviceTwoUp && (serviceTileWidth > 0 ? { width: serviceTileWidth } : styles.serviceTile),
             ]}
           >
             {serviceSurfaceStyle ? null : (
@@ -910,7 +921,7 @@ const styles = StyleSheet.create({
   },
   categoryServicesContainer: {
     gap: 15,
-    paddingHorizontal: 20,
+    paddingHorizontal: SERVICE_LIST_SIDE_PADDING,
   },
   categoryTabs: {
     marginBottom: 20,
@@ -1084,13 +1095,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 1,
   },
-  serviceTile: { width: "48.5%" },
+  // Before the list is measured; then each tile gets its width in points.
+  serviceTile: { width: "48%" },
   serviceArchFrame: { padding: SERVICE_ARCH_FRAME, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, overflow: "hidden" },
   serviceItemSpotlight: { flexDirection: "column", alignItems: "center" },
   serviceInfoSpotlight: { marginRight: 0, alignItems: "center", alignSelf: "stretch" },
-  serviceNameSpotlight: { fontFamily: "Oswald-Bold", fontSize: 22, lineHeight: 30, letterSpacing: 0.5, textAlign: "center" },
+  serviceNameSpotlight: { fontFamily: "Oswald-Bold", fontSize: 18, lineHeight: 24, letterSpacing: 0.4, textAlign: "center" },
   serviceDetailsSpotlight: { justifyContent: "center", gap: 12 },
-  serviceActionSpotlight: { marginTop: 12 },
+  serviceActionSpotlight: { marginTop: 6 },
   servicePill: { alignSelf: "flex-start", borderRadius: 30, paddingHorizontal: 14, paddingVertical: 7, marginBottom: 4 },
   servicePillText: { fontFamily: "Manrope-Bold", fontSize: 12, letterSpacing: 0.6 },
   arrowPillButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16, paddingRight: 6 },
@@ -1098,7 +1110,9 @@ const styles = StyleSheet.create({
   shopBoxButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 1, shadowOpacity: 0, elevation: 0, paddingHorizontal: 12 },
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
-  serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP },
+  // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
+  // the two, wider than the room left beside them, and wrap them one a row.
+  serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP, columnGap: 0 },
   // Service-type switch — plain underline indicator, mirroring the
   // History / To Do row on ProviderBookingHistoryScreen: enough to show
   // selection without a second filled control competing with the category
