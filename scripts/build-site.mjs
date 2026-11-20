@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-// Builds www.cerviced.co. Vercel runs this from vercel.json (read from the
-// repo root, run inside waitlist/, its Root Directory) with the output in
-// waitlist/dist, where Vercel looks for it. Run it locally with `npm run build:site`,
-// which builds into dist/.
+// Builds www.cerviced.co into dist/. Vercel runs this (vercel.json
+// buildCommand); run it locally with `npm run build:site`.
 //
 //   1. The web app (App.web.tsx → src/web/SiteApp.tsx) is exported by Expo as
 //      a single-page app. Its index.html is renamed app.html, and vercel.json
@@ -17,11 +15,9 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-const OUT = process.argv[2] ?? 'dist';
+const OUT = 'dist';
 const STATIC_PAGES = 'waitlist';
-// vercel.json is Vercel's config, and dist is this build's own output when it
-// is built inside waitlist/.
-const NOT_PUBLISHED = new Set(['README.md', 'vercel.json', 'dist']);
+const NOT_PUBLISHED = new Set(['README.md']);
 
 const production = JSON.parse(readFileSync('eas.json', 'utf8')).build.production.env;
 const publicEnv = {

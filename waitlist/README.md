@@ -1,7 +1,7 @@
 # CERVICED website (www.cerviced.co)
 
-Two parts, built together by `scripts/build-site.mjs` (`npm run build:site`
-locally, into `dist/`; on Vercel, into `waitlist/dist/`):
+Two parts, built together by `npm run build:site` (`scripts/build-site.mjs`)
+into `dist/`:
 
 | Part | What it is |
 |---|---|
@@ -25,14 +25,13 @@ Hosted on Vercel, auto-deploying from `main` (about 2 minutes: install,
 then the Expo web export).
 
 **Vercel project settings that matter (since the web app, 2026-11-20).**
-Root Directory stays `waitlist` (the settings API reports it as empty, but
-the live site is served from `waitlist/`), Framework Preset `Other`, and "Include
-files outside the Root Directory in the Build Step" must stay on. Install,
-build and output come from `vercel.json`, so the Override toggles stay off.
-This project reads `vercel.json` from the **repo root** but runs its commands
-inside `waitlist/` (found from the build logs on 2026-11-20), so it installs
-and builds with `cd ..` and writes the site into `waitlist/dist`, where Vercel
-looks for the output. `vercel.json` also:
+Root Directory is **empty** (the repo root), Framework Preset `Other`.
+Install, build, output, routes and headers all come from `vercel.json` at
+the repo root, so the Override toggles stay off. Don't set Root Directory
+back to `waitlist`: with a Root Directory set, this project took the build
+commands from `vercel.json` but dropped its rewrites, or dropped the whole
+file once a second `vercel.json` sat in `waitlist/` (found from the build
+logs, 2026-11-20). `vercel.json`:
 
 - rewrites `/@:handle` to `/app.html` (the web app);
 - skips the build for any branch that isn't `main` and doesn't have `site`
@@ -44,8 +43,8 @@ The Supabase URL and anon key are read from `eas.json`'s production profile
 at build time, so Vercel needs no environment variables. If a merge shows no
 Vercel deployment, push an empty `chore(site): redeploy` commit to `main`.
 
-To roll back to the static-only site, use Vercel's Instant Rollback on the
-last good deployment. A failed build never replaces the live site.
+To roll back, use Vercel's Instant Rollback on the last good deployment. A
+failed build never replaces the live site.
 
 ## DNS (Namecheap — `dns1/dns2.registrar-servers.com`)
 
