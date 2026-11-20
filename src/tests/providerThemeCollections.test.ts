@@ -45,7 +45,7 @@ describe('theme collections', () => {
 
   it('carries the existing picks and the six new chic, clean and bold sets', () => {
     const picked = PROVIDER_THEMES.filter(t => t.collection !== 'classics').map(t => t.name);
-    expect(picked).toHaveLength(29);
+    expect(picked).toHaveLength(32);
     expect(picked).toEqual(expect.arrayContaining([
       'Tangerine & Navy', 'Emerald & Gold', 'Oat Milk', 'Desert Rose',
       'Ivory & Oxblood', 'Cocoa & Cream', 'Sage & Milk', 'Blue & Linen',
@@ -76,6 +76,21 @@ describe('theme collections', () => {
       expect(contrast(theme.tokens.accent, sheet)).toBeGreaterThanOrEqual(3);
       expect(contrast(heroInk, theme.tokens.gradient[0])).toBeGreaterThanOrEqual(4.5);
       expect(contrast(heroInk, theme.tokens.gradient[1])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('keeps the pink-board sets (2026-11-19) readable on their hero and their new pink content areas', () => {
+    for (const key of ['blushcocoa', 'hibiscus', 'cocoapink']) {
+      const theme = PROVIDER_THEMES.find(t => t.key === key)!;
+      const sheet = SHEET_OPTIONS.find(o => o.key === theme.suggestedSheet)!.color;
+      const heroInk = isDarkColor(theme.tokens.gradient[0]) ? '#FFFFFF' : '#26201E';
+      expect({ key, accentOnSheet: contrast(theme.tokens.accent, sheet) >= 3 }).toEqual({ key, accentOnSheet: true });
+      expect({ key, heroFrom: contrast(heroInk, theme.tokens.gradient[0]) >= 4.5 }).toEqual({ key, heroFrom: true });
+      expect({ key, heroTo: contrast(heroInk, theme.tokens.gradient[1]) >= 4.5 }).toEqual({ key, heroTo: true });
+    }
+    // Dark text stays readable on both new pinks.
+    for (const key of ['petal', 'candy']) {
+      expect(contrast('#26201E', SHEET_OPTIONS.find(o => o.key === key)!.color)).toBeGreaterThanOrEqual(4.5);
     }
   });
 

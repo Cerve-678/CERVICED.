@@ -67,7 +67,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'portfolio', 'atelier',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'portfolio', 'atelier',
     ]);
   });
 
@@ -336,7 +336,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'portfolio']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'portfolio']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -403,6 +403,7 @@ describe('which styles show the picked name font', () => {
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'slate', 'halo',
       'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard',
+      'poster', 'hibiscus', 'storefront',
     ].sort());
   });
 
@@ -578,7 +579,7 @@ describe('Ledger', () => {
 });
 
 describe('the picked name font on styles with their own lettering (owner, 2026-11-19)', () => {
-  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard'] as const;
+  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront'] as const;
 
   it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet, Signature and Pinboard', () => {
     for (const key of keys) expect(heroUsesBrandFont(getPageStyle(key))).toBe(true);
@@ -596,5 +597,33 @@ describe('the picked name font on styles with their own lettering (owner, 2026-1
     const ledger = getPageStyle('ledger');
     const style = heroNameFontStyle(ledger.heroNameFont!, 30, pickedNameFont(ledger, 'syne'));
     expect(style).toMatchObject({ fontFamily: 'Syne_700Bold', textTransform: 'uppercase', letterSpacing: 2 });
+  });
+});
+
+describe('Poster, Hibiscus and Storefront (owner, 2026-11-19: "create something new", from three reference boards)', () => {
+  const NEW = ['poster', 'hibiscus', 'storefront'] as const;
+  const others = PAGE_STYLES.filter(style => !(NEW as readonly string[]).includes(style.key));
+
+  it('draws each one with a top, heading, services and portfolio no other style uses', () => {
+    for (const key of NEW) {
+      const style = getPageStyle(key);
+      for (const other of others) {
+        expect(other.hero).not.toBe(style.hero);
+        expect(other.heading).not.toBe(style.heading);
+        expect(other.serviceLayout).not.toBe(style.serviceLayout);
+        expect(other.photoLayout).not.toBe(style.photoLayout);
+      }
+      expect(heroPhotoPickLimit(style)).toBe(1);
+    }
+  });
+
+  it('has its own divider and Book buttons where the boards had them', () => {
+    expect(getPageStyle('poster').divider).toBe('sparkles');
+    expect(getPageStyle('hibiscus').buttonShape).toBe('arrowPill');
+    expect(getPageStyle('storefront').buttonShape).toBe('shopBox');
+    for (const other of others) {
+      expect(other.divider).not.toBe('sparkles');
+      expect(['arrowPill', 'shopBox']).not.toContain(other.buttonShape);
+    }
   });
 });
