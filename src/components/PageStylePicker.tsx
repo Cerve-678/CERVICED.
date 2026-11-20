@@ -135,6 +135,9 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   portfolio: { text: 'Services' },
   atelier: { text: 'Services' },
   pinboard: { text: 'Services' },
+  poster: { lead: 'The', text: 'Services' },
+  hibiscus: { lead: 'The', text: 'Services' },
+  storefront: { lead: 'The', text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -177,6 +180,12 @@ function MiniProfile({
         return <View style={[mini.divider, mini.dividerLine, { backgroundColor: withAlpha(accent, 0.7) }]} />;
       case 'stars':
         return <Text style={[mini.divider, mini.dividerGlyph, { color: accent }]}>✦ ✦ ✦</Text>;
+      case 'sparkles':
+        return (
+          <Svg width={40} height={9} viewBox="0 0 40 9" style={mini.divider}>
+            <Path d="M5 5 C 9 1, 31 0, 35 3.5 C 38 6, 30 8.5, 20 8.5 C 10 8.5, 2 7, 6 3" stroke={accent} strokeWidth={0.9} fill="none" />
+          </Svg>
+        );
       case 'dots':
         return (
           <View style={[mini.divider, mini.dividerDots]}>
@@ -233,6 +242,34 @@ function MiniProfile({
             </View>
           </View>
         );
+      case 'taped':
+        return (
+          <View style={[mini.photoRow, { justifyContent: 'center', gap: 8, paddingVertical: 4 }]}>
+            {[-4, 4].map((tilt, i) => (
+              <View key={i} style={[mini.polaroidPrint, { width: 26, transform: [{ rotate: `${tilt}deg` }] }]}>
+                <View style={[mini.polaroidPrintPhoto, { backgroundColor: photoFill }]} />
+                <View style={mini.tape} />
+              </View>
+            ))}
+          </View>
+        );
+      case 'phone':
+        return (
+          <View style={[mini.photoRow, { justifyContent: 'center', paddingVertical: 2 }]}>
+            <View style={[mini.phone, { borderColor: ink }]}>
+              <View style={[mini.phoneScreen, { backgroundColor: photoFill }]} />
+            </View>
+          </View>
+        );
+      case 'banner':
+        return (
+          <View style={{ gap: 3 }}>
+            <View style={{ height: 14, backgroundColor: photoFill }} />
+            <View style={[mini.photoRow, { gap: 3 }]}>
+              {[0, 1, 2].map(i => <View key={i} style={{ flex: 1, height: 10, backgroundColor: photoFill }} />)}
+            </View>
+          </View>
+        );
       case 'swipe':
         return (
           <View style={[mini.photoRow, mini.swipeRow]}>
@@ -264,6 +301,30 @@ function MiniProfile({
         return (
           <>
             <View style={[mini.photoCardPhoto, { backgroundColor: photoFill }]} />
+            <View style={[mini.bar, { backgroundColor: line }]} />
+          </>
+        );
+      case 'pillMenu':
+        return (
+          <View style={mini.menuLine}>
+            <View style={[mini.pillName, { backgroundColor: accent }]} />
+            <View style={[mini.bar, mini.menuPrice, { backgroundColor: line }]} />
+          </View>
+        );
+      case 'spotlight':
+        return (
+          <View style={{ alignItems: 'center', gap: 3 }}>
+            <View style={[mini.plate, { backgroundColor: photoFill }]} />
+            <View style={[mini.bar, { width: '50%', backgroundColor: line }]} />
+            <View style={[mini.arrowPill, { backgroundColor: accent }]} />
+          </View>
+        );
+      case 'archTiles':
+        return (
+          <>
+            <View style={[mini.archFrame, { backgroundColor: withAlpha(accent, 0.18) }]}>
+              <View style={[mini.archFramePhoto, { backgroundColor: photoFill }]} />
+            </View>
             <View style={[mini.bar, { backgroundColor: line }]} />
           </>
         );
@@ -442,6 +503,27 @@ function MiniProfile({
             <Text style={[mini.bowTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
+      case 'twoToneCaps':
+        return (
+          <View style={{ alignSelf: 'flex-start' }}>
+            <Text style={[mini.twoTone, { color: ink }]}>{(heading.lead ?? '').toUpperCase()}</Text>
+            <Text style={[mini.twoTone, { color: isDarkColor(sheet) ? blend(accent, '#FFFFFF', 0.5) : accent }]}>{heading.text.toUpperCase()}</Text>
+          </View>
+        );
+      case 'enjoyStack':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.enjoyLead, { color: ink }]}>{(heading.lead ?? '').toUpperCase()}</Text>
+            <Text style={[mini.enjoyTitle, { color: accent }]}>{heading.text.toUpperCase()}</Text>
+          </View>
+        );
+      case 'slantCaps':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.enjoyLead, { color: withAlpha(ink, 0.5) }]}>{(heading.lead ?? '').toUpperCase()}</Text>
+            <Text style={[mini.slantTitle, { color: ink }]}>{heading.text.toUpperCase()}</Text>
+          </View>
+        );
       case 'chapter':
         return (
           <View style={mini.stack}>
@@ -578,7 +660,7 @@ function MiniProfile({
     const el = card(key);
     if (!serviceInside || !React.isValidElement<{ style?: unknown; children?: React.ReactNode }>(el)) return el;
     return React.cloneElement(el, {
-      style: [el.props.style, mini.layoutCard, style.serviceLayout === 'tiles' && mini.tileCard],
+      style: [el.props.style, mini.layoutCard, (style.serviceLayout === 'tiles' || style.serviceLayout === 'archTiles') && mini.tileCard],
       children: serviceInside,
     });
   };
@@ -602,7 +684,43 @@ function MiniProfile({
       ) : null}
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
-        {style.hero === 'pinboardHeader' ? (
+        {style.hero === 'posterCover' ? (
+          // Poster: a pill, the name in two-tone caps, a taped print.
+          <View style={mini.posterCoverHero}>
+            <View style={[mini.posterCoverPill, { backgroundColor: blend(accent, '#FFFFFF', isDarkColor(heroColours[0]) ? 0.5 : 0) }]} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={[mini.posterCoverName, { color: isDarkColor(heroColours[0]) ? '#FFF4EE' : '#26201E' }]} numberOfLines={1}>NAME</Text>
+                <Text style={[mini.posterCoverName, { color: blend(accent, '#FFFFFF', isDarkColor(heroColours[0]) ? 0.5 : 0) }]} numberOfLines={1}>HERE</Text>
+              </View>
+              <View style={[mini.polaroidPrint, { width: 30, transform: [{ rotate: '5deg' }] }]}>
+                <View style={[mini.polaroidPrintPhoto, { backgroundColor: photoFill }]} />
+                <View style={mini.tape} />
+              </View>
+            </View>
+          </View>
+        ) : style.hero === 'echoName' ? (
+          // Hibiscus: the name echoed faintly behind a photo and a deep round panel.
+          <View style={mini.echoHero}>
+            {[0, 1, 2, 3].map(i => (
+              <Text key={i} style={[mini.echoRow, { color: withAlpha(isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E', 0.1) }]} numberOfLines={1}>NAME NAME NAME</Text>
+            ))}
+            <View style={[mini.echoPhoto, { backgroundColor: photoFill }]} />
+            <View style={[mini.echoPanel, { backgroundColor: blend(accent, '#000000', 0.45) }]}>
+              <Text style={[mini.echoName, { color: blend(accent, '#FFFFFF', 0.62) }]} numberOfLines={1}>NAME</Text>
+            </View>
+          </View>
+        ) : style.hero === 'storefrontBanner' ? (
+          // Storefront: a full-width photo, then a soft band with the name in slanted caps.
+          <View style={mini.storeHero}>
+            <View style={[mini.storePhoto, { backgroundColor: photoFill }]}>
+              <View style={mini.smallLogo}>{logo}</View>
+            </View>
+            <View style={[mini.storeBand, { backgroundColor: blend(accent, '#FFFFFF', 0.82) }]}>
+              <Text style={[mini.slantTitle, { color: blend(accent, '#1A0F12', 0.55) }]} numberOfLines={1}>NAME</Text>
+            </View>
+          </View>
+        ) : style.hero === 'pinboardHeader' ? (
           // Pinboard: three rounded pins side by side at uneven heights, then the logo beside the name.
           <View style={mini.pinHero}>
             <View style={mini.pinBoard}>
@@ -1003,6 +1121,30 @@ const mini = StyleSheet.create({
     textShadowColor: 'rgba(50,36,28,0.55)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5,
   },
   root: { height: 180 },
+  // The 2026-11-19 reference-board styles: Poster, Hibiscus, Storefront.
+  tape: { position: 'absolute', top: -3, alignSelf: 'center', width: 14, height: 5, backgroundColor: 'rgba(238,232,220,0.9)' },
+  phone: { width: 30, height: 46, borderWidth: 2, borderRadius: 7, padding: 1, overflow: 'hidden' },
+  phoneScreen: { flex: 1, borderRadius: 4 },
+  pillName: { width: '45%', height: 8, borderRadius: 4 },
+  plate: { width: 22, height: 22, borderRadius: 11 },
+  arrowPill: { width: 28, height: 7, borderRadius: 4 },
+  archFrame: { padding: 2, borderTopLeftRadius: 99, borderTopRightRadius: 99, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
+  archFramePhoto: { height: 18, borderTopLeftRadius: 99, borderTopRightRadius: 99 },
+  twoTone: { fontFamily: 'LeagueSpartan-ExtraBold', fontSize: 13, lineHeight: 14, letterSpacing: -0.5 },
+  enjoyLead: { fontFamily: 'Manrope-Bold', fontSize: 4, letterSpacing: 2 },
+  enjoyTitle: { fontFamily: 'Oswald-Bold', fontSize: 13, lineHeight: 17 },
+  slantTitle: { fontFamily: 'Archivo-ExtraBold', fontSize: 11, lineHeight: 15, transform: [{ skewX: '-10deg' }] },
+  posterCoverHero: { alignSelf: 'stretch', flex: 1, paddingHorizontal: 8, paddingTop: 6 },
+  posterCoverPill: { width: 30, height: 6, borderRadius: 3, marginBottom: 3 },
+  posterCoverName: { fontFamily: 'LeagueSpartan-ExtraBold', fontSize: 15, lineHeight: 16, letterSpacing: -0.6 },
+  echoHero: { alignSelf: 'stretch', flex: 1, overflow: 'hidden', justifyContent: 'center' },
+  echoRow: { fontFamily: 'Oswald-Bold', fontSize: 16, lineHeight: 18, marginLeft: -6 },
+  echoPhoto: { position: 'absolute', right: 8, top: 10, width: 40, height: 54, borderRadius: 7 },
+  echoPanel: { position: 'absolute', left: 8, bottom: 8, width: 58, borderRadius: 7, paddingHorizontal: 5, paddingVertical: 4 },
+  echoName: { fontFamily: 'Oswald-Bold', fontSize: 12, lineHeight: 15 },
+  storeHero: { alignSelf: 'stretch', flex: 1 },
+  storePhoto: { flex: 1, alignItems: 'center', paddingTop: 3 },
+  storeBand: { height: 22, alignItems: 'center', justifyContent: 'center' },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   // Over a background photo the sheet is inset, as on the profile.

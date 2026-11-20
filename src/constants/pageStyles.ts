@@ -48,6 +48,12 @@ export type PageStyleKey =
   | 'pinboard'
   | 'portfolio'
   | 'atelier'
+  // 2026-11-19, from the owner's reference boards (a coach's Instagram grid,
+  // a café's drink posts and a hair shop's Shopify site): each built from
+  // parts of its own rather than the ones the other styles share.
+  | 'poster'
+  | 'hibiscus'
+  | 'storefront'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -75,7 +81,10 @@ export type PageHeading =
   | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
   | 'chapter'   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
   | 'chunkyCaps' // a lowercase script word, then the title in big serif caps, centred (Studio)
-  | 'loungeCaps' // tall condensed caps, centred; Policies gets "PLEASE REVIEW MY" over it (Lounge)
+  | 'loungeCaps' // tall condensed caps, centred
+  | 'twoToneCaps' // huge condensed caps, the lead word in the ink and the rest in the accent (Poster)
+  | 'enjoyStack'  // a thin, widely spaced lead word over heavy condensed caps, centred (Hibiscus)
+  | 'slantCaps'   // a tiny spaced overline, then heavy slanted caps, centred, like a shop banner (Storefront); Policies gets "PLEASE REVIEW MY" over it (Lounge)
   | 'softCaps'   // heavy grotesk caps at the top left of its own card (Soft Focus)
   | 'hushRule'   // tiny spaced caps between hairlines, in the style's own quiet words (Hush)
   | 'stripeCaps' // spaced serif caps, centred, at the top of the section's colour strip (Stripes)
@@ -189,6 +198,9 @@ export type PageHero =
   | 'portfolioFront' // a chosen work photo above a compact provider identity and booking details
   | 'pinboardHeader' // up to three rounded photo pins side by side at uneven heights, then the logo beside the name
   | 'atelierLetterhead' // a tall noncursive wordmark, fine rules and a small provider image
+  | 'posterCover' // a pill label, the name in huge two-tone caps, a taped photo and a handwritten line in a sparkle loop (Poster)
+  | 'echoName'   // the name repeated large and faint behind a chosen photo, a dark round panel over it with the name (Hibiscus)
+  | 'storefrontBanner' // a chosen photo the full width of the page, then a soft band with the name in slanted caps (Storefront)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -292,6 +304,9 @@ export interface PageStyle {
 export type ServiceLayout =
   | 'tiles'      // two across: the photo on top, then the name, length and price, Book under them (Posy)
   | 'photoCards' // one across: a wide photo on top, then the name and price beside Book (Riviera)
+  | 'pillMenu'   // no photos: each name in a filled accent pill, the price and length beside it (Poster)
+  | 'spotlight'  // one across, centred: the photo in a round plate, the name in condensed caps, the price, Book under (Hibiscus)
+  | 'archTiles'  // two across, each photo standing in a soft arched frame, the name and price under (Storefront)
   | 'menu';      // a printed menu: no photos, the name, a dotted leader and the price, its length under (Muse)
 
 /** Portfolio layouts beyond the usual columns. */
@@ -301,18 +316,24 @@ export type PhotoLayout =
   | 'pins'      // two staggered columns of rounded photos with captions
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
-  | 'swipe';    // one row of tall photos that scrolls sideways (Muse, Noir)
+  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
+  | 'taped'     // two across as white-bordered prints held on by a strip of tape, tilted by hand (Poster)
+  | 'phone'     // the work inside a phone's screen, swiping sideways like a feed (Hibiscus)
+  | 'banner';   // the first photo as a wide banner, then a row of three under it (Storefront)
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
   | 'line'  // a hairline across the page (Noir)
   | 'stars'  // three small stars between two fine rules (Muse)
-  | 'dots';  // three small dots, centred (Retreat)
+  | 'dots'  // three small dots, centred (Retreat)
+  | 'sparkles'; // a hand-drawn loop with a sparkle at each end (Poster)
 
 export type ButtonShape =
   | 'square'    // barely rounded, the word in spaced capitals (Noir)
   | 'textLink'  // no button at all: the word underlined in the accent (Muse)
-  | 'outline';  // a round outline in the ink, no fill (Retreat)
+  | 'outline'   // a round outline in the ink, no fill (Retreat)
+  | 'arrowPill' // a filled pill, the word then a small arrow in a circle, like "Order now" (Hibiscus)
+  | 'shopBox';  // a small square outline, the word in spaced capitals, like "Shop now" (Storefront)
 
 export interface HeroNameFont {
   fontFamily: string;
@@ -642,6 +663,30 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     custom: { headingFont: 'Manrope-Bold', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
   },
   {
+    key: 'poster', name: 'Poster', description: 'Bold two-tone capitals, taped prints and your services as pink pills',
+    heading: 'twoToneCaps', cards: 'open', policies: 'stickers', logo: 'circle',
+    hero: 'posterCover', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    serviceLayout: 'pillMenu', photoLayout: 'taped', divider: 'sparkles',
+    nameFontPickable: true,
+  },
+  {
+    key: 'hibiscus', name: 'Hibiscus', description: 'Your name echoing behind your work, round panels and "Book now" pills',
+    heading: 'enjoyStack', cards: 'soft', policies: 'bubbles', logo: 'rounded',
+    hero: 'echoName', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    serviceLayout: 'spotlight', photoLayout: 'phone', buttonShape: 'arrowPill',
+    nameFontPickable: true,
+  },
+  {
+    key: 'storefront', name: 'Storefront', description: 'A full-width photo, bold slanted headings and services in arches, like a shop',
+    heading: 'slantCaps', cards: 'stripes', policies: 'accordion', logo: 'circle',
+    hero: 'storefrontBanner', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    openStrips: true, serviceLayout: 'archTiles', photoLayout: 'banner', buttonShape: 'shopBox',
+    nameFontPickable: true,
+  },
+  {
     key: 'portfolio', name: 'Portfolio', description: 'A chosen cover photo, your image and a calm gallery of your work',
     heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
     hero: 'portfolioFront', aboutInHero: false,
@@ -677,6 +722,9 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'portfolioFront': return 1; // Portfolio's cover image
     case 'pinboardHeader': return 3; // Pinboard's board of pins
     case 'roseCampaign': return 1; // Custom's Rose top: the photo beside the name
+    case 'posterCover': return 1;  // Poster's taped print
+    case 'echoName': return 1;     // Hibiscus's photo in front of the echoed name
+    case 'storefrontBanner': return 1; // Storefront's full-width photo
     default: return 0;
   }
 }
@@ -694,6 +742,9 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'archWindow': return 196 / 236;    // Retreat's window
     case 'portfolioFront': return 358 / 230; // Portfolio's cover
     case 'roseCampaign': return 156 / 248;  // Rose's photo, beside the name panel
+    case 'posterCover': return 138 / 168;   // Poster's taped print
+    case 'echoName': return 190 / 230;      // Hibiscus's photo
+    case 'storefrontBanner': return 390 / 300; // Storefront's full-width photo
     case 'pinboardHeader': {
       // Side by side at uneven heights (150, 124, 138); one photo is 156 across.
       if (count <= 1) return 358 / 156;

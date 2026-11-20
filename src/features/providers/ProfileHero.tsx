@@ -320,6 +320,139 @@ function ProfileHeroLayoutBody({
         </View>
       );
     }
+    case "posterCover": {
+      // Poster (owner's coach-grid board, 2026-11-19): what they do on a
+      // pill, the name in huge two-tone caps, a handwritten line in a
+      // sparkle loop beside one of their photos taped on like a print.
+      const [first, last] = splitLast(name);
+      const pop = heroIsDark ? blend(accent, "#FFFFFF", 0.5) : accent;
+      const popInk = isDarkColor(pop) ? "#FFFFFF" : "#1F1214";
+      const label = kickerPhrase(kicker);
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.posterWrap}>
+          <View style={layout.posterTopRow}>
+            {label ? (
+              <View style={[layout.posterPill, { backgroundColor: pop }]}>
+                <Text style={[layout.posterPillText, { color: popInk }]} numberOfLines={1}>{label.toUpperCase()}</Text>
+              </View>
+            ) : <View />}
+            {renderLogo(46)}
+          </View>
+          <View accessible accessibilityRole="header" accessibilityLabel={name} style={layout.posterNameBlock}>
+            <Text style={[layout.posterName, pickedName(54), { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{first.toUpperCase()}</Text>
+            {last ? <Text style={[layout.posterName, pickedName(54), { color: pop }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{last.toUpperCase()}</Text> : null}
+            {tick}
+          </View>
+          <View style={layout.posterLower}>
+            <View style={layout.posterLoop}>
+              <Svg width={168} height={72} viewBox="0 0 168 72" style={StyleSheet.absoluteFill}>
+                <Path d="M18 38 C 22 12, 140 6, 156 30 C 168 52, 100 66, 66 64 C 26 62, 4 50, 22 26" fill="none" stroke={heroText} strokeWidth={1.4} strokeLinecap="round" />
+                <Path d="M8 34 L10 29 L12 34 L17 36 L12 38 L10 43 L8 38 L3 36 Z" fill={heroText} />
+                <Path d="M156 50 L157.6 46 L159.2 50 L163 51.6 L159.2 53.2 L157.6 57 L156 53.2 L152 51.6 Z" fill={heroText} />
+              </Svg>
+              <Text style={[layout.posterScript, { color: heroText }]} numberOfLines={2}>book in{"\n"}with me</Text>
+            </View>
+            {photo ? (
+              <TouchableOpacity
+                style={layout.posterPrint}
+                disabled={!onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(0)}
+                accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={`${name} work photo`}
+                activeOpacity={0.88}
+              >
+                <View style={layout.posterPrintPhoto}><HeroPhoto uri={photo} /></View>
+                <View style={layout.posterTape} pointerEvents="none" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <View style={layout.posterFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "echoName": {
+      // Hibiscus (owner's drink-post board, 2026-11-19): the name repeated
+      // large and faint behind everything, one chosen photo, and a deep
+      // round panel over its corner with the name in condensed caps.
+      const echo = name.trim().toUpperCase();
+      const photo = photoUris?.[0];
+      const panel = heroIsDark ? blend(heroColour, "#000000", 0.35) : blend(accent, "#000000", 0.45);
+      const panelPop = blend(accent, "#FFFFFF", 0.62);
+      const phrase = kickerPhrase(kicker);
+      const panelBody = (
+        <View style={[layout.echoPanel, { backgroundColor: panel }, photo ? layout.echoPanelOver : null]}>
+          <Text style={[layout.echoLead, { color: "#FFF4F6" }]}>WELCOME TO</Text>
+          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.echoName, pickedName(32), { color: panelPop }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+            {isVerified ? <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" accessibilityLabel="Verified" /> : null}
+          </View>
+          {phrase ? (
+            <View style={[layout.echoTag, { backgroundColor: withAlpha(panelPop, 0.22) }]}>
+              <Text style={[layout.echoTagText, { color: "#FFF4F6" }]} numberOfLines={1}>{phrase}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+      return (
+        <View style={layout.echoWrap}>
+          <View style={layout.echoBehind} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants">
+            {[0, 1, 2, 3, 4, 5].map(row => (
+              <Text key={row} style={[layout.echoRow, { color: withAlpha(heroText, 0.1) }]} numberOfLines={1}>{`${echo} ${echo} ${echo}`}</Text>
+            ))}
+          </View>
+          <View style={layout.echoTop}>{renderLogo(46)}</View>
+          {photo ? (
+            <View style={layout.echoStage}>
+              <TouchableOpacity
+                style={[layout.echoPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.5) }]}
+                disabled={!onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(0)}
+                accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={`${name} featured work`}
+                activeOpacity={0.88}
+              ><HeroPhoto uri={photo} /></TouchableOpacity>
+              {panelBody}
+            </View>
+          ) : panelBody}
+          <View style={layout.echoFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "storefrontBanner": {
+      // Storefront (owner's Shopify board, 2026-11-19): one chosen photo the
+      // full width of the page with the logo over its top, then a soft band
+      // with the name in heavy slanted caps, like a shop's home page.
+      const photo = photoUris?.[0];
+      const band = sheetColour ?? blend(accent, "#FFFFFF", 0.82);
+      const bandDark = isDarkColor(band);
+      const bandInk = bandDark ? "#FFFFFF" : blend(accent, "#1A0F12", 0.55);
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.storeWrap}>
+          <TouchableOpacity
+            style={[layout.storePhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.45) }]}
+            disabled={!photo || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={photo ? `${name} featured work` : undefined}
+            activeOpacity={0.9}
+          >
+            {photo ? <HeroPhoto uri={photo} /> : null}
+            <LinearGradient colors={["rgba(0,0,0,0.28)", "transparent"]} style={layout.storeShade} pointerEvents="none" />
+            <View style={layout.storeLogo}>{renderLogo(52)}</View>
+          </TouchableOpacity>
+          <View style={[layout.storeBand, { backgroundColor: band }]}>
+            {phrase ? <Text style={[layout.storeOver, { color: withAlpha(bandInk, 0.6) }]} numberOfLines={1}>{phrase.toUpperCase()}</Text> : null}
+            <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.storeName, pickedName(30), { color: bandInk }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+              {isVerified ? <Ionicons name="checkmark-circle" size={17} color={bandDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+            </View>
+          </View>
+          <View style={layout.storeFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
     case "pinboardHeader": {
       // Pinboard: up to three of their photos side by side as rounded pins of
       // uneven heights, like a Pinterest board, then the logo beside the name
@@ -1385,6 +1518,40 @@ export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 const TEXT_FIRST_DROP = 48;
 
 const layout = StyleSheet.create({
+  posterWrap: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 22 },
+  posterTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  posterPill: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 30, maxWidth: "70%" },
+  posterPillText: { fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 0.6 },
+  posterNameBlock: { alignItems: "flex-start" },
+  posterName: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 54, lineHeight: 56, letterSpacing: -2, paddingTop: 6 },
+  posterLower: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
+  posterLoop: { width: 168, height: 72, alignItems: "center", justifyContent: "center" },
+  posterScript: { fontFamily: "DancingScript_700Bold", fontSize: 18, lineHeight: 20, textAlign: "center", transform: [{ rotate: "-4deg" }] },
+  posterPrint: { width: 138, padding: 6, paddingBottom: 6, backgroundColor: "#FFFDF9", transform: [{ rotate: "4deg" }], shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  posterPrintPhoto: { width: "100%", height: 156, overflow: "hidden", backgroundColor: "#EEE" },
+  posterTape: { position: "absolute", top: -9, left: 40, width: 58, height: 18, backgroundColor: "rgba(238,232,220,0.82)", transform: [{ rotate: "-6deg" }] },
+  posterFoot: { alignItems: "flex-start", gap: 9, marginTop: 18 },
+  echoWrap: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 22, overflow: "hidden" },
+  echoBehind: { position: "absolute", top: 0, left: -30, right: -30, bottom: 0, justifyContent: "space-around" },
+  echoRow: { fontFamily: "Oswald-Bold", fontSize: 64, lineHeight: 72, letterSpacing: 1 },
+  echoTop: { flexDirection: "row", justifyContent: "flex-start", marginBottom: 12 },
+  echoStage: { minHeight: 262 },
+  echoPhoto: { position: "absolute", right: 0, top: 0, width: "60%", height: 230, borderRadius: 22, overflow: "hidden" },
+  echoPanel: { borderRadius: 22, paddingHorizontal: 18, paddingVertical: 18 },
+  echoPanelOver: { position: "absolute", left: 0, bottom: 0, width: "64%" },
+  echoLead: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 4 },
+  echoName: { fontFamily: "Oswald-Bold", fontSize: 32, lineHeight: 40, marginTop: 2, flexShrink: 1 },
+  echoTag: { alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 4, marginTop: 6 },
+  echoTagText: { fontFamily: "LibreBaskerville-Italic", fontSize: 12 },
+  echoFoot: { alignItems: "center", gap: 9, marginTop: 18 },
+  storeWrap: { paddingBottom: 22 },
+  storePhoto: { height: 300, overflow: "hidden" },
+  storeShade: { position: "absolute", top: 0, left: 0, right: 0, height: 96 },
+  storeLogo: { position: "absolute", top: 14, left: 0, right: 0, alignItems: "center" },
+  storeBand: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 20 },
+  storeOver: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 3.5, marginBottom: 6 },
+  storeName: { fontFamily: "Archivo-ExtraBold", fontSize: 30, lineHeight: 38, textAlign: "center", transform: [{ skewX: "-10deg" }], flexShrink: 1 },
+  storeFoot: { alignItems: "center", gap: 9, paddingHorizontal: 20, marginTop: 16 },
   roseWrap: { paddingHorizontal: 18, paddingTop: 17, paddingBottom: 24 },
   roseHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 52 },
   roseOverline: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.4, flexShrink: 1 },

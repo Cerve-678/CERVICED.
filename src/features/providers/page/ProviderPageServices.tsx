@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import CategoryTabItem from "../../../components/CategoryTabPill";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../../constants/featureFlags";
 import { menuNumber } from "../../../constants/pageStyles";
-import { withAlpha } from "../../../constants/providerThemes";
+import { isDarkColor, withAlpha } from "../../../constants/providerThemes";
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
 import { GlossShine } from "../ProfilePageStyle";
@@ -33,6 +33,10 @@ const SERVICE_TILE_GAP = 10;
 const SERVICE_TILE_PADDING = 8;
 /** The padding inside a usual service card (styles.serviceItem). */
 const SERVICE_CARD_PADDING = 15;
+/** Storefront: the soft frame round each service's arched photo. */
+const SERVICE_ARCH_FRAME = 7;
+/** Hibiscus: the round plate each service's photo sits on. */
+const SERVICE_PLATE = 168;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
@@ -282,12 +286,40 @@ export function ProviderPageServices({
   // leader and the price on one line, the length under it.
   const serviceMenu = pageStyle.serviceLayout === "menu";
   const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
-  const serviceStacked = serviceTiles || servicePhotoCards;
+  // Poster: no photos, each name in a filled pill of the accent.
+  const servicePills = pageStyle.serviceLayout === "pillMenu";
+  // Hibiscus: one across and centred, the photo in a round plate.
+  const serviceSpotlight = pageStyle.serviceLayout === "spotlight";
+  // Storefront: two across, each photo standing in a soft arched frame.
+  const serviceArches = pageStyle.serviceLayout === "archTiles";
+  const serviceTwoUp = serviceTiles || serviceArches;
+  const serviceNoPhoto = serviceMenu || servicePills;
+  const serviceStacked = serviceTwoUp || servicePhotoCards || serviceSpotlight;
+  // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
+  const arrowPillButtons = pageStyle.buttonShape === "arrowPill";
+  const shopBoxButtons = pageStyle.buttonShape === "shopBox";
+  const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
   const serviceTileImageWidth = listWidth > 0 ? Math.floor((listWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
   const serviceWideImageWidth = listWidth > 0 ? Math.floor(listWidth) - SERVICE_CARD_PADDING * 2 : 280;
-  const serviceTopImage = serviceTiles
+  const serviceArchWidth = serviceTileImageWidth - SERVICE_ARCH_FRAME * 2;
+  const serviceTopImage = serviceArches
+    ? { width: serviceArchWidth, height: Math.round(serviceArchWidth * 1.25), borderTopLeftRadius: 999, borderTopRightRadius: 999, borderRadius: 4 }
+    : serviceSpotlight
+    ? { width: SERVICE_PLATE, height: SERVICE_PLATE, borderRadius: SERVICE_PLATE / 2 }
+    : serviceTiles
     ? { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 }
     : { width: serviceWideImageWidth, height: Math.round(serviceWideImageWidth * 0.5), borderRadius: 16 };
+  // Storefront's arch frame round each photo: a soft wash of the accent.
+  const archFrame = serviceArches
+    ? [
+        styles.serviceArchFrame,
+        {
+          width: serviceTileImageWidth,
+          height: Math.round(serviceArchWidth * 1.25) + SERVICE_ARCH_FRAME * 2,
+          backgroundColor: withAlpha(adaptiveAccentColor, 0.16),
+        },
+      ]
+    : null;
 
   return (
     <>
@@ -401,7 +433,7 @@ export function ProviderPageServices({
 
       {/* Services List */}
       <View
-        style={[styles.categoryServicesContainer, serviceTiles && styles.serviceTilesGrid]}
+        style={[styles.categoryServicesContainer, serviceTwoUp && styles.serviceTilesGrid]}
         onLayout={serviceStacked ? (e) => onListWidth(e.nativeEvent.layout.width) : undefined}
       >
         {services.map((service, serviceIndex) => (
@@ -416,7 +448,7 @@ export function ProviderPageServices({
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
               squareCards && styles.squareCard,
-              serviceTiles && styles.serviceTile,
+              serviceTwoUp && styles.serviceTile,
             ]}
           >
             {serviceSurfaceStyle ? null : (
@@ -429,8 +461,8 @@ export function ProviderPageServices({
             )}
             {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
             <View style={styles.serviceCardBlur}>
-              <View style={[styles.serviceItem, serviceTiles && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard]}>
-                {serviceMenu ? null : (() => {
+              <View style={[styles.serviceItem, serviceTwoUp && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard, serviceSpotlight && styles.serviceItemSpotlight]}>
+                {serviceNoPhoto ? null : (() => {
                   const isMulti = (service.images?.length ?? 0) > 1;
                   const hasSingle = (service.images?.length ?? 0) === 1;
                   const hasLocal = !!service.image;
@@ -446,6 +478,7 @@ export function ProviderPageServices({
                           styles.serviceImageContainer,
                           { marginRight: 0 },
                           serviceStacked && serviceTopImage,
+                          archFrame,
                         ]}
                       />
                     );
@@ -460,6 +493,7 @@ export function ProviderPageServices({
                           styles.serviceImageContainer,
                           serviceStacked && [serviceTopImage, styles.serviceImageTileGap],
                           styles.serviceImagePlaceholder,
+                          archFrame,
                           {
                             backgroundColor: adaptiveAccentColor + "1C",
                           },
@@ -492,7 +526,7 @@ export function ProviderPageServices({
                         }
                       }}
                     >
-                      <View style={[styles.serviceImageContainer, serviceStacked && [serviceTopImage, styles.serviceImageTileGap]]}>
+                      <View style={[styles.serviceImageContainer, serviceStacked && [serviceTopImage, styles.serviceImageTileGap], archFrame]}>
                         <Image
                           source={imgSrc}
                           style={serviceStacked ? serviceTopImage : styles.serviceImage}
@@ -504,16 +538,20 @@ export function ProviderPageServices({
                   );
                 })()}
 
-                <View style={[styles.serviceInfo, serviceTiles && styles.serviceInfoTile]}>
-                  {serviceMenu ? (
+                <View style={[styles.serviceInfo, serviceTwoUp && styles.serviceInfoTile, serviceSpotlight && styles.serviceInfoSpotlight]}>
+                  {servicePills ? (
+                    <View style={[styles.servicePill, { backgroundColor: adaptiveAccentColor }]}>
+                      <Text style={[styles.servicePillText, { color: pillInk }]}>{service.name.toUpperCase()}</Text>
+                    </View>
+                  ) : serviceMenu ? (
                     <View style={styles.menuNameRow}>
                       <Text style={[styles.serviceName, styles.menuName, { color: SV.text }, bodyFont]}>{service.name}</Text>
                       <View style={[styles.menuLeader, { borderBottomColor: SV.sub }]} />
                       <Text style={[styles.servicePrice, styles.menuPrice, { color: SV.text }, bodyFont]}>£{service.price}</Text>
                     </View>
                   ) : (
-                  <Text style={[styles.serviceName, { color: SV.text }, bodyFont]}>
-                    {service.name}
+                  <Text style={[styles.serviceName, { color: SV.text }, bodyFont, serviceSpotlight && styles.serviceNameSpotlight]}>
+                    {serviceSpotlight ? service.name.toUpperCase() : service.name}
                   </Text>
                   )}
                   {service.serviceType === "consultation" &&
@@ -580,7 +618,7 @@ export function ProviderPageServices({
                       )}
                     </View>
                   )}
-                  <View style={styles.serviceDetails}>
+                  <View style={[styles.serviceDetails, serviceSpotlight && styles.serviceDetailsSpotlight]}>
                     <Text style={[styles.serviceDuration, { color: SV.sub }, bodyFont]}>
                       {service.duration}
                     </Text>
@@ -595,7 +633,7 @@ export function ProviderPageServices({
                 {/* Booking controls are absent, rather than merely disabled,
                     on the provider's own profile and while ownership loads. */}
                 {canBook && (
-                <View style={[styles.serviceActionColumn, serviceTiles && styles.serviceActionTile]}>
+                <View style={[styles.serviceActionColumn, serviceTwoUp && styles.serviceActionTile, serviceSpotlight && styles.serviceActionSpotlight]}>
                   {(() => {
                     const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
 
@@ -670,6 +708,8 @@ export function ProviderPageServices({
                           },
                           textLinkButtons && styles.textLinkButton,
                           outlineButtons && [styles.outlineButton, { borderColor: fullyBooked ? SV.border : SV.text }],
+                          arrowPillButtons && styles.arrowPillButton,
+                          shopBoxButtons && [styles.shopBoxButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -687,6 +727,8 @@ export function ProviderPageServices({
                             // After the colour above: a text link is the accent, or grey when full.
                             textLinkButtons && [styles.textLinkButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
                             outlineButtons && !fullyBooked && { color: SV.text },
+                            arrowPillButtons && !fullyBooked && { color: pillInk },
+                            shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                           ]}
                         >
                           {!takingBookings
@@ -694,8 +736,15 @@ export function ProviderPageServices({
                               : fullyBooked
                               ? "Fully Booked"
                               // Boutique says "Add to basket"; it still opens the booking sheet.
+                              : arrowPillButtons || shopBoxButtons
+                              ? "Book now"
                               : pageStyle.bookLabel ?? "Book"}
                         </Text>
+                        {arrowPillButtons && takingBookings && !fullyBooked ? (
+                          <View style={[styles.arrowPillCircle, { borderColor: pillInk }]}>
+                            <Ionicons name="chevron-forward" size={11} color={pillInk} />
+                          </View>
+                        ) : null}
                       </TouchableOpacity>
                     );
                   })()}
@@ -1036,6 +1085,18 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   serviceTile: { width: "48.5%" },
+  serviceArchFrame: { padding: SERVICE_ARCH_FRAME, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, overflow: "hidden" },
+  serviceItemSpotlight: { flexDirection: "column", alignItems: "center" },
+  serviceInfoSpotlight: { marginRight: 0, alignItems: "center", alignSelf: "stretch" },
+  serviceNameSpotlight: { fontFamily: "Oswald-Bold", fontSize: 22, lineHeight: 30, letterSpacing: 0.5, textAlign: "center" },
+  serviceDetailsSpotlight: { justifyContent: "center", gap: 12 },
+  serviceActionSpotlight: { marginTop: 12 },
+  servicePill: { alignSelf: "flex-start", borderRadius: 30, paddingHorizontal: 14, paddingVertical: 7, marginBottom: 4 },
+  servicePillText: { fontFamily: "Manrope-Bold", fontSize: 12, letterSpacing: 0.6 },
+  arrowPillButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16, paddingRight: 6 },
+  arrowPillCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.4, alignItems: "center", justifyContent: "center" },
+  shopBoxButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 1, shadowOpacity: 0, elevation: 0, paddingHorizontal: 12 },
+  shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP },
   // Service-type switch — plain underline indicator, mirroring the

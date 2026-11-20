@@ -268,11 +268,16 @@ export function ProfileStylePreview({
   const page = sheetInk(OP.bg);
   const cardInk = sectionInk(palette);
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
-  const tiles = pageStyle.serviceLayout === "tiles";
+  const arches = pageStyle.serviceLayout === "archTiles";
+  const tiles = pageStyle.serviceLayout === "tiles" || arches;
   const photoCards = pageStyle.serviceLayout === "photoCards";
-  const menu = pageStyle.serviceLayout === "menu";
+  const spotlight = pageStyle.serviceLayout === "spotlight";
+  const pills = pageStyle.serviceLayout === "pillMenu";
+  const menu = pageStyle.serviceLayout === "menu" || pills;
   const textLink = pageStyle.buttonShape === "textLink";
-  const outlineBook = pageStyle.buttonShape === "outline";
+  const outlineBook = pageStyle.buttonShape === "outline" || pageStyle.buttonShape === "shopBox";
+  const arrowBook = pageStyle.buttonShape === "arrowPill";
+  const shopBook = pageStyle.buttonShape === "shopBox";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -591,11 +596,11 @@ export function ProfileStylePreview({
             >
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
-              <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow]}>
+              <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow, spotlight && styles.spotlightColumn]}>
                 {menu ? null : (
-                <View style={[styles.serviceThumb, tiles && styles.tileThumb, photoCards && styles.photoCardThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
+                <View style={[styles.serviceThumb, tiles && styles.tileThumb, photoCards && styles.photoCardThumb, spotlight && styles.spotlightThumb, arches && styles.archThumb, { backgroundColor: withAlpha(accent, arches ? 0.16 : 0.11) }]}>
                   {services[index]?.imageUri && !pageStyle.numberedServices ? (
-                    <Image source={{ uri: services[index]!.imageUri! }} style={tiles || photoCards ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
+                    <Image source={{ uri: services[index]!.imageUri! }} style={arches ? styles.archThumbImage : tiles || photoCards || spotlight ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
                   ) : (
                     <Text style={[styles.serviceThumbText, { color: accent }]}>
                       {pageStyle.numberedServices ? `${index + 1 < 10 ? "0" : ""}${index + 1}` : (services[index]?.name.trim().charAt(0).toUpperCase() || "S")}
@@ -604,8 +609,15 @@ export function ProfileStylePreview({
                 </View>
                 )}
                 {services[index] ? (
-                  <View style={styles.serviceText}>
-                    {menu ? (
+                  <View style={[styles.serviceText, spotlight && styles.spotlightText]}>
+                    {pills ? (
+                      <View style={styles.menuRow}>
+                        <View style={[styles.pillName, { backgroundColor: accent }]}>
+                          <Text style={[styles.pillNameText, { color: onAccentInk(accent).text }]} numberOfLines={1}>{services[index].name.toUpperCase()}</Text>
+                        </View>
+                        <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]}>{previewPrice(services[index].price)}</Text>
+                      </View>
+                    ) : menu ? (
                       // Muse: the printed menu line, as on the profile.
                       <View style={styles.menuRow}>
                         <Text style={[styles.serviceName, styles.menuName, { color: serviceInk.text }, bodyFont]} numberOfLines={1}>{services[index].name}</Text>
@@ -613,7 +625,7 @@ export function ProfileStylePreview({
                         <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]}>{previewPrice(services[index].price)}</Text>
                       </View>
                     ) : (
-                      <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]} numberOfLines={1}>{services[index].name}</Text>
+                      <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont, spotlight && styles.spotlightName]} numberOfLines={1}>{spotlight ? services[index].name.toUpperCase() : services[index].name}</Text>
                     )}
                     <Text style={[styles.serviceMeta, { color: serviceInk.sub }, bodyFont]} numberOfLines={1}>
                       {menu
@@ -627,8 +639,13 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }]]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText]}>Book</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, shopBook && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
+                  {arrowBook ? (
+                    <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
+                      <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
+                    </View>
+                  ) : null}
                 </View>
               </View>
               {services[index]?.addOns?.length ? (
@@ -791,6 +808,18 @@ const styles = StyleSheet.create({
   // Posy: two tiles across, the photo on top, as on the profile.
   tilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   tile: { width: "48.5%", padding: 8 },
+  spotlightColumn: { flexDirection: "column", alignItems: "center", gap: 10 },
+  spotlightThumb: { width: 140, height: 140, borderRadius: 70, overflow: "hidden" },
+  spotlightText: { alignItems: "center", alignSelf: "stretch" },
+  spotlightName: { fontFamily: "Oswald-Bold", fontSize: 20, lineHeight: 28 },
+  archThumb: { width: "100%", height: undefined, aspectRatio: 0.82, padding: 6, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, overflow: "hidden" },
+  archThumbImage: { flex: 1, width: "100%", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 3, borderBottomRightRadius: 3 },
+  pillName: { borderRadius: 30, paddingHorizontal: 12, paddingVertical: 6, flexShrink: 1 },
+  pillNameText: { fontFamily: "Manrope-Bold", fontSize: 11, letterSpacing: 0.5 },
+  bookArrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingRight: 6 },
+  bookArrowCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.3, alignItems: "center", justifyContent: "center" },
+  bookShopBox: { borderWidth: 1, borderRadius: 1 },
+  bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },
   // Riviera: a wide photo on top, the details and Book wrapping under it.
