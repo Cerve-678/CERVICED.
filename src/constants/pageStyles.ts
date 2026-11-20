@@ -317,15 +317,13 @@ export type ServiceLayout =
 
 /** Portfolio layouts beyond the usual columns. */
 export type PhotoLayout =
-  | 'arches'     // three across, each photo with a round arched top (Posy)
+  | 'arches'     // three across, each photo with a round arched top (Posy, Retreat, Storefront)
   | 'portfolioWall' // three airy cover images with the middle print set higher
   | 'pins'      // two staggered columns of rounded photos with captions
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
-  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
-  | 'taped'     // two across as white-bordered prints held on by a strip of tape, tilted by hand (Poster)
-  | 'phone'     // the work inside a phone's screen, swiping sideways like a feed (Hibiscus)
-  | 'banner';   // the first photo as a wide banner, then a row of three under it (Storefront)
+  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir, Hibiscus)
+  | 'taped';    // two across as white-bordered prints held on by a strip of tape, tilted by hand (Poster)
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
@@ -637,7 +635,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
     hero: 'archWindow', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    divider: 'dots', buttonShape: 'outline', pagePattern: 'glow',
+    divider: 'dots', buttonShape: 'outline', pagePattern: 'glow', photoLayout: 'arches',
     custom: { headingFont: 'Marcellus-Regular', headingScale: 1, textFont: 'DidactGothic-Regular', headingStyle: 'typed', centred: true },
   },
   {
@@ -681,7 +679,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'enjoyStack', cards: 'soft', policies: 'bubbles', logo: 'rounded',
     hero: 'echoName', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    serviceLayout: 'spotlight', photoLayout: 'phone', buttonShape: 'arrowPill',
+    serviceLayout: 'spotlight', photoLayout: 'swipe', buttonShape: 'arrowPill',
     nameFontPickable: true,
   },
   {
@@ -689,7 +687,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'slantCaps', cards: 'stripes', policies: 'accordion', logo: 'circle',
     hero: 'storefrontBanner', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    openStrips: true, serviceLayout: 'archTiles', photoLayout: 'banner', buttonShape: 'shopBox',
+    openStrips: true, serviceLayout: 'archTiles', photoLayout: 'arches', buttonShape: 'shopBox',
     nameFontPickable: true,
   },
   {

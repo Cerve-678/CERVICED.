@@ -256,23 +256,6 @@ function MiniProfile({
             ))}
           </View>
         );
-      case 'phone':
-        return (
-          <View style={[mini.photoRow, { justifyContent: 'center', paddingVertical: 2 }]}>
-            <View style={[mini.phone, { borderColor: ink }]}>
-              <View style={[mini.phoneScreen, { backgroundColor: photoFill }]} />
-            </View>
-          </View>
-        );
-      case 'banner':
-        return (
-          <View style={{ gap: 3 }}>
-            <View style={{ height: 14, backgroundColor: photoFill }} />
-            <View style={[mini.photoRow, { gap: 3 }]}>
-              {[0, 1, 2].map(i => <View key={i} style={{ flex: 1, height: 10, backgroundColor: photoFill }} />)}
-            </View>
-          </View>
-        );
       case 'swipe':
         return (
           <View style={[mini.photoRow, mini.swipeRow]}>
@@ -1156,8 +1139,6 @@ const mini = StyleSheet.create({
   root: { height: 180 },
   // The 2026-11-19 reference-board styles: Poster, Hibiscus, Storefront.
   tape: { position: 'absolute', top: -3, alignSelf: 'center', width: 14, height: 5, backgroundColor: 'rgba(238,232,220,0.9)' },
-  phone: { width: 30, height: 46, borderWidth: 2, borderRadius: 7, padding: 1, overflow: 'hidden' },
-  phoneScreen: { flex: 1, borderRadius: 4 },
   pillName: { width: '45%', height: 8, borderRadius: 4 },
   plate: { width: 12, height: 12, borderRadius: 6 },
   arrowPill: { width: 16, height: 7, borderRadius: 4 },
