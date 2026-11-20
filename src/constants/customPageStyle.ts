@@ -169,13 +169,13 @@ export const CUSTOM_PHOTO_LAYOUTS: readonly CustomPartOption<CustomPhotos>[] = [
 export type CustomPartKey = 'top' | 'surface' | 'headingStyle' | 'services' | 'photos' | 'policies';
 
 /** Every part, in page order, with the name the provider sees and its choices. */
-export const CUSTOM_PARTS: readonly { key: CustomPartKey; name: string; label: string; options: readonly CustomPartOption<string>[] }[] = [
-  { key: 'top', name: 'Top', label: 'TOP OF YOUR PAGE', options: CUSTOM_TOPS },
-  { key: 'surface', name: 'Sections', label: 'WHAT SECTIONS SIT ON', options: CUSTOM_SURFACES },
-  { key: 'headingStyle', name: 'Headings', label: 'HEADINGS', options: CUSTOM_HEADING_STYLES },
-  { key: 'policies', name: 'Policies', label: 'POLICIES', options: CUSTOM_POLICY_LAYOUTS },
-  { key: 'services', name: 'Services', label: 'SERVICES', options: CUSTOM_SERVICE_LAYOUTS },
-  { key: 'photos', name: 'Photos', label: 'PORTFOLIO PHOTOS', options: CUSTOM_PHOTO_LAYOUTS },
+export const CUSTOM_PARTS: readonly { key: CustomPartKey; name: string; options: readonly CustomPartOption<string>[] }[] = [
+  { key: 'top', name: 'Top', options: CUSTOM_TOPS },
+  { key: 'surface', name: 'Sections', options: CUSTOM_SURFACES },
+  { key: 'headingStyle', name: 'Headings', options: CUSTOM_HEADING_STYLES },
+  { key: 'policies', name: 'Policies', options: CUSTOM_POLICY_LAYOUTS },
+  { key: 'services', name: 'Services', options: CUSTOM_SERVICE_LAYOUTS },
+  { key: 'photos', name: 'Photos', options: CUSTOM_PHOTO_LAYOUTS },
 ];
 
 /** These picks with one part changed, if the value is one of that part's choices. */
