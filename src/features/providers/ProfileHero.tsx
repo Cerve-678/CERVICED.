@@ -22,6 +22,7 @@ import type { HeroNameFont, PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import type { LogoFraming } from "../../types/database";
+import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroPhoto";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
@@ -212,6 +213,9 @@ export interface ProfileHeroLayoutProps {
   /** The Business Name Font they picked, on a style that lets it replace its
    *  own lettering (pickedNameFont); null keeps the style's own. */
   pickedNameFont?: string | null;
+  /** How the provider framed each hero photo, by URL (Branding → Your Photos).
+   *  Pass a memoized value: it feeds a context. Missing = centred, unzoomed. */
+  photoFrames?: HeroPhotoFrames;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -241,7 +245,13 @@ function splitFirst(name: string): [string, string] {
  * the others move the name, the logo and the words round them as their
  * template did on the 2026-11-13 canvas.
  */
-export function ProfileHeroLayout({
+export function ProfileHeroLayout(props: ProfileHeroLayoutProps) {
+  const { photoFrames } = props;
+  const body = <ProfileHeroLayoutBody {...props} />;
+  return photoFrames ? <HeroPhotoFramesContext.Provider value={photoFrames}>{body}</HeroPhotoFramesContext.Provider> : body;
+}
+
+function ProfileHeroLayoutBody({
   pageStyle,
   name,
   kicker,
@@ -277,16 +287,98 @@ export function ProfileHeroLayout({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "shopEdit": {
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.shopEditWrap}>
+          <View style={[layout.shopRule, { backgroundColor: withAlpha(heroText, 0.5) }]} />
+          <View style={layout.shopTopRow}>
+            <Text style={[layout.shopOverline, { color: heroSub }]}>THE SERVICE EDIT</Text>
+            {renderLogo(48)}
+          </View>
+          <View style={layout.shopEditName}>{renderName({ scale: 1.3 })}{tick}</View>
+          <Text style={[layout.shopOverline, { color: heroSub, marginBottom: 14 }]}>{kicker || "THOUGHTFULLY CURATED FOR YOU"}</Text>
+          <TouchableOpacity
+            style={[layout.shopEditPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.35) }]}
+            disabled={!photo || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={photo ? `${name} featured work` : undefined}
+            activeOpacity={0.88}
+          >
+            {photo ? <HeroPhoto uri={photo} /> : <View style={[layout.shopPhotoMark, { borderColor: withAlpha(heroText, 0.4) }]} />}
+            <View style={layout.shopPhotoLabel}><Text style={layout.shopPhotoLabelText}>FEATURED WORK</Text></View>
+          </TouchableOpacity>
+          <View style={layout.shopEditFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "shopGallery": {
+      const photos = (photoUris ?? []).slice(0, 3);
+      return (
+        <View style={layout.shopGalleryWrap}>
+          <View style={[layout.shopGalleryNav, { borderColor: withAlpha(heroText, 0.36) }]}>
+            {renderLogo(42)}
+            <Text style={[layout.shopOverline, { color: heroText }]}>EXPLORE  ·  BOOK</Text>
+          </View>
+          <View style={layout.shopGalleryName}>{renderName({ scale: 1.1 })}{tick}</View>
+          <Text style={[layout.shopOverline, { color: heroSub, marginBottom: 16 }]}>{kicker || "A COLLECTION OF OUR WORK"}</Text>
+          <View style={layout.shopGalleryPhotos}>
+            {[0, 1, 2].map(index => (
+              <TouchableOpacity
+                key={index}
+                style={[layout.shopGalleryPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", index === 1 ? 0.46 : 0.27) }]}
+                disabled={!photos[index] || !onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(index)}
+                accessibilityRole={photos[index] && onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={photos[index] ? `${name} work photo ${index + 1}` : undefined}
+                activeOpacity={0.88}
+              >
+                {photos[index] ? <HeroPhoto uri={photos[index]} /> : null}
+                <Text style={layout.shopGalleryNumber}>0{index + 1}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={layout.shopGalleryFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "shopRitual": {
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.shopRitualWrap}>
+          <Text style={[layout.shopRitualOverline, { color: heroSub }]}>A SPACE TO RESET</Text>
+          <View style={layout.shopRitualLogo}>{renderLogo(66)}</View>
+          <View style={layout.shopRitualName}>{renderName({ scale: 1.02 })}{tick}</View>
+          <View style={[layout.shopRitualRule, { backgroundColor: heroAccent }]} />
+          <Text style={[layout.shopRitualPhrase, { color: heroSub }]}>{kicker || "CARE IN EVERY DETAIL"}</Text>
+          <TouchableOpacity
+            style={[layout.shopRitualPhotoFrame, { borderColor: withAlpha(heroText, 0.42) }]}
+            disabled={!photo || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={photo ? `${name} featured photo` : undefined}
+            activeOpacity={0.88}
+          >
+            <View style={[layout.shopRitualPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.42) }]}>
+              {photo ? <HeroPhoto uri={photo} /> : null}
+            </View>
+          </TouchableOpacity>
+          <View style={layout.shopRitualFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
     case "pinboardHeader": {
-      // Pinboard: up to three of their photos as a short board of rounded pins
-      // (one tall beside two uneven, like a Pinterest board), then the logo
-      // beside the name in the picked font, what they do and their area.
+      // Pinboard: up to three of their photos side by side as rounded pins of
+      // uneven heights, like a Pinterest board, then the logo beside the name
+      // in the picked font, what they do and their area.
       const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
       const pins = (photoUris ?? []).slice(0, 3);
       const pinFill = blend(accent, "#FFFFFF", 0.6);
+      // Uneven heights, tops level: 150, 124, 138 (one photo: 156 across).
+      const pinHeights = [layout.pinboardPinTall, layout.pinboardPinShort, layout.pinboardPinMid];
       const pin = (index: number, size: object) => (
         <TouchableOpacity
-          key={pins[index] ?? index}
           activeOpacity={onOpenHeroPhoto ? 0.88 : 1}
           disabled={!onOpenHeroPhoto}
           onPress={() => onOpenHeroPhoto?.(index)}
@@ -294,26 +386,18 @@ export function ProfileHeroLayout({
           accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
           accessibilityLabel={`Photo ${index + 1} of ${pins.length}`}
         >
-          {pins[index] ? <Image source={{ uri: pins[index] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+          {pins[index] ? <HeroPhoto uri={pins[index]} /> : null}
         </TouchableOpacity>
       );
       return (
         <View style={[layout.pinboardWrap, { marginTop: pins.length ? 12 : TEXT_FIRST_DROP }]}>
           {pins.length ? (
             <View style={layout.pinboardBoard}>
-              <View style={layout.pinboardColumn}>{pin(0, layout.pinboardPinTall)}</View>
-              {pins.length > 1 ? (
-                <View style={layout.pinboardColumn}>
-                  {pins.length > 2 ? (
-                    <>
-                      {pin(1, layout.pinboardPinShort)}
-                      {pin(2, layout.pinboardPinMid)}
-                    </>
-                  ) : (
-                    pin(1, layout.pinboardPinTall)
-                  )}
+              {pins.map((uri, index) => (
+                <View key={uri} style={layout.pinboardColumn}>
+                  {pin(index, pins.length === 1 ? layout.pinboardPinOnly : pinHeights[index] ?? layout.pinboardPinTall)}
                 </View>
-              ) : null}
+              ))}
             </View>
           ) : null}
           <View style={[layout.pinboardIdentity, pins.length ? layout.pinboardIdentityUnderPins : null]}>
@@ -367,7 +451,7 @@ export function ProfileHeroLayout({
             accessibilityLabel={cover ? `${name} cover photo` : undefined}
             style={[layout.portfolioCover, { backgroundColor: blend(heroColour, "#282322", 0.45) }]}
           >
-            {cover ? <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+            {cover ? <HeroPhoto uri={cover} /> : null}
             <LinearGradient colors={["transparent", "rgba(0,0,0,0.42)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
             <Text style={layout.portfolioCoverLabel}>SELECTED WORK</Text>
           </TouchableOpacity>
@@ -500,7 +584,7 @@ export function ProfileHeroLayout({
             <View style={layout.edCards}>
               <View style={[layout.edBack, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]}>
                 {photoUris?.[0] ? (
-                  <Image source={{ uri: photoUris[0] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                  <HeroPhoto uri={photoUris[0]} />
                 ) : null}
               </View>
               <View style={layout.edFront}>{renderLogo(86)}</View>
@@ -716,7 +800,7 @@ export function ProfileHeroLayout({
             {(["left", "middle", "right"] as const).map((slot, i) => (
               <View key={slot} style={[layout.blockPhoto, { backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.4 : 0.6) }]}>
                 {photoUris?.[i] ? (
-                  <Image source={{ uri: photoUris[i] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                  <HeroPhoto uri={photoUris[i]} />
                 ) : null}
               </View>
             ))}
@@ -1109,7 +1193,7 @@ export function ProfileHeroLayout({
         <View style={layout.archWrap}>
           <View style={[layout.archWindow, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
             {photo ? (
-              <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+              <HeroPhoto uri={photo} />
             ) : (
               <View style={layout.logoNoGap}>{renderLogo(92)}</View>
             )}
@@ -1163,7 +1247,7 @@ export function ProfileHeroLayout({
           <View style={layout.splitRow}>
             <View style={[layout.splitPhoto, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
               {photo ? (
-                <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                <HeroPhoto uri={photo} />
               ) : (
                 <View style={layout.logoNoGap}>{renderLogo(96)}</View>
               )}
@@ -1282,7 +1366,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader", "shopEdit", "shopGallery", "shopRitual"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return (BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont) || !!pageStyle.nameFontPickable;
@@ -1349,19 +1433,46 @@ export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 const TEXT_FIRST_DROP = 48;
 
 const layout = StyleSheet.create({
+  shopRule: { height: 1, marginBottom: 16 },
+  shopTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  shopOverline: { fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2, lineHeight: 16 },
+  shopEditWrap: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 26 },
+  shopEditName: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, marginBottom: 6 },
+  shopEditPhoto: { height: 214, overflow: "hidden", justifyContent: "flex-end" },
+  shopPhotoMark: { width: 88, height: 88, borderWidth: 1, borderRadius: 44, alignSelf: "center", position: "absolute", top: 56 },
+  shopPhotoLabel: { alignSelf: "flex-start", backgroundColor: "rgba(25,24,22,0.78)", paddingHorizontal: 13, paddingVertical: 8 },
+  shopPhotoLabelText: { fontFamily: "Manrope-Bold", color: "#FFFFFF", fontSize: 9, letterSpacing: 1.6 },
+  shopEditFoot: { alignItems: "flex-start", marginTop: 18, gap: 9 },
+  shopGalleryWrap: { paddingTop: 15, paddingBottom: 24 },
+  shopGalleryNav: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  shopGalleryName: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginTop: 20, marginBottom: 5 },
+  shopGalleryPhotos: { flexDirection: "row", gap: 4, height: 188 },
+  shopGalleryPhoto: { flex: 1, overflow: "hidden", justifyContent: "flex-end" },
+  shopGalleryNumber: { color: "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 11, letterSpacing: 1, margin: 8, textShadowColor: "#0009", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  shopGalleryFoot: { paddingHorizontal: 20, paddingTop: 18, alignItems: "flex-start", gap: 9 },
+  shopRitualWrap: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 28, alignItems: "center" },
+  shopRitualOverline: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 2.8, marginBottom: 20 },
+  shopRitualLogo: { marginBottom: 7 },
+  shopRitualName: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  shopRitualRule: { width: 56, height: 1, marginTop: 12, marginBottom: 12 },
+  shopRitualPhrase: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 1.5, textAlign: "center", marginBottom: 20 },
+  shopRitualPhotoFrame: { width: "100%", height: 196, padding: 7, borderWidth: 1 },
+  shopRitualPhoto: { flex: 1, overflow: "hidden" },
+  shopRitualFoot: { marginTop: 19, alignItems: "center", gap: 8 },
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },
   // Short on purpose: the board is a taste of their work, not a wall (156pt).
-  pinboardBoard: { flexDirection: "row", gap: 8 },
-  pinboardColumn: { flex: 1, gap: 8 },
+  pinboardBoard: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  pinboardColumn: { flex: 1 },
   pinboardPin: {
     borderRadius: 18, overflow: "hidden",
     shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
   },
-  pinboardPinTall: { height: 156 },
-  pinboardPinShort: { height: 62 },
-  pinboardPinMid: { height: 86 },
+  pinboardPinTall: { height: 150 },
+  pinboardPinShort: { height: 124 },
+  pinboardPinMid: { height: 138 },
+  pinboardPinOnly: { height: 156 },
   pinboardIdentity: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 4 },
   pinboardIdentityUnderPins: { marginTop: 16, gap: 12 },
   pinboardText: { flex: 1, minWidth: 0 },

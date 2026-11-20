@@ -104,6 +104,7 @@ export {
   getProviderPortfolio,
   addPortfolioItem,
   setHeroPortfolioPhotos,
+  setHeroPhotoFrames,
   deletePortfolioItem,
   getExplorePortfolioItems,
   getPortfolioItems,

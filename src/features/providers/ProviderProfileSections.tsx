@@ -372,10 +372,16 @@ export const ProviderOwnSections = React.memo(function ProviderOwnSections({
 
 type PortfolioTile = DbPortfolioItem & { tileHeight: number; globalIndex: number };
 
-function tileHeight(item: DbPortfolioItem, width: number): number {
+function tileHeight(item: DbPortfolioItem, width: number, min = 140, max = 300): number {
   const ratio = item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
-  return Math.min(Math.max(width / ratio, 140), 300);
+  return Math.min(Math.max(width / ratio, min), max);
 }
+
+/** Pinboard's pins: three narrow columns, kept short so the board stays small. */
+const PIN_COLUMNS = 3;
+const PIN_GAP = 8;
+const PIN_MIN_HEIGHT = 90;
+const PIN_MAX_HEIGHT = 170;
 
 export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSection({
   items,
@@ -394,20 +400,26 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   // Measured per render rather than captured at module load, so the two-column
   // maths stays right after a rotation or in split-screen.
   const { width: screenWidth } = useWindowDimensions();
-  const inlineColumnWidth = (screenWidth - 40 - COLUMN_GAP) / 2;
+  const pins = palette.pageStyle?.photoLayout === "pins";
+  const columnCount = pins ? PIN_COLUMNS : 2;
+  const columnGap = pins ? PIN_GAP : COLUMN_GAP;
+  const inlineColumnWidth = (screenWidth - 40 - columnGap * (columnCount - 1)) / columnCount;
   const modalColumnWidth = (screenWidth - 52) / 2;
   const images = useMemo(() => items.map(item => ({ uri: item.image_url })), [items]);
   const columns = useMemo(() => {
-    const result: PortfolioTile[][] = [[], []];
-    const heights = [0, 0];
+    const result: PortfolioTile[][] = Array.from({ length: columnCount }, () => []);
+    const heights: number[] = Array.from({ length: columnCount }, () => 0);
     items.slice(0, INLINE_PORTFOLIO_LIMIT).forEach((item, globalIndex) => {
-      const height = tileHeight(item, inlineColumnWidth);
-      const column = heights[0]! <= heights[1]! ? 0 : 1;
+      const height = pins
+        ? tileHeight(item, inlineColumnWidth, PIN_MIN_HEIGHT, PIN_MAX_HEIGHT)
+        : tileHeight(item, inlineColumnWidth);
+      // The shortest column takes the next photo (the first, on a tie).
+      const column = heights.indexOf(Math.min(...heights));
       result[column]!.push({ ...item, tileHeight: height, globalIndex });
-      heights[column]! += height + COLUMN_GAP;
+      heights[column]! += height + columnGap;
     });
     return result;
-  }, [items, inlineColumnWidth]);
+  }, [items, inlineColumnWidth, pins, columnCount, columnGap]);
 
   if (loading) {
     return (
@@ -442,7 +454,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   // Feature (Ledger): one big photo beside two small ones, then two more under them.
   const feature = palette.pageStyle?.photoLayout === "feature";
   const portfolioWall = palette.pageStyle?.photoLayout === "portfolioWall";
-  const pins = palette.pageStyle?.photoLayout === "pins";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
@@ -582,9 +593,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           ))}
         </View>
       ) : (
-      <View style={[styles.columns, clipped && styles.clippedColumns]}>
+      <View style={[styles.columns, clipped && styles.clippedColumns, pins && styles.pinColumns]}>
         {columns.map((column, columnIndex) => (
-          <View key={columnIndex} style={[styles.column, clipped && styles.clippedColumn]}>
+          <View key={columnIndex} style={[styles.column, clipped && styles.clippedColumn, pins && styles.pinColumn]}>
             {column.map((item, rowIndex) => (
               <TouchableOpacity
                 key={item.id}
@@ -789,11 +800,13 @@ const styles = StyleSheet.create({
   archTile: { width: "31.5%", aspectRatio: 0.68, overflow: "hidden", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  pinColumns: { gap: PIN_GAP },
+  pinColumn: { gap: PIN_GAP },
   pinTile: {
-    borderRadius: 20, overflow: "hidden",
+    borderRadius: 14, overflow: "hidden",
     shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
   },
-  pinCaption: { fontFamily: "HankenGrotesk-Medium", fontSize: 12, lineHeight: 17, paddingHorizontal: 11, paddingVertical: 10 },
+  pinCaption: { fontFamily: "HankenGrotesk-Medium", fontSize: 11, lineHeight: 15, paddingHorizontal: 8, paddingVertical: 7 },
   // Lounge, Soft Focus and Bow: rounder, softer photos.
   roundedTile: { borderRadius: 24 },
   halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },

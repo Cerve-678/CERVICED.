@@ -37,6 +37,7 @@ import {
 import { BUSINESS_TYPE_ICON, BUSINESS_TYPE_LABEL } from "../profilePresentation";
 import type { ProviderProfileData } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
+import type { HeroPhotoFrames } from "../HeroPhoto";
 
 const SERIF = "Prata-Regular";
 const NAME_SIZE = HERO_NAME_SIZE;
@@ -51,6 +52,8 @@ export interface ProviderPageHeroProps {
   palette: ProviderPagePalette;
   /** The photos the hero shows (Editorial, Snapshot, Hush, Bow). */
   heroPhotoUris: string[];
+  /** How the provider framed each of those photos, by URL. Memoized by the caller. */
+  heroPhotoFrames: HeroPhotoFrames;
   isLinkOnly: boolean;
   /** Recommend's badge on the logo, when the viewer has one to show. */
   recommendHeart: ReturnType<typeof useProviderRecommend>["heart"];
@@ -79,6 +82,7 @@ export function ProviderPageHero({
   provider,
   palette,
   heroPhotoUris,
+  heroPhotoFrames,
   isLinkOnly,
   recommendHeart,
   bell,
@@ -133,6 +137,7 @@ export function ProviderPageHero({
         heroColour={heroBgColor ?? OP.hero}
         cardColour={OP.card}
         photoUris={heroPhotoUris}
+        photoFrames={heroPhotoFrames}
         sheetColour={sheetColour}
         onOpenHeroPhoto={onOpenHeroPhoto}
         rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}

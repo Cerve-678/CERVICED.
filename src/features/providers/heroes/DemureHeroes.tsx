@@ -23,13 +23,13 @@
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, type TextStyle } from "react-native";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes";
 import { cardInk } from "./BoutiqueHero";
 import { BowGlyph, PearlRing, ribbonColours, stripeColours } from "./demureOrnaments";
+import { HeroPhoto } from "../HeroPhoto";
 
 /** How far Lounge's name line hangs below the panel's foot, as a share of its
  *  size. 0.55 at first, 0.42 (#578), 0.16 once the photo went (owner,
@@ -76,7 +76,7 @@ export function HushBoxes({
   return (
     <View style={boxes.row}>
       {uris.slice(0, 3).map((uri, index) => {
-        const photo = <Image source={{ uri }} style={boxes.photo} contentFit="cover" transition={0} recyclingKey={uri} />;
+        const photo = <View style={boxes.photo}><HeroPhoto uri={uri} /></View>;
         const look = [boxes.box, { backgroundColor: paper, borderColor: edge }];
         return onOpen ? (
           <TouchableOpacity
@@ -104,7 +104,7 @@ const boxes = StyleSheet.create({
     width: "24%", aspectRatio: 0.76, padding: 5, borderWidth: StyleSheet.hairlineWidth,
     shadowColor: "#2A2826", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2,
   },
-  photo: { flex: 1 },
+  photo: { flex: 1, overflow: "hidden" },
 });
 
 // ── Lounge ──────────────────────────────────────────────────────────────────
@@ -367,7 +367,7 @@ export function BowHero({
     <View style={bow.wrap}>
       <View style={bow.photoWrap}>
         <View style={[bow.photo, { backgroundColor: blend(accent, "#FFFFFF", 0.6) }]}>
-          {photoUri ? <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} /> : null}
+          {photoUri ? <HeroPhoto uri={photoUri} /> : null}
           <View style={[bow.ribbon, { backgroundColor: ribbon.satin, borderColor: ribbon.edge }]} />
         </View>
         <View style={bow.knot} pointerEvents="none">
