@@ -912,7 +912,7 @@ export const POLICY_PICTURE_LOOKS: readonly { key: PolicyPictureLook; name: stri
   { key: 'swipe', name: 'Swipe', description: 'Full width, one page at a time, swipe through' },
   { key: 'fan', name: 'Fanned', description: 'Your pages fanned out like cards, tap to read' },
   { key: 'peek', name: 'Peek', description: 'The top of your policy, then Read the full policy' },
-  { key: 'story', name: 'Story', description: 'Circles near the top that open full screen' },
+  { key: 'story', name: 'Story', description: 'A circle near the top that opens full screen' },
   { key: 'thumbs', name: 'Thumbnails', description: 'A small row of pages after your services' },
   { key: 'button', name: 'Button', description: 'Just a "Read my policy" button' },
 ];
