@@ -1,5 +1,4 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { APP_FONTS } from '../constants/appFonts';
 
 import {
   CUSTOM_HEADING_FONTS,
@@ -74,9 +73,9 @@ describe('Custom page style', () => {
   });
 
   it('only offers fonts the app actually loads', () => {
-    const app = readFileSync(join(__dirname, '../../App.tsx'), 'utf8');
+    const loaded = Object.keys(APP_FONTS);
     for (const font of [...CUSTOM_HEADING_FONTS, ...CUSTOM_TEXT_FONTS]) {
-      expect(app).toContain(font.fontFamily);
+      expect(loaded).toContain(font.fontFamily);
     }
     expect(new Set(CUSTOM_HEADING_FONTS.map(font => font.key)).size).toBe(CUSTOM_HEADING_FONTS.length);
     expect(new Set(CUSTOM_TEXT_FONTS.map(font => font.key)).size).toBe(CUSTOM_TEXT_FONTS.length);

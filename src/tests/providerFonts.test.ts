@@ -1,8 +1,7 @@
 // Pins the business-name fonts: every one sits in a listed collection, every
 // one is actually loaded at start-up (an unloaded family silently falls back
 // to the system font), and the thin scripts are the only ones drawn larger.
-import fs from 'fs';
-import path from 'path';
+import { APP_FONTS } from '../constants/appFonts';
 import {
   DEFAULT_PROVIDER_FONT,
   FONT_COLLECTIONS,
@@ -12,13 +11,12 @@ import {
   resolveProviderNameLineHeight,
 } from '../constants/providerFonts';
 
-const appSource = fs.readFileSync(path.join(__dirname, '..', '..', 'App.tsx'), 'utf8');
-const useFontsCall = appSource.slice(appSource.indexOf('useFonts({'), appSource.indexOf('});', appSource.indexOf('useFonts({')));
+const loadedFamilies = new Set(Object.keys(APP_FONTS));
 
 describe('provider fonts', () => {
-  it('loads every font family in App.tsx', () => {
+  it('loads every font family at start-up (APP_FONTS)', () => {
     for (const font of PROVIDER_FONTS) {
-      const loaded = useFontsCall.includes(`'${font.fontFamily}'`) || new RegExp(`\\b${font.fontFamily}\\b`).test(useFontsCall);
+      const loaded = loadedFamilies.has(font.fontFamily);
       expect({ font: font.key, loaded }).toEqual({ font: font.key, loaded: true });
     }
   });
