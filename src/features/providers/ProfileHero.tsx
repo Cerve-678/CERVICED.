@@ -287,84 +287,252 @@ function ProfileHeroLayoutBody({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
-    case "shopEdit": {
+    case "orbitMark":
+      return (
+        <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
+          <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 4, marginBottom: 20 }}>YOUR SPACE TO SHINE</Text>
+          <View style={{ width: 236, height: 236, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ position: "absolute", width: 226, height: 226, borderRadius: 113, borderWidth: 1, borderColor: withAlpha(heroText, 0.32) }} />
+            <View style={{ position: "absolute", width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: withAlpha(heroText, 0.55) }} />
+            <View style={{ position: "absolute", top: 20, right: 26, width: 16, height: 16, borderRadius: 8, backgroundColor: heroAccent }} />
+            <View style={{ position: "absolute", bottom: 26, left: 22, width: 9, height: 9, borderRadius: 5, backgroundColor: heroText }} />
+            {renderLogo(128)}
+          </View>
+          <View accessible accessibilityRole="header" accessibilityLabel={name} style={{ alignItems: "center", marginTop: 16, maxWidth: "100%" }}>
+            <Text style={[{ color: heroText, fontFamily: "PoiretOne_400Regular", fontSize: 38, letterSpacing: 2, textAlign: "center" }, pickedName(38), shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+            {tick}
+          </View>
+          {kicker ? <Text style={{ color: heroSub, fontSize: 11, letterSpacing: 2, textAlign: "center", marginTop: 8 }}>{kicker.toUpperCase()}</Text> : null}
+          <View style={{ width: 54, height: 1, backgroundColor: heroAccent, marginTop: 21, marginBottom: 13 }} />
+          {meta}{details}
+        </View>
+      );
+    case "typeblockMark":
+      // The rail runs the full height of the block, down beside the details
+      // too (owner, 2026-11-20: it stopped short of "the rest of the words").
+      return (
+        <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
+          <View style={{ flexDirection: "row" }}>
+            <View style={{ width: 18, backgroundColor: heroAccent, marginRight: 18, justifyContent: "flex-end", paddingBottom: 12, alignItems: "center" }}>
+              {/* A slot as tall as the turned word, so it sits inside the rail
+                  rather than hanging off its end. */}
+              <View style={{ width: 18, height: 90, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 90, textAlign: "center", letterSpacing: 2 }} numberOfLines={1}>EST. TODAY</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ minHeight: 250, justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>THE PROFILE / 01</Text>
+                  {renderLogo(58)}
+                </View>
+                <View accessible accessibilityRole="header" accessibilityLabel={name}>
+                  <Text style={[{ color: heroText, fontFamily: "BebasNeue_400Regular", fontSize: 56, lineHeight: 60, letterSpacing: -0.5 }, pickedName(56), shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>{name.toUpperCase()}</Text>
+                  <View style={{ width: "100%", height: 4, backgroundColor: heroAccent, marginTop: 4, marginBottom: 10 }} />
+                  {kicker ? <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 1.4 }}>{kicker.toUpperCase()}</Text> : null}
+                  {tick}
+                </View>
+              </View>
+              <View style={{ marginTop: 18 }}>{meta}{details}</View>
+            </View>
+          </View>
+        </View>
+      );
+    case "filmstripMark": {
+      const frames = [photoUris?.[0], photoUris?.[1]];
+      return (
+        <View style={{ paddingHorizontal: 18, paddingTop: 20, paddingBottom: 25 }}>
+          <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: withAlpha(heroText, 0.65), paddingVertical: 7 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
+              <Text style={{ color: heroText, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>SELECTED WORK</Text>
+              <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10 }}>01 — 02</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {frames.map((uri, index) => (
+                <TouchableOpacity key={index} style={{ flex: 1, aspectRatio: 158 / 190, backgroundColor: withAlpha(heroAccent, 0.24), overflow: "hidden" }} disabled={!uri || !onOpenHeroPhoto} onPress={() => onOpenHeroPhoto?.(index)} activeOpacity={0.88} accessibilityRole={uri && onOpenHeroPhoto ? "imagebutton" : undefined} accessibilityLabel={uri ? `${name} work photo ${index + 1}` : undefined}>
+                  {uri ? <HeroPhoto uri={uri} /> : <Text style={{ position: "absolute", bottom: 10, left: 10, color: heroSub, fontFamily: "TenorSans_400Regular", fontSize: 28 }}>0{index + 1}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+              <Text style={{ color: heroSub, fontSize: 10 }}>FRAME 01</Text><Text style={{ color: heroSub, fontSize: 10 }}>FRAME 02</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 19, gap: 13 }}>
+            {renderLogo(54)}
+            <View style={{ flex: 1 }} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[{ color: heroText, fontFamily: "TenorSans_400Regular", fontSize: 27, lineHeight: 35 }, pickedName(27), shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+              {kicker ? <Text style={{ color: heroSub, fontSize: 10, letterSpacing: 1.5, marginTop: 3 }}>{kicker.toUpperCase()}</Text> : null}
+            </View>
+            {tick}
+          </View>
+          <View style={{ marginTop: 14 }}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "roseCampaign": {
+      // Custom's Rose top (owner, 2026-11-19: "keep rose hero, add to custom
+      // hero only"): a campaign block, the name and a rule on a deep panel
+      // beside one chosen work photo, framed in a soft rose line.
+      const photo = photoUris?.[0];
+      const rose = blend(accent, "#FFFFFF", heroIsDark ? 0.65 : 0.35);
+      return (
+        <View style={layout.roseWrap}>
+          <View style={layout.roseHeader}>
+            <Text style={[layout.roseOverline, { color: heroText }]}>A FRESH TAKE ON YOUR ROUTINE</Text>
+            {renderLogo(42)}
+          </View>
+          <View style={[layout.roseFeature, { borderColor: rose }]}>
+            <View style={[layout.roseCopy, { backgroundColor: withAlpha(heroColour, 0.92) }]}>
+              <Text style={[layout.roseEyebrow, { color: rose }]}>{kicker || "EXPERIENCE THE DIFFERENCE"}</Text>
+              <Text style={[layout.roseName, pickedName(31), { color: rose }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.62} accessibilityRole="header">{name}</Text>
+              {tick}
+              <View style={[layout.roseRule, { backgroundColor: rose }]} />
+              <Text style={[layout.roseSmall, { color: heroText }]}>{location || "DISCOVER THE SERVICES"}</Text>
+            </View>
+            <TouchableOpacity
+              style={[layout.rosePhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.62) }]}
+              disabled={!photo || !onOpenHeroPhoto}
+              onPress={() => onOpenHeroPhoto?.(0)}
+              accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+              accessibilityLabel={photo ? `${name} featured work` : undefined}
+              activeOpacity={0.88}
+            >{photo ? <HeroPhoto uri={photo} /> : null}</TouchableOpacity>
+          </View>
+          <View style={layout.roseFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "posterCover": {
+      // Poster (owner's coach-grid board, 2026-11-19): what they do on a
+      // pill, the name in huge two-tone caps, a handwritten line in a
+      // sparkle loop beside one of their photos taped on like a print.
+      const [first, last] = splitLast(name);
+      const pop = heroIsDark ? blend(accent, "#FFFFFF", 0.5) : accent;
+      const popInk = isDarkColor(pop) ? "#FFFFFF" : "#1F1214";
+      const label = kickerPhrase(kicker);
       const photo = photoUris?.[0];
       return (
-        <View style={layout.shopEditWrap}>
-          <View style={[layout.shopRule, { backgroundColor: withAlpha(heroText, 0.5) }]} />
-          <View style={layout.shopTopRow}>
-            <Text style={[layout.shopOverline, { color: heroSub }]}>THE SERVICE EDIT</Text>
-            {renderLogo(48)}
+        <View style={layout.posterWrap}>
+          <View style={layout.posterTopRow}>
+            {label ? (
+              <View style={[layout.posterPill, { backgroundColor: pop }]}>
+                <Text style={[layout.posterPillText, { color: popInk }]} numberOfLines={1}>{label.toUpperCase()}</Text>
+              </View>
+            ) : <View />}
+            {renderLogo(46)}
           </View>
-          <View style={layout.shopEditName}>{renderName({ scale: 1.3 })}{tick}</View>
-          <Text style={[layout.shopOverline, { color: heroSub, marginBottom: 14 }]}>{kicker || "THOUGHTFULLY CURATED FOR YOU"}</Text>
+          <View accessible accessibilityRole="header" accessibilityLabel={name} style={layout.posterNameBlock}>
+            <Text style={[layout.posterName, pickedName(54), { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{first.toUpperCase()}</Text>
+            {last ? <Text style={[layout.posterName, pickedName(54), { color: pop }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{last.toUpperCase()}</Text> : null}
+            {tick}
+          </View>
+          <View style={layout.posterLower}>
+            <View style={layout.posterLoop}>
+              <Svg width={168} height={72} viewBox="0 0 168 72" style={StyleSheet.absoluteFill}>
+                <Path d="M18 38 C 22 12, 140 6, 156 30 C 168 52, 100 66, 66 64 C 26 62, 4 50, 22 26" fill="none" stroke={heroText} strokeWidth={1.4} strokeLinecap="round" />
+                <Path d="M8 34 L10 29 L12 34 L17 36 L12 38 L10 43 L8 38 L3 36 Z" fill={heroText} />
+                <Path d="M156 50 L157.6 46 L159.2 50 L163 51.6 L159.2 53.2 L157.6 57 L156 53.2 L152 51.6 Z" fill={heroText} />
+              </Svg>
+              <Text style={[layout.posterScript, { color: heroText }]} numberOfLines={2}>book in{"\n"}with me</Text>
+            </View>
+            {photo ? (
+              <TouchableOpacity
+                style={layout.posterPrint}
+                disabled={!onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(0)}
+                accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={`${name} work photo`}
+                activeOpacity={0.88}
+              >
+                <View style={layout.posterPrintPhoto}><HeroPhoto uri={photo} /></View>
+                <View style={layout.posterTape} pointerEvents="none" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <View style={layout.posterFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "echoName": {
+      // Hibiscus (owner's drink-post board, 2026-11-19): the name repeated
+      // large and faint behind everything, one chosen photo, and a deep
+      // round panel over its corner with the name in condensed caps.
+      const echo = name.trim().toUpperCase();
+      const photo = photoUris?.[0];
+      const panel = heroIsDark ? blend(heroColour, "#000000", 0.35) : blend(accent, "#000000", 0.45);
+      const panelPop = blend(accent, "#FFFFFF", 0.62);
+      const phrase = kickerPhrase(kicker);
+      const panelBody = (
+        <View style={[layout.echoPanel, { backgroundColor: panel }, photo ? layout.echoPanelOver : null]}>
+          <Text style={[layout.echoLead, { color: "#FFF4F6" }]}>WELCOME TO</Text>
+          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.echoName, pickedName(32), { color: panelPop }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+            {isVerified ? <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" accessibilityLabel="Verified" /> : null}
+          </View>
+          {phrase ? (
+            <View style={[layout.echoTag, { backgroundColor: withAlpha(panelPop, 0.22) }]}>
+              <Text style={[layout.echoTagText, { color: "#FFF4F6" }]} numberOfLines={1}>{phrase}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+      return (
+        <View style={layout.echoWrap}>
+          <View style={layout.echoBehind} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants">
+            {[0, 1, 2, 3, 4, 5].map(row => (
+              <Text key={row} style={[layout.echoRow, { color: withAlpha(heroText, 0.1) }]} numberOfLines={1}>{`${echo} ${echo} ${echo}`}</Text>
+            ))}
+          </View>
+          <View style={layout.echoTop}>{renderLogo(46)}</View>
+          {photo ? (
+            <View style={layout.echoStage}>
+              <TouchableOpacity
+                style={[layout.echoPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.5) }]}
+                disabled={!onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(0)}
+                accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={`${name} featured work`}
+                activeOpacity={0.88}
+              ><HeroPhoto uri={photo} /></TouchableOpacity>
+              {panelBody}
+            </View>
+          ) : panelBody}
+          <View style={layout.echoFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "storefrontBanner": {
+      // Storefront (owner's Shopify board, 2026-11-19): one chosen photo the
+      // full width of the page with the logo over its top, then a soft band
+      // with the name in heavy slanted caps, like a shop's home page.
+      const photo = photoUris?.[0];
+      const band = sheetColour ?? blend(accent, "#FFFFFF", 0.82);
+      const bandDark = isDarkColor(band);
+      const bandInk = bandDark ? "#FFFFFF" : blend(accent, "#1A0F12", 0.55);
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.storeWrap}>
           <TouchableOpacity
-            style={[layout.shopEditPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.35) }]}
+            style={[layout.storePhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.45) }]}
             disabled={!photo || !onOpenHeroPhoto}
             onPress={() => onOpenHeroPhoto?.(0)}
             accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
             accessibilityLabel={photo ? `${name} featured work` : undefined}
-            activeOpacity={0.88}
+            activeOpacity={0.9}
           >
-            {photo ? <HeroPhoto uri={photo} /> : <View style={[layout.shopPhotoMark, { borderColor: withAlpha(heroText, 0.4) }]} />}
-            <View style={layout.shopPhotoLabel}><Text style={layout.shopPhotoLabelText}>FEATURED WORK</Text></View>
+            {photo ? <HeroPhoto uri={photo} /> : null}
+            <LinearGradient colors={["rgba(0,0,0,0.28)", "transparent"]} style={layout.storeShade} pointerEvents="none" />
+            <View style={layout.storeLogo}>{renderLogo(52)}</View>
           </TouchableOpacity>
-          <View style={layout.shopEditFoot}>{meta}{details}</View>
-        </View>
-      );
-    }
-    case "shopGallery": {
-      const photos = (photoUris ?? []).slice(0, 3);
-      return (
-        <View style={layout.shopGalleryWrap}>
-          <View style={[layout.shopGalleryNav, { borderColor: withAlpha(heroText, 0.36) }]}>
-            {renderLogo(42)}
-            <Text style={[layout.shopOverline, { color: heroText }]}>EXPLORE  ·  BOOK</Text>
-          </View>
-          <View style={layout.shopGalleryName}>{renderName({ scale: 1.1 })}{tick}</View>
-          <Text style={[layout.shopOverline, { color: heroSub, marginBottom: 16 }]}>{kicker || "A COLLECTION OF OUR WORK"}</Text>
-          <View style={layout.shopGalleryPhotos}>
-            {[0, 1, 2].map(index => (
-              <TouchableOpacity
-                key={index}
-                style={[layout.shopGalleryPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", index === 1 ? 0.46 : 0.27) }]}
-                disabled={!photos[index] || !onOpenHeroPhoto}
-                onPress={() => onOpenHeroPhoto?.(index)}
-                accessibilityRole={photos[index] && onOpenHeroPhoto ? "imagebutton" : undefined}
-                accessibilityLabel={photos[index] ? `${name} work photo ${index + 1}` : undefined}
-                activeOpacity={0.88}
-              >
-                {photos[index] ? <HeroPhoto uri={photos[index]} /> : null}
-                <Text style={layout.shopGalleryNumber}>0{index + 1}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={layout.shopGalleryFoot}>{meta}{details}</View>
-        </View>
-      );
-    }
-    case "shopRitual": {
-      const photo = photoUris?.[0];
-      return (
-        <View style={layout.shopRitualWrap}>
-          <Text style={[layout.shopRitualOverline, { color: heroSub }]}>A SPACE TO RESET</Text>
-          <View style={layout.shopRitualLogo}>{renderLogo(66)}</View>
-          <View style={layout.shopRitualName}>{renderName({ scale: 1.02 })}{tick}</View>
-          <View style={[layout.shopRitualRule, { backgroundColor: heroAccent }]} />
-          <Text style={[layout.shopRitualPhrase, { color: heroSub }]}>{kicker || "CARE IN EVERY DETAIL"}</Text>
-          <TouchableOpacity
-            style={[layout.shopRitualPhotoFrame, { borderColor: withAlpha(heroText, 0.42) }]}
-            disabled={!photo || !onOpenHeroPhoto}
-            onPress={() => onOpenHeroPhoto?.(0)}
-            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
-            accessibilityLabel={photo ? `${name} featured photo` : undefined}
-            activeOpacity={0.88}
-          >
-            <View style={[layout.shopRitualPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.42) }]}>
-              {photo ? <HeroPhoto uri={photo} /> : null}
+          <View style={[layout.storeBand, { backgroundColor: band }]}>
+            {phrase ? <Text style={[layout.storeOver, { color: withAlpha(bandInk, 0.6) }]} numberOfLines={1}>{phrase.toUpperCase()}</Text> : null}
+            <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.storeName, pickedName(30), { color: bandInk }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+              {isVerified ? <Ionicons name="checkmark-circle" size={17} color={bandDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
             </View>
-          </TouchableOpacity>
-          <View style={layout.shopRitualFoot}>{meta}{details}</View>
+          </View>
+          <View style={layout.storeFoot}>{meta}{details}</View>
         </View>
       );
     }
@@ -1366,7 +1534,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader", "shopEdit", "shopGallery", "shopRitual"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader", "roseCampaign"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return (BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont) || !!pageStyle.nameFontPickable;
@@ -1433,32 +1601,51 @@ export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 const TEXT_FIRST_DROP = 48;
 
 const layout = StyleSheet.create({
-  shopRule: { height: 1, marginBottom: 16 },
-  shopTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  shopOverline: { fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2, lineHeight: 16 },
-  shopEditWrap: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 26 },
-  shopEditName: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, marginBottom: 6 },
-  shopEditPhoto: { height: 214, overflow: "hidden", justifyContent: "flex-end" },
-  shopPhotoMark: { width: 88, height: 88, borderWidth: 1, borderRadius: 44, alignSelf: "center", position: "absolute", top: 56 },
-  shopPhotoLabel: { alignSelf: "flex-start", backgroundColor: "rgba(25,24,22,0.78)", paddingHorizontal: 13, paddingVertical: 8 },
-  shopPhotoLabelText: { fontFamily: "Manrope-Bold", color: "#FFFFFF", fontSize: 9, letterSpacing: 1.6 },
-  shopEditFoot: { alignItems: "flex-start", marginTop: 18, gap: 9 },
-  shopGalleryWrap: { paddingTop: 15, paddingBottom: 24 },
-  shopGalleryNav: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  shopGalleryName: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginTop: 20, marginBottom: 5 },
-  shopGalleryPhotos: { flexDirection: "row", gap: 4, height: 188 },
-  shopGalleryPhoto: { flex: 1, overflow: "hidden", justifyContent: "flex-end" },
-  shopGalleryNumber: { color: "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 11, letterSpacing: 1, margin: 8, textShadowColor: "#0009", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  shopGalleryFoot: { paddingHorizontal: 20, paddingTop: 18, alignItems: "flex-start", gap: 9 },
-  shopRitualWrap: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 28, alignItems: "center" },
-  shopRitualOverline: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 2.8, marginBottom: 20 },
-  shopRitualLogo: { marginBottom: 7 },
-  shopRitualName: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
-  shopRitualRule: { width: 56, height: 1, marginTop: 12, marginBottom: 12 },
-  shopRitualPhrase: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 1.5, textAlign: "center", marginBottom: 20 },
-  shopRitualPhotoFrame: { width: "100%", height: 196, padding: 7, borderWidth: 1 },
-  shopRitualPhoto: { flex: 1, overflow: "hidden" },
-  shopRitualFoot: { marginTop: 19, alignItems: "center", gap: 8 },
+  posterWrap: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 22 },
+  posterTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  posterPill: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 30, maxWidth: "70%" },
+  posterPillText: { fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 0.6 },
+  posterNameBlock: { alignItems: "flex-start" },
+  posterName: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 54, lineHeight: 56, letterSpacing: -2, paddingTop: 6 },
+  posterLower: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
+  posterLoop: { width: 168, height: 72, alignItems: "center", justifyContent: "center" },
+  posterScript: { fontFamily: "DancingScript_700Bold", fontSize: 18, lineHeight: 20, textAlign: "center", transform: [{ rotate: "-4deg" }] },
+  posterPrint: { width: 138, padding: 6, paddingBottom: 6, backgroundColor: "#FFFDF9", transform: [{ rotate: "4deg" }], shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  posterPrintPhoto: { width: "100%", height: 156, overflow: "hidden", backgroundColor: "#EEE" },
+  posterTape: { position: "absolute", top: -9, left: 40, width: 58, height: 18, backgroundColor: "rgba(238,232,220,0.82)", transform: [{ rotate: "-6deg" }] },
+  posterFoot: { alignItems: "flex-start", gap: 9, marginTop: 18 },
+  echoWrap: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 22, overflow: "hidden" },
+  echoBehind: { position: "absolute", top: 0, left: -30, right: -30, bottom: 0, justifyContent: "space-around" },
+  echoRow: { fontFamily: "Oswald-Bold", fontSize: 64, lineHeight: 72, letterSpacing: 1 },
+  echoTop: { flexDirection: "row", justifyContent: "flex-start", marginBottom: 12 },
+  echoStage: { minHeight: 262 },
+  echoPhoto: { position: "absolute", right: 0, top: 0, width: "60%", height: 230, borderRadius: 22, overflow: "hidden" },
+  echoPanel: { borderRadius: 22, paddingHorizontal: 18, paddingVertical: 18 },
+  echoPanelOver: { position: "absolute", left: 0, bottom: 0, width: "64%" },
+  echoLead: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 4 },
+  echoName: { fontFamily: "Oswald-Bold", fontSize: 32, lineHeight: 40, marginTop: 2, flexShrink: 1 },
+  echoTag: { alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 4, marginTop: 6 },
+  echoTagText: { fontFamily: "LibreBaskerville-Italic", fontSize: 12 },
+  echoFoot: { alignItems: "center", gap: 9, marginTop: 18 },
+  storeWrap: { paddingBottom: 22 },
+  storePhoto: { height: 300, overflow: "hidden" },
+  storeShade: { position: "absolute", top: 0, left: 0, right: 0, height: 96 },
+  storeLogo: { position: "absolute", top: 14, left: 0, right: 0, alignItems: "center" },
+  storeBand: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 20 },
+  storeOver: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 3.5, marginBottom: 6 },
+  storeName: { fontFamily: "Archivo-ExtraBold", fontSize: 30, lineHeight: 38, textAlign: "center", transform: [{ skewX: "-10deg" }], flexShrink: 1 },
+  storeFoot: { alignItems: "center", gap: 9, paddingHorizontal: 20, marginTop: 16 },
+  roseWrap: { paddingHorizontal: 18, paddingTop: 17, paddingBottom: 24 },
+  roseHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 52 },
+  roseOverline: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.4, flexShrink: 1 },
+  roseFeature: { flexDirection: "row", height: 248, borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  roseCopy: { width: "54%", paddingHorizontal: 14, paddingVertical: 16, justifyContent: "center", alignItems: "flex-start" },
+  roseEyebrow: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.2, marginBottom: 9 },
+  roseName: { fontFamily: "Italiana_400Regular", fontSize: 31, lineHeight: 36 },
+  roseRule: { width: 44, height: 1, marginTop: 12, marginBottom: 10 },
+  roseSmall: { fontFamily: "Manrope-Bold", fontSize: 8, letterSpacing: 1.2 },
+  rosePhoto: { flex: 1, overflow: "hidden" },
+  roseFoot: { alignItems: "center", gap: 8, marginTop: 16 },
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },

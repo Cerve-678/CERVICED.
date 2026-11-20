@@ -45,8 +45,6 @@ import {
   DEFAULT_CARD_SHAPE,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
-import ProviderBrandTemplatePicker from '../../components/ProviderBrandTemplatePicker';
-import { matchingBrandTemplate, type ProviderBrandTemplate } from '../../constants/providerBrandTemplates';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import PageStylePicker from '../../components/PageStylePicker';
@@ -514,26 +512,6 @@ export default function BrandingScreen({ navigation }: any) {
     setGradient(resolvedGradient);
   }, []);
 
-  const handleTemplateChoose = useCallback((template: ProviderBrandTemplate) => {
-    handleThemeChange({
-      themeChoice: template.theme,
-      customBackdrop,
-      customCard,
-      customAccent,
-      sheetColor: template.sheet,
-    });
-    setHeroFinish(template.finish);
-    setCardShape(template.shape);
-    setPageStyle(template.pageStyle);
-    setPolicyLook(template.policyLook);
-    setBrandFont(template.font);
-  }, [handleThemeChange, customBackdrop, customCard, customAccent]);
-
-  const selectedTemplate = matchingBrandTemplate({
-    theme: themeChoice, sheet: sheetColor, finish: heroFinish, shape: cardShape,
-    pageStyle, policyLook, font: brandFont,
-  });
-
   // The preview's words follow the backdrop's lead colour, so pale sets like
   // Oat Milk read in ink rather than shadowed white.
   const previewOnLight = !backgroundImage && !isDarkColor(gradient[0]);
@@ -698,22 +676,6 @@ export default function BrandingScreen({ navigation }: any) {
 
           {part === 'layout' && (
             <>
-              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Brand Templates</Text>
-                <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  Ready-made looks inspired by beautiful storefronts. Choose one to set your layout, colours and type together, then make it yours below.
-                </Text>
-                <ProviderBrandTemplatePicker
-                  selectedKey={selectedTemplate}
-                  onChoose={handleTemplateChoose}
-                  locked={limited}
-                  onLockedPress={showLocked}
-                  textColor={P.text}
-                  subColor={P.sub}
-                  borderColor={P.border}
-                />
-              </View>
-
               {/* Page style — the layout and decoration of the whole profile */}
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
@@ -1070,7 +1032,7 @@ function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<Pol
     <View style={styles.smallPreview}>
       {look === 'story' ? (
         <View style={styles.smallRings}>
-          {[0, 1, 2].map(i => <View key={i} style={[styles.smallRing, { borderColor: pageColour }]} />)}
+          <View style={[styles.smallRing, { borderColor: pageColour }]} />
         </View>
       ) : null}
       {lines}

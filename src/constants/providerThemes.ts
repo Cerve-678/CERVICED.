@@ -53,6 +53,11 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
   // A deeper grey beside Dove, the darkest content area: the cards' grey
   // text still reads at about 4.3:1 on it.
   { key: 'smoke',     name: 'Smoke',     color: '#CFCFCE' },
+  // 2026-11-19, for Poster, Hibiscus and Storefront (the owner's pink
+  // reference boards): two pinks deeper than Blush, still pale enough for
+  // the dark text.
+  { key: 'petal',     name: 'Petal',     color: '#F7E1E6' },
+  { key: 'candy',     name: 'Candy',     color: '#FBD9EA' },
 ];
 
 // ── Hero finish ───────────────────────────────────────────────────────────────
@@ -312,15 +317,18 @@ const COLLECTION_DEFS: { key: string; name: string; description: string; from: s
   { key: 'mushroom',      name: 'Mushroom',          description: 'Earthy taupe into stone, with a deep bark accent',         from: '#9C8F84', to: '#CFC5BA', accent: '#4A403A', suggestedSheet: 'oat',      collection: 'atelier' },
   { key: 'ivoryoxblood',   name: 'Ivory & Oxblood',  description: 'Warm ivory with a rich oxblood accent',                 from: '#EDE3D9', to: '#F9F4EC', accent: '#772F3D', suggestedSheet: 'ivory',    collection: 'atelier' },
   { key: 'cocoacream',     name: 'Cocoa & Cream',    description: 'Deep cocoa above a warm cream content area',           from: '#3C302D', to: '#6A514A', accent: '#79543B', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'blushcocoa',    name: 'Blush & Cocoa',     description: 'Soft blush pink with a rich cocoa accent, like a beauty shop', from: '#F2C9D5', to: '#FBE6EC', accent: '#6B3A2E', suggestedSheet: 'milk',     collection: 'sorbet' },
   { key: 'rosesage',      name: 'Rose & Sage',       description: 'Dusty rose with a soft sage accent',                       from: '#E6B3B9', to: '#F2D9D9', accent: '#66805F', suggestedSheet: 'blush',    collection: 'sorbet' },
   { key: 'powderapricot', name: 'Powder & Apricot',  description: 'Powder blue into apricot, with a burnt-orange accent',      from: '#B9CFE3', to: '#F4D6BF', accent: '#B9643F', suggestedSheet: 'mist',     collection: 'sorbet' },
   { key: 'desertrose',    name: 'Desert Rose',       description: 'Sandstone pink with a dark rosewood accent',               from: '#B4807A', to: '#DFBDB1', accent: '#6A3D3A', suggestedSheet: 'shell',    collection: 'terra' },
   { key: 'emeraldgold',   name: 'Emerald & Gold',    description: 'Bottle green with an antique-gold accent',                 from: '#1D4A3C', to: '#2E6A54', accent: '#A98235', suggestedSheet: 'ivory',    collection: 'afterdark' },
   { key: 'sapphireblush', name: 'Sapphire & Blush',  description: 'Midnight sapphire with a deep rose accent',                from: '#1D2C52', to: '#3A4B78', accent: '#B04A68', suggestedSheet: 'blush',    collection: 'afterdark' },
   { key: 'plumchampagne', name: 'Plum & Champagne',  description: 'Velvet plum with an antique-bronze accent',                from: '#3C1F3E', to: '#683C64', accent: '#8A6438', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'hibiscus',      name: 'Hibiscus',          description: 'Deep hibiscus wine with a raspberry-pink accent',          from: '#4A1426', to: '#7A2A45', accent: '#A63A62', suggestedSheet: 'petal',    collection: 'afterdark' },
   { key: 'tealcoral',     name: 'Deep Teal & Coral', description: 'Inky teal with a warm coral accent',                       from: '#113A41', to: '#1E5B62', accent: '#D9714F', suggestedSheet: 'mist',     collection: 'afterdark' },
   { key: 'cobaltblush',   name: 'Cobalt & Blush',    description: 'Electric cobalt with a raspberry-pink accent',             from: '#2747A0', to: '#4A68BE', accent: '#B8436A', suggestedSheet: 'blush',    collection: 'statement' },
   { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    description: 'Glossy cherry with a dark cocoa accent',                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
+  { key: 'cocoapink',     name: 'Cocoa & Pink',      description: 'Dark chocolate with a hot-pink accent, like a poster',      from: '#2B0B0A', to: '#4A1720', accent: '#B23A76', suggestedSheet: 'candy',    collection: 'statement' },
   { key: 'matchaink',     name: 'Matcha & Ink',      description: 'Whisked matcha with a deep ink-green accent',              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
   { key: 'tangerinenavy', name: 'Tangerine & Navy',  description: 'Juicy tangerine with a crisp navy accent',                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },
   { key: 'royalyellow',    name: 'Royal Blue & Yellow', description: 'Royal blue with a golden-yellow accent',              from: '#2446A6', to: '#4167BC', accent: '#AA7600', suggestedSheet: 'butter',   collection: 'statement' },

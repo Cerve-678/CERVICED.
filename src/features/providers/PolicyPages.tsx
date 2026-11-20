@@ -7,8 +7,8 @@
 //   - PolicyPagesInline: the pages running edge to edge down the profile,
 //     either melting into the page around them (B) or on a wavy band of
 //     their own colour (A) — Branding → Policy Pictures.
-//   - PolicyStoryRings + PolicyStoryViewer: story-style circles near the top
-//     of the profile that open the pages full screen, one at a time (D).
+//   - PolicyStoryRings + PolicyStoryViewer: one story-style circle near the
+//     top of the profile that opens the pages full screen, one at a time (D).
 //   - PolicyPagesCompact: the subtle choices — a small row of page
 //     thumbnails, or just a "Read my policy" button — after the services.
 //   - PolicyPagesShowcase: more designs after the services — framed prints,
@@ -459,8 +459,10 @@ function withAlphaHex(hex: string, alpha: number): string {
 
 // ── Story rings ──────────────────────────────────────────────────────────────
 
-/** A circle per policy page near the top of the profile, each showing the
- *  top of its page; a tap opens that page full screen. */
+/** One "Policy" circle near the top of the profile, showing the top of the
+ *  first page; a tap opens the story on page 1, and every other page follows
+ *  in the same story (the owner asked on 2026-11-19 for one circle, not one
+ *  per page). */
 export function PolicyStoryRings({
   urls,
   accent,
@@ -470,36 +472,31 @@ export function PolicyStoryRings({
   urls: readonly string[];
   accent: string;
   sheet: string;
-  onOpen: (index: number) => void;
+  onOpen: () => void;
 }) {
-  if (urls.length === 0) return null;
+  const first = urls[0];
+  if (!first) return null;
   const ink = sheetInk(sheet);
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ringRow} style={styles.ringScroll}>
-      {urls.map((url, index) => {
-        const name = urls.length === 1 ? "Policy" : `Page ${index + 1}`;
-        return (
-          <TouchableOpacity
-            key={url}
-            style={styles.ringItem}
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              onOpen(index);
-            }}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={urls.length === 1 ? "Open their policy" : `Open policy page ${index + 1} of ${urls.length}`}
-          >
-            <LinearGradient colors={[accent, blend(accent, "#FFFFFF", 0.5)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ring}>
-              <View style={[styles.ringInner, { borderColor: sheet }]}>
-                <Image source={{ uri: url }} style={styles.ringImage} contentFit="cover" contentPosition="top" transition={0} />
-              </View>
-            </LinearGradient>
-            <Text style={[styles.ringLabel, { color: ink.text }]} numberOfLines={1}>{name}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
+    <View style={styles.ringRow}>
+      <TouchableOpacity
+        style={styles.ringItem}
+        onPress={() => {
+          Haptics.selectionAsync().catch(() => {});
+          onOpen();
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={urls.length === 1 ? "Open their policy" : `Open their policy, ${urls.length} pages`}
+      >
+        <LinearGradient colors={[accent, blend(accent, "#FFFFFF", 0.5)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ring}>
+          <View style={[styles.ringInner, { borderColor: sheet }]}>
+            <Image source={{ uri: first }} style={styles.ringImage} contentFit="cover" contentPosition="top" transition={0} />
+          </View>
+        </LinearGradient>
+        <Text style={[styles.ringLabel, { color: ink.text }]} numberOfLines={1}>Policy</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -678,8 +675,7 @@ const styles = StyleSheet.create({
   readButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 15, flex: 1 },
   readButtonCount: { fontFamily: "Jura-VariableFont_wght", fontWeight: "600", fontSize: 13 },
 
-  ringScroll: { marginBottom: 18, marginHorizontal: -20 },
-  ringRow: { gap: 16, paddingHorizontal: 20 },
+  ringRow: { flexDirection: "row", marginBottom: 18 },
   ringItem: { alignItems: "center", gap: 6, width: 72 },
   ring: { width: 70, height: 70, borderRadius: 35, padding: 3 },
   ringInner: { flex: 1, borderRadius: 32, borderWidth: 3, overflow: "hidden" },

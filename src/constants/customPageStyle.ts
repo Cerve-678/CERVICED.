@@ -83,7 +83,7 @@ export const CUSTOM_TEXT_FONTS: readonly CustomFont[] = [
 ];
 
 export type CustomHeadingStyle = 'typed' | 'caps' | 'numbered' | 'underlined' | 'script';
-export type CustomTop = 'centred' | 'ringed' | 'side' | 'bigName' | 'cover' | 'arch' | 'polaroid' | 'calm' | 'prism';
+export type CustomTop = 'centred' | 'ringed' | 'side' | 'bigName' | 'cover' | 'arch' | 'polaroid' | 'calm' | 'prism' | 'rose';
 export type CustomSurface = 'open' | 'cards' | 'outlined' | 'roundBoxes' | 'soft' | 'paper';
 export type CustomPolicies = 'rows' | 'lines' | 'side' | 'boxes' | 'tiles' | 'discs' | 'notes' | 'open';
 export type CustomServices = 'list' | 'numbered';
@@ -111,6 +111,7 @@ export const CUSTOM_TOPS: readonly CustomPartOption<CustomTop>[] = [
   { key: 'polaroid', name: 'Polaroid', description: 'Your logo as a polaroid' },
   { key: 'calm', name: 'Calm', description: 'Your name spaced out over a ringed logo' },
   { key: 'prism', name: 'Prism', description: 'Angled colour planes round your logo and name' },
+  { key: 'rose', name: 'Rose', description: 'Your name on a deep panel beside one of your photos' },
 ];
 
 export const CUSTOM_SURFACES: readonly CustomPartOption<CustomSurface>[] = [
@@ -333,6 +334,7 @@ const TOP_SWITCHES: Record<CustomTop, { hero: PageHero; logo: PageLogoFrame }> =
   polaroid: { hero: 'poster', logo: 'polaroid' },
   calm: { hero: 'spa', logo: 'doubleRing' },
   prism: { hero: 'prismHeader', logo: 'sharp' },
+  rose: { hero: 'roseCampaign', logo: 'rounded' },
 };
 
 const SURFACE_CARDS: Record<CustomSurface, PageCards> = {

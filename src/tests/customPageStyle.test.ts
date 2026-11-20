@@ -157,3 +157,22 @@ describe('Prism\'s top, kept in Custom (owner, 2026-11-19: "just the hero from p
     expect(PAGE_STYLES.some(style => (style.key as string) === 'prism')).toBe(false);
   });
 });
+
+describe('the Rose top, Custom only (owner, 2026-11-19: "keep rose hero add to custom hero only")', () => {
+  const withRoseTop = withPart(DEFAULT_CUSTOM_CHOICES, 'top', 'rose');
+
+  it('draws the rose campaign block in the Business Name Font with one photo to pick', () => {
+    const style = customPageStyle(withRoseTop);
+    expect(style).toMatchObject({ hero: 'roseCampaign', logo: 'rounded' });
+    expect(heroUsesBrandFont(style)).toBe(true);
+    expect(heroPhotoPickLimit(style)).toBe(1);
+  });
+
+  it('saves and reads back the Rose top', () => {
+    expect(parseCustomChoices(encodeCustomChoices(withRoseTop))).toEqual(withRoseTop);
+  });
+
+  it('is not a fixed page style', () => {
+    expect(PAGE_STYLES.some(style => style.hero === 'roseCampaign')).toBe(false);
+  });
+});
