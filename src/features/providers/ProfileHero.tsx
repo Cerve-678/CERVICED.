@@ -315,9 +315,11 @@ function ProfileHeroLayoutBody({
           <View style={{ flexDirection: "row" }}>
             <View style={{ width: 18, backgroundColor: heroAccent, marginRight: 18, justifyContent: "flex-end", paddingBottom: 12, alignItems: "center" }}>
               {/* A slot as tall as the turned word, so it sits inside the rail
-                  rather than hanging off its end. */}
-              <View style={{ width: 18, height: 90, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 90, textAlign: "center", letterSpacing: 2 }} numberOfLines={1}>EST. TODAY</Text>
+                  rather than hanging off its end. The word only just fit 90pt,
+                  so a bigger text size cut it off (owner, 2026-11-20): it's a
+                  fixed mark like an icon, so it keeps its size, with room to spare. */}
+              <View style={{ width: 18, height: 110, alignItems: "center", justifyContent: "center" }}>
+                <Text allowFontScaling={false} style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 110, textAlign: "center", letterSpacing: 2 }} numberOfLines={1}>EST. TODAY</Text>
               </View>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
