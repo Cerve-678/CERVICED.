@@ -41,9 +41,6 @@ const SERVICE_LIST_SIDE_PADDING = 20;
 const SERVICE_CARD_BORDER_ROOM = 4;
 /** Storefront: the soft frame round each service's arched photo. */
 const SERVICE_ARCH_FRAME = 7;
-/** Hibiscus: the round plate each service's photo sits on. Was 168, which
- *  made each service nearly a screen tall (owner, 2026-11-20: "too big"). */
-const SERVICE_PLATE = 108;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
@@ -295,13 +292,14 @@ export function ProviderPageServices({
   const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
   // Poster: no photos, each name in a filled pill of the accent.
   const servicePills = pageStyle.serviceLayout === "pillMenu";
-  // Hibiscus: one across and centred, the photo in a round plate.
+  // Hibiscus: one row each like the plain list (owner, 2026-11-20: "too big,
+  // needs to fit in a row"), with the name in condensed caps and "Book now".
   const serviceSpotlight = pageStyle.serviceLayout === "spotlight";
   // Storefront: two across, each photo standing in a soft arched frame.
   const serviceArches = pageStyle.serviceLayout === "archTiles";
   const serviceTwoUp = serviceTiles || serviceArches;
   const serviceNoPhoto = serviceMenu || servicePills;
-  const serviceStacked = serviceTwoUp || servicePhotoCards || serviceSpotlight;
+  const serviceStacked = serviceTwoUp || servicePhotoCards;
   // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
   const arrowPillButtons = pageStyle.buttonShape === "arrowPill";
   const shopBoxButtons = pageStyle.buttonShape === "shopBox";
@@ -315,8 +313,6 @@ export function ProviderPageServices({
   const serviceArchWidth = serviceTileImageWidth - SERVICE_ARCH_FRAME * 2;
   const serviceTopImage = serviceArches
     ? { width: serviceArchWidth, height: Math.round(serviceArchWidth * 1.25), borderTopLeftRadius: 999, borderTopRightRadius: 999, borderRadius: 4 }
-    : serviceSpotlight
-    ? { width: SERVICE_PLATE, height: SERVICE_PLATE, borderRadius: SERVICE_PLATE / 2 }
     : serviceTiles
     ? { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 }
     : { width: serviceWideImageWidth, height: Math.round(serviceWideImageWidth * 0.5), borderRadius: 16 };
@@ -472,7 +468,7 @@ export function ProviderPageServices({
             )}
             {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
             <View style={styles.serviceCardBlur}>
-              <View style={[styles.serviceItem, serviceTwoUp && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard, serviceSpotlight && styles.serviceItemSpotlight]}>
+              <View style={[styles.serviceItem, serviceTwoUp && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard]}>
                 {serviceNoPhoto ? null : (() => {
                   const isMulti = (service.images?.length ?? 0) > 1;
                   const hasSingle = (service.images?.length ?? 0) === 1;
@@ -502,7 +498,7 @@ export function ProviderPageServices({
                       <View
                         style={[
                           styles.serviceImageContainer,
-                          serviceStacked && [serviceTopImage, styles.serviceImageTileGap],
+                          serviceStacked && [serviceTopImage, styles.serviceImageTileGap, styles.serviceImageCentred],
                           styles.serviceImagePlaceholder,
                           archFrame,
                           {
@@ -527,6 +523,9 @@ export function ProviderPageServices({
                   const imgSrc = hasSingle ? service.images![0] : service.image;
                   return (
                     <TouchableOpacity
+                      // A tile stretches what's in it, so a stacked photo is
+                      // centred rather than sitting against the left edge.
+                      style={serviceStacked ? styles.serviceImageCentred : undefined}
                       activeOpacity={0.85}
                       onPress={() => {
                         if (imgSrc) {
@@ -549,7 +548,7 @@ export function ProviderPageServices({
                   );
                 })()}
 
-                <View style={[styles.serviceInfo, serviceTwoUp && styles.serviceInfoTile, serviceSpotlight && styles.serviceInfoSpotlight]}>
+                <View style={[styles.serviceInfo, serviceTwoUp && styles.serviceInfoTile]}>
                   {servicePills ? (
                     <View style={[styles.servicePill, { backgroundColor: adaptiveAccentColor }]}>
                       <Text style={[styles.servicePillText, { color: pillInk }]}>{service.name.toUpperCase()}</Text>
@@ -629,7 +628,7 @@ export function ProviderPageServices({
                       )}
                     </View>
                   )}
-                  <View style={[styles.serviceDetails, serviceSpotlight && styles.serviceDetailsSpotlight]}>
+                  <View style={styles.serviceDetails}>
                     <Text style={[styles.serviceDuration, { color: SV.sub }, bodyFont]}>
                       {service.duration}
                     </Text>
@@ -644,7 +643,7 @@ export function ProviderPageServices({
                 {/* Booking controls are absent, rather than merely disabled,
                     on the provider's own profile and while ownership loads. */}
                 {canBook && (
-                <View style={[styles.serviceActionColumn, serviceTwoUp && styles.serviceActionTile, serviceSpotlight && styles.serviceActionSpotlight]}>
+                <View style={[styles.serviceActionColumn, serviceTwoUp && styles.serviceActionTile]}>
                   {(() => {
                     const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
 
@@ -1039,6 +1038,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   serviceImageTileGap: { marginRight: 0, marginBottom: 10 },
+  serviceImageCentred: { alignSelf: "center" },
   serviceInfo: {
     flex: 1,
     marginRight: 15,
@@ -1098,11 +1098,7 @@ const styles = StyleSheet.create({
   // Before the list is measured; then each tile gets its width in points.
   serviceTile: { width: "48%" },
   serviceArchFrame: { padding: SERVICE_ARCH_FRAME, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, overflow: "hidden" },
-  serviceItemSpotlight: { flexDirection: "column", alignItems: "center" },
-  serviceInfoSpotlight: { marginRight: 0, alignItems: "center", alignSelf: "stretch" },
-  serviceNameSpotlight: { fontFamily: "Oswald-Bold", fontSize: 18, lineHeight: 24, letterSpacing: 0.4, textAlign: "center" },
-  serviceDetailsSpotlight: { justifyContent: "center", gap: 12 },
-  serviceActionSpotlight: { marginTop: 6 },
+  serviceNameSpotlight: { fontFamily: "Oswald-Bold", fontSize: 16, lineHeight: 21, letterSpacing: 0.4 },
   servicePill: { alignSelf: "flex-start", borderRadius: 30, paddingHorizontal: 14, paddingVertical: 7, marginBottom: 4 },
   servicePillText: { fontFamily: "Manrope-Bold", fontSize: 12, letterSpacing: 0.6 },
   arrowPillButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16, paddingRight: 6 },

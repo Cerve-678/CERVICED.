@@ -596,7 +596,7 @@ export function ProfileStylePreview({
             >
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
-              <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow, spotlight && styles.spotlightColumn]}>
+              <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow]}>
                 {menu ? null : (
                 <View style={[styles.serviceThumb, tiles && styles.tileThumb, photoCards && styles.photoCardThumb, spotlight && styles.spotlightThumb, arches && styles.archThumb, { backgroundColor: withAlpha(accent, arches ? 0.16 : 0.11) }]}>
                   {services[index]?.imageUri && !pageStyle.numberedServices ? (
@@ -609,7 +609,7 @@ export function ProfileStylePreview({
                 </View>
                 )}
                 {services[index] ? (
-                  <View style={[styles.serviceText, spotlight && styles.spotlightText]}>
+                  <View style={styles.serviceText}>
                     {pills ? (
                       <View style={styles.menuRow}>
                         <View style={[styles.pillName, { backgroundColor: accent }]}>
@@ -808,10 +808,8 @@ const styles = StyleSheet.create({
   // Posy: two tiles across, the photo on top, as on the profile.
   tilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   tile: { width: "48.5%", padding: 8 },
-  spotlightColumn: { flexDirection: "column", alignItems: "center", gap: 6 },
-  spotlightThumb: { width: 96, height: 96, borderRadius: 48, overflow: "hidden" },
-  spotlightText: { alignItems: "center", alignSelf: "stretch" },
-  spotlightName: { fontFamily: "Oswald-Bold", fontSize: 17, lineHeight: 23 },
+  spotlightThumb: { borderRadius: 32, overflow: "hidden" },
+  spotlightName: { fontFamily: "Oswald-Bold", fontSize: 15, lineHeight: 20 },
   archThumb: { width: "100%", height: undefined, aspectRatio: 0.82, padding: 6, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, overflow: "hidden" },
   archThumbImage: { flex: 1, width: "100%", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 3, borderBottomRightRadius: 3 },
   pillName: { borderRadius: 30, paddingHorizontal: 12, paddingVertical: 6, flexShrink: 1 },

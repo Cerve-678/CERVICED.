@@ -38,18 +38,15 @@ export default function ProviderServicesNavigator() {
         options={{ headerShown: false }}
       />
 
-      {/* Tapping the logo on My Profile. ProviderProfileScreen already knows
-          when its owner is looking (no Book for yourself), so nothing here
-          leads into a client-only flow. It appears instantly (no slide in
-          from the side, no fade) with no header buttons — the screen hides
-          its header for `asPreview` — and a swipe from anywhere on the screen
-          closes it (the swipe keeps the usual slide). */}
+      {/* Tapping the logo on My Profile opens the client-facing preview with
+          a brief fade, while retaining the full-screen swipe to close. */}
       <ProviderServicesStack.Screen
         name="MyPublicProfile"
         component={ProviderProfileScreen as React.ComponentType<any>}
         options={{
           headerShown: false,
-          animation: 'none',
+          animation: 'fade',
+          animationDuration: 250,
           gestureEnabled: true,
           fullScreenGestureEnabled: true,
         }}

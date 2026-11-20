@@ -83,10 +83,10 @@ export const CUSTOM_TEXT_FONTS: readonly CustomFont[] = [
 ];
 
 export type CustomHeadingStyle = 'typed' | 'caps' | 'numbered' | 'underlined' | 'script';
-export type CustomTop = 'centred' | 'ringed' | 'side' | 'bigName' | 'cover' | 'arch' | 'polaroid' | 'calm' | 'prism' | 'rose';
+export type CustomTop = 'centred' | 'ringed' | 'side' | 'bigName' | 'cover' | 'arch' | 'polaroid' | 'calm' | 'prism' | 'rose' | 'hibiscus' | 'filmstrip';
 export type CustomSurface = 'open' | 'cards' | 'outlined' | 'roundBoxes' | 'soft' | 'paper';
 export type CustomPolicies = 'rows' | 'lines' | 'side' | 'boxes' | 'tiles' | 'discs' | 'notes' | 'open';
-export type CustomServices = 'list' | 'numbered';
+export type CustomServices = 'list' | 'numbered' | 'twoAcross' | 'wide' | 'spotlight' | 'arches' | 'pills' | 'menu';
 export type CustomPhotos = 'plain' | 'rounded' | 'stamps' | 'pinned' | 'pressed' | 'newsprint';
 
 /** One way a part of the page can look: what the provider sees, and the page switch it sets. */
@@ -112,6 +112,9 @@ export const CUSTOM_TOPS: readonly CustomPartOption<CustomTop>[] = [
   { key: 'calm', name: 'Calm', description: 'Your name spaced out over a ringed logo' },
   { key: 'prism', name: 'Prism', description: 'Angled colour planes round your logo and name' },
   { key: 'rose', name: 'Rose', description: 'Your name on a deep panel beside one of your photos' },
+  // Owner, 2026-11-20: "add hibiscus and film strip heros to custom".
+  { key: 'hibiscus', name: 'Hibiscus', description: 'Your name echoing behind two of your photos' },
+  { key: 'filmstrip', name: 'Filmstrip', description: 'Two of your photos as numbered frames' },
 ];
 
 export const CUSTOM_SURFACES: readonly CustomPartOption<CustomSurface>[] = [
@@ -145,6 +148,13 @@ export const CUSTOM_POLICY_LAYOUTS: readonly CustomPartOption<CustomPolicies>[] 
 export const CUSTOM_SERVICE_LAYOUTS: readonly CustomPartOption<CustomServices>[] = [
   { key: 'list', name: 'With Photos', description: 'Each service with its photo' },
   { key: 'numbered', name: 'Numbered', description: '01, 02, 03 instead of photos' },
+  // Owner, 2026-11-20: the ways the page styles lay their services out.
+  { key: 'twoAcross', name: 'Two Across', description: 'Photo tiles, two to a row' },
+  { key: 'wide', name: 'Wide Photo', description: 'One across, a wide photo on top' },
+  { key: 'spotlight', name: 'Spotlight', description: 'A row each, the photo round and the name in capitals' },
+  { key: 'arches', name: 'Arches', description: 'Two across, each photo in an arch' },
+  { key: 'pills', name: 'Pills', description: 'Each name in a pill of your colour' },
+  { key: 'menu', name: 'Menu', description: 'A printed price list, no photos' },
 ];
 
 export const CUSTOM_PHOTO_LAYOUTS: readonly CustomPartOption<CustomPhotos>[] = [
@@ -324,7 +334,7 @@ export function sameCustomChoices(a: CustomChoices, b: CustomChoices): boolean {
   return encodeCustomChoices(a) === encodeCustomChoices(b);
 }
 
-const TOP_SWITCHES: Record<CustomTop, { hero: PageHero; logo: PageLogoFrame }> = {
+const TOP_SWITCHES: Record<CustomTop, { hero: PageHero; logo: PageLogoFrame; nameFontPickable?: boolean }> = {
   centred: { hero: 'stacked', logo: 'circle' },
   ringed: { hero: 'stacked', logo: 'doubleRing' },
   side: { hero: 'customLeft', logo: 'circle' },
@@ -335,6 +345,9 @@ const TOP_SWITCHES: Record<CustomTop, { hero: PageHero; logo: PageLogoFrame }> =
   calm: { hero: 'spa', logo: 'doubleRing' },
   prism: { hero: 'prismHeader', logo: 'sharp' },
   rose: { hero: 'roseCampaign', logo: 'rounded' },
+  // Both draw the name in the Business Name Font once one is picked, as their page styles do.
+  hibiscus: { hero: 'echoName', logo: 'rounded', nameFontPickable: true },
+  filmstrip: { hero: 'filmstripMark', logo: 'sharp', nameFontPickable: true },
 };
 
 const SURFACE_CARDS: Record<CustomSurface, PageCards> = {
@@ -343,6 +356,19 @@ const SURFACE_CARDS: Record<CustomSurface, PageCards> = {
 
 const POLICY_LAYOUTS: Record<CustomPolicies, PagePolicies> = {
   rows: 'rows', lines: 'hairline', side: 'definition', boxes: 'boxes', tiles: 'softTiles', discs: 'discTiles', notes: 'gentleNotes', open: 'accordion',
+};
+
+/** The page switches each service layout sets: the layout, and the Book
+ *  button the page style it comes from draws with it. */
+const SERVICE_SWITCHES: Record<CustomServices, Partial<PageStyle>> = {
+  list: {},
+  numbered: { numberedServices: true },
+  twoAcross: { serviceLayout: 'tiles' },          // Posy, Pinboard
+  wide: { serviceLayout: 'photoCards' },          // Riviera
+  spotlight: { serviceLayout: 'spotlight', buttonShape: 'arrowPill' }, // Hibiscus
+  arches: { serviceLayout: 'archTiles', buttonShape: 'shopBox' },      // Storefront
+  pills: { serviceLayout: 'pillMenu' },           // Poster
+  menu: { serviceLayout: 'menu' },                // Muse, Typeblock
 };
 
 const PHOTO_SWITCHES: Record<CustomPhotos, Partial<PageStyle>> = {
@@ -374,7 +400,8 @@ export function customPageStyle(choices: CustomChoices): PageStyle {
     heroPills: false,
     jumpBar: false,
     separateAboutAndPolicies: true,
-    numberedServices: choices.services === 'numbered',
+    numberedServices: false,
+    ...SERVICE_SWITCHES[choices.services],
     custom: {
       layout: choices.layout,
       headingFont: heading.fontFamily,
