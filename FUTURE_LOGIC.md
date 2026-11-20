@@ -1712,3 +1712,37 @@ once.
 - Reuse `bookingsByDate`, `scheduleIssues` and the per-day availability
   shading that `WeekView` already gets, so the new layout can't disagree
   with the grid about what's on.
+
+---
+
+## Welcome intro on a provider's page — designed, parked (2026-11-18)
+
+### What it means
+
+An optional short intro (about 2 seconds) that a **client** sees when they open a provider's page, in the provider's own colours, logo and name font. The provider switches it on and picks a style in Branding. Mockups: https://claude.ai/artifact/12MS8cd9kAYr9ocPEeDBuq
+
+Six styles were drawn:
+
+- **Curtain**: two panels in the provider's colour open from the middle, with their name in the centre.
+- **Signed**: the name writes itself in a script font, then the page lifts away.
+- **Logo bloom**: the logo grows in the middle of the screen, then floats up to its place on the page.
+- **Hello note**: a short note in the provider's own words slides up over the page (about 3 seconds).
+- **Letter by letter**: the letters of the name rise in one by one.
+- **Settle**: the provider's colour fills the screen, then shrinks into the coloured band at the top of the page.
+
+The provider's settings would be a Welcome card in Branding → Layout: on/off, the style, "Your words", and **First visit only** or **Every visit**.
+
+### Rules the build has to keep
+
+- Off by default. A client can tap anywhere to skip it.
+- Respect the phone's Reduce Motion setting: no intro at all.
+- Never play it when a provider opens their own page from the My Profile logo. That preview opens instantly on purpose (see the logo-opens-client-view notes).
+- "Your words" are free text that clients see, so they need a length cap and the same checks as other public profile text.
+- Profile pages are always light today, so in dark mode only the intro overlay is dark.
+
+### How to build it
+
+- Store the choice as another `|` part of `providers.profile_theme`, like page style and card shape. That means no migration.
+- Draw it as an overlay over `ProviderProfileScreen`, once the profile data has loaded, so the intro never covers a loading skeleton.
+- Use React Native's built-in `Animated`, not Reanimated. Reanimated opacity never reached 1 on the dev build for the app's welcome intro (2026-10-18).
+- "First visit only" can be remembered on the client's phone per provider. It doesn't need a database table.
