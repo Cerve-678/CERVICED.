@@ -233,7 +233,7 @@ export function ProviderPageSheet({
       ) : null}
 
       {/* Templates only, when Branding → Policy Pictures is Story:
-          their policy pictures as story circles; a tap opens them full
+          their policy pictures as one story circle; a tap opens them full
           screen, one page at a time. Classic keeps the round button on
           the About card. */}
       {pageStyle.key !== "classic" && policyPlacement === "top" && policyPages.length > 0 ? (
@@ -242,7 +242,7 @@ export function ProviderPageSheet({
             urls={policyPages}
             accent={adaptiveAccentColor}
             sheet={OP.bg}
-            onOpen={onOpenPolicyStory}
+            onOpen={() => onOpenPolicyStory(0)}
           />
         </View>
       ) : null}

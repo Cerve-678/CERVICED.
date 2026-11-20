@@ -511,6 +511,39 @@ export function PageSectionHeading({
         </Text>
       );
     }
+    case "twoToneCaps": {
+      // Poster: huge heavy caps on the left, the lead word in the ink and the
+      // rest in the accent, lifted on a dark page so the pink still reads.
+      const [lead, rest] = pair;
+      const pop = isDarkColor(palette.background) ? blend(accent, "#FFFFFF", 0.5) : accent;
+      return (
+        <View {...a11y} accessible style={headingStyles.twoToneWrap}>
+          {lead ? <Text style={[headingStyles.twoTone, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{lead.toUpperCase()}</Text> : null}
+          <Text style={[headingStyles.twoTone, { color: color ?? pop }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{rest.toUpperCase()}</Text>
+        </View>
+      );
+    }
+    case "enjoyStack": {
+      // Hibiscus: "T H E" thin and widely spaced, then the name in heavy
+      // condensed caps, both centred, like a drink poster.
+      const [lead, rest] = pair;
+      return (
+        <View {...a11y} accessible style={headingStyles.enjoyWrap}>
+          {lead ? <Text style={[headingStyles.enjoyLead, { color: ink }]}>{lead.toUpperCase()}</Text> : null}
+          <Text style={[headingStyles.enjoyTitle, { color: color ?? accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{rest.toUpperCase()}</Text>
+        </View>
+      );
+    }
+    case "slantCaps": {
+      // Storefront: a tiny spaced overline, then heavy slanted caps, like a shop's banner.
+      const [lead, rest] = pair;
+      return (
+        <View {...a11y} accessible style={headingStyles.slantWrap}>
+          {lead ? <Text style={[headingStyles.slantOver, { color: withAlpha(ink, 0.5) }]}>{lead.toUpperCase()}</Text> : null}
+          <Text style={[headingStyles.slantTitle, { color: color ?? ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{rest.toUpperCase()}</Text>
+        </View>
+      );
+    }
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -863,7 +896,7 @@ function isCentredHeading(style: PageStyle): boolean {
     || style.heading === "italicCaps" || style.heading === "layered"
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
     || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "stripeCaps"
-    || style.heading === "bowSerif"
+    || style.heading === "bowSerif" || style.heading === "enjoyStack" || style.heading === "slantCaps"
     || (style.heading === "custom" && !!style.custom?.centred)
   );
 }
@@ -1836,6 +1869,14 @@ function AccordionPolicies({
 }
 
 const headingStyles = StyleSheet.create({
+  twoToneWrap: { marginBottom: 14 },
+  twoTone: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 40, lineHeight: 42, letterSpacing: -1, paddingTop: 4 },
+  enjoyWrap: { alignItems: "center", marginBottom: 16 },
+  enjoyLead: { fontFamily: "Manrope-Bold", fontSize: 11, letterSpacing: 7, marginBottom: 2, paddingLeft: 7 },
+  enjoyTitle: { fontFamily: "Oswald-Bold", fontSize: 38, lineHeight: 48, letterSpacing: 0.5 },
+  slantWrap: { alignItems: "center", marginBottom: 16 },
+  slantOver: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 4, marginBottom: 4, paddingLeft: 4 },
+  slantTitle: { fontFamily: "Archivo-ExtraBold", fontSize: 24, lineHeight: 32, letterSpacing: -0.3, transform: [{ skewX: "-10deg" }] },
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   custom: { marginBottom: 12 },
   customCentred: { textAlign: "center" },

@@ -158,3 +158,71 @@ describe('Prism\'s top, kept in Custom (owner, 2026-11-19: "just the hero from p
     expect(PAGE_STYLES.some(style => (style.key as string) === 'prism')).toBe(false);
   });
 });
+
+describe('the Rose top, Custom only (owner, 2026-11-19: "keep rose hero add to custom hero only")', () => {
+  const withRoseTop = withPart(DEFAULT_CUSTOM_CHOICES, 'top', 'rose');
+
+  it('draws the rose campaign block in the Business Name Font with one photo to pick', () => {
+    const style = customPageStyle(withRoseTop);
+    expect(style).toMatchObject({ hero: 'roseCampaign', logo: 'rounded' });
+    expect(heroUsesBrandFont(style)).toBe(true);
+    expect(heroPhotoPickLimit(style)).toBe(1);
+  });
+
+  it('saves and reads back the Rose top', () => {
+    expect(parseCustomChoices(encodeCustomChoices(withRoseTop))).toEqual(withRoseTop);
+  });
+
+  it('is not a fixed page style', () => {
+    expect(PAGE_STYLES.some(style => style.hero === 'roseCampaign')).toBe(false);
+  });
+});
+
+describe('the Hibiscus and Filmstrip tops in Custom (owner, 2026-11-20: "add hibiscus and film strip heros to custom")', () => {
+  it.each([
+    ['hibiscus', 'echoName', 'rounded', 'hibiscus'],
+    ['filmstrip', 'filmstripMark', 'sharp', 'filmstrip'],
+  ] as const)('the %s top draws that page style\'s top, in the picked name font, with the same photos to pick', (top, hero, logo, from) => {
+    const choices = withPart(DEFAULT_CUSTOM_CHOICES, 'top', top);
+    const style = customPageStyle(choices);
+    expect(style).toMatchObject({ hero, logo, nameFontPickable: true });
+    expect(heroUsesBrandFont(style)).toBe(true);
+    expect(heroPhotoPickLimit(style)).toBe(heroPhotoPickLimit(getPageStyle(from)));
+    expect(heroPhotoPickLimit(style)).toBeGreaterThan(0);
+    expect(parseCustomChoices(encodeCustomChoices(choices))).toEqual(choices);
+  });
+
+  it('leaves the other tops without a pickable name font', () => {
+    expect(customPageStyle(DEFAULT_CUSTOM_CHOICES).nameFontPickable).toBeFalsy();
+  });
+});
+
+describe('the service layouts in Custom (owner, 2026-11-20: the page styles\' ways of laying services out)', () => {
+  it.each([
+    ['twoAcross', 'tiles', 'pinboard'],
+    ['wide', 'photoCards', 'riviera'],
+    ['spotlight', 'spotlight', 'hibiscus'],
+    ['arches', 'archTiles', 'storefront'],
+    ['pills', 'pillMenu', 'poster'],
+    ['menu', 'menu', 'typeblock'],
+  ] as const)('%s lays services out as %s, like %s', (services, layout, from) => {
+    const choices = withPart(DEFAULT_CUSTOM_CHOICES, 'services', services);
+    const style = customPageStyle(choices);
+    expect(style.serviceLayout).toBe(layout);
+    expect(getPageStyle(from).serviceLayout).toBe(layout);
+    expect(style.numberedServices).toBe(false);
+    expect(parseCustomChoices(encodeCustomChoices(choices))).toEqual(choices);
+  });
+
+  it('keeps the Book button each layout comes with', () => {
+    expect(customPageStyle(withPart(DEFAULT_CUSTOM_CHOICES, 'services', 'spotlight')).buttonShape).toBe('arrowPill');
+    expect(customPageStyle(withPart(DEFAULT_CUSTOM_CHOICES, 'services', 'arches')).buttonShape).toBe('shopBox');
+    expect(customPageStyle(withPart(DEFAULT_CUSTOM_CHOICES, 'services', 'twoAcross')).buttonShape).toBeUndefined();
+  });
+
+  it('keeps With Photos and Numbered as they were', () => {
+    expect(customPageStyle(DEFAULT_CUSTOM_CHOICES)).toMatchObject({ numberedServices: false });
+    expect(customPageStyle(DEFAULT_CUSTOM_CHOICES).serviceLayout).toBeUndefined();
+    expect(customPageStyle(withPart(DEFAULT_CUSTOM_CHOICES, 'services', 'numbered'))).toMatchObject({ numberedServices: true });
+  });
+});

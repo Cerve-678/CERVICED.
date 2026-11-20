@@ -1194,9 +1194,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   }, [navigation]);
 
   // Keep a fresh copy of the profile as clients see it ready while My Profile
-  // is open, so the logo tap below opens it instantly and fully drawn: no
-  // wait on tap, and no grey loading frame (the preview opens with no slide
-  // to hide one). Refreshed on every focus, so coming back from Edit Profile
+  // is open, so the logo tap below opens it with the profile already drawn.
+  // Refreshed on every focus, so coming back from Edit Profile
   // picks the edit up. Not before go-live: clients can't see it yet.
   const isLiveForPreview = goLive?.isLive !== false;
   useFocusEffect(

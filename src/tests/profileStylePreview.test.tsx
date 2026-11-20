@@ -278,7 +278,8 @@ describe('the 2026-11-15 templates', () => {
           full
         />,
       );
-      expect(screen.getAllByText('Amara Lashes').length).toBeGreaterThan(0);
+      // Some tops write the name in capitals (Hibiscus), so match either case.
+      expect(screen.getAllByText(/^amara lashes$/i).length).toBeGreaterThan(0);
       expect(screen.getByText('Soft lash sets.')).toBeTruthy();
     },
   );
@@ -343,5 +344,36 @@ describe('the portfolio and pinned bar, as on the profile', () => {
     screen.unmount();
     renderPreview('pure');
     expect(screen.queryByText(/^From £/)).toBeNull();
+  });
+});
+
+describe('Poster, Hibiscus and Storefront in the full preview (owner, 2026-11-19)', () => {
+  it.each(['poster', 'hibiscus', 'storefront'] as const)('draws %s with a hero photo, its services and their names', key => {
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', key)}
+        gradient={['#410C20', '#6A1D36']}
+        accent="#9B315F"
+        backgroundImage={null}
+        brandFont="default"
+        name="Amara Lashes"
+        logoUri={null}
+        logoFraming={null}
+        metaLabels={['LASHES']}
+        pillLabels={['LASHES']}
+        kicker="LASHES"
+        location="Peckham"
+        photoUris={['https://example.com/a.jpg']}
+        content={{
+          about: 'Soft lash sets.',
+          categories: ['Lashes'],
+          services: [{ name: 'Classic full set', minutes: 120, price: 65, imageUri: 'https://example.com/s.jpg' }],
+        }}
+        rating="5.0"
+        full
+      />,
+    );
+    expect(screen.getAllByLabelText('Amara Lashes').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/classic full set/i).length).toBeGreaterThan(0);
   });
 });

@@ -33,6 +33,23 @@ export function SectionDivider({ divider, accent }: { divider: SectionDividerKey
       );
     case "line":
       return <View style={[styles.line, { backgroundColor: withAlpha(accent, 0.3) }]} accessible={false} />;
+    case "sparkles":
+      // Poster: a hand-drawn loop, a little uneven, with a sparkle at each end.
+      return (
+        <View style={styles.divider} accessible={false} importantForAccessibility="no-hide-descendants">
+          <Svg width={150} height={26} viewBox="0 0 150 26">
+            <Path
+              d="M14 14 C 30 2, 118 1, 136 11 C 146 17, 120 24, 75 24 C 34 24, 6 20, 16 10"
+              fill="none"
+              stroke={accent}
+              strokeWidth={1.4}
+              strokeLinecap="round"
+            />
+            <Path d="M8 13 L10 9 L12 13 L16 14 L12 15 L10 19 L8 15 L4 14 Z" fill={accent} />
+            <Path d="M140 4 L141.6 1 L143.2 4 L146.4 5 L143.2 6 L141.6 9 L140 6 L136.8 5 Z" fill={accent} />
+          </Svg>
+        </View>
+      );
     case "wave":
       return (
         <View style={styles.divider} accessible={false} importantForAccessibility="no-hide-descendants">
