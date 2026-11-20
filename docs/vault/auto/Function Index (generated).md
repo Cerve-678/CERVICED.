@@ -280,7 +280,7 @@
 - `CalendarSyncCard.tsx` — blockedLine · **CalendarSyncCard** · disconnect · load · openChooser · saveChoice · sync · toggleCalendar
 - `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · tomorrow
 - `conversionSteps.ts` — **buildConversionSteps** · **countLeftToGoLive**
-- `CustomPageMaker.tsx` — **CustomPageMaker** · **CustomPartPicker** · **CustomTapPanel** · FontRow · guard · LayoutSketch · set · tap
+- `CustomPageMaker.tsx` — **CustomPageMaker** · CustomPartPicker · **CustomTapPanel** · FontRow · guard · LayoutSketch · set · tap
 - `descriptionTopics.ts` — **learnDescriptionTopics** · meaningful
 - `DiaryCard.tsx` — createStyles · daySummary · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles · toggleCalendar · week · weekRangeLabel
 - `diaryDays.ts` — **buildDashboardWeek** · **diaryEventMinutes** · **hoursFor** · **startOfDay**
@@ -621,7 +621,7 @@
 - `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · **noticeChoiceForHours** · **noticeHoursToSave** · pushRow · pushWrittenPolicies · **readProviderTermsSnapshot** · rescheduleSummary · sectionRow
 - `providerCity.ts` — **addCoveredArea** · addPlaceKeys · **cityFilterKeys** · **coveredAreaLabel** · **matchesCityFilter** · normalisePlace · **placeForLocation** · **samePlace** · **suggestedCoverTown**
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
-- `providerProfileDeepLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerProfileDeepLink**
+- `providerProfileLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerWebPageUrl**
 - `readCache.ts` — cachedFetch · clear · **createReadCache** · **isCacheableRead** · **isWriteRequest** · pathOf · **readRequestKey** · requestMethod · requestUrl · that · tooLargeToKeep
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**
