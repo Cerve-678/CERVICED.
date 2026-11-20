@@ -299,9 +299,9 @@ function MiniProfile({
         );
       case 'spotlight':
         return (
-          <View style={{ alignItems: 'center', gap: 3 }}>
+          <View style={mini.menuLine}>
             <View style={[mini.plate, { backgroundColor: photoFill }]} />
-            <View style={[mini.bar, { width: '50%', backgroundColor: line }]} />
+            <View style={[mini.bar, { flex: 1, backgroundColor: line }]} />
             <View style={[mini.arrowPill, { backgroundColor: accent }]} />
           </View>
         );
@@ -1140,8 +1140,8 @@ const mini = StyleSheet.create({
   // The 2026-11-19 reference-board styles: Poster, Hibiscus, Storefront.
   tape: { position: 'absolute', top: -3, alignSelf: 'center', width: 14, height: 5, backgroundColor: 'rgba(238,232,220,0.9)' },
   pillName: { width: '45%', height: 8, borderRadius: 4 },
-  plate: { width: 22, height: 22, borderRadius: 11 },
-  arrowPill: { width: 28, height: 7, borderRadius: 4 },
+  plate: { width: 12, height: 12, borderRadius: 6 },
+  arrowPill: { width: 16, height: 7, borderRadius: 4 },
   archFrame: { padding: 2, borderTopLeftRadius: 99, borderTopRightRadius: 99, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
   archFramePhoto: { height: 18, borderTopLeftRadius: 99, borderTopRightRadius: 99 },
   twoTone: { fontFamily: 'LeagueSpartan-ExtraBold', fontSize: 13, lineHeight: 14, letterSpacing: -0.5 },

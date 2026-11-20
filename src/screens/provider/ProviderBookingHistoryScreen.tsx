@@ -1031,7 +1031,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <TouchableOpacity style={[wl.pickerDone, { borderBottomColor: P.sub + '20' }]} onPress={() => setShowInviteDatePicker(false)} activeOpacity={0.7}>
                     <Text style={[wl.pickerDoneText, { color: P.accent }]}>Done</Text>
                   </TouchableOpacity>
-                  <DateTimePicker value={inviteDate ?? new Date()} mode="date" display="spinner" minimumDate={new Date()} onChange={(_, d) => { if (d) setInviteDate(d); }} />
+                  <DateTimePicker value={inviteDate ?? new Date()} mode="date" display="spinner" themeVariant={dark ? 'dark' : 'light'} textColor={P.text} minimumDate={new Date()} onChange={(_, d) => { if (d) setInviteDate(d); }} />
                 </View>
               )}
               {Platform.OS === 'ios' && showInviteTimePicker && (
@@ -1039,7 +1039,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <TouchableOpacity style={[wl.pickerDone, { borderBottomColor: P.sub + '20' }]} onPress={() => setShowInviteTimePicker(false)} activeOpacity={0.7}>
                     <Text style={[wl.pickerDoneText, { color: P.accent }]}>Done</Text>
                   </TouchableOpacity>
-                  <DateTimePicker value={inviteTime ?? new Date()} mode="time" display="spinner" onChange={(_, d) => { if (d) setInviteTime(d); }} />
+                  <DateTimePicker value={inviteTime ?? new Date()} mode="time" display="spinner" themeVariant={dark ? 'dark' : 'light'} textColor={P.text} onChange={(_, d) => { if (d) setInviteTime(d); }} />
                 </View>
               )}
               <Text style={[wl.notes, { color: P.sub, marginTop: 12 }]}>
