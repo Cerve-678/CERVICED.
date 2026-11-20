@@ -151,7 +151,7 @@ export const CUSTOM_SERVICE_LAYOUTS: readonly CustomPartOption<CustomServices>[]
   // Owner, 2026-11-20: the ways the page styles lay their services out.
   { key: 'twoAcross', name: 'Two Across', description: 'Photo tiles, two to a row' },
   { key: 'wide', name: 'Wide Photo', description: 'One across, a wide photo on top' },
-  { key: 'spotlight', name: 'Spotlight', description: 'Centred, the photo in a round plate' },
+  { key: 'spotlight', name: 'Spotlight', description: 'A row each, the photo round and the name in capitals' },
   { key: 'arches', name: 'Arches', description: 'Two across, each photo in an arch' },
   { key: 'pills', name: 'Pills', description: 'Each name in a pill of your colour' },
   { key: 'menu', name: 'Menu', description: 'A printed price list, no photos' },
