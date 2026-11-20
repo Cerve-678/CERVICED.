@@ -287,6 +287,81 @@ function ProfileHeroLayoutBody({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "orbitMark":
+      return (
+        <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
+          <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 4, marginBottom: 20 }}>YOUR SPACE TO SHINE</Text>
+          <View style={{ width: 236, height: 236, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ position: "absolute", width: 226, height: 226, borderRadius: 113, borderWidth: 1, borderColor: withAlpha(heroText, 0.32) }} />
+            <View style={{ position: "absolute", width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: withAlpha(heroText, 0.55) }} />
+            <View style={{ position: "absolute", top: 20, right: 26, width: 16, height: 16, borderRadius: 8, backgroundColor: heroAccent }} />
+            <View style={{ position: "absolute", bottom: 26, left: 22, width: 9, height: 9, borderRadius: 5, backgroundColor: heroText }} />
+            {renderLogo(128)}
+          </View>
+          <View accessible accessibilityRole="header" accessibilityLabel={name} style={{ alignItems: "center", marginTop: 16, maxWidth: "100%" }}>
+            <Text style={[{ color: heroText, fontFamily: "PoiretOne_400Regular", fontSize: 38, letterSpacing: 2, textAlign: "center" }, pickedName(38), shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+            {tick}
+          </View>
+          {kicker ? <Text style={{ color: heroSub, fontSize: 11, letterSpacing: 2, textAlign: "center", marginTop: 8 }}>{kicker.toUpperCase()}</Text> : null}
+          <View style={{ width: 54, height: 1, backgroundColor: heroAccent, marginTop: 21, marginBottom: 13 }} />
+          {meta}{details}
+        </View>
+      );
+    case "typeblockMark":
+      return (
+        <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
+          <View style={{ flexDirection: "row", minHeight: 250 }}>
+            <View style={{ width: 18, backgroundColor: heroAccent, marginRight: 18, justifyContent: "flex-end", paddingBottom: 12, alignItems: "center" }}>
+              <Text style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 90, textAlign: "center", letterSpacing: 2 }}>EST. TODAY</Text>
+            </View>
+            <View style={{ flex: 1, justifyContent: "space-between", minWidth: 0 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>THE PROFILE / 01</Text>
+                {renderLogo(58)}
+              </View>
+              <View accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[{ color: heroText, fontFamily: "BebasNeue_400Regular", fontSize: 56, lineHeight: 60, letterSpacing: -0.5 }, pickedName(56), shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>{name.toUpperCase()}</Text>
+                <View style={{ width: "100%", height: 4, backgroundColor: heroAccent, marginTop: 4, marginBottom: 10 }} />
+                {kicker ? <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 1.4 }}>{kicker.toUpperCase()}</Text> : null}
+                {tick}
+              </View>
+            </View>
+          </View>
+          <View style={{ marginLeft: 36, marginTop: 18 }}>{meta}{details}</View>
+        </View>
+      );
+    case "filmstripMark": {
+      const frames = [photoUris?.[0], photoUris?.[1]];
+      return (
+        <View style={{ paddingHorizontal: 18, paddingTop: 20, paddingBottom: 25 }}>
+          <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: withAlpha(heroText, 0.65), paddingVertical: 7 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
+              <Text style={{ color: heroText, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>SELECTED WORK</Text>
+              <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10 }}>01 — 02</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {frames.map((uri, index) => (
+                <TouchableOpacity key={index} style={{ flex: 1, aspectRatio: 158 / 190, backgroundColor: withAlpha(heroAccent, 0.24), overflow: "hidden" }} disabled={!uri || !onOpenHeroPhoto} onPress={() => onOpenHeroPhoto?.(index)} activeOpacity={0.88} accessibilityRole={uri && onOpenHeroPhoto ? "imagebutton" : undefined} accessibilityLabel={uri ? `${name} work photo ${index + 1}` : undefined}>
+                  {uri ? <HeroPhoto uri={uri} /> : <Text style={{ position: "absolute", bottom: 10, left: 10, color: heroSub, fontFamily: "TenorSans_400Regular", fontSize: 28 }}>0{index + 1}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+              <Text style={{ color: heroSub, fontSize: 10 }}>FRAME 01</Text><Text style={{ color: heroSub, fontSize: 10 }}>FRAME 02</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 19, gap: 13 }}>
+            {renderLogo(54)}
+            <View style={{ flex: 1 }} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[{ color: heroText, fontFamily: "TenorSans_400Regular", fontSize: 27, lineHeight: 35 }, pickedName(27), shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+              {kicker ? <Text style={{ color: heroSub, fontSize: 10, letterSpacing: 1.5, marginTop: 3 }}>{kicker.toUpperCase()}</Text> : null}
+            </View>
+            {tick}
+          </View>
+          <View style={{ marginTop: 14 }}>{meta}{details}</View>
+        </View>
+      );
+    }
     case "roseCampaign": {
       // Custom's Rose top (owner, 2026-11-19: "keep rose hero, add to custom
       // hero only"): a campaign block, the name and a rule on a deep panel

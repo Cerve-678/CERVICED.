@@ -138,6 +138,9 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   poster: { lead: 'The', text: 'Services' },
   hibiscus: { lead: 'The', text: 'Services' },
   storefront: { lead: 'The', text: 'Services' },
+  orbit: { text: 'S E R V I C E S' },
+  typeblock: { text: 'SERVICES' },
+  filmstrip: { lead: '03', text: 'SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -684,7 +687,37 @@ function MiniProfile({
       ) : null}
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
-        {style.hero === 'posterCover' ? (
+        {style.hero === 'orbitMark' ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 70, height: 70, borderRadius: 35, borderWidth: 1, borderColor: line, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 54, height: 54, borderRadius: 27, borderWidth: 1, borderColor: ink, alignItems: 'center', justifyContent: 'center' }}>{logo}</View>
+              <View style={{ position: 'absolute', top: 5, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: accent }} />
+            </View>
+            <Text style={{ color: ink, fontFamily: 'PoiretOne_400Regular', fontSize: 13, marginTop: 5 }}>NAME</Text>
+          </View>
+        ) : style.hero === 'typeblockMark' ? (
+          <View style={{ flex: 1, flexDirection: 'row', padding: 9, gap: 7 }}>
+            <View style={{ width: 7, backgroundColor: accent }} />
+            <View style={{ flex: 1, justifyContent: 'space-between' }}>
+              <View style={{ alignSelf: 'flex-end' }}>{logo}</View>
+              <View>
+                <Text style={{ color: ink, fontFamily: 'BebasNeue_400Regular', fontSize: 27, lineHeight: 28 }}>YOUR{String.fromCharCode(10)}NAME</Text>
+                <View style={{ height: 3, backgroundColor: accent, marginTop: 3 }} />
+              </View>
+            </View>
+          </View>
+        ) : style.hero === 'filmstripMark' ? (
+          <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
+            <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: ink, paddingVertical: 4 }}>
+              <Text style={{ color: ink, fontSize: 6, letterSpacing: 1, marginBottom: 3 }}>SELECTED WORK  01—02</Text>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                <View style={{ flex: 1, height: 37, backgroundColor: photoFill }} />
+                <View style={{ flex: 1, height: 37, backgroundColor: blend(accent, '#FFFFFF', 0.7) }} />
+              </View>
+            </View>
+            <Text style={{ color: ink, fontFamily: 'TenorSans_400Regular', fontSize: 11, marginTop: 6 }}>Your Name</Text>
+          </View>
+        ) : style.hero === 'posterCover' ? (
           // Poster: a pill, the name in two-tone caps, a taped print.
           <View style={mini.posterCoverHero}>
             <View style={[mini.posterCoverPill, { backgroundColor: blend(accent, '#FFFFFF', isDarkColor(heroColours[0]) ? 0.5 : 0) }]} />
