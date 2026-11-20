@@ -6,7 +6,8 @@
   "outputDirectory": "dist",
   "ignoreCommand": "bash scripts/vercel-ignore-build.sh",
   "rewrites": [
-    { "source": "/@:handle", "destination": "/app.html" }
+    { "source": "/@:handle", "destination": "/app.html" },
+    { "source": "/@:handle/", "destination": "/app.html" }
   ],
   "headers": [
     {
