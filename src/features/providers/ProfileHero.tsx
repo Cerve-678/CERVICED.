@@ -308,26 +308,34 @@ function ProfileHeroLayoutBody({
         </View>
       );
     case "typeblockMark":
+      // The rail runs the full height of the block, down beside the details
+      // too (owner, 2026-11-20: it stopped short of "the rest of the words").
       return (
         <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
-          <View style={{ flexDirection: "row", minHeight: 250 }}>
+          <View style={{ flexDirection: "row" }}>
             <View style={{ width: 18, backgroundColor: heroAccent, marginRight: 18, justifyContent: "flex-end", paddingBottom: 12, alignItems: "center" }}>
-              <Text style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 90, textAlign: "center", letterSpacing: 2 }}>EST. TODAY</Text>
+              {/* A slot as tall as the turned word, so it sits inside the rail
+                  rather than hanging off its end. */}
+              <View style={{ width: 18, height: 90, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 90, textAlign: "center", letterSpacing: 2 }} numberOfLines={1}>EST. TODAY</Text>
+              </View>
             </View>
-            <View style={{ flex: 1, justifyContent: "space-between", minWidth: 0 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>THE PROFILE / 01</Text>
-                {renderLogo(58)}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ minHeight: 250, justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>THE PROFILE / 01</Text>
+                  {renderLogo(58)}
+                </View>
+                <View accessible accessibilityRole="header" accessibilityLabel={name}>
+                  <Text style={[{ color: heroText, fontFamily: "BebasNeue_400Regular", fontSize: 56, lineHeight: 60, letterSpacing: -0.5 }, pickedName(56), shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>{name.toUpperCase()}</Text>
+                  <View style={{ width: "100%", height: 4, backgroundColor: heroAccent, marginTop: 4, marginBottom: 10 }} />
+                  {kicker ? <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 1.4 }}>{kicker.toUpperCase()}</Text> : null}
+                  {tick}
+                </View>
               </View>
-              <View accessible accessibilityRole="header" accessibilityLabel={name}>
-                <Text style={[{ color: heroText, fontFamily: "BebasNeue_400Regular", fontSize: 56, lineHeight: 60, letterSpacing: -0.5 }, pickedName(56), shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>{name.toUpperCase()}</Text>
-                <View style={{ width: "100%", height: 4, backgroundColor: heroAccent, marginTop: 4, marginBottom: 10 }} />
-                {kicker ? <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 1.4 }}>{kicker.toUpperCase()}</Text> : null}
-                {tick}
-              </View>
+              <View style={{ marginTop: 18 }}>{meta}{details}</View>
             </View>
           </View>
-          <View style={{ marginLeft: 36, marginTop: 18 }}>{meta}{details}</View>
         </View>
       );
     case "filmstripMark": {
