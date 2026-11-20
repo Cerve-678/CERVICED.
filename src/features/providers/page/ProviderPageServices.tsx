@@ -33,6 +33,12 @@ const SERVICE_TILE_GAP = 10;
 const SERVICE_TILE_PADDING = 8;
 /** The padding inside a usual service card (styles.serviceItem). */
 const SERVICE_CARD_PADDING = 15;
+/** The list's own side padding (styles.categoryServicesContainer). The list's
+ *  measured width includes it, so the cards get that width less this twice. */
+const SERVICE_LIST_SIDE_PADDING = 20;
+/** Room for a card's own border (at most 1.5pt a side) so the photo never
+ *  runs under the card's rounded, clipped edge. */
+const SERVICE_CARD_BORDER_ROOM = 4;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
@@ -283,8 +289,11 @@ export function ProviderPageServices({
   const serviceMenu = pageStyle.serviceLayout === "menu";
   const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
   const serviceStacked = serviceTiles || servicePhotoCards;
-  const serviceTileImageWidth = listWidth > 0 ? Math.floor((listWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
-  const serviceWideImageWidth = listWidth > 0 ? Math.floor(listWidth) - SERVICE_CARD_PADDING * 2 : 280;
+  // The width the cards actually get: inside the list's side padding.
+  const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
+  const serviceTileWidth = cardsWidth > 0 ? Math.floor((cardsWidth - SERVICE_TILE_GAP) / 2) : 0;
+  const serviceTileImageWidth = serviceTileWidth > 0 ? serviceTileWidth - SERVICE_TILE_PADDING * 2 - SERVICE_CARD_BORDER_ROOM : 132;
+  const serviceWideImageWidth = cardsWidth > 0 ? Math.floor(cardsWidth) - SERVICE_CARD_PADDING * 2 - SERVICE_CARD_BORDER_ROOM : 280;
   const serviceTopImage = serviceTiles
     ? { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 }
     : { width: serviceWideImageWidth, height: Math.round(serviceWideImageWidth * 0.5), borderRadius: 16 };
@@ -416,7 +425,7 @@ export function ProviderPageServices({
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
               squareCards && styles.squareCard,
-              serviceTiles && styles.serviceTile,
+              serviceTiles && (serviceTileWidth > 0 ? { width: serviceTileWidth } : styles.serviceTile),
             ]}
           >
             {serviceSurfaceStyle ? null : (
@@ -861,7 +870,7 @@ const styles = StyleSheet.create({
   },
   categoryServicesContainer: {
     gap: 15,
-    paddingHorizontal: 20,
+    paddingHorizontal: SERVICE_LIST_SIDE_PADDING,
   },
   categoryTabs: {
     marginBottom: 20,
@@ -1035,9 +1044,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 1,
   },
-  serviceTile: { width: "48.5%" },
+  // Before the list is measured; then each tile gets its width in points.
+  serviceTile: { width: "48%" },
   // Posy: two tiles across, each a column of photo, details and Book.
-  serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP },
+  // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
+  // the two, wider than the room left beside them, and wrap them one a row.
+  serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP, columnGap: 0 },
   // Service-type switch — plain underline indicator, mirroring the
   // History / To Do row on ProviderBookingHistoryScreen: enough to show
   // selection without a second filled control competing with the category
