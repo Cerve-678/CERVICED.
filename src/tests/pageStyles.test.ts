@@ -605,17 +605,24 @@ describe('Poster, Hibiscus and Storefront (owner, 2026-11-19: "create something 
   const NEW = ['poster', 'hibiscus', 'storefront'] as const;
   const others = PAGE_STYLES.filter(style => !(NEW as readonly string[]).includes(style.key));
 
-  it('draws each one with a top, heading, services and portfolio no other style uses', () => {
+  it('draws each one with a top, heading and services no other style uses', () => {
     for (const key of NEW) {
       const style = getPageStyle(key);
       for (const other of others) {
         expect(other.hero).not.toBe(style.hero);
         expect(other.heading).not.toBe(style.heading);
         expect(other.serviceLayout).not.toBe(style.serviceLayout);
-        expect(other.photoLayout).not.toBe(style.photoLayout);
       }
       expect(heroPhotoPickLimit(style)).toBe(1);
     }
+  });
+
+  // Owner, 2026-11-20: Storefront's banner and Hibiscus's phone weren't liked;
+  // both now share a portfolio another style already has, and so does Retreat.
+  it('shows Storefront and Retreat in arches, and Hibiscus as a swipe row', () => {
+    expect(getPageStyle('storefront').photoLayout).toBe('arches');
+    expect(getPageStyle('retreat').photoLayout).toBe('arches');
+    expect(getPageStyle('hibiscus').photoLayout).toBe('swipe');
   });
 
   it('has its own divider and Book buttons where the boards had them', () => {

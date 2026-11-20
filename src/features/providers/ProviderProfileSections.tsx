@@ -35,10 +35,6 @@ const INLINE_PORTFOLIO_LIMIT = 6;
 /** The feature grid (Ledger) holds five: one big, four small. */
 const FEATURE_PHOTO_LIMIT = 5;
 const PORTFOLIO_WALL_LIMIT = 3;
-/** Storefront: the wide banner and the row of three under it. */
-const BANNER_PHOTO_LIMIT = 4;
-/** Hibiscus: the phone's screen width (its height is twice that). */
-const PHONE_WIDTH = 176;
 /** Riviera's prints lean a little each way, as if dropped on a table. */
 const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
 const COLUMN_GAP = 12;
@@ -462,10 +458,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const swipe = palette.pageStyle?.photoLayout === "swipe";
   // Poster: two across as white-bordered prints, each held on by a strip of tape.
   const taped = palette.pageStyle?.photoLayout === "taped";
-  // Hibiscus: the work inside a phone's screen, swiping sideways like a feed.
-  const phone = palette.pageStyle?.photoLayout === "phone";
-  // Storefront: the first photo as a wide banner, then a row of three under it.
-  const banner = palette.pageStyle?.photoLayout === "banner";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
     <TouchableOpacity
       key={item.id}
@@ -500,7 +492,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         ) : (
           <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
         )}
-        {!swipe && !phone && items.length > (banner ? BANNER_PHOTO_LIMIT : portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
+        {!swipe && items.length > (portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
           </TouchableOpacity>
@@ -540,71 +532,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
               <View style={[styles.tapedStrip, { transform: [{ rotate: index % 2 === 0 ? "4deg" : "-5deg" }] }]} pointerEvents="none" />
             </TouchableOpacity>
           ))}
-        </View>
-      ) : phone ? (
-        <View style={styles.phoneStage}>
-          <View style={[styles.phoneBody, { borderColor: palette.text }]}>
-            <View style={[styles.phoneNotch, { backgroundColor: palette.text }]} />
-            {/* A list, not a ScrollView: the whole portfolio is in the screen,
-                so only the photos near it are drawn. */}
-            <FlatList
-              data={items}
-              horizontal
-              pagingEnabled
-              keyExtractor={item => item.id}
-              showsHorizontalScrollIndicator={false}
-              style={styles.phoneScreen}
-              nestedScrollEnabled
-              initialNumToRender={2}
-              maxToRenderPerBatch={3}
-              windowSize={3}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={() => onOpenImage(images, index)}
-                  disabled={!interactiveImages}
-                  style={styles.phoneShot}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel={item.caption || `Portfolio photo ${index + 1} of ${items.length}`}
-                >
-                  <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-          {items.length > 1 ? <Text style={[styles.swipeHint, { color: palette.sub }]}>Swipe for more</Text> : null}
-        </View>
-      ) : banner ? (
-        <View style={styles.bannerGrid}>
-          {items[0] ? (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => onOpenImage(images, 0)}
-              disabled={!interactiveImages}
-              style={styles.bannerWide}
-              accessibilityRole="imagebutton"
-              accessibilityLabel={items[0].caption || "Portfolio photo 1"}
-            >
-              <Image source={{ uri: items[0].image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={items[0].id} />
-            </TouchableOpacity>
-          ) : null}
-          {items.length > 1 ? (
-            <View style={styles.bannerRow}>
-              {items.slice(1, BANNER_PHOTO_LIMIT).map((item, i) => (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.88}
-                  onPress={() => onOpenImage(images, i + 1)}
-                  disabled={!interactiveImages}
-                  style={styles.bannerSmall}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel={item.caption || `Portfolio photo ${i + 2}`}
-                >
-                  <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
         </View>
       ) : swipe ? (
         <>
@@ -896,15 +823,6 @@ const styles = StyleSheet.create({
   tapedLower: { marginTop: 14 },
   tapedPhoto: { width: "100%", aspectRatio: 0.86, overflow: "hidden", backgroundColor: "#EEEEEE" },
   tapedStrip: { position: "absolute", top: -9, alignSelf: "center", width: 56, height: 18, backgroundColor: "rgba(238,232,220,0.85)" },
-  phoneStage: { alignItems: "center", paddingVertical: 6 },
-  phoneBody: { width: PHONE_WIDTH + 16, borderWidth: 8, borderRadius: 34, overflow: "hidden", backgroundColor: "#000000" },
-  phoneNotch: { position: "absolute", top: 6, alignSelf: "center", width: 64, height: 16, borderRadius: 9, zIndex: 2 },
-  phoneScreen: { width: PHONE_WIDTH, height: PHONE_WIDTH * 2 },
-  phoneShot: { width: PHONE_WIDTH, height: PHONE_WIDTH * 2 },
-  bannerGrid: { gap: 8 },
-  bannerWide: { height: 190, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.06)" },
-  bannerRow: { flexDirection: "row", gap: 8 },
-  bannerSmall: { flex: 1, height: 128, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.06)" },
   archTile: { width: "31.5%", aspectRatio: 0.68, overflow: "hidden", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
