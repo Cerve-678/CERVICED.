@@ -1,12 +1,12 @@
 # CERVICED website (www.cerviced.co)
 
-Two parts, built together by `npm run build:site` (`scripts/build-site.mjs`)
-into `dist/`:
+Two parts, built together by `scripts/build-site.mjs` (`npm run build:site`
+locally, into `dist/`; on Vercel, into `waitlist/dist/`):
 
 | Part | What it is |
 |---|---|
-| `waitlist/` (this folder) | The static pages: Home (`index.html`), About (`about/`), Legal (`legal/`). All CSS and JS inlined, no dependencies. Copied into `dist/` unchanged. |
-| `src/web/` | The web app, built by Expo (react-native-web) from `App.web.tsx`. It serves provider pages at `/@handle` with the app's own page components (`src/features/providers/page/`). Its `index.html` becomes `dist/app.html`. |
+| `waitlist/` (this folder) | The static pages: Home (`index.html`), About (`about/`), Legal (`legal/`). All CSS and JS inlined, no dependencies. Copied into the build unchanged. |
+| `src/web/` | The web app, built by Expo (react-native-web) from `App.web.tsx`. It serves provider pages at `/@handle` with the app's own page components (`src/features/providers/page/`). Its `index.html` becomes `app.html`. |
 
 Nothing in `src/` imports from `waitlist/`. Until provider pages are built
 (web booking plan, step 3) `/@handle` shows "This page is coming soon".
@@ -25,9 +25,12 @@ Hosted on Vercel, auto-deploying from `main` (about 2 minutes: install,
 then the Expo web export).
 
 **Vercel project settings that matter (since the web app, 2026-11-20).**
-Root Directory is the repo root (empty), Framework Preset `Other`. Build,
-Output and Install commands come from `vercel.json` at the repo root, so
-their Override toggles stay off. `vercel.json` also:
+Root Directory stays `waitlist`, Framework Preset `Other`, and "Include
+files outside the Root Directory in the Build Step" must stay on. Install,
+build and output come from `waitlist/vercel.json`, so the Override toggles
+stay off: it installs and builds from the repo root (`cd ..`) into
+`waitlist/dist`, because Vercel's output has to sit inside the Root
+Directory. `waitlist/vercel.json` also:
 
 - rewrites `/@:handle` to `/app.html` (the web app);
 - skips the build for any branch that isn't `main` and doesn't have `site`
@@ -39,8 +42,8 @@ The Supabase URL and anon key are read from `eas.json`'s production profile
 at build time, so Vercel needs no environment variables. If a merge shows no
 Vercel deployment, push an empty `chore(site): redeploy` commit to `main`.
 
-To roll back to the static-only site: set Root Directory back to `waitlist`
-and redeploy (or use Vercel's Instant Rollback on the last good deployment).
+To roll back to the static-only site, use Vercel's Instant Rollback on the
+last good deployment. A failed build never replaces the live site.
 
 ## DNS (Namecheap — `dns1/dns2.registrar-servers.com`)
 
