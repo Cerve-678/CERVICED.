@@ -4,22 +4,5 @@
   "installCommand": "cd .. && npm ci --no-audit --no-fund",
   "buildCommand": "cd .. && node scripts/build-site.mjs waitlist/dist",
   "outputDirectory": "dist",
-  "ignoreCommand": "bash ../scripts/vercel-ignore-build.sh",
-  "rewrites": [
-    {
-      "source": "/@:handle",
-      "destination": "/app.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/_expo/static/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ]
+  "ignoreCommand": "bash ../scripts/vercel-ignore-build.sh"
 }
