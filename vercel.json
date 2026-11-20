@@ -1,10 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "echo INSTALL; ls scripts | grep -iE \"vercel|build-site\"; ls waitlist; exit 1",
+  "installCommand": "cd .. && npm ci --no-audit --no-fund",
   "buildCommand": "cd .. && node scripts/build-site.mjs waitlist/dist",
   "outputDirectory": "dist",
-  "ignoreCommand": "echo IGNORE; git log --oneline -1; ls scripts | grep -iE \"vercel|build-site\" ; echo WAITLIST; ls waitlist; echo COUNT $(ls | wc -l); exit 1",
+  "ignoreCommand": "bash ../scripts/vercel-ignore-build.sh",
   "rewrites": [
     {
       "source": "/@:handle",
