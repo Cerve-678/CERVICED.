@@ -19,7 +19,6 @@ import {
   LAYOUT_PARTS,
   matchingLook,
   partsOf,
-  withPart,
   type CustomPartKey,
   CUSTOM_TEXT_FONTS,
   FONT_SET_COLLECTIONS,
@@ -126,12 +125,27 @@ export function CustomPageMaker({
             </TouchableOpacity>
           </>
         )}
+        {/* Changing one part at a time happens on the page itself. */}
+        <TouchableOpacity
+          style={[styles.tapEditBtn, { borderColor: P.border, backgroundColor: P.surface }]}
+          onPress={guard(onOpenTapEdit)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Tap your page: change a part by tapping it on your page"
+        >
+          <Ionicons name="hand-left-outline" size={18} color={P.text} />
+          <View style={styles.coloursText}>
+            <Text style={[styles.tapEditTitle, { color: P.text }]}>Tap Your Page</Text>
+            <Text style={[styles.sectionSubFlat, { color: P.sub }]}>See your page and tap the part you want to change.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={P.sub} />
+        </TouchableOpacity>
       </View>
 
-      {/* 1 · A look to start from: each sets every part below at once. */}
+      {/* 1 · A look to start from: each sets every part of the page at once. */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Start From a Look</Text>
-        <Text style={[styles.sectionSub, { color: P.sub }]}>Each one sets your whole page. Then change any part below.</Text>
+        <Text style={[styles.sectionSub, { color: P.sub }]}>Each one sets your whole page. Then use Tap Your Page to change any part.</Text>
         <View style={styles.layoutGrid}>
           {CUSTOM_LAYOUTS.map(layout => {
             const selected = active && look === layout.key;
@@ -155,39 +169,7 @@ export function CustomPageMaker({
         </View>
       </View>
 
-      {/* 2 · Every part on its own */}
-      <View style={sectionStyle}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>Part by Part</Text>
-        <Text style={[styles.sectionSub, { color: P.sub }]}>Change one part of your page at a time.</Text>
-        <TouchableOpacity
-          style={[styles.tapEditBtn, { borderColor: P.border, backgroundColor: P.surface }]}
-          onPress={guard(onOpenTapEdit)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Tap your page: change a part by tapping it on your page"
-        >
-          <Ionicons name="hand-left-outline" size={18} color={P.text} />
-          <View style={styles.coloursText}>
-            <Text style={[styles.tapEditTitle, { color: P.text }]}>Tap Your Page</Text>
-            <Text style={[styles.sectionSubFlat, { color: P.sub }]}>See your page and tap the part you want to change.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={P.sub} />
-        </TouchableOpacity>
-        {CUSTOM_PARTS.map(part => (
-          <View key={part.key} style={styles.group}>
-            <Text style={[styles.groupLabel, { color: P.sub }]}>{part.label}</Text>
-            <CustomPartPicker
-              part={part.key}
-              choices={choices}
-              active={active}
-              onPick={(key, value) => guard(() => onChange(withPart(choices, key, value)))()}
-              P={P}
-            />
-          </View>
-        ))}
-      </View>
-
-      {/* 3 · Fonts */}
+      {/* 2 · Fonts */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Fonts</Text>
         <Text style={[styles.sectionSub, { color: P.sub }]}>Your name, your headings and your text.</Text>
@@ -283,7 +265,7 @@ export function CustomPageMaker({
         )}
       </View>
 
-      {/* 4 · Corners */}
+      {/* 3 · Corners */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Finishing Touches</Text>
         <Text style={[styles.groupLabel, styles.touchLabel, { color: P.sub }]}>CORNERS</Text>
@@ -325,11 +307,11 @@ export function CustomPageMaker({
 }
 
 /**
- * One part's choices in a row you swipe through. Used in the Custom tab and
- * in the preview's Tap Your Page panel, so both offer the same choices.
- * `bleed` is the padding of whatever it sits in, so the row runs edge to edge.
+ * One part's choices in a row you swipe through, in the preview's Tap Your
+ * Page panel. `bleed` is the padding of whatever it sits in, so the row runs
+ * edge to edge.
  */
-export function CustomPartPicker({
+function CustomPartPicker({
   part,
   choices,
   active,
