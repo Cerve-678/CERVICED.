@@ -52,6 +52,8 @@ test('no late cancellation fee for an early cancel, a provider cancel, a full pa
   expect(isChargeableLateCancel({ ...lateCancelled, paymentStatus: 'fully_paid' })).toBe(false);
   expect(isChargeableLateCancel({ ...lateCancelled, cancelPenalty: 'deposit' })).toBe(false);
   expect(isChargeableLateCancel({ ...lateCancelled, cancelNoticeHours: 0 })).toBe(false);
+  // Cancelling after the start is late, not free (same rule as the server).
+  expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-07-01T14:30:00').toISOString() })).toBe(true);
   // Moved after the window started: late however early the cancel.
   expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-06-28T08:00:00').toISOString(), lateRescheduleFrom: '2026-06-27' })).toBe(true);
 });
