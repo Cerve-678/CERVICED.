@@ -319,6 +319,14 @@ about every 5 minutes for good. The
 notices come from the database, so they reach the client whichever of the three
 finished it.
 
+Leaving the Cart (another tab, a tapped notification) cancels a checkout that
+hasn't been paid, so its held times go back straight away. Since 22 November it
+doesn't once the payment has been handed to Stripe: the card may already be
+approved, so the checkout is left to finish as above, and the success screen
+only shows if the client is still on the Cart (the notification tells them
+otherwise). Before, leaving during "Confirming your payment…" released the
+card they had just approved and dropped the booking.
+
 *Partly live: migration `20261102210000` was applied on 3 November, so "Payment
 received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 `stripe-webhook` still need deploying, and until then the "didn't go through" and
