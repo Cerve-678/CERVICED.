@@ -187,8 +187,10 @@ export interface LateCancelInput {
 }
 
 /** Whether a client's own cancel counts as late: inside the notice period,
- *  measured from when they cancelled, or after moving the booking once the
- *  window had started. One rule for the refund and for the late-cancel charge. */
+ *  measured from when they cancelled, at any time after the start (cancelling a
+ *  booking that has already begun used to count as early, a full refund), or
+ *  after moving the booking once the window had started. One rule for the
+ *  refund and for the late-cancel charge. */
 export function isLateClientCancel(input: LateCancelInput): boolean {
   if (!(input.noticeHours > 0)) return false;
   if (input.movedLate) return true;
@@ -196,5 +198,5 @@ export function isLateClientCancel(input: LateCancelInput): boolean {
   // has; the late-cancel charge separately refuses a booking with no valid time.
   const hoursUntil = Number.isFinite(input.appointmentMs) && Number.isFinite(input.cancelledMs)
     ? (input.appointmentMs - input.cancelledMs) / 3_600_000 : 0;
-  return hoursUntil >= 0 && hoursUntil < input.noticeHours;
+  return hoursUntil < input.noticeHours;
 }
