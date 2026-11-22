@@ -50,8 +50,15 @@
     },
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "CERVICED",
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
       "expo-video",
       "expo-font",

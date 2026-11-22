@@ -1,12 +1,13 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const REPO = join(__dirname, '..', '..');
 const MIGRATION = readFileSync(
   join(REPO, 'supabase/migrations/20260827161000_client_address_released_on_confirmation.sql'),
   'utf8',
 );
-const DB = readFileSync(join(REPO, 'src/services/databaseService.ts'), 'utf8');
+const DB = readDatabaseLayer();
 
 // A mobile provider's appointment happens at the CLIENT's home, so the client
 // must hand over their address to book at all. It used to sit on the booking

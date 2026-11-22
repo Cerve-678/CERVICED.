@@ -99,8 +99,8 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           />
           <NavRow
             icon="document-text-outline"
-            title="Policies"
-            subtitle="Cancellations, reschedules, no-shows & refunds"
+            title="Policies & Info"
+            subtitle="Cancellations, reschedules, no-shows, refunds & what's on your profile"
             onPress={() => navigation.navigate('Policies')}
             C={C}
           />

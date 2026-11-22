@@ -37,8 +37,8 @@ export interface CircleMomentState {
   busy: boolean;
   error: string | null;
   recommend: () => void;
-  /** The card's ×: counts as "Not now". */
-  notNow: () => void;
+  /** Close the card without recording a negative answer. */
+  closeRecommend: () => void;
   /** The intro's buttons. Closing it without one just hides it for now. */
   finishIntro: (turnOff: boolean) => void;
   closeIntro: () => void;
@@ -99,6 +99,11 @@ export function useCircleMoment(
           bookingDate: chosen.bookingDate,
           providerId: chosen.providerId,
           providerName: chosen.providerName,
+          providerLogoUri: typeof chosen.providerImage === 'string'
+            ? chosen.providerImage
+            : chosen.providerImage && typeof chosen.providerImage === 'object' && 'uri' in chosen.providerImage
+              ? String(chosen.providerImage.uri ?? '') || null
+              : null,
         });
       } catch (err) {
         // Decoration: a failed check means nothing this session.
@@ -132,11 +137,6 @@ export function useCircleMoment(
     }
   }, [moment, busy, userId, clear]);
 
-  const notNow = useCallback(() => {
-    if (userId) void updateMomentsMemory(userId, (m) => withAnswer(m, false));
-    clear();
-  }, [userId, clear]);
-
   // Marked seen only on a button: visits start being shared from then.
   const finishIntro = useCallback(
     async (turnOff: boolean) => {
@@ -168,7 +168,7 @@ export function useCircleMoment(
     busy,
     error,
     recommend: () => void recommend(),
-    notNow,
+    closeRecommend: clear,
     finishIntro: (turnOff: boolean) => void finishIntro(turnOff),
     closeIntro: clear,
   };

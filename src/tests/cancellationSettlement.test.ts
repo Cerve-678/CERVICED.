@@ -238,20 +238,14 @@ describe('computeCancellationSettlement', () => {
 });
 
 describe('isLateClientCancel', () => {
-  const base = { noticeHours: 24, hoursUntilStart: 48, movedLate: false };
-  it('is early outside the window', () => {
-    expect(isLateClientCancel(base)).toBe(false);
+  const start = Date.UTC(2026, 10, 14, 10, 0);
+  const hours = (h: number) => start - h * 3_600_000;
+  it('is late inside the notice period, from when they cancelled', () => {
+    expect(isLateClientCancel({ noticeHours: 24, appointmentMs: start, cancelledMs: hours(6), movedLate: false })).toBe(true);
+    expect(isLateClientCancel({ noticeHours: 24, appointmentMs: start, cancelledMs: hours(30), movedLate: false })).toBe(false);
   });
-  it('is late inside the window', () => {
-    expect(isLateClientCancel({ ...base, hoursUntilStart: 3 })).toBe(true);
-  });
-  it('is late after the start time, not a free cancel', () => {
-    expect(isLateClientCancel({ ...base, hoursUntilStart: -0.5 })).toBe(true);
-  });
-  it('stays late after a move made inside the window', () => {
-    expect(isLateClientCancel({ ...base, hoursUntilStart: 200, movedLate: true })).toBe(true);
-  });
-  it('is never late with no notice window', () => {
-    expect(isLateClientCancel({ ...base, noticeHours: 0, hoursUntilStart: -1 })).toBe(false);
+  it('is never late without a notice period, and always late after a late move', () => {
+    expect(isLateClientCancel({ noticeHours: 0, appointmentMs: start, cancelledMs: hours(1), movedLate: true })).toBe(false);
+    expect(isLateClientCancel({ noticeHours: 24, appointmentMs: start, cancelledMs: hours(100), movedLate: true })).toBe(true);
   });
 });

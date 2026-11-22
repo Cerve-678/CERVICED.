@@ -134,7 +134,9 @@ export type NotificationType =
   /** Provider: a daily count of the people who saved them. Never names. */
   | "provider_saved"
   /** Client: someone asked to follow their private account. metadata.follower_id says who. */
-  | "follow_request";
+  | "follow_request"
+  /** Provider: a client joined their waitlist. metadata.waitlist_id says which entry. */
+  | "waitlist_joined";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -155,6 +157,19 @@ export type TransactionType =
   | "remaining"
   | "tip"
   | "refund";
+
+// ── Hero photo framing ───────────────────────────────────
+
+/** How a portfolio photo sits in a page style's hero
+ *  (`portfolio_items.hero_frame`). `zoom` multiplies the size at which the
+ *  photo just covers its slot (1 to 3). `x`/`y` move it as a fraction of how far
+ *  it can move in that slot (-1 to 1, 0 centred), so one frame shows the same
+ *  part of the photo in every style's slot, whatever its shape. */
+export interface HeroPhotoFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
 
 // ── Logo framing ─────────────────────────────────────────
 
@@ -263,6 +278,10 @@ export interface DbProvider {
    *  landmarks. Never door codes: those are provider_private_details
    *  .how_to_get_there, released with the address. */
   public_directions: string | null;
+  /** The provider's own profile sections (Key Information, FAQs, Aftercare,
+   *  Disclaimer, Custom sections) from Policies & Info. Public. Read through
+   *  normalizeOwnSections in features/providers/ownSections.ts. */
+  profile_sections: Record<string, unknown> | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
@@ -324,6 +343,7 @@ export interface DbProvider {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     rescheduleNote?: string;
     /** 'full_only' | 'client_choice' | 'deposit_required' — the provider's
      *  three-way deposit choice, edited on PaymentsScreen. Read it through
@@ -667,6 +687,8 @@ export interface DbPortfolioItem {
   price: number | null;
   aspect_ratio: number;
   is_featured: boolean;
+  /** How it sits in the hero; null = centred, unzoomed. */
+  hero_frame: HeroPhotoFrame | null;
   created_at: string;
   // Enriched discovery tags — personalised Explore feed
   vibe_tags: string[] | null;
@@ -724,6 +746,11 @@ export interface DbBooking {
   service_name_snapshot: string;
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
+  /** Set on an on_hold row: a cart checkout's 5 minutes, or a waitlist
+   *  hold's 15. Optional because client_bookings never returns on_hold rows. */
+  hold_expires_at?: string | null;
+  /** The waitlist entry a hold (and the booking it becomes) came from. */
+  waitlist_entry_id?: string | null;
   // The provider's private venue is NOT on the bookings table (migration
   // 20261108180000): it lives in booking_venue_details, which clients can't
   // read. These three are client_bookings VIEW columns, null until the
@@ -767,6 +794,9 @@ export interface DbBooking {
   late_reschedule_from?: string | null;
   /** client_bookings only: booked after that rule went live, so it applies. */
   late_reschedule_rule_applies?: boolean | null;
+  /** client_bookings only: booked after the five-day refund-request limit
+   *  went live (migration 20261113190000), so it applies. */
+  refund_request_window_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   /** A request declined by the provider or expired unanswered — see
    *  20261110200000_booking_request_declined_at.sql. */
@@ -1007,6 +1037,7 @@ export type ProviderWithServices = Pick<
   | "custom_service_type"
   | "location_text"
   | "public_directions"
+  | "profile_sections"
   | "about_text"
   | "logo_url"
   | "logo_framing"

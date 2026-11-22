@@ -49,9 +49,14 @@ describe('an emergency request never auto-confirms, on either checkout path', ()
   });
 
   it('finalize_checkout() forces auto-accept off for one', () => {
-    const { body } = latestDefinitionOf('finalize_checkout');
+    // Since 20261116100000 finalize_checkout books each booking through
+    // book_checkout_booking(), shared with a request whose card hold is
+    // approved after checkout; the rule lives there.
+    const finalize = latestDefinitionOf('finalize_checkout').body;
+    expect(finalize).toContain('PERFORM public.book_checkout_booking(');
+    const { body } = latestDefinitionOf('book_checkout_booking');
     expect(body).toMatch(
-      /IF COALESCE\(v_booking\.is_emergency_request, false\) THEN v_auto_accept := false; END IF;/,
+      /IF COALESCE\(v_booking\.is_emergency_request, false\)( OR p_request)? THEN v_auto_accept := false; END IF;/,
     );
   });
 

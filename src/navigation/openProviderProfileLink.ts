@@ -1,6 +1,6 @@
 import { getProviderBasicById } from '../services/databaseService';
 import { logger } from '../utils/logger';
-import { isProviderProfileUuid } from '../utils/providerProfileDeepLink';
+import { isProviderProfileUuid } from '../utils/providerProfileLink';
 import { requestMode } from './modeController';
 import { navigationRef } from './navigationRef';
 

@@ -38,11 +38,27 @@ export async function findPayoutTransfer<T extends TransferLike>(
   payoutId: string,
   payoutCreatedAt: string,
 ): Promise<T | null> {
-  const createdMs = Date.parse(payoutCreatedAt);
-  if (Number.isNaN(createdMs)) throw new Error(`payout ${payoutId} has no usable created_at`);
+  return findTransferTagged(stripe, destination, 'payout_id', payoutId, payoutCreatedAt);
+}
+
+/**
+ * The provider's transfer whose metadata[key] is value, made since `since`
+ * (less a day), or null. Same rules as findPayoutTransfer, which is this for
+ * payout_id; also finds a bank-dispute payback (dispute_payback = <dispute>:<payout>),
+ * so one retried after Stripe forgot its idempotency key isn't sent twice.
+ */
+export async function findTransferTagged<T extends TransferLike>(
+  stripe: { transfers: { list(params: TransferListParams): AsyncIterable<T> } },
+  destination: string,
+  key: string,
+  value: string,
+  since: string,
+): Promise<T | null> {
+  const createdMs = Date.parse(since);
+  if (Number.isNaN(createdMs)) throw new Error(`no usable created_at to look for transfer ${key}=${value}`);
   const gte = Math.floor(createdMs / 1000) - LOOKBACK_SECONDS;
   for await (const transfer of stripe.transfers.list({ destination, created: { gte }, limit: 100 })) {
-    if (transfer.metadata?.['payout_id'] === payoutId) return transfer;
+    if (transfer.metadata?.[key] === value) return transfer;
   }
   return null;
 }

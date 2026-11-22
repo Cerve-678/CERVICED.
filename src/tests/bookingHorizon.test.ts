@@ -9,6 +9,7 @@ import {
   releaseTimeLabel,
   toReleaseTime,
   ukOffsetMinutes,
+  ukTodayYMD,
   parseBookingWindowDays,
 } from '../utils/bookingHorizon';
 
@@ -194,5 +195,15 @@ describe('releaseSettingsPatch: a save writes only what changed on that screen',
 
   it('removes the day but keeps the time when going back to a rolling window', () => {
     expect(releaseSettingsPatch(loaded, { day: null, time: '19:00' })).toEqual({ set: {}, remove: ['scheduleReleaseDay'] });
+  });
+});
+
+describe('ukTodayYMD', () => {
+  it('is the UK date, not the UTC one, just after midnight in summer', () => {
+    // 00:30 BST on 2 July is still 1 July in UTC.
+    expect(ukTodayYMD(new Date('2026-07-01T23:30:00Z'))).toBe('2026-07-02');
+  });
+  it('matches the UTC date in winter', () => {
+    expect(ukTodayYMD(new Date('2026-12-01T23:30:00Z'))).toBe('2026-12-01');
   });
 });

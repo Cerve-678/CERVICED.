@@ -11,18 +11,23 @@
 //     same rule refund-payment already follows).
 //   • late + 'deposit'                       → keep the deposit (it goes to the
 //     provider) and the platform fee (CERVICED keeps it); refund the rest.
-//   • late + 'custom'                        → the provider keeps the £ amount
-//     they set, never more than half (user decision 2026-11-02), CERVICED keeps
-//     its fee, and the client gets the rest back.
 //   • late + 'half'                          → the provider keeps half their
 //     share, CERVICED keeps its fee, and the client gets the other half back.
-//     No longer offered, but policies and snapshots saved before 'custom' say it.
+//     The only late-cancel charge offered since 2026-11-13.
+//   • late + 'custom'                        → the provider keeps the £ amount
+//     they set, never more than half (user decision 2026-11-02), CERVICED keeps
+//     its fee, and the client gets the rest back. No longer offered (saved
+//     policies became 'half' in 20261113160000), but bookings frozen with it
+//     still settle this way.
 //
 // Based on what was paid in the app (user decision 2026-11-01): a client who
 // paid only a deposit can lose that whole deposit under 'deposit' or 'half'; a
 // client who paid in full never loses more than half the service price. Older
-// policies saying 'full' now mean 'half' (readCancelPenalty). This is only ever
-// a share of what was paid, never a charge for the unpaid balance.
+// policies saying 'full' now mean 'half' (readCancelPenalty). This function
+// only ever settles a share of what was paid. Under 'half', the rest up to half
+// the price is a separate charge the provider may make to the saved card
+// (bookings.late_cancel_fee_pence, booking-fee kind 'late_cancel', user
+// decision 2026-11-13); isLateClientCancel below is the shared test for it.
 //
 // Non-refundable deposit (user decisions 2026-11-02 and 03): where the booking's
 // frozen policy says so, the provider keeps the deposit whenever the client
@@ -51,27 +56,6 @@ export function readCancelCustomFeePence(value: unknown): number {
   const text = typeof value === 'number' ? String(value) : value;
   if (typeof text !== 'string' || !/^\s*\d+(\.\d{1,2})?\s*$/.test(text)) return 0;
   return Math.round(Number(text) * 100);
-}
-
-/** Whether a client's cancellation counts as late under the provider's policy.
- *
- *  - Inside the notice window is late, and so is any time after the start:
- *    cancelling a booking that has already begun is at least as late as
- *    cancelling an hour before (it used to count as early, a full refund).
- *  - A booking the client moved while already inside the window stays late
- *    wherever it was moved to (decided 2026-10-25).
- *  - With no notice window (0 hours) nothing is late. */
-export function isLateClientCancel(input: {
-  /** The booking's notice window in hours (bookings.cancel_notice_hours). */
-  noticeHours: number;
-  /** Hours from the cancellation to the UK start time; negative once started. */
-  hoursUntilStart: number;
-  /** The client moved it while already inside the window (late_reschedule_from). */
-  movedLate: boolean;
-}): boolean {
-  if (!(input.noticeHours > 0)) return false;
-  if (input.movedLate) return true;
-  return Number.isFinite(input.hoursUntilStart) && input.hoursUntilStart < input.noticeHours;
 }
 
 export interface CancellationSettlementInput {
@@ -189,4 +173,30 @@ export function computeCancellationSettlement(
     reverseFromPayoutPence: Math.max(0, payout - providerKeep),
     depositRuleOnly,
   };
+}
+
+export interface LateCancelInput {
+  /** The booking's notice period in hours; 0 means there is none. */
+  noticeHours: number;
+  /** Appointment start as a real instant (londonWallTimeToUtcMs). */
+  appointmentMs: number;
+  /** When the client cancelled, as stamped by the database. */
+  cancelledMs: number;
+  /** The client moved the booking after its window had started (bookings.late_reschedule_from). */
+  movedLate: boolean;
+}
+
+/** Whether a client's own cancel counts as late: inside the notice period,
+ *  measured from when they cancelled, at any time after the start (cancelling a
+ *  booking that has already begun used to count as early, a full refund), or
+ *  after moving the booking once the window had started. One rule for the
+ *  refund and for the late-cancel charge. */
+export function isLateClientCancel(input: LateCancelInput): boolean {
+  if (!(input.noticeHours > 0)) return false;
+  if (input.movedLate) return true;
+  // An unreadable time counts as cancelling at the start, as the refund always
+  // has; the late-cancel charge separately refuses a booking with no valid time.
+  const hoursUntil = Number.isFinite(input.appointmentMs) && Number.isFinite(input.cancelledMs)
+    ? (input.appointmentMs - input.cancelledMs) / 3_600_000 : 0;
+  return hoursUntil < input.noticeHours;
 }

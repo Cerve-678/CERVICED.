@@ -7,14 +7,16 @@
 //
 // What leaves the phone: hashes only, compared in the query and never stored
 // (migration 20261108220000). Contact names are read too (decided
-// 2026-11-09) but only to list the people NOT on CERVICED with an Invite
-// button — they stay on the phone, in memory for the session, and are never
-// sent, stored or logged. Numbers and hashes are never logged either.
+// 2026-11-09) to list the people NOT on CERVICED with an Invite button, and
+// to label matches — they stay on the phone, in memory for the session, and
+// are never sent, stored or logged. Numbers and hashes are never logged either.
 //
-// Matching uses the number people typed on their own profile, which isn't
-// verified, so a match shows only the account's own name under "On
-// CERVICED" — never the name the client saved (decided 2026-11-08: echoing
-// it would let a fake account borrow it).
+// A match leads with the account's own name; the name the client saved
+// sits underneath as "Sis in your contacts" (decided 2026-11-17, replacing
+// the 2026-11-08 account-name-only rule). Known trade-off, accepted by the
+// user: profile numbers aren't verified, so a fake account that typed a
+// contact's number would also carry that contact's saved name. Number
+// verification by text code is the fix if that ever matters.
 
 import type * as ContactsModule from 'expo-contacts/legacy';
 import type * as CryptoModule from 'expo-crypto';
@@ -59,8 +61,22 @@ export function isContactsLimitError(err: unknown): boolean {
 
 export type ContactsAccess = 'granted' | 'denied' | 'blocked';
 
-/** An account found from the address book: just the account itself. */
-export type ContactMatchResult = PersonSummary;
+/** An account found from the address book, plus the name it's saved under there. */
+export interface ContactMatchResult extends PersonSummary {
+  /** The address-book name for the matched number. Null when unnamed. Phone only. */
+  savedName: string | null;
+}
+
+/**
+ * The line under a match: "Sis in your contacts". Nothing when the saved
+ * name is missing or just repeats the account's own name.
+ */
+export function savedNameLine(match: Pick<ContactMatchResult, 'name' | 'savedName'>): string | null {
+  const saved = match.savedName?.trim();
+  if (!saved) return null;
+  if (saved.localeCompare(match.name.trim(), 'en-GB', { sensitivity: 'base' }) === 0) return null;
+  return `${saved} in your contacts`;
+}
 
 /** Someone in the address book who isn't on CERVICED. Stays on the phone. */
 export interface InviteContact {
@@ -152,6 +168,42 @@ export function buildInviteList(
   return out.sort((a, b) => a.name.localeCompare(b.name, 'en-GB', { sensitivity: 'base' }));
 }
 
+/**
+ * The first saved name for each normalised number, in address-book order.
+ * Used only to label matches on this phone.
+ */
+export function savedNamesByNumber(contacts: readonly RawContact[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const c of contacts) {
+    const name = c.name?.trim();
+    if (!name) continue;
+    for (const p of c.phoneNumbers ?? []) {
+      const n = normalisePhoneForMatching(p.number);
+      if (n && !out.has(n)) out.set(n, name);
+    }
+  }
+  return out;
+}
+
+/**
+ * Search inside Your circle's contacts only (never everyone on CERVICED).
+ * Matches by account name or saved name; invites by name, or by number when
+ * the search has 3+ digits. A blank search returns everything unchanged.
+ */
+export function searchContacts(result: ContactsResult, query: string): ContactsResult {
+  const q = query.trim().toLocaleLowerCase('en-GB');
+  if (!q) return result;
+  const digits = q.replace(/\D/g, '');
+  const has = (text: string | null | undefined) => !!text && text.toLocaleLowerCase('en-GB').includes(q);
+  // "07700" should find "+44 7700…" too: compare without a leading 0 or 44.
+  const core = (s: string) => s.replace(/^(44|0)/, '');
+  const numberHas = (raw: string) => digits.length >= 3 && core(raw.replace(/\D/g, '')).includes(core(digits));
+  return {
+    matches: result.matches.filter((m) => has(m.name) || has(m.savedName)),
+    invites: result.invites.filter((c) => has(c.name) || numberHas(c.number)),
+  };
+}
+
 export const INVITE_MESSAGE = "I'm on CERVICED for booking beauty and wellness. Come join me: https://www.cerviced.co";
 
 /** Opens a text message to them with the invite filled in; falls back to the share sheet. */
@@ -185,6 +237,7 @@ export async function findContactsOnCerviced(): Promise<ContactsResult> {
   const hashes = await Promise.all(numbers.map(hashNormalisedNumber));
   const numberByHash = new Map(hashes.map((h, i) => [h, numbers[i] as string]));
   const found = await matchContactHashes(hashes);
+  const savedNames = savedNamesByNumber(data);
   const matchedNumbers = new Set<string>();
   const seen = new Set<string>();
   const matches: ContactMatchResult[] = [];
@@ -199,6 +252,7 @@ export async function findContactsOnCerviced(): Promise<ContactsResult> {
       avatarUrl: m.avatarUrl,
       myStatus: m.myStatus,
       followsMe: m.followsMe,
+      savedName: n ? savedNames.get(n) ?? null : null,
     });
   }
   return { matches, invites: buildInviteList(data, matchedNumbers) };

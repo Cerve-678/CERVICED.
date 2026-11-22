@@ -107,6 +107,13 @@ function hairIdeas(d: BeautyData): [Idea, string][] {
   if (history.has('Locs')) add('Treatment history: Locs', LOC_RETWIST);
   if (history.has('Keratin / smoothing')) add('Treatment history: Keratin / smoothing', KERATIN);
   if (history.has('Hair extensions')) add('Treatment history: Hair extensions', EXTENSIONS);
+  // Added 2026-11-17 with the answers that follow textured hair.
+  if (history.has('Braids / twists')) add('Treatment history: Braids / twists', KNOTLESS, TWISTS);
+  if (history.has('Wigs / units')) add('Treatment history: Wigs / units', WIG_INSTALL);
+  if (history.has('Silk pressed')) add('Treatment history: Silk pressed', SILK_PRESS);
+  const scalp = new Set(d.scalpCondition);
+  if (scalp.has('Thinning edges')) add('Scalp: Thinning edges', SCALP_TREATMENT);
+  else if (scalp.has('Product build-up')) add('Scalp: Product build-up', SCALP_TREATMENT);
   const colourBecause =
     history.has('Coloured') ? 'Treatment history: Coloured'
     : history.has('Bleached / lightened') ? 'Treatment history: Bleached / lightened'
