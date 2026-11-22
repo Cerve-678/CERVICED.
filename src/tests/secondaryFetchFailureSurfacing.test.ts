@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (...parts: string[]): string =>
   fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
@@ -15,7 +16,7 @@ const read = (...parts: string[]): string =>
  * through to happy-path copy.
  */
 describe('secondary fetch and write failures are surfaced, not swallowed', () => {
-  const database = read('services', 'databaseService.ts');
+  const database = readDatabaseLayer();
 
   describe('conversation lists', () => {
     it('gives the client message list a real error state with a retry', () => {
@@ -103,7 +104,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
       expect(source).not.toContain('dbDeleteNotification(notificationId).catch(() => {})');
 
       expect(source).toContain('await markNotificationRead(notificationId)');
-      expect(source).toContain('await markAllNotificationsRead()');
+      expect(source).toContain('await markAllNotificationsRead(');
       expect(source).toContain('await dbDeleteNotification(notificationId)');
 
       // Rollback: read flag restored, deleted row re-inserted at its position.
@@ -113,10 +114,9 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
     });
 
     it('deletes through the RPC, since notifications has no DELETE policy', () => {
-      const section = database.slice(
-        database.indexOf('export async function deleteNotification'),
-        database.indexOf('// INFO PACKS'),
-      );
+      const start = database.indexOf('export async function deleteNotification');
+      // Just this function: up to its closing brace.
+      const section = database.slice(start, database.indexOf('\n}\n', start) + 2);
 
       // A raw .delete() would match zero rows and resolve successfully, so the
       // screen's rollback would never fire.

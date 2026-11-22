@@ -21,8 +21,10 @@
  *    supabase/MIGRATION_OWNER.md, "go-live now requires policies + payment"
  *    / "go-live now also requires a logo"). Never add anything here that
  *    the server doesn't also gate on, or the checklist starts lying again.
- *    A SEVENTH blocking step, `stripe` (Stripe Connect payouts / KYC
- *    complete), is emitted ONLY when STRIPE_CONNECT_PAYOUTS_ENABLED is on —
+ *    When STRIPE_CONNECT_PAYOUTS_ENABLED is on, the `payment` row is replaced
+ *    by a `stripe` row (Stripe Connect payouts / KYC complete AND the deposit
+ *    choice saved — both live on the Payments screen, so the user asked for
+ *    one row, 2026-11-16). That row is emitted ONLY when the flag is on —
  *    because its matching server gate (stripe_charges_enabled in
  *    check_and_set_provider_live, DRAFT_stripe_connect_gate_go_live.sql) is
  *    deliberately HELD until providers have onboarded (applying it darks
@@ -174,13 +176,27 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       required: true,
       blocking: true,
     },
-    {
-      key: 'payment',
-      label: 'Set your deposit & payment options',
-      done: status.paymentSet,
-      required: true,
-      blocking: true,
-    },
+    // With Stripe payouts on, the deposit choice and the payouts set-up are
+    // both on the Payments screen, so they're one row, "Set up Stripe
+    // payouts", ticked only once BOTH are done. The server still gates on
+    // the deposit choice, so it can't simply be dropped: that would leave a
+    // provider stuck on "Almost live" with no row telling them why. With
+    // Stripe off, the deposit row stands alone, as it did before Stripe.
+    status.stripeSet === undefined
+      ? {
+          key: 'payment',
+          label: 'Set your deposit & payment options',
+          done: status.paymentSet,
+          required: true,
+          blocking: true,
+        }
+      : {
+          key: 'stripe',
+          label: 'Set up Stripe payouts',
+          done: status.stripeSet && status.paymentSet,
+          required: true,
+          blocking: true,
+        },
     {
       key: 'logo',
       label: 'Add your logo',
@@ -194,20 +210,6 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       key: 'ownerDetails',
       label: "Add the account owner's details",
       done: false,
-      required: true,
-      blocking: true,
-    });
-  }
-  // Blocking, but conditional on the Stripe Connect payouts feature being on
-  // (see the `stripeSet` doc on GoLiveStatus and the header comment). Kept
-  // adjacent to the money steps (policies/payment) it belongs with. When the
-  // field is undefined the feature is off and no Stripe step exists at all —
-  // exactly as it was before Stripe, and matching the held server gate.
-  if (status.stripeSet !== undefined) {
-    steps.push({
-      key: 'stripe',
-      label: 'Set up Stripe payouts',
-      done: status.stripeSet,
       required: true,
       blocking: true,
     });
@@ -265,6 +267,17 @@ export interface GoLiveHeadline {
   /** The one thing worth saying under the title, or null when the step list
    *  already says it. */
   detail: string | null;
+}
+
+/** Setup percent at which the Profile dashboard's go-live card stops leading
+ *  and drops to the bottom (user, 2026-11-18). */
+export const GO_LIVE_CARD_DROPS_AT_PERCENT = 80;
+
+/** Whether the Profile dashboard's go-live card leads the page. It leads
+ *  until setup is at least 80%, and always while clients can't book the
+ *  provider yet: then it's the only place that says what's stopping them. */
+export function goLiveCardLeads(percent: number, isLive: boolean): boolean {
+  return !isLive || percent < GO_LIVE_CARD_DROPS_AT_PERCENT;
 }
 
 export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {

@@ -1261,6 +1261,43 @@ export function payoutFailedSupportEmail(params: {
   };
 }
 
+/** A bank dispute that needs a person: one the amount couldn't be matched to
+ *  a booking, or money to put right after one closed. Internal only. */
+export function bankDisputeSupportEmail(params: {
+  title: string;
+  amount: string;
+  reason: string;
+  /** One line per booking on the disputed payment. */
+  bookings: string[];
+  nextStep: string;
+}) {
+  const P = PROVIDER;
+  const rows: Array<[string, string]> = [
+    ['Disputed', params.amount],
+    ['Bank reason', params.reason],
+    ...params.bookings.map((line, i) => [i === 0 ? 'Bookings' : '', line] as [string, string]),
+  ];
+  return {
+    subject: `${params.title}: ${params.amount}`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${esc(params.amount)}: ${esc(params.title)}`,
+      content:
+        eyebrow(P, 'Bank dispute') +
+        headline(P, esc(params.title)) +
+        panel(
+          P,
+          'What we know',
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${internalRows(P, rows)}
+        </table>`,
+          18,
+        ) +
+        note(P, `<strong>What to do:</strong> ${esc(params.nextStep)}`, 0),
+    }),
+  };
+}
+
 export function moneySummaryEmail(params: {
   failed: MoneySummaryLine[];
   owed: MoneySummaryLine[];

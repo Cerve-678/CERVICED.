@@ -1,7 +1,16 @@
-import { feeChargeWindow, feeDisputeOpen, liveFee } from '../features/bookings/bookingFeeRules';
+import { bookingFeeButtons, feeChargeWindow, feeCountsToYou, feeDisputeOpen, feesToChargeNow, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
 import type { BookingFeeCharge, BookingFeeTerms } from '../services/databaseService';
 
-const terms: BookingFeeTerms = { status: 'completed', bookingDate: '2026-07-01', bookingTime: '14:00:00', endTime: '15:00:00', lateFeePence: 1000, noShowFeePence: 2000 };
+const terms: BookingFeeTerms = {
+  status: 'completed', bookingDate: '2026-07-01', bookingTime: '14:00:00', endTime: '15:00:00', lateFeePence: 1000, noShowFeePence: 2000,
+  lateCancelFeePence: null, depositPence: 0, paymentStatus: 'fully_paid', cancelledBy: null, cancelledAt: null, confirmedAt: '2026-06-20T10:00:00Z',
+  cancelNoticeHours: 24, lateRescheduleFrom: null, cancelPenalty: 'half',
+};
+// Cancelled by the client 6 hours before a 14:00 start, deposit only, half policy.
+const lateCancelled: BookingFeeTerms = {
+  ...terms, status: 'cancelled', lateFeePence: null, noShowFeePence: null, lateCancelFeePence: 3000, depositPence: 2000,
+  paymentStatus: 'deposit_paid', cancelledBy: 'client', cancelledAt: new Date('2026-07-01T08:00:00').toISOString(),
+};
 const end = new Date('2026-07-01T15:00:00').getTime();
 const charge = (over: Partial<BookingFeeCharge>): BookingFeeCharge => ({
   id: 'c', kind: 'late', amountPence: 1000, status: 'succeeded', chargedAt: '2026-07-01T16:00:00Z', payBy: null, nextRetryAt: null, createdAt: '2026-07-01T16:00:00Z',
@@ -9,12 +18,12 @@ const charge = (over: Partial<BookingFeeCharge>): BookingFeeCharge => ({
 });
 
 test('offers a late fee on a booking that went ahead, until 24 hours after it ends', () => {
-  expect(feeChargeWindow(terms, end).canCharge).toEqual({ late: true, no_show: false });
+  expect(feeChargeWindow(terms, end).canCharge).toEqual({ late: true, no_show: false, late_cancel: false });
   expect(feeChargeWindow(terms, end + 24 * 3600e3 + 1).open).toBe(false);
 });
 
 test('offers the no-show fee only once the booking is marked no-show', () => {
-  expect(feeChargeWindow({ ...terms, status: 'no_show' }, end).canCharge).toEqual({ late: false, no_show: true });
+  expect(feeChargeWindow({ ...terms, status: 'no_show' }, end).canCharge).toEqual({ late: false, no_show: true, late_cancel: false });
 });
 
 test('a failed attempt never counts as the live fee', () => {
@@ -27,4 +36,86 @@ test('a client can dispute for 7 days after the charge', () => {
   expect(feeDisputeOpen(charge({}), charged + 7 * 24 * 3600e3)).toBe(true);
   expect(feeDisputeOpen(charge({}), charged + 7 * 24 * 3600e3 + 1)).toBe(false);
   expect(feeDisputeOpen(charge({ status: 'refunded' }), charged)).toBe(false);
+});
+
+test('offers the late cancellation fee straight after a late cancel, until 24 hours after the end', () => {
+  const cancelledAt = new Date('2026-07-01T08:00:00').getTime();
+  expect(feeChargeWindow(lateCancelled, cancelledAt + 60e3).canCharge.late_cancel).toBe(true);
+  expect(feeChargeWindow(lateCancelled, end + 24 * 3600e3 + 1).canCharge.late_cancel).toBe(false);
+});
+
+test('no late cancellation fee for an early cancel, a provider cancel, a full payment or another policy', () => {
+  expect(isChargeableLateCancel(lateCancelled)).toBe(true);
+  expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-06-30T08:00:00').toISOString() })).toBe(false);
+  expect(isChargeableLateCancel({ ...lateCancelled, cancelledBy: 'provider' })).toBe(false);
+  expect(isChargeableLateCancel({ ...lateCancelled, confirmedAt: null })).toBe(false);
+  expect(isChargeableLateCancel({ ...lateCancelled, paymentStatus: 'fully_paid' })).toBe(false);
+  expect(isChargeableLateCancel({ ...lateCancelled, cancelPenalty: 'deposit' })).toBe(false);
+  expect(isChargeableLateCancel({ ...lateCancelled, cancelNoticeHours: 0 })).toBe(false);
+  // Moved after the window started: late however early the cancel.
+  expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-06-28T08:00:00').toISOString(), lateRescheduleFrom: '2026-06-27' })).toBe(true);
+});
+
+test('lists what can be charged now in Payments & payouts, skipping anything already charged', () => {
+  const cand = (id: string, t: BookingFeeTerms, charges: { status: BookingFeeCharge['status'] }[] = []) =>
+    ({ bookingId: id, customerName: 'Sam', serviceName: 'Gel nails', terms: t, charges });
+  const list = feesToChargeNow([
+    cand('late', terms),
+    cand('noShow', { ...terms, status: 'no_show' }),
+    cand('charged', terms, [{ status: 'succeeded' }]),
+    cand('retry', terms, [{ status: 'failed' }]),
+    cand('none', { ...terms, lateFeePence: null, noShowFeePence: null }),
+  ], end);
+  expect(list.map(f => f.bookingId)).toEqual(['late', 'noShow', 'retry']);
+  expect(list[0]!.kinds).toEqual(['late']);
+  expect(list[1]!.kinds).toEqual(['no_show']);
+  expect(feesToChargeNow([cand('late', terms)], end + 24 * 3600e3 + 1)).toEqual([]);
+});
+
+describe('fee buttons on the booking page', () => {
+  const start = new Date('2026-07-01T14:00:00').getTime();
+  const confirmed: BookingFeeTerms = { ...terms, status: 'confirmed' };
+  const state = (b: ReturnType<typeof bookingFeeButtons>) => b.map(x => `${x.kind}:${x.enabled ? 'on' : 'off'}`);
+
+  test('both are greyed out before the appointment starts, saying when they open', () => {
+    const buttons = bookingFeeButtons(confirmed, start - 60_000);
+    expect(state(buttons)).toEqual(['late:off', 'no_show:off']);
+    expect(buttons[0]!.note).toMatch(/^From 2:00\s?pm, once the appointment starts$/);
+    expect(buttons[1]!.note).toMatch(/if they don't come$/);
+  });
+
+  test('the late fee goes live at the start; the no-show fee waits to be marked', () => {
+    const buttons = bookingFeeButtons(confirmed, start);
+    expect(state(buttons)).toEqual(['late:on', 'no_show:off']);
+    expect(buttons[1]!.note).toBe('Mark them as a no-show first');
+    expect(state(bookingFeeButtons({ ...terms, status: 'no_show' }, start + 60_000))).toEqual(['no_show:on']);
+  });
+
+  test('a client who came has no no-show button, and everything goes when the window closes', () => {
+    expect(state(bookingFeeButtons(terms, end))).toEqual(['late:on']);
+    expect(bookingFeeButtons(terms, end + 24 * 3600e3 + 1)).toEqual([]);
+  });
+
+  test('only the fees on their policy, and none on a booking that did not go ahead', () => {
+    expect(state(bookingFeeButtons({ ...confirmed, noShowFeePence: null }, start))).toEqual(['late:on']);
+    expect(bookingFeeButtons({ ...confirmed, lateFeePence: null, noShowFeePence: null }, start)).toEqual([]);
+    expect(bookingFeeButtons({ ...terms, status: 'cancelled' }, start)).toEqual([]);
+    expect(bookingFeeButtons({ ...terms, status: 'pending' }, start)).toEqual([]);
+  });
+
+  test('a late cancellation fee gets its button while it can be charged', () => {
+    const cancelledAt = Date.parse(lateCancelled.cancelledAt!);
+    expect(state(bookingFeeButtons(lateCancelled, cancelledAt + 60e3))).toEqual(['late_cancel:on']);
+    expect(bookingFeeButtons(lateCancelled, end + 24 * 3600e3 + 1)).toEqual([]);
+    expect(bookingFeeButtons({ ...lateCancelled, cancelledBy: 'provider' }, cancelledAt + 60e3)).toEqual([]);
+  });
+});
+
+describe('feeCountsToYou', () => {
+  it('adds a charged fee to the booking payment, not a refunded or taken-back one', () => {
+    expect(feeCountsToYou({ status: 'succeeded', payoutStatus: 'held' })).toBe(true);
+    expect(feeCountsToYou({ status: 'succeeded', payoutStatus: 'transferred' })).toBe(true);
+    expect(feeCountsToYou({ status: 'refunded', payoutStatus: 'cancelled' })).toBe(false);
+    expect(feeCountsToYou({ status: 'succeeded', payoutStatus: 'reversed' })).toBe(false);
+  });
 });

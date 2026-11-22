@@ -1,7 +1,9 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderPayoutSummaryCard from '../components/ProviderPayoutSummaryCard';
-import { getProviderPayouts, getProviderFinance } from '../services/providerPaymentService';
+import {
+  getPayoutSchedule, getProviderFinance, getProviderPayouts, getProviderTipEarnings,
+} from '../services/providerPaymentService';
 
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -16,7 +18,7 @@ jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
 }));
 jest.mock('../services/providerPaymentService', () => ({
-  getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(),
+  getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderTipEarnings: jest.fn(), getPayoutSchedule: jest.fn(),
 }));
 
 const props = {
@@ -26,6 +28,9 @@ const props = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (getProviderTipEarnings as jest.Mock).mockResolvedValue([]);
+  // No schedule: the card shows the totals, as before paydays existed.
+  (getPayoutSchedule as jest.Mock).mockResolvedValue(null);
   (getProviderPayouts as jest.Mock).mockResolvedValue([
     { id: 'a', booking_id: 'b1', payout_amount: 4500, gross_amount: 5000, platform_fee: 500, currency: 'gbp', status: 'held', release_after: '', created_at: '' },
     { id: 'b', booking_id: 'b2', payout_amount: 3000, gross_amount: 3300, platform_fee: 300, currency: 'gbp', status: 'held', release_after: '', created_at: '' },
@@ -45,6 +50,7 @@ test('shows the Stripe balance, the held total and the next bank payout, and ope
   // Only held rows count towards "held" — the transferred one has already left.
   expect(ui.getByText('£75.00')).toBeTruthy();
   expect(ui.getByText(/Next to your bank: £12\.00/)).toBeTruthy();
+  expect(ui.getByText(/Ready for payday is cleared money/)).toBeTruthy();
   fireEvent.press(ui.getByRole('button', { name: 'Payouts. Open Payments.' }));
   expect(onOpenPayments).toHaveBeenCalledTimes(1);
 });
@@ -61,4 +67,29 @@ test('says so plainly when nothing could load', async () => {
   (getProviderPayouts as jest.Mock).mockRejectedValue(new Error('offline'));
   const ui = render(<ProviderPayoutSummaryCard {...props} onOpenPayments={jest.fn()} />);
   await waitFor(() => expect(ui.getByText("Payouts couldn't load. Tap to open Payments.")).toBeTruthy());
+});
+
+test('with a payout schedule, shows the next paydays and the bookings in the one picked', async () => {
+  const inDays = (n: number) => new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString();
+  const booking = (service: string, client: string) => ({ service_name_snapshot: service, customer_name: client, booking_date: '', status: 'confirmed', group_booking_id: null });
+  (getPayoutSchedule as jest.Mock).mockResolvedValue({ interval: 'daily', weeklyDays: [], monthlyDays: [] });
+  (getProviderPayouts as jest.Mock).mockResolvedValue([
+    { id: 'a', booking_id: 'b1', payout_amount: 4230, gross_amount: 4700, platform_fee: 470, currency: 'gbp', status: 'held', release_after: inDays(1), created_at: inDays(-5), refundRequestOpen: false, bankDispute: null, booking: booking('Lash Lift', 'Amy') },
+    { id: 'b', booking_id: 'b2', payout_amount: 3570, gross_amount: 4000, platform_fee: 430, currency: 'gbp', status: 'held', release_after: inDays(12), created_at: inDays(-5), refundRequestOpen: false, bankDispute: null, booking: booking('Brow Lamination', 'Priya') },
+  ]);
+  const onOpenPayments = jest.fn();
+  const ui = render(<ProviderPayoutSummaryCard {...props} onOpenPayments={onOpenPayments} />);
+  await waitFor(() => expect(ui.getByText('Your paydays')).toBeTruthy());
+  // The soonest payday is picked: only its booking is listed.
+  expect(ui.getByText(/Lash Lift/)).toBeTruthy();
+  expect(ui.queryByText(/Brow Lamination/)).toBeNull();
+  fireEvent.press(ui.getByRole('button', { name: /£35\.70, 1 payment/ }));
+  expect(ui.getByText(/Brow Lamination/)).toBeTruthy();
+  expect(ui.queryByText(/Lash Lift/)).toBeNull();
+  // Says what it is, and what the amounts and dates mean.
+  expect(ui.getByText(/on its way to your bank, by the day it should arrive/)).toBeTruthy();
+  expect(ui.getByText(/^IN YOUR .+ PAYDAY$/)).toBeTruthy();
+  expect(ui.getByText(/Amounts are what you get\. Dates are estimates/)).toBeTruthy();
+  fireEvent.press(ui.getByRole('button', { name: 'Your paydays. Open Payments.' }));
+  expect(onOpenPayments).toHaveBeenCalledTimes(1);
 });

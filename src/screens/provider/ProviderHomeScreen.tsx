@@ -47,7 +47,6 @@ import {
   hasMyProviderGoLiveAddress,
   getServiceDurationsByIds,
   subscribeToProviderBookingChanges,
-  getUnreadNotificationCount,
   countProviderServices,
   getCurrentAccountDetailsPending,
   getOrCreateConversation,
@@ -58,6 +57,8 @@ import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../util
 import { assignOverlapColumns, resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
+import { useAutoCalendarSync } from '../../features/providers/calendarBusySync';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { withTimeout } from '../../utils/withTimeout';
 import type {
   DbProviderAvailability,
@@ -972,8 +973,13 @@ function WeekView({
                     }
                     return blocks;
                   })()}
+                  {/* Explicit height, not bottom: 0. Every child of this row is
+                      absolutely positioned, so the row itself is 0px tall and a
+                      top/bottom-anchored shade collapsed to nothing: the closed
+                      day showed clean while the open days' out-of-hours bands
+                      (which have real heights) made them look like the shut ones. */}
                   {(isBlocked || dayAvail?.is_closed) && (
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: WK_HEIGHT, backgroundColor: 'rgba(0,0,0,0.4)' }} />
                   )}
 
                   {/* Booking blocks */}
@@ -1135,7 +1141,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const [loading,   setLoading]     = useState(true);
   // Provider-role unread badge for the header bell. Counts only recipient_role
   // = 'provider' rows, so it never reflects the same user's client-side unread.
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount('provider');
   const [refreshing,setRefreshing]  = useState(false);
 
   // Provider availability
@@ -1454,10 +1460,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       .catch(err => logger.error('[ProviderHome] service duration lookup failed:', err));
     return () => { cancelled = true; };
   }, [bookings]);
-  // Keep the header bell's unread badge in sync (provider-role notifications only)
-  useFocusEffect(useCallback(() => {
-    getUnreadNotificationCount('provider').then(setUnreadCount).catch((err) => logger.error('[ProviderHome] unread count load failed:', err));
-  }, []));
+  // Calendar sync: busy times in the calendars they chose on Scheduling &
+  // Availability stop clients booking those times. Does nothing until they
+  // connect one.
+  useAutoCalendarSync();
 
   // Bookings + availability/blocked-dates, reloaded together on every focus
   // (e.g. after editing in ProviderScheduleScreen) from ONE profile fetch —

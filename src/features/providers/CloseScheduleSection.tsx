@@ -2,6 +2,9 @@
 // that says whether they're open, and the sheet they close from, which shows
 // the bookings they already have so they can decide what happens to each.
 //
+// Every upcoming booking needs an answer before the schedule can close: "I can
+// do it", a move in progress, or cancelled (which takes it off the list).
+//
 // Keep and Move/Cancel are deliberately different weights. Keeping needs nothing
 // from the server. Moving and cancelling open the booking from the Home
 // calendar, on its day, the same as tapping it there: its own screen already
@@ -25,6 +28,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useFocusEffect } from '@react-navigation/native';
 import {
   closeMySchedule,
+  getActiveRescheduleRequestsForBookings,
   getMyScheduleClosure,
   getProviderBookings,
   reopenMySchedule,
@@ -32,7 +36,13 @@ import {
 import type { MyScheduleClosure } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
 import { isDarkColor } from '../../constants/providerThemes';
-import { closureReasonForClient, CLOSURE_REASONS, type ClosureReason } from './scheduleClosure';
+import {
+  canCloseSchedule,
+  closureReasonForClient,
+  CLOSURE_REASONS,
+  unansweredBookingCount,
+  type ClosureReason,
+} from './scheduleClosure';
 import {
   dateToYMD,
   formatLongDateNoYear,
@@ -59,6 +69,8 @@ type UpcomingBooking = {
   time: string | null;
   clientName: string;
   serviceName: string;
+  /** A move is already in progress, which answers it. */
+  moving: boolean;
 };
 
 type Props = {
@@ -103,11 +115,14 @@ export default function CloseScheduleSection({
   const [closure, setClosure] = useState<MyScheduleClosure | null>(lastClosure.get(providerId) ?? null);
   const [loaded, setLoaded] = useState(lastClosure.has(providerId));
   const [reason, setReason] = useState<ClosureReason | null>(null);
-  const [tellClients, setTellClients] = useState(false);
+  // On by default: a provider who picks a reason usually wants it seen.
+  const [tellClients, setTellClients] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [upcoming, setUpcoming] = useState<UpcomingBooking[] | null>(null);
+  // Not knowing their bookings isn't the same as having none, so it blocks closing.
+  const [upcomingFailed, setUpcomingFailed] = useState(false);
   const [keptIds, setKeptIds] = useState<Set<string>>(new Set());
   const [reopenDate, setReopenDate] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -116,31 +131,31 @@ export default function CloseScheduleSection({
 
   const loadUpcoming = useCallback(() => {
     setUpcoming(null);
+    setUpcomingFailed(false);
     getProviderBookings(0, providerId, UPCOMING_DAYS_AHEAD)
-      .then((rows) => {
+      .then(async (rows) => {
         const now = new Date();
         const today = dateToYMD(now);
         const timeNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        setUpcoming(
-          rows
-            .filter((b) => (b.status === 'confirmed' || b.status === 'pending')
-              && (b.booking_date > today || (b.booking_date === today && (b.booking_time ?? '') >= timeNow)))
-            .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`))
-            .map((b) => ({
-              id: b.id,
-              date: b.booking_date,
-              time: b.booking_time,
-              clientName: b.customer_name ?? 'Client',
-              serviceName: b.service_name_snapshot ?? 'Booking',
-            })),
-        );
+        const ahead = rows
+          .filter((b) => (b.status === 'confirmed' || b.status === 'pending')
+            && (b.booking_date > today || (b.booking_date === today && (b.booking_time ?? '') >= timeNow)))
+          .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
+        const moves = await getActiveRescheduleRequestsForBookings(ahead.map((b) => b.id));
+        setUpcoming(ahead.map((b) => ({
+          id: b.id,
+          date: b.booking_date,
+          time: b.booking_time,
+          clientName: b.customer_name ?? 'Client',
+          serviceName: b.service_name_snapshot ?? 'Booking',
+          moving: moves[b.id] !== undefined,
+        })));
       })
       .catch((err) => {
         logger.error('[Schedule] upcoming bookings load failed:', err);
-        setUpcoming([]);
-        showToast("Couldn't load your upcoming bookings. Check them before closing.", 'error');
+        setUpcomingFailed(true);
       });
-  }, [providerId, showToast]);
+  }, [providerId]);
 
   // Set when Move or Cancel leaves for the booking's own screen, so coming back
   // lands on the sheet with their choices intact and the list up to date.
@@ -169,7 +184,7 @@ export default function CloseScheduleSection({
     setKeptIds(new Set());
     setReopenDate(null);
     setReason(null);
-    setTellClients(false);
+    setTellClients(true);
     setSheetVisible(true);
     loadUpcoming();
   }, [loadUpcoming]);
@@ -177,7 +192,7 @@ export default function CloseScheduleSection({
   const handleClose = useCallback(async () => {
     setBusy(true);
     try {
-      await closeMySchedule(reopenDate ? dateToYMD(reopenDate) : null, reason, tellClients);
+      await closeMySchedule(reopenDate ? dateToYMD(reopenDate) : null, reason, reason !== null && tellClients);
       const row = await getMyScheduleClosure();
       lastClosure.set(providerId, row);
       setClosure(row);
@@ -220,6 +235,9 @@ export default function CloseScheduleSection({
     if (Platform.OS !== 'ios') setDatePickerVisible(false);
     if (date) setReopenDate(date);
   }, []);
+
+  const unanswered = unansweredBookingCount(upcoming, keptIds);
+  const canClose = canCloseSchedule(upcoming, keptIds, upcomingFailed);
 
   const toldClients = closure?.showReason ? closureReasonForClient(closure.reason) : null;
 
@@ -300,7 +318,8 @@ export default function CloseScheduleSection({
                       style={[st.reasonChip, { backgroundColor: P.card, borderColor: selected ? P.accent : P.border }]}
                       onPress={() => {
                         setReason(selected ? null : r.value);
-                        if (selected) setTellClients(false);
+                        // Each newly picked reason starts shown to clients.
+                        if (!selected) setTellClients(true);
                       }}
                       activeOpacity={0.8}
                       accessibilityRole="radio"
@@ -364,14 +383,28 @@ export default function CloseScheduleSection({
               <Text style={[st.hint, { color: P.sub }]}>You can reopen any time.</Text>
 
               <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>YOUR UPCOMING BOOKINGS</Text>
-              {upcoming === null ? (
+              {upcomingFailed ? (
+                <View style={[st.booking, { backgroundColor: P.card, borderColor: P.border }]}>
+                  <Text style={[st.bookingDetail, { color: P.sub }]}>
+                    We couldn't load your upcoming bookings, so you can't close yet.
+                  </Text>
+                  <TouchableOpacity
+                    style={[st.actionBtn, st.retryBtn, { backgroundColor: P.surface }]}
+                    onPress={loadUpcoming}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[st.actionText, { color: P.text }]}>Try again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : upcoming === null ? (
                 <ActivityIndicator style={st.loading} color={P.accent} />
               ) : upcoming.length === 0 ? (
                 <Text style={[st.hint, { color: P.sub }]}>You have no upcoming bookings.</Text>
               ) : (
                 <>
                   <Text style={[st.hint, st.hintBelow, { color: P.sub }]}>
-                    These stay booked unless you change them. Can you still do them?
+                    These stay booked unless you change them. Answer each one before you close: can you still do it?
                   </Text>
                   {upcoming.map((b) => {
                     const kept = keptIds.has(b.id);
@@ -382,7 +415,9 @@ export default function CloseScheduleSection({
                         <Text style={[st.bookingDetail, { color: P.sub }]}>
                           {b.serviceName} · {formatShortDayDate(b.date)}{time ? ` · ${time}` : ''}
                         </Text>
-                        {kept ? (
+                        {b.moving ? (
+                          <Text style={[st.keptText, { color: P.accent }]}>Being moved</Text>
+                        ) : kept ? (
                           <Text style={[st.keptText, { color: P.accent }]}>You'll still do this one</Text>
                         ) : (
                           <View style={st.bookingActions}>
@@ -419,12 +454,18 @@ export default function CloseScheduleSection({
               )}
             </ScrollView>
 
+            {upcoming !== null && unanswered > 0 ? (
+              <Text style={[st.hint, st.blockedHint, { color: P.sub }]}>
+                {`Answer ${unanswered === 1 ? 'the booking' : `all ${unanswered} bookings`} above to close your schedule.`}
+              </Text>
+            ) : null}
             <TouchableOpacity
-              style={[st.closeBtn, { backgroundColor: P.accent, opacity: busy ? 0.6 : 1 }]}
+              style={[st.closeBtn, { backgroundColor: P.accent, opacity: busy || !canClose ? 0.5 : 1 }]}
               onPress={handleClose}
-              disabled={busy}
+              disabled={busy || !canClose}
               activeOpacity={0.8}
               accessibilityRole="button"
+              accessibilityState={{ disabled: busy || !canClose }}
             >
               {busy ? (
                 <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
@@ -481,6 +522,8 @@ const st = StyleSheet.create({
   optionText: { fontSize: 14, fontWeight: '600' },
   hint: { fontSize: 12, lineHeight: 17 },
   hintBelow: { marginBottom: 10 },
+  blockedHint: { marginTop: 12, textAlign: 'center' },
+  retryBtn: { flex: 0, alignSelf: 'flex-start', paddingHorizontal: 16, marginTop: 10 },
   loading: { marginVertical: 16 },
   booking: { padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   bookingName: { fontSize: 14, fontWeight: '700' },

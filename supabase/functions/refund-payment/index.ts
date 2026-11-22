@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
     // Load the booking with the service role (we need private payment fields).
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, provider_id, payment_intent_id, amount_paid, service_charge')
+      .select('id, provider_id, payment_intent_id, amount_paid, service_charge, payment_status')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -122,6 +122,11 @@ Deno.serve(async (req: Request) => {
     // Stripe issued but we failed to record still counts.
     if (!booking.payment_intent_id || Number(booking.amount_paid) <= 0) {
       return json({ error: 'This booking has no captured payment to refund.' }, 409);
+    }
+    // Held on the card, never taken (a request): there is nothing to refund.
+    // Declining it releases the hold through settle-held-payment instead.
+    if (booking.payment_status === 'authorised' || booking.payment_status === 'not_charged') {
+      return json({ status: 'not_charged' }, 200);
     }
     const requestId = typeof body.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.requestId)
       ? body.requestId

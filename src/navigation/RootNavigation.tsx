@@ -14,7 +14,7 @@ import { openProviderProfileLink, type ProviderProfileLinkOutcome } from './open
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
-import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
+import { parseProviderProfileDeepLink } from '../utils/providerProfileLink';
 import { useAppDialog } from '../components/AppDialog';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';

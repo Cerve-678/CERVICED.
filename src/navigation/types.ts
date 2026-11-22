@@ -306,6 +306,9 @@ export type ProviderHomeStackParamList = {
 // Provider Services Stack (profile preview + edit via InfoRegScreen)
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
+  // Tapping the logo on My Profile: their own profile, as clients see it.
+  /** asPreview: the owner tapping their logo — no header, no buttons. */
+  MyPublicProfile: { providerId: string; asPreview?: boolean };
   AccountHolderDetails: { addDetailsForCurrentUser: true };
   EditProfile: { transferProviderId?: string } | undefined;
   // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
@@ -360,7 +363,8 @@ export type ProviderAccountStackParamList = {
   FullCervicedFeatures: undefined;
   // Link-only providers' Profile tab root: their public profile + edit rows.
   // Their own public profile, exactly as clients see it.
-  MyPublicProfile: { providerId: string };
+  /** asPreview: the owner tapping their logo — no header, no buttons. */
+  MyPublicProfile: { providerId: string; asPreview?: boolean };
   // Another provider's public profile, opened by scanning their QR code.
   PublicProviderProfile: { providerId: string; source?: string };
   EditProfile: { transferProviderId?: string } | undefined;
@@ -441,7 +445,8 @@ export type ProviderTabParamList = {
 export type LinkOnlyPortfolioStackParamList = {
   LinkOnlyPortfolioMain: undefined;
   /** Their own profile, as clients see it (ProviderProfileScreen). */
-  MyPublicProfile: { providerId: string };
+  /** asPreview: the owner tapping their logo — no header, no buttons. */
+  MyPublicProfile: { providerId: string; asPreview?: boolean };
 };
 
 export type LinkOnlyMessagesStackParamList = {

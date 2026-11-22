@@ -68,10 +68,19 @@ interface LogoCircleProps {
 export const LogoCircle = memo(function LogoCircle({ uri, framing, style }: LogoCircleProps) {
   // The clip sits on an inner layer, not on `style`: overflow hidden on the
   // circle itself would drop any shadow it carries on iOS.
-  const radius = StyleSheet.flatten(style)?.borderRadius ?? 9999;
+  const flat = StyleSheet.flatten(style) ?? {};
+  // Per-corner radii ride along too, so a shaped frame (the Arch page style's
+  // rounded top) clips the logo to the same outline it draws.
+  const clip: ViewStyle = {
+    borderRadius: flat.borderRadius ?? 9999,
+    ...(flat.borderTopLeftRadius != null ? { borderTopLeftRadius: flat.borderTopLeftRadius } : null),
+    ...(flat.borderTopRightRadius != null ? { borderTopRightRadius: flat.borderTopRightRadius } : null),
+    ...(flat.borderBottomLeftRadius != null ? { borderBottomLeftRadius: flat.borderBottomLeftRadius } : null),
+    ...(flat.borderBottomRightRadius != null ? { borderBottomRightRadius: flat.borderBottomRightRadius } : null),
+  };
   return (
     <View style={style}>
-      <FramedLogo uri={uri} framing={framing} slot="circle" style={{ borderRadius: radius }} />
+      <FramedLogo uri={uri} framing={framing} slot="circle" style={clip} />
     </View>
   );
 });

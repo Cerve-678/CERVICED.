@@ -15,30 +15,7 @@ import React, { useEffect, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
-import { Lobster_400Regular } from '@expo-google-fonts/lobster';
-import { DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
-import { Bungee_400Regular } from '@expo-google-fonts/bungee';
-import { Righteous_400Regular } from '@expo-google-fonts/righteous';
-import { Sniglet_800ExtraBold } from '@expo-google-fonts/sniglet';
-import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2';
-import { VarelaRound_400Regular } from '@expo-google-fonts/varela-round';
-// The 2026-11-03 brand fonts, one weight each: a family's own index would
-// bundle every weight it ships.
-import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display/700Bold';
-import { Italiana_400Regular } from '@expo-google-fonts/italiana/400Regular';
-import { GreatVibes_400Regular } from '@expo-google-fonts/great-vibes/400Regular';
-import { PinyonScript_400Regular } from '@expo-google-fonts/pinyon-script/400Regular';
-import { Sacramento_400Regular } from '@expo-google-fonts/sacramento/400Regular';
-import { Syne_700Bold } from '@expo-google-fonts/syne/700Bold';
-import { JosefinSans_600SemiBold } from '@expo-google-fonts/josefin-sans/600SemiBold';
-import { TenorSans_400Regular } from '@expo-google-fonts/tenor-sans/400Regular';
-import { PoiretOne_400Regular } from '@expo-google-fonts/poiret-one/400Regular';
-import { Limelight_400Regular } from '@expo-google-fonts/limelight/400Regular';
-import { Shrikhand_400Regular } from '@expo-google-fonts/shrikhand/400Regular';
-import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue/400Regular';
-import { Fredoka_600SemiBold } from '@expo-google-fonts/fredoka/600SemiBold';
-import { Comfortaa_700Bold } from '@expo-google-fonts/comfortaa/700Bold';
-import { Pacifico_400Regular } from '@expo-google-fonts/pacifico/400Regular';
+import { APP_FONTS } from './src/constants/appFonts';
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { FontProvider } from './src/contexts/FontContext';
@@ -179,33 +156,7 @@ function StatusBarBlur() {
 }
 
 export default Sentry.wrap(function App() {
-  const [fontsLoaded, fontError] = useFonts({
-    'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
-    'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),
-    Lobster_400Regular,
-    DancingScript_700Bold,
-    Bungee_400Regular,
-    Righteous_400Regular,
-    Sniglet_800ExtraBold,
-    Baloo2_700Bold,
-    VarelaRound_400Regular,
-    PlayfairDisplay_700Bold,
-    Italiana_400Regular,
-    GreatVibes_400Regular,
-    PinyonScript_400Regular,
-    Sacramento_400Regular,
-    Syne_700Bold,
-    JosefinSans_600SemiBold,
-    TenorSans_400Regular,
-    PoiretOne_400Regular,
-    Limelight_400Regular,
-    Shrikhand_400Regular,
-    BebasNeue_400Regular,
-    Fredoka_600SemiBold,
-    Comfortaa_700Bold,
-    Pacifico_400Regular,
-  });
+  const [fontsLoaded, fontError] = useFonts(APP_FONTS);
 
   const appIsReady = fontsLoaded || !!fontError;
 

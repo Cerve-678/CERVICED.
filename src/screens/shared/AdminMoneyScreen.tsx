@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
@@ -10,23 +10,26 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
 import {
-  adminDeclineRefundRequest, adminRetryPayout, getAdminMoneyOverview, refundProviderBooking,
+  adminDeclineRefundRequest, adminRetryPayout, assignBankDispute, getAdminBankDisputes, getAdminMoneyOverview,
+  refundProviderBooking,
 } from '../../services/databaseService';
 import {
-  describeFailedPayout, describeOwed, describeRefundRequest, formatPence, parsePounds,
+  type BankDisputeView, describeBankDispute, describeFailedPayout, describeOwed, describeRefundRequest, formatPence,
+  parsePounds,
 } from '../../features/admin/moneyPresentation';
-import type { AdminMoneyOverview, AdminRefundRequest } from '../../types/adminMoney';
+import type { AdminBankDispute, AdminMoneyOverview, AdminRefundRequest } from '../../types/adminMoney';
 import { newRequestId } from '../../utils/requestId';
 import { logger } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 
 // ── Admin Money screen ─────────────────────────────────────────────────────
 // Only reachable from the settings row an admin account sees (admin_users),
-// and every read and action is refused server-side for anyone else. Three
-// lists: payouts to providers that failed, money providers owe, and refund
-// requests. Internal tool, so its copy is English only.
+// and every read and action is refused server-side for anyone else. Four
+// lists: payouts to providers that failed, money providers owe, refund
+// requests, and bank disputes that need someone to say which booking they're
+// about. Internal tool, so its copy is English only.
 
-type Tab = 'failed' | 'owed' | 'refunds';
+type Tab = 'failed' | 'owed' | 'refunds' | 'disputes';
 
 export default function AdminMoneyScreen({ navigation }: any) {
   const { theme, isDarkMode, palette: P } = useTheme();
@@ -38,14 +41,25 @@ export default function AdminMoneyScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<AdminRefundRequest | null>(null);
+  const [disputes, setDisputes] = useState<AdminBankDispute[] | null>(null);
+  const [disputesError, setDisputesError] = useState(false);
+  /** Bookings ticked on each dispute card, by dispute id. */
+  const [picked, setPicked] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async () => {
     setLoadError(false);
-    try {
-      setData(await getAdminMoneyOverview());
-    } catch (err) {
-      logger.error('[AdminMoney] overview failed to load:', err);
+    setDisputesError(false);
+    // Separate so one list failing doesn't blank the other.
+    const [overview, disputeList] = await Promise.allSettled([getAdminMoneyOverview(), getAdminBankDisputes()]);
+    if (overview.status === 'fulfilled') setData(overview.value);
+    else {
+      logger.error('[AdminMoney] overview failed to load:', overview.reason);
       setLoadError(true);
+    }
+    if (disputeList.status === 'fulfilled') setDisputes(disputeList.value);
+    else {
+      logger.error('[AdminMoney] disputes failed to load:', disputeList.reason);
+      setDisputesError(true);
     }
   }, []);
 
@@ -67,6 +81,8 @@ export default function AdminMoneyScreen({ navigation }: any) {
           try {
             await adminRetryPayout(payoutId);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            // Reloading turns the card's button into the "In the next payment
+            // run" panel, read from the server, so it's still there on return.
             await load();
           } catch (err) {
             showAlert("Couldn't retry it", toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', 'AdminMoney.retry'));
@@ -78,15 +94,69 @@ export default function AdminMoneyScreen({ navigation }: any) {
     ]);
   }, [load, showAlert, showConfirm]);
 
+  const togglePick = useCallback((disputeId: string, bookingId: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setPicked(prev => {
+      const current = prev[disputeId] ?? [];
+      return {
+        ...prev,
+        [disputeId]: current.includes(bookingId) ? current.filter(id => id !== bookingId) : [...current, bookingId],
+      };
+    });
+  }, []);
+
+  const assign = useCallback((view: BankDisputeView) => {
+    const chosen = pickedFor(view, picked);
+    if (chosen.length === 0) return;
+    const names = view.bookings.filter(b => chosen.includes(b.key)).map(b => b.title).join('\n');
+    const others = view.bookings.length - chosen.length;
+    showConfirm(
+      view.unfinished ? 'Finish taking it back?' : 'Is the dispute about these?',
+      view.unfinished
+        ? `${names}\n\nTaking back what these providers were paid didn't finish last time. Nothing is taken twice.`
+        : `${names}\n\nWhat these providers were paid for them is taken back now.${others > 0 ? ` The other ${others === 1 ? 'booking is' : `${others} bookings are`} paid as normal.` : ''} You can't change this afterwards.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: view.unfinished ? 'Finish it' : 'Yes, these',
+          onPress: async () => {
+            setBusyId(view.key);
+            try {
+              await assignBankDispute(view.key, chosen);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              setPicked(prev => { const next = { ...prev }; delete next[view.key]; return next; });
+              await load();
+            } catch (err) {
+              showAlert("Couldn't save that", err instanceof Error && err.message ? err.message : 'Please try again in a moment.');
+            } finally {
+              setBusyId(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [picked, load, showAlert, showConfirm]);
+
   const now = useMemo(() => new Date(), [data]);
-  const failed = useMemo(() => (data?.failed ?? []).map(describeFailedPayout), [data]);
+  const failed = useMemo(() => (data?.failed ?? []).map(f => describeFailedPayout(f, now)), [data, now]);
+  const anyQueued = failed.some(f => f.queued);
+
+  // While a payment is waiting on the run, check every minute so its card
+  // goes away (or shows the new reason) without a pull to refresh.
+  useEffect(() => {
+    if (!anyQueued) return;
+    const timer = setInterval(() => { void load(); }, 60_000);
+    return () => clearInterval(timer);
+  }, [anyQueued, load]);
   const owed = useMemo(() => (data?.owed ?? []).map(describeOwed), [data]);
   const refunds = useMemo(() => (data?.refunds ?? []).map(r => ({ row: r, view: describeRefundRequest(r, now) })), [data, now]);
+  const disputeViews = useMemo(() => (disputes ?? []).map(describeBankDispute), [disputes]);
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'failed', label: 'FAILED', count: data?.failed_count ?? 0 },
     { id: 'owed', label: 'OWED', count: data?.owed_count ?? 0 },
     { id: 'refunds', label: 'REFUNDS', count: data?.refunds_count ?? 0 },
+    { id: 'disputes', label: 'DISPUTES', count: disputes?.length ?? 0 },
   ];
 
   const card = [styles.card, { backgroundColor: P.card, borderColor: P.border }];
@@ -122,14 +192,83 @@ export default function AdminMoneyScreen({ navigation }: any) {
                 accessibilityState={{ selected }}
                 style={[styles.tab, { backgroundColor: selected ? P.accent : P.card, borderColor: P.border }]}
               >
-                <Text style={[styles.tabLabel, { color: selected ? P.onAccent : P.accentText }]}>{t.label} </Text>
+                <Text style={[styles.tabLabel, { color: selected ? P.onAccent : P.accentText }]} numberOfLines={1} adjustsFontSizeToFit>{t.label} </Text>
                 <Text style={[styles.tabCount, { color: selected ? P.onAccent : P.accentText }]}>{t.count}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {loadError ? (
+        {tab === 'disputes' ? (
+          disputesError ? (
+            <View style={card}>
+              <Text style={[styles.body, { color: P.text }]}>Couldn't load the disputes.</Text>
+              <TouchableOpacity onPress={() => void load()} activeOpacity={0.7} style={{ marginTop: 8 }}>
+                <Text style={{ color: P.accentText, fontWeight: '600' }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : !disputes ? (
+            <ActivityIndicator color={P.accent} style={{ marginTop: 32 }} />
+          ) : (
+            <>
+              <Text style={[styles.section, { color: P.sub }]}>BANK DISPUTES TO MATCH</Text>
+              <Text style={[styles.small, { color: P.sub, marginBottom: 12 }]}>
+                The amount didn't match a booking on the payment, so nothing has been taken back and these providers' payouts are on hold. Pick the booking(s) the client is disputing. Answer the dispute itself in Stripe.
+              </Text>
+              {disputeViews.length === 0 && <Text style={[styles.empty, { color: P.sub }]}>No disputes need matching.</Text>}
+              {disputeViews.map(view => {
+                const chosen = pickedFor(view, picked);
+                const busy = busyId === view.key;
+                return (
+                  <View key={view.key} style={card}>
+                    <View style={styles.rowBetween}>
+                      <Text style={[styles.name, { color: P.text }]} numberOfLines={1}>{view.reason}</Text>
+                      <Text style={[styles.amount, { color: P.text }]}>{view.amount}</Text>
+                    </View>
+                    <View style={[styles.pill, { backgroundColor: view.lost ? '#FF950022' : P.surface }]}>
+                      <Text style={[styles.pillText, { color: view.lost ? (isDarkMode ? '#FFB54D' : '#9A5A00') : P.accentText }]}>{view.status}</Text>
+                    </View>
+                    {view.bookings.map(b => {
+                      const on = chosen.includes(b.key);
+                      return (
+                        <TouchableOpacity
+                          key={b.key}
+                          onPress={() => togglePick(view.key, b.key)}
+                          // An unfinished one is already decided: only pressing again is possible.
+                          disabled={busy || view.unfinished}
+                          activeOpacity={0.7}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: on, disabled: busy || view.unfinished }}
+                          style={[styles.pickRow, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.surface : 'transparent' }]}
+                        >
+                          <View style={[styles.tick, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.accent : 'transparent' }]}>
+                            {on && <Text style={{ color: P.onAccent, fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.body, { color: P.text, fontWeight: '600' }]} numberOfLines={2}>{b.title}</Text>
+                            {!!b.detail && <Text style={[styles.small, { color: P.sub }]}>{b.detail}</Text>}
+                            {b.matchesAmount && <Text style={[styles.small, { color: P.accentText }]}>Same amount as the dispute</Text>}
+                          </View>
+                          <Text style={[styles.body, { color: P.text, fontWeight: '700' }]}>{b.amount}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    <TouchableOpacity
+                      style={[styles.cta, { backgroundColor: P.accent, opacity: chosen.length && !busy ? 1 : 0.4 }]}
+                      disabled={!chosen.length || busy}
+                      onPress={() => assign(view)}
+                      activeOpacity={0.8}
+                    >
+                      {busy
+                        ? <ActivityIndicator size="small" color={P.onAccent} />
+                        : <Text style={[styles.ctaText, { color: P.onAccent }]}>{view.unfinished ? 'FINISH TAKING IT BACK' : chosen.length ? `IT'S ABOUT ${chosen.length === 1 ? 'THIS ONE' : `THESE ${chosen.length}`}` : 'PICK A BOOKING'}</Text>}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </>
+          )
+        ) : loadError ? (
           <View style={card}>
             <Text style={[styles.body, { color: P.text }]}>Couldn't load the money lists.</Text>
             <TouchableOpacity onPress={() => void load()} activeOpacity={0.7} style={{ marginTop: 8 }}>
@@ -150,7 +289,9 @@ export default function AdminMoneyScreen({ navigation }: any) {
                 </View>
                 <Text style={[styles.body, { color: P.text }]}><Text style={{ fontWeight: '700' }}>Why: </Text>{f.why}</Text>
                 <Text style={[styles.small, { color: P.sub }]}>{f.tries}</Text>
-                {f.canRetry ? (
+                {f.queued ? (
+                  <QueuedPanel note={f.queuedNote} dark={isDarkMode} />
+                ) : f.canRetry ? (
                   <TouchableOpacity
                     style={[styles.cta, { backgroundColor: P.accent, opacity: busyId === f.key ? 0.5 : 1 }]}
                     disabled={busyId === f.key}
@@ -225,6 +366,41 @@ export default function AdminMoneyScreen({ navigation }: any) {
       <DialogHost />
     </ThemedBackground>
   );
+}
+
+/** Where the retry button was, once the payment is due: says it's on its way
+ *  and when. Pops in so pressing the button visibly did something. */
+function QueuedPanel({ note, dark }: { note: string | null; dark: boolean }) {
+  const pop = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(pop, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start();
+  }, [pop]);
+  const green = dark ? '#6FD08C' : '#2E7D32';
+  return (
+    <Animated.View
+      accessibilityRole="text"
+      accessibilityLabel={`In the next payment run. ${note ?? ''}`}
+      style={[
+        styles.queued,
+        { backgroundColor: dark ? '#6FD08C1F' : '#2E7D321A', borderColor: green },
+        { opacity: pop, transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] },
+      ]}
+    >
+      <View style={[styles.queuedTick, { backgroundColor: green }]}>
+        <Text style={{ color: dark ? '#0F1A12' : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✓</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.label, { color: green }]}>IN THE NEXT PAYMENT RUN</Text>
+        {!!note && <Text style={[styles.small, { color: green }]}>{note}</Text>}
+      </View>
+    </Animated.View>
+  );
+}
+
+/** The bookings ticked on a dispute card. An unfinished one is already
+ *  decided, so its bookings are the answer and stay ticked. */
+function pickedFor(view: BankDisputeView, picked: Record<string, string[]>): string[] {
+  return view.unfinished ? view.bookings.map(b => b.key) : picked[view.key] ?? [];
 }
 
 /** One passed-on refund request: what each side said, then approve or decline.
@@ -398,6 +574,10 @@ const styles = StyleSheet.create({
   cta: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   ctaText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 1 },
   waiting: { borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  queued: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, borderRadius: 12, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12, marginTop: 4 },
+  queuedTick: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 10, paddingHorizontal: 12 },
+  tick: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   pill: { alignSelf: 'flex-start', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
   pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.5 },
   footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, textAlign: 'center', marginTop: 8 },

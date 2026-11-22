@@ -3,11 +3,11 @@ import {
   canAskOnHome,
   EMPTY_MEMORY,
   INTRO_GAP_DAYS,
-  NOT_NOW_LIMIT,
   nextCircleStep,
   parseMomentsMemory,
   RECOMMEND_WINDOW_DAYS,
   recommendCandidates,
+  shouldOfferOnProfile,
   shouldShowWhereIGoNotice,
   visitWhenLabel,
   withAnswer,
@@ -113,11 +113,8 @@ describe('canAskOnHome', () => {
     expect(canAskOnHome(mem({ lastAskAt: NOW.getTime() - ASK_GAP_DAYS * DAY }), NOW)).toBe(true);
   });
 
-  it('stops after two "Not now"s in a row, and a Recommend resets that', () => {
-    let m = EMPTY_MEMORY;
-    for (let i = 0; i < NOT_NOW_LIMIT; i++) m = withAnswer(m, false);
-    expect(canAskOnHome(m, NOW)).toBe(false);
-    expect(canAskOnHome(withAnswer(m, true), NOW)).toBe(true);
+  it('ignores legacy dismissals when deciding whether to show a new prompt', () => {
+    expect(canAskOnHome(mem({ notNowStreak: 2 }), NOW)).toBe(true);
   });
 
   it('never asks on a day the intro was shown', () => {
@@ -163,6 +160,30 @@ describe('nextCircleStep', () => {
   it('asks nothing while Show where I go is off, or inside the weekly gap', () => {
     expect(nextCircleStep({ showWhereIGo: false, whereIGoNoticeSeen: true }, [booking({})], EMPTY_MEMORY, NOW)).toBeNull();
     expect(nextCircleStep(on, [booking({})], mem({ lastAskAt: NOW.getTime() }), NOW)).toBeNull();
+  });
+});
+
+describe('shouldOfferOnProfile', () => {
+  const been = { canRecommend: true, recommended: false, hidden: false };
+
+  it('offers once to someone who has been and was never asked', () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, EMPTY_MEMORY, 'p1')).toBe(true);
+  });
+
+  it("doesn't offer when they were already asked about this provider anywhere", () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, withAsked(EMPTY_MEMORY, 'p1', NOW), 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, withAsked(EMPTY_MEMORY, 'p2', NOW), 'p1')).toBe(true);
+  });
+
+  it("doesn't offer when nobody would see it, or there's nothing to ask", () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: false }, been, EMPTY_MEMORY, 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, canRecommend: false }, EMPTY_MEMORY, 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, recommended: true }, EMPTY_MEMORY, 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, hidden: true }, EMPTY_MEMORY, 'p1')).toBe(false);
+  });
+
+  it('ignores legacy dismissals on a provider profile', () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, mem({ notNowStreak: 2 }), 'p1')).toBe(true);
   });
 });
 

@@ -131,8 +131,9 @@ const st = StyleSheet.create({
   packLine: { fontSize: 13 },
   sentPill: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100 },
   sentPillText: { fontSize: 11, fontWeight: '800' },
-  chips: { flexDirection: 'row', gap: 6, marginTop: 12 },
-  chip: { borderRadius: 100, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 6, overflow: 'hidden', flexShrink: 1 },
+  // Wraps rather than squeezing, so service names show whole.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  chip: { borderRadius: 100, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 6, overflow: 'hidden', maxWidth: '100%' },
   chipLit: { borderRadius: 100, borderWidth: 1 },
   chipText: { fontSize: 12, fontWeight: '600' },
 

@@ -1,6 +1,7 @@
 import type Stripe from 'npm:stripe@17.4.0';
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
 import { chargeWasApproved } from './checkoutCharge.ts';
+import { placeRequestHolds } from './requestCardHolds.ts';
 
 // What the client paid with, in the app's own vocabulary
 // (paymentPresentation.ts PAYMENT_METHOD_LABELS), so receipts and booking
@@ -49,9 +50,31 @@ export async function outcomeOfCancelledIntent(stripe: Stripe, intentId: string)
   return chargeWasApproved(intent.latest_charge) ? 'not_charged' : 'abandoned';
 }
 
+// A request whose card hold is the sheet's own payment (a basket of requests
+// only; plan_checkout_holds). That payment is never captured here:
+// settleRequestHold takes it when the provider accepts.
+async function readSheetHold(admin: SupabaseClient, batchId: string): Promise<string | null> {
+  const { data, error } = await admin.from('request_card_holds').select('id')
+    .eq('checkout_batch_id', batchId).eq('on_sheet', true).maybeSingle();
+  if (error) throw error;
+  return (data?.id as string | undefined) ?? null;
+}
+
+// Every other request's hold is placed once the checkout is booked. It never
+// decides the checkout's own outcome: anything not placed now is retried by
+// the settle-request-card-holds sweep.
+async function placeHoldsQuietly(admin: SupabaseClient, stripe: Stripe, intent: Stripe.PaymentIntent) {
+  try {
+    await placeRequestHolds(admin, stripe, intent);
+  } catch (err) {
+    console.error(`[settleCheckout] request holds for ${intent.id} not all placed yet: ${String(err)}`);
+  }
+}
+
 // Both the authenticated endpoint, signed webhooks and the reconcile-checkouts
 // job converge here. Capture precedes booking confirmation; a paid checkout
-// which loses its reservation is refunded.
+// which loses its reservation is refunded. Requests are held, not charged:
+// see requestCardHolds.ts.
 export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, intentId: string) {
   let intent = await stripe.paymentIntents.retrieve(intentId);
   const batchId = intent.metadata.checkout_batch_id;
@@ -59,8 +82,11 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
   const readBatch = async () => {
     const { data, error } = await admin.from('checkout_batches').select('*').eq('id', batchId).single();
     if (error) throw error;
+    // The sheet's payment is for sheet_amount_pence once requests are held
+    // separately; a checkout paid before that existed is for amount_due.
+    const expectedPence = data.sheet_amount_pence ?? Math.round(Number(data.amount_due) * 100);
     if (data.payment_intent_id !== intent.id || data.user_id !== intent.metadata.user_id ||
-        Math.round(Number(data.amount_due) * 100) !== intent.amount || data.currency !== intent.currency) {
+        expectedPence !== intent.amount || data.currency !== intent.currency) {
       throw new Error('Payment does not match checkout');
     }
     return data;
@@ -74,8 +100,34 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
     }
     return 'canceled';
   }
-  if (batch.status === 'finalised' && intent.status === 'succeeded') return 'succeeded';
   const available = () => batch.status === 'prepared' && Date.parse(batch.expires_at) > Date.now();
+
+  if (intent.status === 'requires_capture' && await readSheetHold(admin, batchId)) {
+    if (batch.status !== 'finalised') {
+      if (!available()) {
+        await stripe.paymentIntents.cancel(intent.id, {}, { idempotencyKey: `checkout_cancel_${batchId}` });
+        await recordOutcome(admin, batchId, 'not_charged');
+        return 'canceled';
+      }
+      const { error } = await admin.rpc('finalize_checkout', {
+        p_checkout_batch_id: batchId, p_payment_intent_id: intent.id,
+      });
+      if (error) {
+        // A concurrent webhook may already have booked the same checkout.
+        batch = await readBatch();
+        if (batch.status !== 'finalised') throw error;
+      } else {
+        await recordPaymentMethod(admin, stripe, intent);
+      }
+    }
+    await placeHoldsQuietly(admin, stripe, intent);
+    return 'held';
+  }
+
+  if (batch.status === 'finalised' && intent.status === 'succeeded') {
+    await placeHoldsQuietly(admin, stripe, intent);
+    return 'succeeded';
+  }
   if (intent.status === 'requires_capture') {
     if (!available()) {
       // Older deployments finalised before capture: finish those too.
@@ -89,18 +141,25 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
   }
   if (intent.status !== 'succeeded') throw new Error('Payment is not ready to finalise');
   if (intent.amount_received !== intent.amount) throw new Error('Incomplete capture');
-  if (batch.status === 'finalised') return 'succeeded';
+  if (batch.status === 'finalised') {
+    await placeHoldsQuietly(admin, stripe, intent);
+    return 'succeeded';
+  }
   if (available()) {
     const { error } = await admin.rpc('finalize_checkout', {
       p_checkout_batch_id: batchId, p_payment_intent_id: intent.id,
     });
     if (!error) {
       await recordPaymentMethod(admin, stripe, intent);
+      await placeHoldsQuietly(admin, stripe, intent);
       return 'succeeded';
     }
     // A concurrent webhook may already have committed the same booking.
     batch = await readBatch();
-    if (batch.status === 'finalised') return 'succeeded';
+    if (batch.status === 'finalised') {
+      await placeHoldsQuietly(admin, stripe, intent);
+      return 'succeeded';
+    }
     if (available()) throw error;
   }
   await stripe.refunds.create({ payment_intent: intent.id,

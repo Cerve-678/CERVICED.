@@ -134,8 +134,8 @@ export const fr: Catalog = {
   'providerAccount.businessProfile.sub': 'Profil, informations et communications',
 
   'providerAccount.section.myBusiness': 'MON ENTREPRISE',
-  'providerAccount.myBusiness.schedule.title': 'Horaires',
-  'providerAccount.myBusiness.schedule.sub': 'Définissez vos heures et bloquez des dates',
+  'providerAccount.myBusiness.payouts.title': 'Versements',
+  'providerAccount.myBusiness.payouts.sub': 'Vos paiements et dates de versement',
   'providerAccount.myBusiness.inbox.title': 'Boîte de réception',
   'providerAccount.myBusiness.inbox.sub': 'Demandes et messages des clients',
   'providerAccount.myBusiness.history.title': 'Historique des réservations',

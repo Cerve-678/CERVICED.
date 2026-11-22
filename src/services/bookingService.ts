@@ -323,6 +323,8 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
       case 'partially_refunded': return PaymentStatus.PARTIALLY_REFUNDED;
       case 'refund_pending': return PaymentStatus.REFUND_PENDING;
       case 'failed':        return PaymentStatus.FAILED;
+      case 'authorised':    return PaymentStatus.AUTHORISED;
+      case 'not_charged':   return PaymentStatus.NOT_CHARGED;
       default:              return PaymentStatus.PENDING;
     }
   };
@@ -429,6 +431,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     policyRetainedAmount: db.policy_retained_amount != null ? Number(db.policy_retained_amount) : undefined,
     lateRescheduleFrom: db.late_reschedule_from ?? undefined,
     lateRescheduleRuleApplies: db.late_reschedule_rule_applies ?? undefined,
+    refundRequestWindowApplies: db.refund_request_window_applies ?? undefined,
     cancelledBy: db.cancelled_by ?? undefined,
     declinedAt: db.declined_at ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
