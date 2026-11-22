@@ -1,4 +1,4 @@
-import { checkFeeEligibility, feeKindLabel, type FeeKind } from '../_shared/bookingFeePlan.ts';
+import { checkFeeEligibility, feeKindLabel, isVisitFee, sameVisit, VISIT_ALREADY_CHARGED, type FeeKind } from '../_shared/bookingFeePlan.ts';
 import { isLateClientCancel, readCancelPenalty } from '../_shared/cancellationSettlement.ts';
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
@@ -94,6 +94,33 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+/** The other bookings in this booking's visit: same checkout, provider, client
+ *  and day (bookingFeePlan sameVisit). */
+async function visitSiblingIds(
+  checkoutBatchId: string,
+  booking: { id: string; provider_id: string; user_id: string; booking_date: string },
+): Promise<string[]> {
+  const { data: items, error } = await admin.from('checkout_batch_items')
+    .select('booking_id').eq('checkout_batch_id', checkoutBatchId).neq('booking_id', booking.id);
+  if (error) throw error;
+  const ids = (items ?? []).map(item => item.booking_id as string);
+  if (ids.length === 0) return [];
+  const { data: rows, error: rowsError } = await admin.from('bookings')
+    .select('id, provider_id, user_id, booking_date').in('id', ids);
+  if (rowsError) throw rowsError;
+  return (rows ?? []).filter(row => sameVisit(row, booking)).map(row => row.id as string);
+}
+
+/** Late or no-show fees on these bookings that aren't failed: charged, going
+ *  through, waiting on the client, or refunded. A row stuck at 'processing'
+ *  counts too, since it may have reached Stripe. */
+async function liveVisitFees(bookingIds: string[]): Promise<{ id: string }[]> {
+  const { data, error } = await admin.from('booking_fee_charges')
+    .select('id').in('booking_id', bookingIds).in('kind', ['late', 'no_show']).neq('status', 'failed');
+  if (error) throw error;
+  return (data ?? []) as { id: string }[];
+}
+
 interface ProviderRow { id: string; stripe_account_id: string | null; stripe_payouts_enabled: boolean | null }
 
 async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): Promise<Response> {
@@ -126,6 +153,11 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     if (itemError) throw itemError;
     bookingInBatch = !!item;
   }
+
+  // Late and no-show fees are once per visit: the other services this client
+  // booked back to back with this provider in the same checkout share one.
+  const visitIds = isVisitFee(kind) && batch && bookingInBatch ? await visitSiblingIds(batch.id, booking) : [];
+  const visitAlreadyCharged = visitIds.length > 0 && (await liveVisitFees(visitIds)).length > 0;
 
   // The client's recorded agreement for this checkout, and that it covers
   // this provider. The amount charged is the booking's frozen fee, which
@@ -198,6 +230,7 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     paidInApp: !!booking.payment_intent_id && !!customerId,
     clientConsented: consentCoversProvider,
     alreadyCharged: (existing?.length ?? 0) > 0,
+    visitAlreadyCharged,
     nowMs: Date.now(),
   });
   if (!eligibility.ok) return json({ error: eligibility.error }, 409);
@@ -214,6 +247,19 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   if (insertError) {
     if (insertError.code === '23505') return json({ error: 'A fee has already been charged for this booking.' }, 409);
     throw insertError;
+  }
+  // The unique index is per booking, so two taps on two services of the same
+  // visit could both get here. Fail closed: with any other fee row in the
+  // visit now visible, this one steps aside before Stripe is called. Whichever
+  // commits second always sees the first, so at most one goes ahead (both may
+  // step aside; the provider taps again). Ordering by created_at isn't safe:
+  // it's the transaction's start, not when the row became visible.
+  if (visitIds.length > 0) {
+    if ((await liveVisitFees(visitIds)).length > 0) {
+      const { error: deleteError } = await admin.from('booking_fee_charges').delete().eq('id', row.id).eq('status', 'processing');
+      if (deleteError) throw deleteError;
+      return json({ error: VISIT_ALREADY_CHARGED }, 409);
+    }
   }
 
   let intent: Stripe.PaymentIntent;
