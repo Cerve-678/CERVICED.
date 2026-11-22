@@ -11,7 +11,7 @@ import {
 import QRCode from "react-native-qrcode-svg";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { providerProfileDeepLink } from "../utils/providerProfileDeepLink";
+import { providerWebPageUrl } from "../utils/providerProfileLink";
 import { isDarkColor } from '../constants/providerThemes';
 
 type Props = {
@@ -41,15 +41,15 @@ export function ProviderProfileQrSheet({
   borderColor,
   onClose,
 }: Props) {
-  const deepLink = providerProfileDeepLink(providerSlug);
+  const pageUrl = providerWebPageUrl(providerSlug);
   const share = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await Share.share({
       title: `${providerName} on CERVICED`,
-      message: `Open ${providerName}'s profile in CERVICED: ${deepLink}`,
-      url: deepLink,
+      message: `${providerName} on CERVICED: ${pageUrl}`,
+      url: pageUrl,
     });
-  }, [deepLink, providerName]);
+  }, [pageUrl, providerName]);
 
   return (
     <Modal
@@ -73,7 +73,7 @@ export function ProviderProfileQrSheet({
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
             {isLive
-              ? `Clients with the CERVICED app can scan this to open ${providerName}.`
+              ? `Anyone can scan this with their phone camera to open your page.`
               : "This code starts working once your profile is live."}
           </Text>
           <View
@@ -82,7 +82,7 @@ export function ProviderProfileQrSheet({
             accessibilityLabel={`QR code for ${providerName}'s CERVICED profile`}
           >
             <QRCode
-              value={deepLink}
+              value={pageUrl}
               size={220}
               color="#171411"
               backgroundColor="#FFFFFF"

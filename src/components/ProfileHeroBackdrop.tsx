@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { blend, isDarkColor, type HeroFinish } from '../constants/providerThemes';
+import { blend, isDarkColor, SHEET_OPTIONS, type HeroFinish } from '../constants/providerThemes';
 
 /** Where Split's hard edge falls along the diagonal. */
 const SPLIT_AT = 0.58;
@@ -38,10 +38,34 @@ const SHEEN_LIGHT_ON_DARK = 0.18;
  *  Was full strength until 2026-11-09 (owner: "slightly reduced"). */
 const GLOW_STRENGTH = 0.8;
 
+/** How far Sheen lifts the lead colour for its band when the second colour is
+ *  only the content area (owner, 2026-11-13: "for custom colours the sheen is
+ *  too much"). A soft band of light across their own colour, not a stripe of
+ *  the pale content colour. */
+const SHEEN_SELF_EDGE = 0.07;
+const SHEEN_SELF_LIGHT_ON_PALE = 0.26;
+const SHEEN_SELF_LIGHT_ON_DARK = 0.16;
+
+/** True when the hero's second colour is just a content-area colour: a custom
+ *  set (saved as backdrop → content area) or a set without a two-tone
+ *  gradient of its own. Those have one real colour, not two. */
+function secondColourIsContentArea(to: string): boolean {
+  const hex = to.toUpperCase();
+  return SHEET_OPTIONS.some(option => option.color.toUpperCase() === hex);
+}
+
 /** Sheen's colours: the first colour at both corners, the second either side
- *  of a lighter band through the middle. Exported so the test can pin it. */
+ *  of a lighter band through the middle. When the second colour is only the
+ *  content area, the band runs across the first colour instead, lifted a
+ *  little toward white. Exported so the test can pin it. */
 export function sheenColors(from: string, to: string): [string, string, string, string, string] {
-  const light = blend(to, '#FFFFFF', isDarkColor(from) ? SHEEN_LIGHT_ON_DARK : SHEEN_LIGHT_ON_PALE);
+  const dark = isDarkColor(from);
+  if (secondColourIsContentArea(to) && from.toUpperCase() !== to.toUpperCase()) {
+    const edge = blend(from, '#FFFFFF', SHEEN_SELF_EDGE);
+    const light = blend(from, '#FFFFFF', dark ? SHEEN_SELF_LIGHT_ON_DARK : SHEEN_SELF_LIGHT_ON_PALE);
+    return [from, edge, light, edge, from];
+  }
+  const light = blend(to, '#FFFFFF', dark ? SHEEN_LIGHT_ON_DARK : SHEEN_LIGHT_ON_PALE);
   return [from, to, light, to, from];
 }
 

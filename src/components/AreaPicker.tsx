@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { CITY_AREA_NAMES, COUNTY_TOWNS, getCityAreaData, searchPlaces } from '../data/cityAreas';
+import { CITY_AREA_NAMES, COUNTY_TOWNS, getCityAreaData, searchPlaces, type PlaceMatch } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { samePlace } from '../utils/providerCity';
 
@@ -34,6 +34,10 @@ import { samePlace } from '../utils/providerCity';
  * Every step has an "Other…" escape hatch: a provider whose town isn't one of
  * the structured towns still has to be able to set a location to go live,
  * and a client whose area isn't listed still needs to answer the question.
+ * Those boxes search as you type too, so "Leytonstone" typed there is offered
+ * back as Leytonstone, East London — picked, it's saved like any listed area.
+ * Whatever is typed and not picked is saved exactly as typed. Nothing here
+ * ever reads the street address; that lives in AddressPicker.
  */
 
 export type AreaPickerProps = {
@@ -93,6 +97,7 @@ export default function AreaPicker({
 
   const matches = useMemo(() => searchPlaces(query), [query]);
   const typed = query.trim();
+  const freeTyped = freeText.trim();
 
   const cityData = city && city !== OTHER_CITY ? getCityAreaData(city) : undefined;
   const regionData = useMemo(
@@ -190,6 +195,10 @@ export default function AreaPicker({
   const confirmFreeText = () => {
     const t = freeText.trim();
     if (!t) return;
+    // Typed a place we list, word for word: save it as that place, with its
+    // own town, rather than as loose text.
+    const listed = freeMatches.find(m => m.name.toLowerCase() === t.toLowerCase());
+    if (listed) { pickMatch(listed); return; }
     Haptics.selectionAsync().catch(() => {});
     onChange(city && city !== OTHER_CITY ? `${t}, ${city}` : t);
     setVisible(false);
@@ -210,6 +219,50 @@ export default function AreaPicker({
   };
 
   const freeTextMode = step === 'area' && (city === OTHER_CITY || areaOther);
+
+  // Typing in an "Other…" box still finds listed places, so nobody types an
+  // area we already have and ends up with it unmatched. Inside a town, that
+  // town's own areas come first.
+  const freeMatches = useMemo(() => {
+    if (!freeTextMode) return [];
+    const found = searchPlaces(freeText, 12);
+    if (!city || city === OTHER_CITY) return found;
+    const inTown = (m: PlaceMatch) => m.kind === 'area' && m.town === city;
+    return [...found.filter(inTown), ...found.filter(m => !inTown(m))];
+  }, [freeTextMode, freeText, city]);
+
+  const exactly = (list: PlaceMatch[], text: string) =>
+    list.some(m => m.name.toLowerCase() === text.toLowerCase());
+
+  const pickMatch = (match: PlaceMatch) => {
+    if (match.kind === 'county') pickCounty(match.name);
+    else if (match.kind === 'town') pickCity(match.name);
+    else pickSearchedArea(match.name, match.town);
+  };
+
+  // One row per found place. An area says where it sits ("East London"), so
+  // the answer reads as London → East → Leytonstone without the steps.
+  const matchRow = (match: PlaceMatch) => (
+    <TouchableOpacity
+      key={`${match.kind}:${match.name}:${match.kind === 'area' ? match.town : ''}`}
+      style={styles.row}
+      onPress={() => pickMatch(match)}
+    >
+      <View style={styles.matchText}>
+        <Text style={styles.rowText}>{match.name}</Text>
+        {match.kind === 'area' ? (
+          <Text style={styles.matchWhere}>
+            {match.region.includes(match.town) ? match.region : `${match.region} · ${match.town}`}
+          </Text>
+        ) : match.kind === 'county' ? (
+          <Text style={styles.matchWhere}>County</Text>
+        ) : null}
+      </View>
+      {match.kind === 'area'
+        ? rowEnd(`${match.name}, ${match.town}`, accentColor)
+        : <Ionicons name="chevron-forward" size={17} color="#8B8B95" />}
+    </TouchableOpacity>
+  );
 
   const heading =
     step === 'city'
@@ -291,7 +344,7 @@ export default function AreaPicker({
             ) : null}
 
             {freeTextMode ? (
-              <View style={styles.freeWrap}>
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.freeWrap}>
                 <TextInput
                   value={freeText}
                   onChangeText={setFreeText}
@@ -310,9 +363,19 @@ export default function AreaPicker({
                   disabled={!freeText.trim()}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.confirmBtnText}>{covering ? 'Add this place' : 'Use this area'}</Text>
+                  <Text style={styles.confirmBtnText}>
+                    {freeTyped && !exactly(freeMatches, freeTyped)
+                      ? `Use "${freeTyped}"`
+                      : covering ? 'Add this place' : 'Use this area'}
+                  </Text>
                 </TouchableOpacity>
-              </View>
+                {freeMatches.length > 0 ? (
+                  <View>
+                    <Text style={styles.matchHeading}>Did you mean</Text>
+                    {freeMatches.map(matchRow)}
+                  </View>
+                ) : null}
+              </ScrollView>
             ) : (
               <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.results}>
                 {step === 'city' && (
@@ -336,27 +399,11 @@ export default function AreaPicker({
                       </TouchableOpacity>
                     ))}
 
-                {step === 'city' && !!typed &&
-                  matches.map(match => (
-                    <TouchableOpacity
-                      key={`${match.kind}:${match.name}:${match.kind === 'area' ? match.town : ''}`}
-                      style={styles.row}
-                      onPress={() => {
-                        if (match.kind === 'county') pickCounty(match.name);
-                        else if (match.kind === 'town') pickCity(match.name);
-                        else pickSearchedArea(match.name, match.town);
-                      }}
-                    >
-                      <Text style={styles.rowText}>
-                        {match.kind === 'area' ? `${match.name}, ${match.town}` : match.name}
-                      </Text>
-                      {match.kind === 'area'
-                        ? rowEnd(`${match.name}, ${match.town}`, accentColor)
-                        : <Ionicons name="chevron-forward" size={17} color="#8B8B95" />}
-                    </TouchableOpacity>
-                  ))}
+                {step === 'city' && !!typed && matches.map(matchRow)}
 
-                {step === 'city' && !!typed && matches.length === 0 ? (
+                {/* Not one of ours, or spelt their own way: what they typed is
+                    still a fine answer, saved exactly as typed. */}
+                {step === 'city' && !!typed && !exactly(matches, typed) ? (
                   <TouchableOpacity style={[styles.otherRow, { borderColor: accentColor }]} onPress={useTypedPlace} activeOpacity={0.85}>
                     <Ionicons name="add-circle-outline" size={17} color={accentColor} />
                     <Text style={[styles.otherRowText, { color: accentColor }]}>Use "{typed}"</Text>
@@ -454,6 +501,9 @@ const styles = StyleSheet.create({
   otherRow: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 100, borderWidth: 1, borderStyle: 'dashed', marginTop: 12, marginBottom: 4 },
   otherRowText: { fontSize: 13, fontWeight: '700' },
   freeWrap: { paddingTop: 20, paddingBottom: 28, gap: 14 },
+  matchHeading: { marginTop: 6, color: '#6B6B73', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  matchText: { flex: 1 },
+  matchWhere: { marginTop: 2, color: '#6B6B73', fontSize: 12, lineHeight: 16 },
   freeInput: { minHeight: 52, borderRadius: 12, paddingHorizontal: 14, backgroundColor: '#F2F2F7', color: '#1C1C1E', fontSize: 15 },
   confirmBtn: { minHeight: 50, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
   confirmDisabled: { opacity: 0.4 },

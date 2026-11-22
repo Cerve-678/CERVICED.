@@ -35,6 +35,7 @@ import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
 import { useRevealTogether } from '../../features/home/useRevealTogether';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
@@ -42,12 +43,12 @@ import { resolveClientLocation, savePhoneLocationChoice } from '../../services/c
 import { geocodeUkPlace } from '../../services/ukGeocode';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
-import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
+import { getOwnProviderIds, getProviders, getActivePromotions, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
-import { shuffle } from '../../utils/shuffle';
+import { shuffle, shuffleWithDifferentFirst } from '../../utils/shuffle';
 import { keepShownOrder } from '../../utils/keepShownOrder';
 import { withTimeout } from '../../utils/withTimeout';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
@@ -382,7 +383,7 @@ export default function HomeScreen() {
   const [viewAllServices, setViewAllServices] = useState(false);
   const [viewAllMaleServices, setViewAllMaleServices] = useState(false);
   const [viewAllKidsServices, setViewAllKidsServices] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount('client');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     sortBy: 'recommended',
@@ -423,25 +424,6 @@ export default function HomeScreen() {
     return Array.from(uniqueProviders.values());
   }, [bookings, liveProviders]);
 
-  // Load unread notification count — reads the same Supabase notifications
-  // table NotificationsScreen shows, so the bell badge always matches what's
-  // actually in the list it opens (previously read from a local-only
-  // AsyncStorage store that screen never wrote to or read from).
-  const loadUnreadCount = useCallback(async () => {
-    try {
-      const unread = await getUnreadNotificationCount('client');
-      setUnreadCount(unread);
-    } catch (error) {
-      logger.error('Failed to load unread count:', error);
-    }
-  }, []);
-
-  // Refresh count when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadUnreadCount();
-    }, [loadUnreadCount])
-  );
 
   const [services, setServices] = useState(['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS']);
 
@@ -469,12 +451,8 @@ export default function HomeScreen() {
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
-  // Trending is shuffled when Home loads, but Home stays mounted while the
-  // client moves between tabs, so coming back used to show the same order.
-  // The rail gets a fresh order for each return to Home (no refetch, the
-  // same trending providers). It's reshuffled just after Home is left, once
-  // the next screen has slid over it, never on focus: reshuffling on focus
-  // made the cards jump while Home was sliding back into view.
+  // Refresh the order of these three browse rails after leaving Home. Doing
+  // it after the next screen slides over Home avoids cards jumping on return.
   const trendingReshuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useFocusEffect(
     useCallback(() => {
@@ -485,7 +463,9 @@ export default function HomeScreen() {
       return () => {
         trendingReshuffleTimer.current = setTimeout(() => {
           trendingReshuffleTimer.current = null;
-          setTrending(current => (current.length > 1 ? shuffle(current) : current));
+          setTrending(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+          setNewProviders(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+          setTopRated(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
         }, TRENDING_RESHUFFLE_AFTER_LEAVE_MS);
       };
     }, []),
@@ -615,8 +595,8 @@ export default function HomeScreen() {
         // the primary list, and keeping this group separate from service
         // discovery avoids another burst of joined services queries.
         await Promise.allSettled([
-          getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-          getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+          getNewProviders(15).then(data => setNewProviders(shuffle(data.map(mapDbProvider)))),
+          getTopRatedProviders(15).then(data => setTopRated(shuffle(data.map(mapDbProvider)))),
           // Trending is ranked by 7-day bookings, which barely moves between
           // visits — so the same provider always led the rail. Shuffle the
           // trending set on each Home load so a client sees a different one
@@ -1333,7 +1313,7 @@ export default function HomeScreen() {
               <BellIcon size={18} color={P.sub} />
               {unreadCount > 0 && (
                 <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                  <Text style={styles.notificationBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -1352,12 +1332,13 @@ export default function HomeScreen() {
         {!selectedService && circleMoment.moment?.kind === 'recommend' && (
           <RecommendHomeCard
             providerName={circleMoment.moment.providerName}
+            providerLogoUri={circleMoment.moment.providerLogoUri}
             bookingDate={circleMoment.moment.bookingDate}
             busy={circleMoment.busy}
             error={circleMoment.error}
             onRecommend={circleMoment.recommend}
             onBookAgain={openRecommendProvider}
-            onNotNow={circleMoment.notNow}
+            onClose={circleMoment.closeRecommend}
             P={P}
             errorColour={semanticColors(isDarkMode).bad}
           />
@@ -1871,7 +1852,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
                 </View>
-                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
+                <RoundProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
             )}
 
@@ -2226,12 +2207,13 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -11,
+    right: -10,
     backgroundColor: '#FF1744',
-    borderRadius: 10.5,
-    minWidth: 21,
-    height: 21,
+    borderRadius: 11,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 2,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

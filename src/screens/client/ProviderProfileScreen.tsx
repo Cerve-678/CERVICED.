@@ -6,7 +6,10 @@ import React, {
   useEffect,
 } from "react";
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
-import { ProviderSharingRow } from "../../features/social/ProviderSharingRow";
+import {
+  ProviderRecommendLayer,
+  useProviderRecommend,
+} from "../../features/social/ProviderRecommend";
 import {
   View,
   Text,
@@ -36,7 +39,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
-import { LogoCircle } from "../../components/FramedLogo";
+import { VeilBackdrop } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -46,9 +49,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { FullImageViewer } from "../../components/FullImageViewer";
 import { LogoZoomViewer } from "../../components/LogoZoomViewer";
-import { policyImageUrls } from "../../features/providers/policyImages";
+import { policyImageEdges, policyImageUrls } from "../../features/providers/policyImages";
+import { PolicyStoryViewer, usePolicyEdgeColours } from "../../features/providers/PolicyPages";
 import { StackScreenProps } from "@react-navigation/stack";
-import { usePreventRemove } from "@react-navigation/native";
+import { useFocusEffect, usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
 
 // Correct icon imports - using your IconLibrary.tsx
@@ -67,18 +71,17 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
-import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderDepositPoliciesByDisplayNames,
-  getUserWaitlistEntries,
+  getMyWaitlist,
   joinWaitlist,
   leaveWaitlist,
-  type WaitlistEntry,
+  type MyWaitlistPlace,
   setProviderFollowNotify,
   recordProviderStat,
   addMyExternalBooking,
@@ -102,29 +105,25 @@ import {
   isDarkColor,
   type ProviderThemeTokens,
 } from "../../constants/providerThemes";
-import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
-import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { dateToYMD, formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { releaseTimeLabel } from "../../utils/bookingHorizon";
-import { slotsPillText } from "../../utils/slotsRowText";
-import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
+import { hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
-import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
+import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
+import { ProviderPageHero } from "../../features/providers/page/ProviderPageHero";
+import { ProviderPageSheet } from "../../features/providers/page/ProviderPageSheet";
+import { ProviderPageServices } from "../../features/providers/page/ProviderPageServices";
+import { revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
+import { heroPhotoPickLimit, type PageSectionKey } from "../../constants/pageStyles";
+import { heroPhotoFramesOf } from "../../features/providers/HeroPhoto";
+import { heroPhotos } from "../../features/providers/heroPhotos";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
-import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
-import {
-  ProviderAdditionalInfoSection,
-  ProviderContactSection,
-  ProviderOpeningHoursSection,
-  ProviderPortfolioSection,
-  ProviderReviewPreviewSection,
-  ProviderSpecialitiesSection,
-} from "../../features/providers/ProviderProfileSections";
-import { productsGroup, workWithGroups } from "../../features/providers/workWith";
-import { PAYMENT_OPTS } from "../../features/business-details/options";
+import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
+import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -143,96 +142,7 @@ const sidePanelWidth = (screenWidth: number) => screenWidth * 0.85;
 // the content sheet starts right after them, rising over the photo with a rounded lip.
 const SHEET_LIP_RADIUS = 36;
 
-const StarIcon = ({ size, color }: { size: number; color: string }) => (
-  <Text style={{ fontSize: size, color }}>★</Text>
-);
-
-// Client-facing wording for providers.team_size. Module scope, not inside the
-// component — it never varies, and as a component-local object it would be a
-// new identity on every render for the memo that reads it.
-const TEAM_SIZE_LABELS: Record<string, string> = {
-  solo: "Solo practitioner",
-  small_team: "Small team",
-  large_team: "Large team",
-};
 type ServiceData = ProviderProfileService;
-
-// Most dots the 60px pill ever shows, however many images the service has.
-const MAX_PILL_DOTS = 3;
-
-// 60px circle pill for multi-image services — tap opens modal, swipe pages through images
-const MultiImagePill: React.FC<{
-  images: any[];
-  onPress: (images: any[], index: number) => void;
-  imageStyle: any;
-  containerStyle: any;
-}> = React.memo(({ images, onPress, imageStyle, containerStyle }) => {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const w = imageStyle.width ?? 60;
-
-  // The pill is only 60px wide, so a dot per image turns into an unreadable
-  // smear the moment a service has more than a handful of photos. Show a
-  // three-dot window that slides with the active image instead — it still
-  // says "there's more this way" without pretending to be a countable index.
-  const dotWindow = useMemo(() => {
-    const total = images.length;
-    if (total <= MAX_PILL_DOTS) {
-      return Array.from({ length: total }, (_, i) => i);
-    }
-    const start = Math.min(
-      Math.max(activeIdx - 1, 0),
-      total - MAX_PILL_DOTS,
-    );
-    return Array.from({ length: MAX_PILL_DOTS }, (_, i) => start + i);
-  }, [images.length, activeIdx]);
-
-  return (
-    <View style={{ alignItems: "center", marginRight: 15 }}>
-      <View style={containerStyle}>
-        <ScrollView
-          horizontal
-          pagingEnabled
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          nestedScrollEnabled
-          onMomentumScrollEnd={(e) => {
-            setActiveIdx(Math.round(e.nativeEvent.contentOffset.x / w));
-          }}
-          style={{ width: w, height: imageStyle.height ?? 60 }}
-        >
-          {images.map((img, i) => (
-            <TouchableOpacity
-              key={i}
-              activeOpacity={0.85}
-              onPress={() => onPress(images, i)}
-            >
-              <Image source={img} style={imageStyle} contentFit="cover" transition={0} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-      {images.length > 1 && (
-        <View style={{ flexDirection: "row", gap: 3, marginTop: 5 }}>
-          {dotWindow.map((i) => (
-            <View
-              key={i}
-              style={{
-                width: activeIdx === i ? 10 : 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor:
-                  activeIdx === i ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.2)",
-              }}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-});
-
-MultiImagePill.displayName = "MultiImagePill";
 
 // Success Message Component
 /** The structured half of the cart confirmation. The service, when it is,
@@ -623,9 +533,6 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
 );
 
 NotificationAlert.displayName = "NotificationAlert";
-
-// Elegant serif for display names & section headings (matches the reference look)
-const SERIF = "Prata-Regular";
 
 // ── Offers Modal ─────────────────────────────────────────────────────────────
 interface OffersSidePanelProps {
@@ -1193,53 +1100,6 @@ const unclaimedStyles = StyleSheet.create({
 // The provider's theme isn't known yet, so it stays on the pale 'app' preset
 // even in dark mode: the page never follows the viewer's dark mode, and the
 // back button's tint already assumes this background.
-/** A service description clamped to two lines, with See more only when the
- *  clamp actually cuts something off. A character count can't tell: the card
- *  is narrow, and a line break ends a line however few letters are on it. */
-function ServiceDescription({
-  text,
-  expanded,
-  onToggle,
-  textColor,
-  linkColor,
-}: {
-  text: string;
-  expanded: boolean;
-  onToggle: () => void;
-  textColor: string;
-  linkColor: string;
-}) {
-  const [overflows, setOverflows] = useState(false);
-  return (
-    <View>
-      <Text
-        style={[styles.serviceDescription, { color: textColor }]}
-        numberOfLines={expanded ? undefined : 2}
-      >
-        {text}
-      </Text>
-      {/* Invisible, unclamped copy at the same width, only to count the
-          lines the whole description takes. */}
-      <Text
-        style={[styles.serviceDescription, styles.serviceDescriptionMeasure]}
-        onTextLayout={(e) => setOverflows(e.nativeEvent.lines.length > 2)}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        pointerEvents="none"
-      >
-        {text}
-      </Text>
-      {(overflows || expanded) && (
-        <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
-          <Text style={[styles.seeMoreText, { color: linkColor }]}>
-            {expanded ? "See less" : "See more"}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
 function ProviderProfileSkeleton() {
   const { height: screenHeight } = useWindowDimensions();
   const shimmer = useRef(new Animated.Value(0)).current;
@@ -1349,12 +1209,6 @@ function ProviderProfileSkeleton() {
   );
 }
 
-// ⚠️ TEMP TESTING FLAG — forces every service into the "fully booked" state
-// (disabled "Fully Booked" button + Waitlist button/chip) so both can be
-// eyeballed without seeding real booking data. Re-requested by user for
-// visual QA on 2026-08-02 — set back to false (or delete this block and its
-// three call sites below) when they say testing is done. Search
-// DEBUG_FORCE_FULLY_BOOKED to find every use.
 /**
  * The profile's status bar. At the top of the page the hero sits behind the
  * clock; once scrolled, the header background does. The scrolled flag is held
@@ -1381,8 +1235,6 @@ const ProfileStatusBar = React.memo(function ProfileStatusBar({
   return <FocusAwareStatusBar barStyle={dark ? "light-content" : "dark-content"} />;
 });
 
-const DEBUG_FORCE_FULLY_BOOKED = false;
-
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   navigation,
@@ -1392,6 +1244,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Measured per render, not captured at module load: the offers panel rests
   // one panel-width offscreen and the full-screen image modal pages by width.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [serviceTileGridWidth, setServiceTileGridWidth] = useState(0);
 
   const providerId = route.params?.providerId ?? "";
   // A resolved `null` is meaningful (this viewer owns no provider); an
@@ -1472,15 +1325,41 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     recordStat("profile_view");
   }, [isLinkOnly, viewerChecked, isOwnProvider, providerDbId, recordStat]);
 
-  // Palette follows the provider's chosen profile theme (preset key or custom set).
-  // Until the provider loads this resolves to the 'app' preset.
-  const OP = resolveProviderTheme(provider?.profileTheme);
-  // Branding → Card Shape: square corners on the profile's cards (the service
-  // cards and category pills, About/Policies, the sharing card, Reviews,
-  // Contact, Opening hours, Additional info), or the rounded look it has
-  // always had. The availability pill and Instagram button beside it stay
-  // rounded, and so do photos (owner's call, 2026-11-09).
-  const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
+  // How the page looks, all of it derived from the provider's saved branding
+  // (page style, theme colours, card surfaces, hero ink). Shared with the
+  // website through features/providers/page/providerPagePalette.
+  const palette = useProviderPagePalette(provider);
+  const {
+    pageStyle,
+    bodyFont,
+    baseTheme,
+    veilTheme,
+    OP,
+    squareCards,
+    policyLook,
+    policyPlacement,
+    adaptiveAccentColor,
+    recommendBadgeTheme,
+    cardBg,
+    cardBlurTint,
+    cardBlurIntensity,
+    cardHighlightColors,
+    sectionPalette,
+    pageInk,
+    SV,
+    serviceSurfaceStyle,
+    heroBgColor,
+    heroIsDark,
+    heroText,
+    heroSub,
+    detailsOnCard,
+    sheetColour,
+    detailsText,
+    detailsSub,
+    detailsShadow,
+    heroKicker,
+    heroPillLabels,
+  } = palette;
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1580,7 +1459,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // non-cacheable viewer request. viewerChecked remains a separate gate so
   // deep-linked booking UI never auto-opens before that check settles.
   const [userWaitlistMap, setUserWaitlistMap] = useState<
-    Record<string, WaitlistEntry>
+    Record<string, MyWaitlistPlace>
   >({});
   // service.dbId -> "has a bookable slot in the next 14 days". The Waitlist
   // button only makes sense once we've confirmed there's genuinely nothing
@@ -1603,7 +1482,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistJoining, setWaitlistJoining] = useState(false);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [leaveConfirmEntry, setLeaveConfirmEntry] =
-    useState<WaitlistEntry | null>(null);
+    useState<MyWaitlistPlace | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -1674,6 +1553,41 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   }, []);
 
+  // The Cover page style's bar of section links scrolls to these.
+  const policiesSectionRef = useRef<ViewInstance>(null);
+  const reviewsSectionRef = useRef<ViewInstance>(null);
+  const scrollToSection = useCallback((target: ViewInstance | null) => {
+    const scrollNode = scrollRef.current;
+    if (!scrollNode || !target) return;
+    // Static UIManager.measureLayout with node handles, as the Services jump
+    // does — see the note there on why not the instance method.
+    const scrollHandle = findNodeHandle(scrollNode);
+    const targetHandle = findNodeHandle(target);
+    if (!scrollHandle || !targetHandle) return;
+    UIManager.measureLayout(
+      targetHandle,
+      scrollHandle,
+      () => {},
+      (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
+    );
+  }, []);
+  // Studio's Book now, in its hero.
+  const jumpToServices = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    scrollToSection(servicesSectionRef.current);
+  }, [scrollToSection]);
+  // Riviera's pinned Book bar goes once it's tapped: it has done its job of
+  // taking them to Services (owner, 2026-11-19). It comes back on the next
+  // provider's page.
+  const [pinnedBookBarDismissed, setPinnedBookBarDismissed] = useState(false);
+  useEffect(() => {
+    setPinnedBookBarDismissed(false);
+  }, [providerId]);
+  const pressPinnedBook = useCallback(() => {
+    setPinnedBookBarDismissed(true);
+    jumpToServices();
+  }, [jumpToServices]);
+
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
     new Animated.Value(100),
@@ -1686,49 +1600,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     new Animated.Value(sidePanelWidth(screenWidth)),
   ).current;
 
-  // The saved accent_color, else the provider's own theme accent (the app's
-  // brown for the default theme). There used to be a middle step that guessed
-  // an accent from the gradient's first colour through a table of old
-  // placeholder presets, falling back to purple for anything else.
-  const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
-
-  // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
-  // opaque fill — derived from the provider theme's card colour so every preset matches.
-  const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);
-  const cardBlurTint = OP.isDark ? ("dark" as const) : ("light" as const);
-  const cardBlurIntensity = OP.isDark ? 35 : 25;
-  const cardHighlightColors = useMemo(
-    () => (OP.isDark
-      ? ["rgba(255,255,255,0.08)", "transparent"]
-      : ["rgba(255,255,255,0.3)", "transparent"]
-    ) as [string, string],
-    [OP.isDark],
-  );
-  const sectionPalette = useMemo(() => ({
-    text: OP.text,
-    sub: OP.sub,
-    border: OP.border,
-    separator: OP.sep,
-    background: OP.bg,
-    cardBackground: cardBg,
-    accent: adaptiveAccentColor,
-    blurTint: cardBlurTint,
-    blurIntensity: cardBlurIntensity,
-    highlightColors: cardHighlightColors,
-    squareCards,
-  }), [
-    OP.text,
-    OP.sub,
-    OP.border,
-    OP.sep,
-    OP.bg,
-    cardBg,
-    adaptiveAccentColor,
-    cardBlurTint,
-    cardBlurIntensity,
-    cardHighlightColors,
-    squareCards,
-  ]);
 
   // Venue/workspace shots are stamped with their own category by
   // InfoRegScreen's "Address & venue photos" uploader. They're a picture of
@@ -1740,6 +1611,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // The photos the hero shows: Editorial (1), Snapshot (3) and Hush (3) open
+  // on the ones picked in Branding → Your Photos, topped up with the newest.
+  // Bow, which has nothing to pick, keeps its newest photo.
+  const heroPickLimit = heroPhotoPickLimit(pageStyle);
+  const heroPhotoItems = useMemo(
+    () => (heroPickLimit > 0 ? heroPhotos(workPortfolio, heroPickLimit) : workPortfolio.slice(0, 3)).filter((item) => !!item.image_url),
+    [heroPickLimit, workPortfolio],
+  );
+  const heroPhotoUris = useMemo(() => heroPhotoItems.map((item) => item.image_url), [heroPhotoItems]);
+  // How the provider framed each of them in Branding → Your Photos.
+  const heroPhotoFrames = useMemo(() => heroPhotoFramesOf(heroPhotoItems), [heroPhotoItems]);
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for
   // everyone else, so the area stays the default and a failed fetch just
@@ -1774,103 +1656,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ]);
 
   // ── Additional Information ──────────────────────────────────────────────────
-  // Practice details the provider fills in across Business Profile (About You /
-  // Services & Pricing). They're facts about how the business operates rather
-  // than anything bookable, so they sit at the foot of the profile, below the
-  // portfolio, with the venue shots.
-  //
-  // Insured / DBS are ALWAYS suffixed "(self-declared)". Cerviced verifies
-  // neither, and an unqualified "DBS checked" chip on a beauty marketplace
-  // reads as a platform guarantee — see AboutYouScreen.tsx, which carries the
-  // same warning at the point of collection.
-  //
-  // Grouped, not one undifferentiated chip row: "Polish", "Just me",
-  // "Insured (self-declared)" and "Step-free access" are four different kinds
-  // of fact, and side by side with no subheading a client has to work out
-  // what each chip is even answering. Each group prints its own subheading,
-  // matching the Qualifications / Good to know / Venue blocks below it.
-  const additionalInfoGroups = useMemo(() => {
-    if (!provider) return [];
-    const groups: { label: string; chips: string[] }[] = [];
-    // First, because it's what clients most often scan for ("do they do
-    // knotless?"). Same values Search's Speciality filter matches on. A
-    // link-only profile shows them in their own section instead.
-    if (provider.specialties.length > 0 && !provider.isLinkOnly) {
-      groups.push({ label: "Specialities", chips: [...provider.specialties] });
-    }
-    // Who they work with (clients, skin tones, hair types) from About You's
-    // "I Work With" — here, not in the About/Policy card, which is the bio.
-    groups.push(...workWithGroups(provider));
-    // Its own section, from Services & Pricing's "Products I Work With".
-    const products = productsGroup(provider);
-    if (products) groups.push(products);
-    if (provider.languagesSpoken.length > 0) {
-      groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
-    }
-    const teamLabel = provider.teamSize
-      ? TEAM_SIZE_LABELS[provider.teamSize]
-      : null;
-    if (teamLabel) groups.push({ label: "Team", chips: [teamLabel] });
-    const credentials: string[] = [];
-    if (provider.isInsuredSelfDeclared) {
-      credentials.push("Insured (self-declared)");
-    }
-    if (provider.dbsCheckedSelfDeclared) {
-      credentials.push("DBS checked (self-declared)");
-    }
-    if (credentials.length > 0) {
-      groups.push({ label: "Credentials", chips: credentials });
-    }
-    if (provider.accessibilityTags.length > 0) {
-      groups.push({
-        label: "Accessibility",
-        chips: [...provider.accessibilityTags],
-      });
-    }
-    // The provider's stated preference only (Payments, or Business Info for a
-    // link-only pro) — Cerviced doesn't collect or track off-app payments.
-    // Labelled from the shared PAYMENT_OPTS so this can't drift from the
-    // pickers that write it.
-    const paymentLabels = provider.paymentMethods
-      .map(v => PAYMENT_OPTS.find(o => o.value === v)?.label)
-      .filter((l): l is string => !!l);
-    if (paymentLabels.length > 0) {
-      groups.push({ label: "Payment methods", chips: paymentLabels });
-    }
-    return groups;
-  }, [provider]);
+  // Built in features/providers/additionalInfo, shared with the provider's own
+  // preview on Policies & Info so the two can't drift apart.
+  const additionalInfo = useMemo(() => provider
+    ? {
+        groups: additionalInfoGroups(provider, pageStyle),
+        goodToKnow: goodToKnowText(provider),
+        directions: howToGetThere(provider),
+      }
+    : { groups: [], goodToKnow: '', directions: '' },
+  // pageStyle is rebuilt each render; only its key and hero change the groups.
+  [provider, pageStyle.key, pageStyle.hero]);
 
-  // One natural-language paragraph rather than a label/value dump — these are
-  // unrelated one-liners, and as rows they read like a spec sheet for
-  // facts a client only skims.
-  const goodToKnowText = useMemo(() => {
-    if (!provider) return "";
-    const sentences: string[] = [];
-    if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
-    if (provider.groupBookingsAvailable) {
-      sentences.push("Group bookings are available");
-    }
-    return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
-  }, [provider]);
-
-  // A mobile provider travels to the client, so there is nowhere to direct
-  // them to — an old value left from before a business-type change stays hidden.
-  const howToGetThere = provider?.businessType === "mobile" ? "" : provider?.publicDirections ?? "";
-
-  // Hero info floats over the photo/gradient. Every theme always carries a
-  // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
-  // can't decide text colour any more — some backdrops (Cream, Sky, Blush…)
-  // are pale, and white text on them is close to invisible. Decide from the
-  // actual rendered colour's brightness instead; a photo always gets the
-  // dark-overlay treatment so white text is safe there.
-  const heroBgColor = provider?.hasCustomGradient
-    ? provider?.gradient[0]
-    : OP.hero;
-  const heroIsDark =
-    !!provider?.backgroundImage ||
-    (heroBgColor ? isDarkColor(heroBgColor) : true);
-  const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
-  const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
 
   // Slide in the offers tab from the right when promotions are available
   useEffect(() => {
@@ -1887,20 +1684,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
   }, [promotions.length, offersTabSlide]);
 
-  useEffect(() => {
+  // The client's live places on this provider's waitlists, with their real
+  // place in line. A place whose hold ended (status 'expired') isn't one:
+  // the service offers Waitlist again so they can rejoin.
+  const loadWaitlistMap = useCallback(async () => {
     if (!currentUserId || !providerDbId) return;
-    getUserWaitlistEntries(currentUserId)
-      .then((entries) => {
-        const map: Record<string, WaitlistEntry> = {};
-        entries
-          .filter((e) => e.provider_id === providerDbId)
-          .forEach((e) => {
-            map[e.service_id ?? "__any__"] = e;
-          });
-        setUserWaitlistMap(map);
-      })
-      .catch(() => {});
+    try {
+      const places = await getMyWaitlist();
+      const map: Record<string, MyWaitlistPlace> = {};
+      places
+        .filter((place) => place.providerId === providerDbId && (place.status === "waiting" || place.status === "notified"))
+        .forEach((place) => {
+          map[place.serviceId ?? "__any__"] = place;
+        });
+      setUserWaitlistMap(map);
+    } catch (error) {
+      logger.warn("[ProviderProfile] waitlist places failed to load", error);
+    }
   }, [currentUserId, providerDbId]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadWaitlistMap();
+    }, [loadWaitlistMap]),
+  );
 
   // Check near-term availability per service so the Waitlist button (or,
   // when waitlists are off, the plain "no openings" note) only shows once a
@@ -1974,13 +1780,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [offersPanelSlide]);
 
   // Show notification popup from right
+  const rightNotificationRun = useRef<Animated.CompositeAnimation | null>(null);
   const showRightNotification = useCallback(() => {
+    // A quick second tap (bell on, off, on) starts a new toast while the last
+    // one is still showing. Stop that one first: an interrupted animation still
+    // calls its end callback, which used to hide the toast that just appeared.
+    rightNotificationRun.current?.stop();
     setShowNotification(true);
     // Reset animation - start from right edge
     slideRightAnimation.setValue(100);
 
     // Animate notification slide in from right
-    Animated.sequence([
+    const run = Animated.sequence([
       Animated.spring(slideRightAnimation, {
         toValue: 0,
         useNativeDriver: true,
@@ -1993,8 +1804,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         duration: 300,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setShowNotification(false);
+    ]);
+    rightNotificationRun.current = run;
+    run.start(({ finished }) => {
+      // Only the toast that ran to the end hides itself; a stopped one leaves
+      // the newer toast alone.
+      if (finished && rightNotificationRun.current === run) setShowNotification(false);
     });
   }, [slideRightAnimation]);
 
@@ -2017,6 +1832,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
   }, [canSaveProvider, providerDbId, isNotificationLoading, isNotificationsEnabled,
     setIsNotificationsEnabled, showRightNotification]);
+  const heroBell = useMemo(
+    () => ({ enabled: isNotificationsEnabled, loading: isNotificationLoading, canSave: canSaveProvider }),
+    [isNotificationsEnabled, isNotificationLoading, canSaveProvider],
+  );
 
   // Bookmark toggle handler
   const {
@@ -2060,6 +1879,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
+  // Recommend, for a client who has had a completed appointment here: a
+  // one-time bar, then a thumbs-up badge on the logo with a menu under it.
+  const recommend = useProviderRecommend({
+    providerId: providerDbId,
+    providerName: provider?.displayName ?? "",
+    enabled: canSaveProvider && hatState.active === "client",
+    onError: showAlert,
+  });
+  const recommendHeart = recommend.heart;
 
   const refuseBookingAsProvider = useCallback((): boolean => {
     if (!viewingOtherAsProvider) return false;
@@ -2141,7 +1969,31 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showPolicyImage, setShowPolicyImage] = useState(false);
   // Every page of the detailed policy, in order (the old single image too).
   const policyPages = useMemo(() => policyImageUrls(provider?.bookingPolicies), [provider?.bookingPolicies]);
+  // Each page's edge colours, so the pages can run into the page around them.
+  const savedPolicyEdges = useMemo(() => policyImageEdges(provider?.bookingPolicies), [provider?.bookingPolicies]);
+  const policyEdges = usePolicyEdgeColours(policyPages, savedPolicyEdges);
+  // The page the story view is open on (the rings at the top), or null.
+  const [policyStoryIndex, setPolicyStoryIndex] = useState<number | null>(null);
+  const policyPagesRef = useRef<ViewInstance>(null);
+
+  // Cover's section links, only for sections this profile actually shows.
+  const jumpTargets = useMemo(() => {
+    if (!provider || !pageStyle.jumpBar) return [];
+    const targets: { key: PageSectionKey; ref: React.RefObject<ViewInstance | null> }[] = [
+      { key: "about", ref: aboutCardRef },
+    ];
+    if (!provider.isLinkOnly) targets.push({ key: "services", ref: servicesSectionRef });
+    if (hasProviderPolicyInfo(provider)) {
+      targets.push({ key: "policies", ref: policiesSectionRef });
+    } else if (policyPages.length > 0) {
+      targets.push({ key: "policies", ref: policyPagesRef });
+    }
+    if (!provider.isLinkOnly) targets.push({ key: "reviews", ref: reviewsSectionRef });
+    return targets;
+  }, [provider, pageStyle.jumpBar, policyPages.length]);
+
   const [showFullLogo, setShowFullLogo] = useState(false);
+  const openFullLogo = useCallback(() => setShowFullLogo(true), []);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
       visible: true,
@@ -2150,6 +2002,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       key: prev.key + 1,
     }));
   }, []);
+  const openHeroPhoto = useCallback(
+    (index: number) => openImageViewer(heroPhotoUris.map((uri) => ({ uri })), index),
+    [heroPhotoUris, openImageViewer],
+  );
   const closeImageViewer = useCallback(() => {
     setServiceImageModal((prev) => ({
       visible: false,
@@ -2339,12 +2195,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     try {
       let preferredDates: string[] | undefined;
       if (waitlistDateMode === "range" && waitlistDateFrom) {
-        const fromStr = waitlistDateFrom.toISOString().split("T")[0]!;
+        // Local calendar dates: toISOString() went through UTC and could
+        // slip a day back during British Summer Time.
+        const fromStr = dateToYMD(waitlistDateFrom);
         preferredDates = waitlistDateTo
-          ? [fromStr, waitlistDateTo.toISOString().split("T")[0]!]
+          ? [fromStr, dateToYMD(waitlistDateTo)]
           : [fromStr];
       }
-      const entry = await joinWaitlist({
+      await joinWaitlist({
         providerId: providerDbId,
         userId: currentUserId,
         serviceId: waitlistModal.service.dbId,
@@ -2354,11 +2212,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         ...(preferredDates ? { preferredDates } : {}),
         ...(waitlistNotes.trim() ? { notes: waitlistNotes.trim() } : {}),
       });
-      setUserWaitlistMap((prev) => ({
-        ...prev,
-        [entry.service_id ?? "__any__"]: entry,
-      }));
       closeWaitlistModal();
+      await loadWaitlistMap();
     } catch {
       setWaitlistError("Couldn't save — check your connection and try again.");
     }
@@ -2374,14 +2229,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     waitlistDateFrom,
     waitlistDateTo,
     closeWaitlistModal,
+    loadWaitlistMap,
   ]);
 
-  const handleLeaveWaitlist = useCallback(async (entry: WaitlistEntry) => {
+  const handleLeaveWaitlist = useCallback(async (entry: MyWaitlistPlace) => {
     try {
       await leaveWaitlist(entry.id);
       setUserWaitlistMap((prev) => {
         const next = { ...prev };
-        delete next[entry.service_id ?? "__any__"];
+        delete next[entry.serviceId ?? "__any__"];
         return next;
       });
     } catch {
@@ -2544,7 +2400,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [provider]);
 
   // Configure the navigation header with your gradient and icons
+  // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
+  // this component is typed by the ProviderProfile route it mostly serves.
+  const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
   React.useLayoutEffect(() => {
+    // The owner tapping their logo on My Profile: the page alone, no header
+    // and no buttons. They close it by swiping (MyPublicProfile's options).
+    if (asOwnPreview) {
+      navigation.setOptions({ headerShown: false });
+      return;
+    }
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
@@ -2638,6 +2503,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     OP.bg,
     OP.text,
     provider?.brandFont,
+    asOwnPreview,
   ]);
   const handleScroll = useCallback(
     (event: any) => {
@@ -3603,550 +3469,89 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     </View>
   );
 
+  const toggleServiceExpanded = (serviceId: string | number) =>
+    setExpandedServices((prev) => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  const openBookings = () => navigation.navigate("Bookings" as never);
+  const openWaitlistJoin = (service: ServiceData) => {
+    setWaitlistNotes("");
+    setWaitlistModal({ visible: true, service });
+  };
+
   // Category tabs + service cards — shared by the capped inline list and the
   // fullscreen "Show all" sheet, so the two never drift out of sync. Pass
   // `onShowAll` to get the trailing expand button (inline view); pass null
-  // for the sheet, which already shows everything.
+  // for the sheet, which already shows everything. `runAction` is how the
+  // sheet closes itself before Book or Waitlist opens their own modal.
   const renderServiceCategoryBlock = (
     services: ServiceData[],
     onShowAll: (() => void) | null,
-    // Book / Waitlist open their own <Modal> (BookingSheet, the waitlist
-    // modals). React Native doesn't reliably support one Modal opening on
-    // top of another — on Android especially, the new one can render behind
-    // or eat no touches at all. When this block is rendered inside the "All
-    // Services" sheet, runAction closes that sheet and waits for its slide-out
-    // before opening the next modal. Closing and opening in the same frame can
-    // leave BookingSheet behind the dismissing sheet (or make Book look dead),
-    // especially in Expo Go. Image taps deliberately don't use this —
-    // the viewer renders as an internal overlay instead, so tapping a photo
-    // doesn't kick you out of the sheet you were browsing.
-    runAction: (action: () => void) => void = (action) => action(),
+    runAction?: (action: () => void) => void,
   ) => (
-    <>
-      {/* ── Service-type switch ───────────────────────────────────────────
-          Only when the provider genuinely offers more than one macro type —
-          a single-type provider's menu opens straight onto the category
-          tabs, exactly as it did before this existed.
-
-          Deliberately a plain underline row, NOT a filled pill: the category
-          tabs immediately below are already filled pills, and two filled
-          controls stacked read as one confused level instead of two. Same
-          treatment (and same reasoning) as the History / To Do switch on
-          ProviderBookingHistoryScreen. */}
-      {provider.serviceTypes.length > 1 ? (
-        <View style={[styles.serviceTypeSwitch, { borderBottomColor: OP.border }]}>
-          {provider.serviceTypes.map((serviceType) => {
-            const active = serviceType === selectedServiceType;
-            const count = serviceCountsByType[serviceType] ?? 0;
-            return (
-              <TouchableOpacity
-                key={serviceType}
-                style={[
-                  styles.serviceTypeTab,
-                  active && { borderBottomColor: adaptiveAccentColor },
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setSelectedServiceType(serviceType);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.serviceTypeTabText,
-                    {
-                      color: active ? OP.text : OP.sub,
-                      fontWeight: active ? "700" : "600",
-                    },
-                  ]}
-                >
-                  {serviceType}
-                  {count > 0 ? `  ${count}` : ""}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {/* Enhanced Category Tabs */}
-      {categoryNamesForType.length > 0 ? (
-        <FlatList
-          data={categoryNamesForType}
-          renderItem={({ item: category }) => (
-            <CategoryTabItem
-              category={category}
-              isSelected={selectedCategory === category}
-              onPress={() => setSelectedCategory(category)}
-              cardBg={
-                selectedCategory === category ? adaptiveAccentColor : cardBg
-              }
-              blurIntensity={cardBlurIntensity}
-              blurTint={cardBlurTint}
-              borderColor={
-                selectedCategory === category ? "transparent" : OP.border
-              }
-              textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
-              square={squareCards}
-            />
-          )}
-          keyExtractor={(item) => `cat-${item}`}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryTabs}
-          contentContainerStyle={styles.categoryTabsContent}
-          nestedScrollEnabled={true}
-        />
-      ) : (
-        <Text style={[styles.emptyServiceTypeText, { color: OP.sub }]}>
-          Services for {selectedServiceType} are coming soon.
-        </Text>
-      )}
-
-      {/* Selected category's description — what it includes, benefits, etc. */}
-      {provider.categoryDescriptions[selectedCategory] ? (
-        <Text style={[styles.categoryDescriptionText, { color: OP.sub }]}>
-          {provider.categoryDescriptions[selectedCategory]}
-        </Text>
-      ) : null}
-
-      {/* Small text link, not a pill/icon — sits below the category tabs,
-          away from the "Services" title. Shared here (not per call site) so
-          it appears identically in the inline list and the "All Services"
-          sheet without a second control. */}
-      {/* Multi-service select flow is gated off (MULTI_SERVICE_BOOKING_ENABLED)
-          — with the "Select" entry point hidden, select mode can never be
-          entered, so the floating bar and MultiBookingSheet below never show
-          either. Single-service "Book" is unaffected. See FUTURE_LOGIC.md. */}
-      {canBookProvider && MULTI_SERVICE_BOOKING_ENABLED && !provider.isLinkOnly && (
-        <TouchableOpacity
-          onPress={toggleSelectMode}
-          activeOpacity={0.6}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          style={styles.selectModeLinkRow}
-        >
-          <Text style={[styles.selectModeLinkText, { color: adaptiveAccentColor }]}>
-            {selectMode ? "Cancel" : "Select"}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Services List */}
-      <View style={styles.categoryServicesContainer}>
-        {services.map((service) => (
-          <BlurView
-            key={service.id}
-            intensity={cardBlurIntensity}
-            tint={cardBlurTint}
-            style={[
-              styles.serviceItemCard,
-              { backgroundColor: cardBg, borderColor: OP.border },
-              squareCards && styles.squareCard,
-            ]}
-          >
-            <LinearGradient
-              colors={cardHighlightColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={[styles.cardHighlight, squareCards && styles.squareCard]}
-            />
-            <View style={styles.serviceCardBlur}>
-              <View style={styles.serviceItem}>
-                {(() => {
-                  const isMulti = (service.images?.length ?? 0) > 1;
-                  const hasSingle = (service.images?.length ?? 0) === 1;
-                  const hasLocal = !!service.image;
-
-                  if (isMulti) {
-                    return (
-                      <MultiImagePill
-                        images={service.images!}
-                        onPress={(imgs, idx) => openImageViewer(imgs, idx)}
-                        imageStyle={styles.serviceImage}
-                        containerStyle={[
-                          styles.serviceImageContainer,
-                          { marginRight: 0 },
-                        ]}
-                      />
-                    );
-                  }
-
-                  if (!hasSingle && !hasLocal) {
-                    // No photo — placeholder keeps every card's text starting
-                    // at the same x position as cards that do have images.
-                    return (
-                      <View
-                        style={[
-                          styles.serviceImageContainer,
-                          styles.serviceImagePlaceholder,
-                          {
-                            backgroundColor: adaptiveAccentColor + "1C",
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.serviceImagePlaceholderText,
-                            { color: adaptiveAccentColor },
-                          ]}
-                        >
-                          {service.name.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    );
-                  }
-                  const imgSrc = hasSingle ? service.images![0] : service.image;
-                  return (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        if (imgSrc) {
-                          const imgs = service.images?.length
-                            ? service.images
-                            : [imgSrc];
-                          openImageViewer(imgs, 0);
-                        }
-                      }}
-                    >
-                      <View style={styles.serviceImageContainer}>
-                        <Image
-                          source={imgSrc}
-                          style={styles.serviceImage}
-                          contentFit="cover"
-                          transition={0}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })()}
-
-                <View style={styles.serviceInfo}>
-                  <Text style={[styles.serviceName, { color: OP.text }]}>
-                    {service.name}
-                  </Text>
-                  {service.serviceType === "consultation" &&
-                    provider.onlineConsultationsAvailable && (
-                      <Text
-                        style={[
-                          styles.serviceVirtualBadge,
-                          { color: adaptiveAccentColor },
-                        ]}
-                      >
-                        Available virtually
-                      </Text>
-                    )}
-                  <ServiceDescription
-                    text={service.description ?? ""}
-                    expanded={expandedServices.has(service.id)}
-                    onToggle={() =>
-                      setExpandedServices((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(service.id)) {
-                          next.delete(service.id);
-                        } else {
-                          next.add(service.id);
-                        }
-                        return next;
-                      })
-                    }
-                    textColor={OP.sub}
-                    linkColor={OP.text}
-                  />
-
-                  {/* Treatment Safety — plain text, no box/border — only shown
-                    when the provider actually filled this in (real
-                    treatments), directly under the description so clients
-                    see it before booking. */}
-                  {(service.patchTestRequired ||
-                    !!service.minAge ||
-                    (service.contraindications?.length ?? 0) > 0) && (
-                    <View style={styles.serviceSafetyInline}>
-                      <Text
-                        style={[styles.serviceSafetyTitle, { color: OP.text }]}
-                      >
-                        Treatment Safety
-                      </Text>
-                      {service.patchTestRequired && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
-                        >
-                          • Patch test required before this treatment
-                        </Text>
-                      )}
-                      {!service.isPregnancySafe && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
-                        >
-                          • Not recommended during pregnancy
-                        </Text>
-                      )}
-                      {!!service.minAge && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
-                        >
-                          • Minimum age {service.minAge}
-                        </Text>
-                      )}
-                      {(service.contraindications?.length ?? 0) > 0 && (
-                        <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
-                        >
-                          • Not suitable if:{" "}
-                          {service.contraindications!.join(", ")}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                  <View style={styles.serviceDetails}>
-                    <Text style={[styles.serviceDuration, { color: OP.sub }]}>
-                      {service.duration}
-                    </Text>
-                    <Text style={[styles.servicePrice, { color: OP.text }]}>
-                      £{service.price}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Booking controls are absent, rather than merely disabled,
-                    on the provider's own profile and while ownership loads. */}
-                {canBookProvider && (
-                <View style={styles.serviceActionColumn}>
-                  {(() => {
-                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
-
-                    if (selectMode) {
-                      const isSelected = selectedServiceIds.has(service.dbId);
-                      const hasAddOns = (service.addOns?.length ?? 0) > 0;
-                      const pickedAddOns = addOnsBySelectedService[service.dbId] ?? [];
-                      return (
-                        <>
-                          <TouchableOpacity
-                            disabled={fullyBooked}
-                            // Checking a service that HAS add-ons opens the
-                            // add-on popup — another Modal — so runAction has
-                            // to close the "All Services"
-                            // sheet when this row is rendered inside it, same
-                            // as Book/Waitlist below. Unchecking, and checking
-                            // a service with no add-ons, opens nothing, so the
-                            // sheet stays open for those.
-                            onPress={() => {
-                              const isSelecting = !selectedServiceIds.has(service.dbId);
-                              if (isSelecting && hasAddOns) {
-                                runAction(() => toggleServiceSelected(service));
-                              } else {
-                                toggleServiceSelected(service);
-                              }
-                            }}
-                            style={[
-                              styles.selectCheckbox,
-                              { borderColor: fullyBooked ? OP.border : adaptiveAccentColor },
-                              isSelected && {
-                                backgroundColor: adaptiveAccentColor,
-                                borderColor: adaptiveAccentColor,
-                              },
-                              fullyBooked && { opacity: 0.4 },
-                            ]}
-                            activeOpacity={0.8}
-                          >
-                            {isSelected && (
-                              <Ionicons name="checkmark" size={16} color="#fff" />
-                            )}
-                          </TouchableOpacity>
-                          {isSelected && hasAddOns && (
-                            <TouchableOpacity
-                              onPress={() => {
-                                runAction(() => {
-                                  Haptics.selectionAsync().catch(() => {});
-                                  setAddOnPickerService(service);
-                                });
-                              }}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <Text style={[styles.editAddOnsLink, { color: adaptiveAccentColor }]}>
-                                {pickedAddOns.length > 0 ? 'Edit' : 'Add extras'}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </>
-                      );
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        disabled={fullyBooked}
-                        style={[
-                          styles.bookButton,
-                          {
-                            backgroundColor:
-                              fullyBooked
-                                ? withAlpha(OP.sub, 0.18)
-                                : adaptiveAccentColor,
-                          },
-                        ]}
-                        onPress={() => {
-                          runAction(() => handleBook(service));
-                        }}
-                        activeOpacity={0.8}
-                        accessibilityState={{ disabled: fullyBooked }}
-                      >
-                        <Text
-                          style={[
-                            styles.bookButtonText,
-                            fullyBooked
-                              ? { color: OP.sub, fontSize: 10 }
-                              : { color: "#fff" },
-                          ]}
-                        >
-                          {!takingBookings
-                              ? "Not taking bookings"
-                              : fullyBooked
-                              ? "Fully Booked"
-                              : "Book"}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-
-                  {(() => {
-                    const wEntry = userWaitlistMap[service.dbId];
-                    if (wEntry) {
-                      return (
-                        <View
-                          style={[
-                            styles.waitlistChip,
-                            {
-                              borderColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "70"
-                                  : "#FF9500" + "70",
-                              backgroundColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "0D"
-                                  : "#FF950010",
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.waitlistChipText,
-                              {
-                                color:
-                                  wEntry.status === "notified"
-                                    ? adaptiveAccentColor
-                                    : "#FF9500",
-                              },
-                            ]}
-                          >
-                            {wEntry.status === "notified"
-                              ? "Slot Held — Confirm!"
-                              : `Waiting · #${wEntry.position}`}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => {
-                              runAction(() => setLeaveConfirmEntry(wEntry));
-                            }}
-                            activeOpacity={0.6}
-                            hitSlop={{
-                              top: 6,
-                              bottom: 6,
-                              left: 6,
-                              right: 6,
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.waitlistChipX,
-                                {
-                                  color:
-                                    wEntry.status === "notified"
-                                      ? adaptiveAccentColor
-                                      : "#FF9500",
-                                },
-                              ]}
-                            >
-                              ✕
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    }
-                    // undefined means "still checking" and true means
-                    // "still has openings" — both stay quiet here.
-                    if (!DEBUG_FORCE_FULLY_BOOKED && serviceNearTermAvailability[service.dbId] !== false)
-                      return null;
-                    // Provider turned waitlists off in Automations — still
-                    // surface the scarcity so the client isn't only told
-                    // "nothing this fortnight" after tapping Book and paging
-                    // through empty weeks in the calendar. Skipped when
-                    // the Book button above already reads "Fully Booked" —
-                    // this note would just repeat the same claim.
-                    if (!DEBUG_FORCE_FULLY_BOOKED && !provider.waitlistEnabled) {
-                      if (serviceFullyBooked[service.dbId] === true) return null;
-                      return (
-                        <Text
-                          style={[
-                            styles.fullyBookedNote,
-                            { color: OP.sub },
-                          ]}
-                        >
-                          No openings next 2 wks
-                        </Text>
-                      );
-                    }
-                    return (
-                      <TouchableOpacity
-                        style={[
-                          styles.waitlistJoinBtn,
-                          {
-                            borderColor: adaptiveAccentColor + "70",
-                            backgroundColor: adaptiveAccentColor + "0D",
-                          },
-                        ]}
-                        onPress={() => {
-                          runAction(() => {
-                            setWaitlistNotes("");
-                            setWaitlistModal({
-                              visible: true,
-                              service,
-                            });
-                          });
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.waitlistJoinText,
-                            { color: adaptiveAccentColor },
-                          ]}
-                        >
-                          Waitlist
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-                </View>
-                )}
-              </View>
-            </View>
-          </BlurView>
-        ))}
-        {onShowAll && selectedCategoryServices.length > SERVICES_COLLAPSED_LIMIT && (
-          <TouchableOpacity
-            style={styles.showAllServicesBtn}
-            activeOpacity={0.7}
-            onPress={onShowAll}
-          >
-            <Text
-              style={[styles.showAllServicesText, { color: adaptiveAccentColor }]}
-            >
-              {`Show all ${selectedCategoryServices.length} services`}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={adaptiveAccentColor} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </>
+    <ProviderPageServices
+      provider={provider}
+      palette={palette}
+      services={services}
+      showAll={
+        onShowAll && selectedCategoryServices.length > SERVICES_COLLAPSED_LIMIT
+          ? { count: selectedCategoryServices.length, onPress: onShowAll }
+          : null
+      }
+      runAction={runAction}
+      selectedServiceType={selectedServiceType}
+      serviceCountsByType={serviceCountsByType}
+      onSelectServiceType={setSelectedServiceType}
+      categoryNames={categoryNamesForType}
+      selectedCategory={selectedCategory}
+      onSelectCategory={setSelectedCategory}
+      listWidth={serviceTileGridWidth}
+      onListWidth={setServiceTileGridWidth}
+      expandedServiceIds={expandedServices}
+      onToggleExpanded={toggleServiceExpanded}
+      onOpenImages={openImageViewer}
+      canBook={canBookProvider}
+      takingBookings={takingBookings}
+      serviceFullyBooked={serviceFullyBooked}
+      serviceNearTermAvailability={serviceNearTermAvailability}
+      onBook={handleBook}
+      selectMode={selectMode}
+      onToggleSelectMode={toggleSelectMode}
+      selectedServiceIds={selectedServiceIds}
+      addOnsBySelectedService={addOnsBySelectedService}
+      onToggleServiceSelected={toggleServiceSelected}
+      onEditAddOns={setAddOnPickerService}
+      waitlistPlaces={userWaitlistMap}
+      onOpenHeldPlace={openBookings}
+      onLeaveWaitlist={setLeaveConfirmEntry}
+      onJoinWaitlist={openWaitlistJoin}
+    />
   );
+  // A pinned Book bar uses the square buttons too, on a style that has both.
+  const squareButtons = pageStyle.buttonShape === "square";
+
+  // The price list as it sits on the page; "See all" opens the full sheet.
+  // The pinned bar's "From £…": the lowest price on the menu, as the menu shows it.
+  const lowestServicePrice = pageStyle.pinnedBookBar
+    ? Object.values(provider.categories).flat().reduce<string | null>((low, service) => {
+        const value = Number(service.price);
+        if (!Number.isFinite(value) || value <= 0) return low;
+        return low === null || value < Number(low) ? String(service.price) : low;
+      }, null)
+    : null;
+
+  const renderInlineServices = () =>
+    renderServiceCategoryBlock(visibleServices, () => {
+      Haptics.selectionAsync().catch(() => {});
+      setShowAllServicesModal(true);
+    });
+  const openPolicyImage = () => setShowPolicyImage(true);
 
   return (
     <SafeAreaProvider>
@@ -4171,11 +3576,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </>
         ) : (
           <ProfileHeroBackdrop
-            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            colors={provider.hasCustomGradient ? provider.gradient : [baseTheme.hero, baseTheme.bg]}
             finish={parseThemeKey(provider.profileTheme).finish}
             style={styles.heroImage}
           />
         )}
+        {/* Sheer: the black veil over the whole backdrop, behind the hero and
+            the see-through content sheet alike. */}
+        {veilTheme ? <VeilBackdrop style={styles.heroImage} /> : null}
 
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
@@ -4241,6 +3649,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerKey={provider?.providerName ?? ""}
           providerServiceCategory={provider?.providerService}
           bookingPolicies={provider?.bookingPolicies ?? null}
+          showPolicyPagesCard={pageStyle.key !== "classic"}
         />
 
         {/* Multi-service booking modal — for services picked via "Select" mode */}
@@ -4418,6 +3827,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           onClose={() => setShowPolicyImage(false)}
           label="Policy document"
         />
+        <PolicyStoryViewer
+          urls={policyPages}
+          edges={policyEdges}
+          startIndex={policyStoryIndex}
+          title={provider ? `${provider.displayName} · Policy` : "Policy"}
+          onClose={() => setPolicyStoryIndex(null)}
+          onZoom={() => {
+            // One modal closes before the next opens: two at once can leave
+            // the new one behind the old on Android.
+            setPolicyStoryIndex(null);
+            setTimeout(() => setShowPolicyImage(true), 300);
+          }}
+        />
 
         {/* A tap on the profile circle zooms the logo in over the page. */}
         <LogoZoomViewer
@@ -4572,7 +3994,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
 
               <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
-                We'll notify you when a slot opens up.
+                If a slot that suits you is offered to you, it's held for {WAITLIST_HOLD_MINUTES} minutes to confirm and pay, deposit and fee included. If you don't pay in time, you come off the waitlist and can rejoin.
               </Text>
 
               {/* Availability toggle */}
@@ -4894,7 +4316,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ]}
                   numberOfLines={1}
                 >
-                  {leaveConfirmEntry.service_name_snapshot}
+                  {leaveConfirmEntry.serviceName}
                 </Text>
               )}
               <Text style={[styles.leavePopupBody, { color: OP.sub }]}>
@@ -4972,6 +4394,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             "Book" becomes untappable. */}
         {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
 
+        {/* Riviera's pinned bar: the name, the lowest price and Book, which
+            jumps to Services and then goes. Not while selecting several (that
+            bar takes this spot), and never for a link-only provider (no
+            services here). */}
+        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
+          <View style={[styles.pinnedBookBar, squareButtons && styles.pinnedBookBarSquare, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
+            <View style={styles.pinnedBookText}>
+              <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
+              <Text style={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From £{lowestServicePrice}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.pinnedBookButton, squareButtons && styles.squareButton, { backgroundColor: adaptiveAccentColor }]}
+              onPress={pressPinnedBook}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
+            >
+              <Text style={[styles.pinnedBookButtonText, squareButtons && styles.squareButtonText]}>Book</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Join nudge — a link-only provider can't be booked here, so this
             never shares the spot with the selection bar above. */}
         {isLinkOnly && viewerChecked && currentUserId && !isOwnProvider && !joinNudgeDismissed && (
@@ -5017,651 +4461,79 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             contentContainerStyle={styles.scrollContent}
             scrollEventThrottle={16}
             onScroll={handleScroll}
+            // Touching the page closes Recommend's menu and bubble.
+            onTouchStart={recommend.dismissFloating}
             nestedScrollEnabled={true}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
-            <View style={styles.heroInfoWrap}>
-              {/* Provider Logo - Bigger */}
-              <View style={styles.logoContainer}>
-                <View style={styles.logoWrapper}>
-                  {provider.providerLogo?.uri ? (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        setShowFullLogo(true);
-                      }}
-                      accessibilityRole="imagebutton"
-                      accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
-                    >
-                      <LogoCircle
-                        uri={provider.providerLogo.uri}
-                        framing={provider.providerLogoFraming}
-                        style={styles.providerLogo}
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    <View
-                      style={[
-                        styles.providerLogo,
-                        {
-                          backgroundColor: provider.accentColor ?? "#AF9197",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 28,
-                          fontWeight: "800",
-                        }}
-                      >
-                        {provider.displayName
-                          .split(" ")
-                          .map((w: string) => w[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  {/* Sits on top of the logo, so it must let taps through
-                      to the logo's tap-to-see-it-in-full. */}
-                  <LinearGradient
-                    colors={
-                      ["rgba(255,255,255,0.3)", "transparent"] as [
-                        string,
-                        string,
-                        ...string[],
-                      ]
-                    }
-                    style={styles.logoGloss}
-                    pointerEvents="none"
-                  />
-                </View>
-              </View>
-
-              {/* Provider Info — editorial strip */}
-              <View style={styles.providerInfoCenter}>
-                {/* Name + verified */}
-                <View style={styles.providerNameRow}>
-                  <Text
-                    style={[
-                      styles.providerDisplayName,
-                      {
-                        color: heroText,
-                        fontFamily: resolveProviderFontFamily(provider.brandFont),
-                        // Thin scripts are drawn larger so they read at the same size.
-                        fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont),
-                        lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont),
-                      },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                  >
-                    {provider.displayName}
-                  </Text>
-                  {provider.isVerified && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color={heroIsDark ? "#FFFFFF" : "#007AFF"}
-                    />
-                  )}
-                </View>
-
-                {/* SERVICE TYPE · LOCATION · business-type glyph, in small
-                    caps. The business type is the icon rather than its words
-                    — "HOME STUDIO" is long next to a service and a city, and
-                    BUSINESS_TYPE_ICON already carries the same meaning on
-                    search cards, so the two surfaces now read the same way.
-                    Laid out as a row rather than inline text so the glyph can
-                    be optically centred against the caps (which sit high in
-                    their line box) instead of riding the text baseline. */}
-                <View style={styles.providerMetaRow}>
-                  <Text
-                    style={[
-                      styles.providerMeta,
-                      { color: heroSub },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {/* Every type they actually have services under, so a
-                        lashes-and-brows business doesn't read as only one.
-                        serviceTypes is already ordered by their declared set
-                        and already excludes types with nothing in them. */}
-                    {(provider.serviceTypes.length
-                      ? provider.serviceTypes
-                          .map((serviceType) =>
-                            serviceType === "OTHER"
-                              ? provider.customServiceType || "SERVICE"
-                              : serviceType,
-                          )
-                          .join(" · ")
-                      : provider.providerService === "OTHER"
-                        ? provider.customServiceType || "SERVICE"
-                        : provider.providerService
-                    ).toUpperCase()}
-                    {provider.location
-                      ? ` · ${provider.location.toUpperCase()}`
-                      : ""}
-                    {provider.businessType ? " · " : ""}
-                  </Text>
-                  {provider.businessType ? (
-                    <Ionicons
-                      name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
-                      size={13}
-                      color={heroSub}
-                      style={styles.providerMetaIcon}
-                      accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
-                    />
-                  ) : null}
-                </View>
-
-                {/* Rating inline — not for a link-only provider: their
-                    bookings happen elsewhere, so there are no CERVICED
-                    reviews to rate them from. */}
-                {!isLinkOnly && (
-                <View style={styles.ratingRow}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <StarIcon key={star} size={12} color="#FFD700" />
-                  ))}
-                  <Text
-                    style={[
-                      styles.ratingInline,
-                      { color: heroText },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                  >
-                    {provider.rating}
-                  </Text>
-                </View>
-                )}
-
-                {/* Years experience (optional) */}
-                {provider.yearsExperience ? (
-                  <Text
-                    style={[
-                      styles.yearsExp,
-                      { color: heroSub },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                  >
-                    {provider.yearsExperience} years experience
-                  </Text>
-                ) : null}
-
-                {/* Slots + bell. The pill says when this provider's diary
-                    opens — "New slots drop on the 5th" — or, without a
-                    release day, "Stay updated" beside the bell that delivers
-                    their updates. See slotsPillText. */}
-                {(() => {
-                  if (isLinkOnly) {
-                    // In place of the availability pill: Book (their own
-                    // page, opened inside CERVICED) with their socials and
-                    // messaging beside it in the accent colour.
-                    const onAccentHero = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1B2740";
-                    const socialButton = (
-                      key: string,
-                      icon: keyof typeof Ionicons.glyphMap,
-                      label: string,
-                      onPress: () => void,
-                    ) => (
-                      <TouchableOpacity
-                        key={key}
-                        style={[styles.linkOnlySocialButton, { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
-                        activeOpacity={0.8}
-                        accessibilityLabel={label}
-                        accessibilityRole="button"
-                      >
-                        <Ionicons name={icon} size={20} color={onAccentHero} />
-                      </TouchableOpacity>
-                    );
-                    return (
-                      <View style={styles.linkOnlyBookBlock}>
-                        <View style={styles.linkOnlyBookRow}>
-                          <TouchableOpacity
-                            style={[styles.linkOnlyBookButton, { backgroundColor: OP.card, borderColor: OP.border }]}
-                            onPress={openLinkOnlyBooking}
-                            activeOpacity={0.85}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Book with ${provider.displayName} on their booking page`}
-                          >
-                            <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>BOOK</Text>
-                            <Ionicons name="open-outline" size={15} color={OP.text} />
-                          </TouchableOpacity>
-                          {provider.instagram
-                            ? socialButton("instagram", "logo-instagram", `Open @${provider.instagram} on Instagram`, () => {
-                                recordStat("instagram_tap");
-                                Linking.openURL(`https://instagram.com/${provider.instagram}`).catch(() => {
-                                  Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
-                                });
-                              })
-                            : null}
-                          {provider.tiktok
-                            ? socialButton("tiktok", "logo-tiktok", `Open @${provider.tiktok} on TikTok`, () => {
-                                Linking.openURL(`https://www.tiktok.com/@${provider.tiktok.replace(/^@/, "")}`).catch(() => {
-                                  Alert.alert("Couldn't open TikTok", "Please try again in a moment.");
-                                });
-                              })
-                            : null}
-                          {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
-                        </View>
-                        <Text
-                          style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
-                        >
-                          Books on their own page — opens inside CERVICED
-                        </Text>
-                      </View>
-                    );
-                  }
-                  const pillText = slotsPillText(provider.scheduleReleaseDay, provider.scheduleReleaseTime);
-                  // The bell subscribes to this provider's release
-                  // notification, but it is also the general "tell me when
-                  // this provider opens up" control, so it renders for every
-                  // provider — not only the ones with a release day set. It
-                  // used to sit inside this block's early return and vanished
-                  // whenever there was no availability headline to print.
-                  const showInstagram = !!provider.instagram;
-                  return (
-                  // Instagram sits OUTSIDE the pill, as its own round button
-                  // beside it. Inside, it read as part of the availability
-                  // statement — a third element in a row that says "when you
-                  // can book" — when it's really a link off to another app.
-                  // The bell stays in: it acts on this provider's
-                  // availability, which is exactly what the pill is about.
-                  <View style={styles.slotsRowOuter}>
-                    <BlurView
-                      intensity={cardBlurIntensity}
-                      tint={cardBlurTint}
-                      style={[
-                        styles.slotsRow,
-                        { backgroundColor: cardBg, borderColor: OP.border },
-                      ]}
-                    >
-                      <LinearGradient
-                        colors={cardHighlightColors}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                        style={styles.slotsCardHighlight}
-                      />
-                      <Text style={[styles.slotsText, { color: OP.sub }]}>
-                        {pillText}
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.bellButtonInline}
-                        onPress={handleNotificationToggle}
-                        disabled={!canSaveProvider || isNotificationLoading}
-                        activeOpacity={0.8}
-                        accessibilityLabel="Notifications"
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isNotificationsEnabled, disabled: !canSaveProvider || isNotificationLoading }}
-                      >
-                        <BellIcon
-                          size={16}
-                          color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
-                        />
-                      </TouchableOpacity>
-                    </BlurView>
-                    {showInstagram ? (
-                      <TouchableOpacity
-                        style={styles.instagramButtonOutside}
-                        onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
-                          Linking.openURL(
-                            `https://instagram.com/${provider.instagram}`,
-                          ).catch(() => {
-                            Alert.alert(
-                              "Couldn't open Instagram",
-                              "Please try again in a moment.",
-                            );
-                          });
-                        }}
-                        activeOpacity={0.8}
-                        accessibilityLabel={`Open @${provider.instagram} on Instagram`}
-                        accessibilityRole="button"
-                      >
-                        <BlurView
-                          intensity={cardBlurIntensity}
-                          tint={cardBlurTint}
-                          style={[
-                            styles.instagramButtonSurface,
-                            { backgroundColor: cardBg, borderColor: OP.border },
-                          ]}
-                        >
-                          <LinearGradient
-                            colors={cardHighlightColors}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 0, y: 1 }}
-                            style={styles.slotsCardHighlight}
-                          />
-                          <Ionicons
-                            name="logo-instagram"
-                            size={20}
-                            color={OP.sub}
-                          />
-                        </BlurView>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  );
-                })()}
-
-              </View>
-            </View>
-
-            {/* The content sheet rises over the hero photo with its own large
-                top corners (see contentSheet.borderTopLeftRadius/Right) —
-                rises directly off the hero photo like a floating card. */}
-            <View
-              style={[
-                styles.contentSheet,
-                { minHeight: screenHeight, backgroundColor: OP.bg },
-                // With a background image, inset the sheet so the photo shows
-                // along its sides — the content reads as a card floating over
-                // the image rather than covering it edge to edge.
-                provider.backgroundImage ? styles.contentSheetFloating : null,
-              ]}
-            >
-              {/* Recommend + "Don't show me" — only for a client who has had
-                  a completed appointment here; renders nothing otherwise. */}
-              <ProviderSharingRow
-                providerId={providerDbId}
-                providerName={provider.displayName}
-                enabled={canSaveProvider && hatState.active === "client"}
-                tokens={OP}
-                accent={adaptiveAccentColor}
-                cardBg={cardBg}
-                square={squareCards}
-                onError={showAlert}
-              />
-
-              {/* About / Policy tabbed card */}
-              <View ref={aboutCardRef} style={[styles.aboutCardShadowWrap, squareCards && styles.squareCard]}>
-                <BlurView
-                  intensity={cardBlurIntensity}
-                  tint={cardBlurTint}
-                  style={[
-                    styles.aboutCard,
-                    { backgroundColor: cardBg, borderColor: OP.border },
-                    squareCards && styles.squareCard,
-                    // Room under the last line for the policy button, so it
-                    // never sits on top of the text.
-                    policyPages.length > 0 && styles.aboutCardWithPolicyFab,
-                  ]}
-                >
-                  <LinearGradient
-                    colors={cardHighlightColors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={[styles.cardHighlight, squareCards && styles.squareCard]}
-                  />
-                  {/* Tab switcher — only show if there are policy rows */}
-                  {(() => {
-                    if (!hasProviderPolicyInfo(provider)) return null;
-                    return (
-                      <View
-                        style={[
-                          styles.infoTabRow,
-                          { borderBottomColor: OP.border },
-                        ]}
-                      >
-                        <TouchableOpacity
-                          style={[
-                            styles.infoTab,
-                            infoTab === "about" && {
-                              borderBottomColor: adaptiveAccentColor,
-                              borderBottomWidth: 2,
-                            },
-                          ]}
-                          onPress={() => setInfoTab("about")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.infoTabText,
-                              { color: infoTab === "about" ? OP.text : OP.sub },
-                            ]}
-                          >
-                            About
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.infoTab,
-                            infoTab === "policy" && {
-                              borderBottomColor: adaptiveAccentColor,
-                              borderBottomWidth: 2,
-                            },
-                          ]}
-                          onPress={() => setInfoTab("policy")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.infoTabText,
-                              { color: infoTab === "policy" ? OP.text : OP.sub },
-                            ]}
-                          >
-                            Policy
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })()}
-
-                  {infoTab === "about" ? (
-                    <>
-                      {!hasProviderPolicyInfo(provider) && (
-                        <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                          Relevant Information
-                        </Text>
-                      )}
-                      {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
-                          translates live to the active language when the paid
-                          translation feature is enabled, and shows the original
-                          English otherwise (the default in every current
-                          build). Not legal/health copy, so routing it through
-                          the dynamic path is safe. */}
-                      <ExpandableAboutText
-                        text={provider.aboutText}
-                        translate
-                        textStyle={[styles.aboutText, { color: OP.sub }]}
-                        linkStyle={styles.moreButton}
-                        linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
-                        onCollapse={handleAboutCollapse}
-                      />
-                    </>
-                  ) : (
-                    /* Policy tab content */
-                    (() => {
-                      const rows = buildPolicyDisplayRows(
-                        provider.bookingPolicies,
-                        provider.cancellationNoticeHours,
-                        { linkOnly: isLinkOnly },
-                      );
-                      return (
-                        <View style={{ paddingTop: 8 }}>
-                          {rows.map((row, i) => (
-                            <View
-                              key={i}
-                              style={[
-                                styles.policyRow,
-                                i < rows.length - 1 && {
-                                  borderBottomColor: OP.sep,
-                                  borderBottomWidth: StyleSheet.hairlineWidth,
-                                },
-                              ]}
-                            >
-                              <View style={styles.policyIcon}>
-                                <Ionicons
-                                  name={row.icon}
-                                  size={18}
-                                  color={OP.sub}
-                                />
-                              </View>
-                              <View style={styles.policyRowText}>
-                                <View style={styles.policyLabelRow}>
-                                  <Text
-                                    style={[styles.policyLabel, { color: OP.sub }]}
-                                  >
-                                    {row.label}
-                                  </Text>
-                                  {!!row.tag && (
-                                    <View
-                                      style={[
-                                        styles.policyTag,
-                                        { backgroundColor: adaptiveAccentColor },
-                                      ]}
-                                    >
-                                      <Text style={styles.policyTagText}>
-                                        {row.tag}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-                                <Text
-                                  style={[styles.policyValue, { color: OP.text }]}
-                                >
-                                  {row.value}
-                                </Text>
-                                {row.notes?.map((note) => (
-                                  <Text
-                                    key={note}
-                                    style={[styles.policyNote, { color: OP.sub }]}
-                                  >
-                                    {note}
-                                  </Text>
-                                ))}
-                              </View>
-                            </View>
-                          ))}
-                          {/* Link-only: the booking happens on their own
-                              site, so CERVICED applies none of this. */}
-                          {isLinkOnly && rows.length > 0 && (
-                            <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
-                              These policies are handled on their booking site.
-                            </Text>
-                          )}
-                        </View>
-                      );
-                    })()
-                  )}
-
-                  {/* Floating policy-photo button — bottom-right of the card,
-                      on top of whichever tab (or lack of tabs) is showing. This
-                      is the only way in for a provider who uploaded this photo
-                      but filled in none of the structured fields above (which
-                      is why the tab switcher itself doesn't gate on it). */}
-                  {policyPages.length > 0 ? (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => setShowPolicyImage(true)}
-                      style={[
-                        styles.policyImageFab,
-                        { backgroundColor: adaptiveAccentColor },
-                      ]}
-                      accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
-                      accessibilityRole="button"
-                    >
-                      <Ionicons
-                        name="document-text-outline"
-                        size={20}
-                        color="#FFFFFF"
-                      />
-                    </TouchableOpacity>
-                  ) : null}
-                </BlurView>
-              </View>
-
-              {isLinkOnly && (
-                <ProviderSpecialitiesSection
-                  specialities={provider.specialties}
-                  textColor={OP.text}
-                  accent={adaptiveAccentColor}
-                />
-              )}
-
-              {/* Services Section — the price list. A link-only provider's
-                  prices live on their own booking page. */}
-              {!isLinkOnly && (
-              <View
-                style={styles.servicesSection}
-                ref={servicesSectionRef}
-                collapsable={false}
-              >
-                <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
-                  Services
-                </Text>
-
-                {!takingBookings && closureReason ? (
-                  <Text style={{ color: OP.sub, fontSize: 13, marginBottom: 10 }}>
-                    Not taking bookings: {closureReason.toLowerCase()}
-                  </Text>
-                ) : null}
-
-                {renderServiceCategoryBlock(visibleServices, () => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setShowAllServicesModal(true);
-                })}
-              </View>
-              )}
-
-              {!isLinkOnly && (
-              <ProviderReviewPreviewSection
-                reviews={reviews}
-                loading={reviewsLoading}
-                palette={sectionPalette}
-                onSeeAll={handleOpenReviews}
-              />
-              )}
-
-              <ProviderContactSection
-                contact={contactDetails}
-                palette={sectionPalette}
-                onOpenLink={handleContactLink}
-                onOpenPublicLink={handlePublicContactLink}
-                onGetInTouch={handleGetInTouch}
-              />
-
-              <ProviderOpeningHoursSection
-                openingHours={openingHours}
-                loading={openingHoursLoading}
-                palette={sectionPalette}
-              />
-
-              <ProviderPortfolioSection
-                items={workPortfolio}
-                loading={portfolioLoading}
-                palette={sectionPalette}
-                onOpenImage={openImageViewer}
-              />
-
-              <ProviderAdditionalInfoSection
-                groups={additionalInfoGroups}
-                qualifications={provider.qualifications.trim()}
-                goodToKnow={goodToKnowText}
-                howToGetThere={howToGetThere}
-                venueItems={venuePortfolio}
-                palette={sectionPalette}
-                onOpenImage={openImageViewer}
-              />
-            </View>
+            <ProviderPageHero
+              provider={provider}
+              palette={palette}
+              heroPhotoUris={heroPhotoUris}
+              heroPhotoFrames={heroPhotoFrames}
+              isLinkOnly={isLinkOnly}
+              recommendHeart={recommendHeart}
+              bell={heroBell}
+              aboutCardRef={aboutCardRef}
+              onOpenHeroPhoto={openHeroPhoto}
+              onOpenLogo={openFullLogo}
+              onBookNow={jumpToServices}
+              onToggleBell={handleNotificationToggle}
+              onAboutCollapse={handleAboutCollapse}
+              onGetInTouch={handleGetInTouch}
+              onOpenLinkOnlyBooking={openLinkOnlyBooking}
+              onRecordStat={recordStat}
+            />
+            <ProviderPageSheet
+              provider={provider}
+              palette={palette}
+              isLinkOnly={isLinkOnly}
+              takingBookings={takingBookings}
+              closureReason={closureReason}
+              minHeight={screenHeight}
+              renderServices={renderInlineServices}
+              additionalInfo={additionalInfo}
+              contactDetails={contactDetails}
+              reviews={reviews}
+              reviewsLoading={reviewsLoading}
+              openingHours={openingHours}
+              openingHoursLoading={openingHoursLoading}
+              workPortfolio={workPortfolio}
+              venuePortfolio={venuePortfolio}
+              portfolioLoading={portfolioLoading}
+              policyPages={policyPages}
+              policyEdges={policyEdges}
+              jumpTargets={jumpTargets}
+              aboutCardRef={aboutCardRef}
+              policiesSectionRef={policiesSectionRef}
+              servicesSectionRef={servicesSectionRef}
+              reviewsSectionRef={reviewsSectionRef}
+              policyPagesRef={policyPagesRef}
+              onScrollToSection={scrollToSection}
+              onAboutCollapse={handleAboutCollapse}
+              onOpenPolicyStory={setPolicyStoryIndex}
+              onOpenPolicyImage={openPolicyImage}
+              onOpenReviews={handleOpenReviews}
+              onContactLink={handleContactLink}
+              onPublicContactLink={handlePublicContactLink}
+              onGetInTouch={handleGetInTouch}
+              onOpenImage={openImageViewer}
+            />
           </ScrollView>
         </SafeAreaView>
+
+        {/* Last, so the bar, bubble and menu sit over the page. */}
+        <ProviderRecommendLayer
+          {...recommend.layer}
+          bottomOffset={FLOATING_TAB_BAR_CLEARANCE}
+          theme={recommendBadgeTheme}
+        />
       </ThemedBackground>
     </WindowControlsInsetProvider>
     </SafeAreaProvider>
   );
 };
 
-/** The business name under the logo; a thin script is drawn larger than
- *  this (see resolveProviderFontScale). */
-const NAME_SIZE = 30;
-const NAME_LINE_HEIGHT = 40;
 
 const styles = StyleSheet.create({
   background: {
@@ -5726,10 +4598,16 @@ const styles = StyleSheet.create({
   heroInfoWrap: {
     paddingTop: 100, // clears the status bar / back button over the hero photo
   },
-  heroTextShadow: {
-    textShadowColor: "rgba(0,0,0,0.55)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
+  // The loading skeleton's logo slot: the same box ProfileHero's HeroLogo draws in.
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 0,
+  },
+  logoWrapper: {
+    position: "relative",
+    width: 148,
+    height: 148,
   },
   contentSheet: {
     paddingHorizontal: 20,
@@ -5745,11 +4623,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
-  },
-  // Applied only when the provider has a background image: pulls the sheet in
-  // from both edges so the photo stays visible down its sides.
-  contentSheetFloating: {
-    marginHorizontal: 10,
   },
   skeletonShell: {
     flex: 1,
@@ -5845,36 +4718,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-    marginTop: 0,
-  },
-  logoWrapper: {
-    position: "relative",
-    width: 148,
-    height: 148,
-  },
-  providerLogo: {
-    width: 148,
-    height: 148,
-    borderRadius: 74,
-    borderWidth: 4,
-    borderColor: "rgba(255, 253, 251, 0.9)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  logoGloss: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: 148,
-    height: 148,
-    borderRadius: 74,
-  },
   providerInfoCenter: {
     alignItems: "center",
     marginBottom: 30,
@@ -5885,12 +4728,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginBottom: 4,
-  },
-  providerDisplayName: {
-    fontFamily: SERIF,
-    fontSize: NAME_SIZE,
-    lineHeight: NAME_LINE_HEIGHT,
-    textAlign: "center",
   },
   providerHandle: {
     fontFamily: "Jura-VariableFont_wght",
@@ -5909,59 +4746,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 10,
   },
-  providerMeta: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "800",
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textAlign: "center",
-    flexShrink: 1,
-  },
-  // Caps sit high in their line box, so centring the glyph on the row leaves
-  // it looking a touch low against the letterforms — nudged up to match.
-  providerMetaIcon: {
-    marginTop: -1,
-  },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
     marginBottom: 8,
-  },
-  ratingInline: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "800",
-    fontSize: 13,
-    marginLeft: 4,
-  },
-  yearsExp: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "800",
-    fontSize: 12,
-    textAlign: "center",
-    marginBottom: 10,
-    opacity: 0.9,
-    letterSpacing: 0.4,
-  },
-  infoTabRow: {
-    flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 12,
-    marginHorizontal: -4,
-  },
-  infoTab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  infoTabText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
   },
   infoTagRow: {
     flexDirection: "row",
@@ -5993,65 +4783,38 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  slotsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: "hidden",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    flexShrink: 1,
-  },
-  // The same container as the availability pill beside it — same blurred
-  // surface, same border, same 20pt corners, same height (from the row's
-  // "stretch") — not a round button sitting next to one.
-  linkOnlyBookBlock: {
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 4,
-  },
-  linkOnlyBookRow: {
-    alignSelf: "stretch",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  linkOnlyBookButton: {
-    height: 46,
-    // The primary action takes every spare point in the row; the fixed-size
-    // contact/social controls still fit on every screen width.
-    flex: 1,
-    borderRadius: 23,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  linkOnlyBookText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 15,
-    letterSpacing: 1,
-  },
-  linkOnlySocialButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  linkOnlyCaption: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    fontWeight: "600",
-  },
   joinNudgeButtonMuted: {
     opacity: 0.55,
   },
   // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
   // as the selection bar, fixed near-black so it reads on every provider theme.
+  // Riviera's pinned bar, over the foot of the page above the tab bar.
+  pinnedBookBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 998,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 20,
+    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+  },
+  pinnedBookText: { flex: 1, minWidth: 0 },
+  pinnedBookBarSquare: { borderRadius: 6 },
+  squareButton: { borderRadius: 2 },
+  squareButtonText: { textTransform: "uppercase", letterSpacing: 1.4 },
+  pinnedBookName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
+  pinnedBookPrice: { fontSize: 12, marginTop: 2 },
+  pinnedBookButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  pinnedBookButtonText: { fontFamily: "BakbakOne-Regular", fontSize: 14, color: "#FFFFFF" },
   joinNudgeBar: {
     position: "absolute",
     left: 16,
@@ -6095,18 +4858,6 @@ const styles = StyleSheet.create({
   joinNudgeBarClose: {
     width: 36,
     height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  instagramButtonOutside: {
-    borderRadius: 20,
-  },
-  instagramButtonSurface: {
-    flex: 1,
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: "hidden",
-    paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -6166,12 +4917,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  // Inline Bell Button
-  bellButtonInline: {
-    padding: 4,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-  },
 
   // Notification Alert Styles
   notificationAlert: {
@@ -6242,12 +4987,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
 
-  slotsText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    textAlign: "center",
-    zIndex: 2, // Above overlays
-  },
   slotsoutcard: {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     borderRadius: 12,
@@ -6293,40 +5032,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
-  // The policy button's height plus its bottom offset (policyImageFab), so the
-  // card's last line ends above the button instead of under it.
-  aboutCardWithPolicyFab: {
-    paddingBottom: 10 + 44,
-  },
-  cardHighlight: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-  },
-  slotsCardHighlight: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
-  },
-  sectionTitle: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 18,
-    marginBottom: 15,
-  },
-  aboutText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 10,
-  },
   moreButton: {
     alignSelf: "flex-start",
   },
@@ -6337,93 +5042,18 @@ const styles = StyleSheet.create({
     // Color will be set dynamically using adaptiveAccentColor
   },
 
-  // Services Section
   servicesSection: {
     marginBottom: 20,
-  },
-  sectionTitleNoCard: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 18,
-    marginBottom: 15,
-    paddingHorizontal: 20,
-  },
-  // Plain small text link, right-aligned under the category tabs — not a
-  // pill or icon, and deliberately away from the "Services" title.
-  selectModeLinkRow: {
-    alignItems: "flex-end",
-    paddingHorizontal: 20,
-    marginTop: -8,
-    marginBottom: 10,
-  },
-  selectModeLinkText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  // Service-type switch — plain underline indicator, mirroring the
-  // History / To Do row on ProviderBookingHistoryScreen: enough to show
-  // selection without a second filled control competing with the category
-  // pills directly beneath it.
-  serviceTypeSwitch: {
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  serviceTypeTab: {
-    paddingTop: 4,
-    // More space below the label than above, so the 2px indicator doesn't sit
-    // tight against the text — same spacing as the booking-history switch.
-    paddingBottom: 12,
-    marginRight: 24,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  serviceTypeTabText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 15,
-    letterSpacing: -0.1,
   },
   categoryTabs: {
     marginBottom: 20,
     maxHeight: 60, // Increased to accommodate animation
     paddingHorizontal: 20,
   },
-  categoryTabsContent: {
-    paddingRight: 20,
-    gap: 12,
-    paddingVertical: 8, // Add vertical padding to prevent cutoff
-  },
-  categoryDescriptionText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: 20,
-    marginTop: -12, // categoryTabs already carries a 20px marginBottom
-    marginBottom: 14,
-  },
 
   categoryServicesContainer: {
     gap: 15,
     paddingHorizontal: 20,
-  },
-  emptyServiceTypeText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  showAllServicesBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 14,
-  },
-  showAllServicesText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    letterSpacing: 0.5,
   },
   serviceItemCard: {
     borderRadius: 26,
@@ -6449,9 +5079,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
-  serviceCardBlur: {
-    flex: 1,
-  },
   serviceItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -6465,19 +5092,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginRight: 15,
   },
-  serviceImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  serviceImagePlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  serviceImagePlaceholderText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 22,
-  },
   serviceImageOverlay: {
     position: "absolute",
     top: 0,
@@ -6489,54 +5103,6 @@ const styles = StyleSheet.create({
   serviceInfo: {
     flex: 1,
     marginRight: 15,
-  },
-  serviceName: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  serviceVirtualBadge: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 10,
-    marginBottom: 5,
-  },
-  serviceDescription: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  serviceDescriptionMeasure: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    opacity: 0,
-  },
-  seeMoreText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
-    fontWeight: "800",
-    textDecorationLine: "underline",
-    marginBottom: 6,
-  },
-  serviceSafetyInline: {
-    marginBottom: 6,
-    gap: 2,
-  },
-  serviceSafetyTitle: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 1,
-  },
-  serviceSafetyLine: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
-    lineHeight: 15,
   },
   imageModalOverlay: {
     flex: 1,
@@ -6560,22 +5126,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "80%",
   },
-  serviceDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  serviceDuration: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 11,
-  },
-  servicePrice: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    fontWeight: "bold",
-    // Color will be set dynamically using adaptiveAccentColor
-  },
 
   // Enhanced Action Buttons with Reflective Effects
   actionButtons: {
@@ -6598,36 +5148,6 @@ const styles = StyleSheet.create({
     height: "50%",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-  },
-  bookButton: {
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#B87E92",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  bookButtonText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    fontWeight: "bold",
-    letterSpacing: 0.4,
-  },
-  selectCheckbox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  editAddOnsLink: {
-    fontSize: 11,
-    fontWeight: "700",
   },
   quickBookButton: {
     borderRadius: 18,
@@ -6736,84 +5256,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Contact Section
-  policyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 14,
-  },
   policyRowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  policyIcon: {
-    width: 28,
-    alignItems: "center",
-  },
-  policyRowText: {
-    flex: 1,
-  },
-  policyHandledNote: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    marginTop: 10,
-  },
-  policyLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  policyLabel: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 10,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  policyTag: {
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginBottom: 2,
-  },
-  policyTagText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: "#fff",
-  },
-  policyValue: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  // The section's own note (and the no-show grace period) under its value.
-  policyNote: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 3,
   },
   // Floating circular button, bottom-right of the About/Policy card — opens
   // the provider's uploaded policy photo. Absolutely positioned so it stays
   // put regardless of which tab (About/Policy) is active, or whether the
   // tab switcher is even showing (a provider can have this image with no
   // structured policy fields at all, in which case it's the only way in).
-  policyImageFab: {
-    position: "absolute",
-    bottom: 10,
-    right: 14,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
   contactCard: {
     padding: 22,
     borderRadius: 26,
@@ -7258,46 +5708,6 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
 
-  // Waitlist — service card
-  serviceActionColumn: { alignItems: "center", gap: 6 },
-  waitlistJoinBtn: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  waitlistJoinText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  fullyBookedNote: {
-    fontSize: 10,
-    fontWeight: "600",
-    textAlign: "right",
-    maxWidth: 90,
-  },
-  waitlistChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  waitlistChipText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  waitlistChipX: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    opacity: 0.7,
-  },
   waitlistRow: {
     flexDirection: "row",
     alignItems: "center",

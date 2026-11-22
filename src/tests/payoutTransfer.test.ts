@@ -1,4 +1,4 @@
-import { findPayoutTransfer, type TransferLike } from '../../supabase/functions/_shared/payoutTransfer';
+import { findPayoutTransfer, findTransferTagged, type TransferLike } from '../../supabase/functions/_shared/payoutTransfer';
 
 type ListParams = { destination: string; created: { gte: number }; limit: number };
 
@@ -51,5 +51,20 @@ describe('findPayoutTransfer', () => {
   it("throws when Stripe can't be asked, so a caller never reads that as nothing sent", async () => {
     await expect(findPayoutTransfer(fakeStripe([], true), 'acct_1', 'payout-b', createdAt)).rejects.toThrow('stripe unavailable');
     await expect(findPayoutTransfer(fakeStripe([]), 'acct_1', 'payout-b', 'not a date')).rejects.toThrow('created_at');
+  });
+});
+
+describe('findTransferTagged', () => {
+  it("finds a dispute payback, and never mistakes the payout's own transfer for it", async () => {
+    const stripe = fakeStripe([
+      { id: 'tr_payout', metadata: { payout_id: 'payout-b' } },
+      { id: 'tr_payback', metadata: { dispute_payback: 'dp_1:payout-b', dispute_id: 'dp_1' } },
+    ]);
+    const payback = await findTransferTagged(stripe, 'acct_1', 'dispute_payback', 'dp_1:payout-b', createdAt);
+    expect(payback?.id).toBe('tr_payback');
+    // A second dispute on the same payout is its own payback.
+    expect(await findTransferTagged(stripe, 'acct_1', 'dispute_payback', 'dp_2:payout-b', createdAt)).toBeNull();
+    // The payout lookup doesn't see the payback either.
+    expect((await findPayoutTransfer(stripe, 'acct_1', 'payout-b', createdAt))?.id).toBe('tr_payout');
   });
 });

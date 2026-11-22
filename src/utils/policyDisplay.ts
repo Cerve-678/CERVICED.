@@ -10,11 +10,14 @@ import { resolveDepositMode } from './depositPolicy';
 export interface PolicyDisplayData {
   cancelNotice?: string;
   cancelPenalty?: string;
-  /** The £ amount kept under a 'custom' penalty, at most half the price. */
+  /** The £ amount kept under a 'custom' penalty, at most half the price. No
+   *  longer offered (2026-11-13), but bookings frozen with it still show it. */
   cancelCustomFee?: string;
   cancelNote?: string;
   rescheduleNotice?: string;
   maxReschedules?: string;
+  /** 'same_month': the new date must be in the booking's calendar month. */
+  rescheduleWithin?: string;
   rescheduleNote?: string;
   depositMode?: string;
   depositRequired?: boolean;
@@ -121,6 +124,7 @@ function rescheduleSummary(policy: PolicyDisplayData): string | null {
   else if (policy.rescheduleNotice) parts.push(`${policy.rescheduleNotice} notice`);
   if (policy.maxReschedules === 'unlimited') parts.push('no limit');
   else if (policy.maxReschedules) parts.push(`max ${policy.maxReschedules}`);
+  if (policy.rescheduleWithin === 'same_month') parts.push('same month only');
   if (parts.length === 0) return null;
   const text = parts.join(' · ');
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -136,7 +140,9 @@ function pushRow(rows: PolicyDisplayRow[], row: PolicyDisplayRow | null): void {
  * over the descriptive `cancelNotice` text, since that's what the cancel flow
  * actually enforces. A frozen booking snapshot has no equivalent enforced
  * number (only the descriptive text was ever captured), so callers reading a
- * snapshot should omit this parameter.
+ * snapshot should omit this parameter. Since 13 Nov the database keeps that
+ * text in step with the column (keep_cancel_notice_in_step), except for
+ * link-only providers, whose notice is only their own text.
  *
  * `linkOnly`: a link-only provider takes bookings on their own site, so
  * nothing on CERVICED applies a notice window, keeps a deposit or charges a
@@ -179,7 +185,9 @@ export function buildPolicyDisplayRows(
   const cancelPenaltyText = policy.cancelPenalty === 'custom'
     ? (customCancelFee ? ` · ${customCancelFee} kept, at most half the price` : '')
     : policy.cancelPenalty && policy.cancelPenalty !== 'none'
-      ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price kept'}`
+      // 'half the price charged', not 'kept': a client who paid only a deposit
+      // can be charged the rest up to half (late-cancel-half-top-up).
+      ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price charged'}`
       : '';
   let cancelRule: string | null = null;
   if (enforcedCancellationNoticeHours && enforcedCancellationNoticeHours > 0) {
@@ -198,8 +206,10 @@ export function buildPolicyDisplayRows(
   const grace = Number(policy.noShowGraceMinutes) || 0;
   const noShowRule = policy.noShowAction && policy.noShowAction !== 'none' && policy.noShowAction !== 'custom'
     // 'charge_full' was never enforced and is read as keeping the deposit;
-    // an actual extra charge is the no-show fee row below.
-    ? (policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept')
+    // an extra £ charge from older policies is the no-show fee row below.
+    // 'half': the deposit, plus the rest up to half the price (20261113200000).
+    ? (policy.noShowAction === 'warn' ? 'Warning issued'
+      : policy.noShowAction === 'half' ? 'Half the price charged' : 'Deposit kept')
     : null;
   pushRow(rows, sectionRow('close-circle-outline', 'No-show', [
     noShowRule,

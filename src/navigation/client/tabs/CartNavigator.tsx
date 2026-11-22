@@ -49,10 +49,17 @@ export default function CartNavigator() {
       <CartStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
+        // Same as the other tabs' ProviderProfile. The stack-wide frosted
+        // blur above must not apply here: the profile's header is see-through
+        // so the cover photo shows behind it.
         options={{
-          title: 'Provider Details',
+          title: 'Provider Profile',
           presentation: 'card',
           headerBackTitle: 'Cart',
+          headerBlurEffect: undefined,
+          headerStyle: { backgroundColor: theme.background },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text },
         }}
       />
       

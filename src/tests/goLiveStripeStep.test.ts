@@ -30,30 +30,30 @@ describe('go-live Stripe step', () => {
     expect(steps.filter(s => s.blocking)).toHaveLength(6);
   });
 
-  it('appears as a blocking, not-done step when stripeSet is false', () => {
+  it('replaces the deposit row with one blocking Stripe row when the feature is on', () => {
+    const steps = buildGoLiveSteps({ ...base, stripeSet: false });
     const step = stripeStep({ ...base, stripeSet: false });
-    expect(step).toBeDefined();
     expect(step?.blocking).toBe(true);
     expect(step?.done).toBe(false);
-    // Seventh blocking step once the feature is on.
-    expect(buildGoLiveSteps({ ...base, stripeSet: false }).filter(s => s.blocking))
-      .toHaveLength(7);
+    expect(steps.find(s => s.key === 'payment')).toBeUndefined();
+    // Still six blocking steps: the deposit row became the Stripe row.
+    expect(steps.filter(s => s.blocking)).toHaveLength(6);
   });
 
-  it('appears as done when stripeSet is true', () => {
-    const step = stripeStep({ ...base, stripeSet: true });
-    expect(step?.blocking).toBe(true);
-    expect(step?.done).toBe(true);
+  it('is done only once Stripe AND the deposit choice are both set', () => {
+    expect(stripeStep({ ...base, stripeSet: true })?.done).toBe(true);
+    // The server still gates on the deposit choice, so Stripe alone can't tick it.
+    expect(stripeStep({ ...base, stripeSet: true, paymentSet: false })?.done).toBe(false);
   });
 
-  it('sits with the money steps, before the recommended portfolio/terms', () => {
+  it('sits where the deposit row was, after policies and before the logo', () => {
     const keys = buildGoLiveSteps({
       ...base,
       stripeSet: false,
       portfolioSet: false,
       termsSet: false,
     }).map(s => s.key);
-    expect(keys.indexOf('stripe')).toBeGreaterThan(keys.indexOf('payment'));
-    expect(keys.indexOf('stripe')).toBeLessThan(keys.indexOf('portfolio'));
+    expect(keys.indexOf('stripe')).toBe(keys.indexOf('policies') + 1);
+    expect(keys.indexOf('stripe')).toBeLessThan(keys.indexOf('logo'));
   });
 });

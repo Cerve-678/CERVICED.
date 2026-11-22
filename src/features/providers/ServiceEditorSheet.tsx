@@ -51,6 +51,8 @@ import {
   type ServiceTagGroups,
 } from './serviceTags';
 import { formatLatestStart, latestStartToEditor } from '../../utils/latestStart';
+import { PackFormHint, type PackFormKind } from '../info-packs/PackFormHint';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -217,6 +219,7 @@ export default function ServiceEditorSheet({
   saving,
   palette,
   onSave,
+  onSaveAndOpen,
   onClose,
 }: {
   visible: boolean;
@@ -229,6 +232,9 @@ export default function ServiceEditorSheet({
   saving: boolean;
   palette: ServiceEditorPalette;
   onSave: (draft: MyServiceDraft) => void;
+  /** Saves like onSave, then opens Info Packs or Forms. When given, the
+   *  sheet shows the Info Pack / Form tip under the description. */
+  onSaveAndOpen?: (draft: MyServiceDraft, kind: PackFormKind) => void;
   onClose: () => void;
 }) {
   const bottomInset = useSystemBottomInset();
@@ -329,21 +335,37 @@ export default function ServiceEditorSheet({
     return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
   }, [value.description, value.name]);
 
-  const handleSave = useCallback(() => {
+  /** The draft to save, or null (with the reason shown) when it can't be. */
+  const readyDraft = useCallback((): MyServiceDraft | null => {
     const problem =
       validateServiceValue(value) ??
       (isNew ? findabilityProblem(value, tags, audience) : null);
     if (problem) {
       setError(problem);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      return;
+      return null;
     }
     setError(null);
-    onSave(toDraft(value, isNew, {
+    return toDraft(value, isNew, {
       tags: offerTags && !hasNoTags(tags) ? tags : null,
       audience: offerAudience ? audience : '',
-    }));
-  }, [value, isNew, tags, audience, offerTags, offerAudience, onSave]);
+    });
+  }, [value, isNew, tags, audience, offerTags, offerAudience]);
+
+  const handleSave = useCallback(() => {
+    const draft = readyDraft();
+    if (draft) onSave(draft);
+  }, [readyDraft, onSave]);
+
+  // Opening Info Packs or Forms closes this sheet, so it saves first rather
+  // than throw away what's been typed.
+  const saveAndOpen = useCallback((kind: PackFormKind): boolean => {
+    if (saving || !onSaveAndOpen) return false;
+    const draft = readyDraft();
+    if (!draft) return false;
+    onSaveAndOpen(draft, kind);
+    return true;
+  }, [saving, onSaveAndOpen, readyDraft]);
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="slide" onRequestClose={onClose}>
@@ -527,6 +549,16 @@ export default function ServiceEditorSheet({
             ) : null}
             {descriptionHint ? (
               <Text style={[styles.hint, { color: palette.sub }]}>{descriptionHint}</Text>
+            ) : null}
+            {onSaveAndOpen ? (
+              <PackFormHint
+                tour={TOUR_KEYS.PROVIDER_SERVICE_PACK_TIP}
+                title="Aftercare or questions before they come?"
+                body="Put them in an Info Pack or a Form. Clients get it with their booking, without you sending a thing."
+                note="Saves this service first."
+                palette={palette}
+                onOpen={saveAndOpen}
+              />
             ) : null}
 
             {offerTags ? (

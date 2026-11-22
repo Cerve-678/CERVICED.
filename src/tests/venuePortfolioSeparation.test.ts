@@ -5,6 +5,7 @@ import {
   isVenuePhoto,
   splitPortfolioByKind,
 } from "../features/providers/venuePhotos";
+import { isDatabaseLayerFile, readDatabaseLayer } from "./databaseLayerSource";
 
 /**
  * A venue photo is a picture of the room, not of the provider's work. It lives
@@ -56,8 +57,8 @@ describe("venue photos are split from the work gallery", () => {
       .filter(Boolean)
       .filter((f) => !f.includes("/tests/"))
       .filter((f) => !f.endsWith("features/providers/venuePhotos.ts"))
-      // databaseService only mentions it inside a comment explaining the SQL.
-      .filter((f) => !f.endsWith("services/databaseService.ts"));
+      // The database layer only mentions it inside a comment explaining the SQL.
+      .filter((f) => !isDatabaseLayerFile(f));
     expect(hits).toEqual([]);
   });
 
@@ -69,7 +70,7 @@ describe("venue photos are split from the work gallery", () => {
     // provider's, and a client reads it on their profile. getDiscoverFeedTotal
     // counts Explore's feed, so it must skip the same rows. Each needs the
     // is-null OR neq form: a bare .neq() drops NULL-category rows too.
-    const source = readFileSync("src/services/databaseService.ts", "utf8");
+    const source = readDatabaseLayer();
     const clause = "category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}";
     expect(source.split(clause).length - 1).toBe(6);
   });

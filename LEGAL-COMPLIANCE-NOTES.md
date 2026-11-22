@@ -926,3 +926,171 @@ To raise (not lawyer-reviewed):
 - **Section 5 still says messages go to NVIDIA,** but the AI router is off in
   production (user's call: switch on only after a scorecard). It overstates,
   which is the safe direction; recheck when the router changes.
+
+## 25. Late cancellation charge on deposit bookings, and same-month reschedules (2026-11-13)
+
+Branch `feat/late-cancel-half-top-up`. At the user's direction, **not
+lawyer-reviewed**:
+
+- **What changed:** the late-cancel Custom £ amount is replaced by one "Half the
+  price" option. A client who paid only a deposit and cancels inside the notice
+  period loses the deposit, and the provider may now also charge the client's
+  saved card the rest up to half the price (half of service + add-ons, minus the
+  deposit), within 24 hours of the appointment's end. Until now the app only
+  ever kept part of what had been paid; this is the first charge **after a
+  cancellation**, not just after an appointment.
+- **Wording (user chose a separate tick box, option C):** fee terms version
+  `2026-11-13-late-cancel` in `src/constants/feeTerms.ts`: new heading, a
+  late-cancellation paragraph in the body, and `LATE_CANCEL_CONSENT_LINE`. The
+  cancel sheet says "Late cancellation: you'll lose your £X deposit and may be
+  charged up to £Y more." (the user's chosen wording 2). cerviced.co/legal Client
+  Terms §12, §13 and §16, Provider Terms §8 and the Privacy payments line were
+  updated to match.
+- **Raise:** whether deposit + charge up to half the price is a genuine
+  pre-estimate of loss rather than a penalty under the Consumer Rights Act 2015
+  (Schedule 2 grey list para 5 / 6: disproportionate sums on cancellation),
+  especially for long-notice bookings where the slot can be re-sold; whether
+  the checkout tick box is a sufficient mandate for this merchant-initiated
+  charge; and whether a 24h-after-appointment window is reasonable when the
+  cancel may be days earlier.
+- **Same-month reschedules:** providers can require a client's new date to stay
+  in the booking's calendar month. Raise whether restricting a move this way,
+  combined with a late-cancel charge, leaves a client who can't make any date
+  that month with only a charged cancellation.
+- **Raised by the legal-flagger review (2026-11-13), for the solicitor:**
+  - SCA / merchant-initiated transaction rules for a variable "up to £Y"
+    off-session charge after a cancellation: is an exemption claimed, does the
+    mandate need the ceiling and timing stated, and who carries a chargeback on
+    it (provider, Cerviced as collecting agent, or both).
+  - The right test: CRA 2015 s.62 fairness and Schedule 2 paras 5-6, plus CMA
+    guidance on cancellation charges (for consumers), rather than "genuine
+    pre-estimate"; Cavendish v Makdessi for the penalty rule.
+  - The saved card can't be removed until the charge window closes, which now
+    runs to 24 hours after a cancelled appointment, possibly weeks after the
+    cancel. Is that consistent with UK GDPR withdrawal and erasure, and should
+    the Privacy text say so?
+  - No notice or re-acceptance is asked of existing users for this material
+    change (CRA Sch 2 para 11, variation of terms). Bookings already made carry
+    no late cancellation amount, so none can be charged; future bookings are
+    agreed at checkout. Providers whose saved Custom policy was turned into
+    Half (0 at authoring) weren't asked.
+  - Agreement to the late cancellation fee is a condition of booking (the
+    tick box blocks checkout); confirm "performing our contract" is the right
+    lawful basis framing.
+  - How the Consumer Contracts Regulations 14-day cancellation right interacts
+    with a pre-paid deposit for an appointment inside 14 days (the leisure
+    services exemption may or may not cover a salon appointment).
+  - Providers contracting with consumers carry their own unfair-terms risk for
+    the Half policy they choose; the Provider Terms don't tell them so.
+
+## 26. Refund requests close five days after the appointment (2026-11-13)
+
+The owner's rule: "client has five days after the day of the appointment to
+request for a refund". In-app refund requests close at the end of the fifth
+UK day after the appointment day (`request_booking_refund()`, migration
+`20261113190000`; `REFUND_REQUEST_DAYS` in the app). Complaints, emailing
+support, a provider refunding on their own, requests already open, and
+chargebacks are not limited. Terms: Client Terms §15, Fees policy §9,
+Provider Terms §10, Complaints §1. Not lawyer-reviewed. Same untested area as
+section 6.
+
+Owner's answers (2026-11-13): applies only to bookings made after the
+migration is applied (`refund_request_window_starts_at()`), so earlier
+bookings keep the open-ended rule, as Client Terms §34 promises; no Terms
+notice is sent; the five days apply to every reason, including a wrong
+charge.
+
+To raise (not lawyer-reviewed):
+- **Notice (owner chose none).** Client Terms §34 promises notice before a
+  significant change, and Provider Terms §12 promises providers 15 days'
+  notice; §10 changed. Only the page's "Last updated" date moves.
+- **Billing errors (owner chose five days for all).** "I was charged the
+  wrong amount" is one of the request reasons. A wrong or duplicate charge is
+  a payment-services question as well as a consumer one; "statutory rights"
+  alone may not cover it.
+- **Consumer Rights Act.** The Act's remedies against the provider have no
+  five-day limit. The in-app channel is not the remedy itself, and each place
+  that closes it says statutory rights are unaffected; whether the overall
+  refund/complaint structure is fair under Part 2 is unchecked.
+- **Late/no-show fees** have their own 7-day dispute route (Client Terms §16),
+  decided by the provider; the page does not say which route applies to a fee
+  after day 5.
+- **No-show Half (2026-11-13, live since 2026-11-16):** the no-show
+  Custom £ fee is replaced by "Half the price": deposit kept, plus the rest up
+  to half the price charged to the saved card on a deposit-only booking. One
+  live provider's £25 fee was converted without them choosing it. Raise the
+  same CRA proportionality question as the late cancellation charge.
+
+## 27. A waitlist slot is paid for within 15 minutes (2026-11-12)
+
+Before this, confirming a held waitlist slot booked it with £0 paid: no
+deposit, no fee, no saved card for late or no-show fees, and no recorded
+agreement to the provider's policies. Now it goes through the normal checkout
+(consent recorded server-side at the hold, §11). Decided by the user on
+2026-11-10: the client has 15 minutes from the offer, the clock keeps running
+while they pay, and missing it or passing takes them off that waitlist.
+
+What the copy now says (Terms §17 Waitlists, the join pop-up, the held card in
+Bookings, the "slot has gone" notice):
+- the 15-minute deadline, that deposit and fee apply, and that missing it
+  loses their place;
+- the booking is made when payment goes through;
+- a payment caught by the clock is cancelled or refunded in full (done by
+  `reconcile-checkouts`, which sends its own `payment_not_completed` notice).
+
+Still for a lawyer:
+- Whether a 15-minute window, running during payment (including 3D Secure),
+  is a fair term under the Consumer Rights Act 2015.
+- Cooling-off (Consumer Contracts Regulations 2013) for a waitlist booking,
+  often near-term and made under time pressure. Same open question as §6,
+  more likely to come up here.
+- Providers weren't asked to re-agree to the changed waitlist behaviour
+  (their own offer is now a hold, not an unpaid booking). Same as §10.
+- The Terms page goes live when merged to main, ahead of the app build that
+  follows it. Older builds can't confirm a held slot at all once the
+  migration drops `claim_waitlist_hold` (they show an error), so they never
+  book against the old rule; nobody has ever been offered a waitlist slot.
+
+## 28. A bank dispute is charged only to the booking it is about (2026-11-16)
+
+One checkout can pay several providers. Before this, a chargeback on that
+payment took money back from every provider in it and froze all their unpaid
+payouts for good, even if CERVICED won. Now CERVICED matches the disputed
+amount to the booking(s) it concerns (an admin picks when it can't tell),
+only those providers are affected, and a won dispute is paid back
+(`fix/dispute-per-booking`, migration `20261115090000`). How the money
+moves is in `docs/PAYMENTS_AND_LOGIC.md` §2.7.
+
+Owner's choices (2026-11-16): Provider Terms promise the payback on a win,
+"within a reasonable time" (1A + 1B), and say how CERVICED decides which
+booking a dispute concerns, that other payouts on the payment may wait while
+it does, and how to challenge it (2A). The owner asked for no gaps, so
+Provider Terms §9 now has a "Bank disputes" part covering: who decides the
+outcome (the bank), the provider's duty to give information for the
+response, how the booking is chosen, holding every payout on the payment
+until then, open / lost / won outcomes (including cancelling a debt and
+returning amounts taken from later payouts), CERVICED paying Stripe's
+dispute fee, and a support route for a provider who disagrees.
+
+To raise (not lawyer-reviewed):
+- **Notice (owner chose none, 2026-11-16: "we are still building up").**
+  Provider Terms §12 promises 15 days' notice of a change. The owner's view is
+  that no notice is needed while the provider base is still being built.
+  Holding *every* payout on a payment, and the duty to give information, are
+  new; only the page's "Last updated" date moved. Worth confirming with a
+  lawyer whether §12 already binds the providers who are live today.
+- **Holding innocent providers' money.** The hold has no fixed time limit
+  ("as soon as reasonably practicable"). Whether an open-ended hold of a
+  provider whose booking wasn't disputed is fair, and how it sits with
+  CERVICED being a commercial agent collecting on their behalf.
+- **CERVICED choosing the booking.** CERVICED makes a decision that moves
+  money between providers, with only an internal review by support. Whether
+  that needs a stated timescale, or an outside route.
+- **Corrections are manual.** A wrong pick can only be put right by hand
+  (the system refuses a second, different answer). The Terms promise to
+  return the money, so support must actually do it.
+- **What the provider sees (fixed 2026-11-16, `fix/dispute-payback-shown`).**
+  The payout list now says "Paid back · dispute won" after a win, and "On
+  hold · bank dispute" while one is open, instead of "Returned" throughout.
+  Needs an app build. A fee won back says "being paid back" because support
+  does it by hand.

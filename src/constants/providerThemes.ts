@@ -10,11 +10,21 @@
 // Custom sets are stored in the same column, colon-encoded:
 //   custom:#RRGGBB:#RRGGBB:#RRGGBB   (backdrop : card : accent)
 //
-// The whole stored value is  base[|#sheet[|finish]]  — the content-area colour
+// The whole stored value is  base[|#sheet[|finish[|shape[|pageStyle[|policyLook]]]]]  — the content-area colour
 // and the hero finish ride along as suffixes (see encodeThemeKey), so neither
 // needs a column of its own. Builds that predate the finish read only the
 // first two parts and show the plain blend.
 
+
+import {
+  DEFAULT_PAGE_STYLE,
+  DEFAULT_POLICY_PICTURE_LOOK,
+  isPageStyleKey,
+  isPolicyPictureLook,
+  type PageStyleKey,
+  type PolicyPictureLook,
+} from './pageStyles';
+import { DEFAULT_CUSTOM_CHOICES, encodeCustomChoices, parseCustomChoices, type CustomChoices } from './customPageStyle';
 // Default beige content backdrop — matches the app background.
 export const SHEET_BG = '#F5F1EC';
 
@@ -43,6 +53,11 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
   // A deeper grey beside Dove, the darkest content area: the cards' grey
   // text still reads at about 4.3:1 on it.
   { key: 'smoke',     name: 'Smoke',     color: '#CFCFCE' },
+  // 2026-11-19, for Poster, Hibiscus and Storefront (the owner's pink
+  // reference boards): two pinks deeper than Blush, still pale enough for
+  // the dark text.
+  { key: 'petal',     name: 'Petal',     color: '#F7E1E6' },
+  { key: 'candy',     name: 'Candy',     color: '#FBD9EA' },
 ];
 
 // ── Hero finish ───────────────────────────────────────────────────────────────
@@ -300,22 +315,31 @@ const COLLECTION_DEFS: { key: string; name: string; description: string; from: s
   { key: 'cashmere',      name: 'Cashmere',          description: 'Warm greige into soft camel, with a cinnamon accent',      from: '#C9B2A3', to: '#E9DCD1', accent: '#8C5647', suggestedSheet: 'shell',    collection: 'atelier' },
   { key: 'linenink',      name: 'Linen & Ink',       description: 'Pale linen with a near-black ink accent',                  from: '#E4DED3', to: '#F3EFE8', accent: '#23262E', suggestedSheet: 'beige',    collection: 'atelier' },
   { key: 'mushroom',      name: 'Mushroom',          description: 'Earthy taupe into stone, with a deep bark accent',         from: '#9C8F84', to: '#CFC5BA', accent: '#4A403A', suggestedSheet: 'oat',      collection: 'atelier' },
+  { key: 'ivoryoxblood',   name: 'Ivory & Oxblood',  description: 'Warm ivory with a rich oxblood accent',                 from: '#EDE3D9', to: '#F9F4EC', accent: '#772F3D', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'cocoacream',     name: 'Cocoa & Cream',    description: 'Deep cocoa above a warm cream content area',           from: '#3C302D', to: '#6A514A', accent: '#79543B', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'blushcocoa',    name: 'Blush & Cocoa',     description: 'Soft blush pink with a rich cocoa accent, like a beauty shop', from: '#F2C9D5', to: '#FBE6EC', accent: '#6B3A2E', suggestedSheet: 'milk',     collection: 'sorbet' },
   { key: 'rosesage',      name: 'Rose & Sage',       description: 'Dusty rose with a soft sage accent',                       from: '#E6B3B9', to: '#F2D9D9', accent: '#66805F', suggestedSheet: 'blush',    collection: 'sorbet' },
   { key: 'powderapricot', name: 'Powder & Apricot',  description: 'Powder blue into apricot, with a burnt-orange accent',      from: '#B9CFE3', to: '#F4D6BF', accent: '#B9643F', suggestedSheet: 'mist',     collection: 'sorbet' },
   { key: 'desertrose',    name: 'Desert Rose',       description: 'Sandstone pink with a dark rosewood accent',               from: '#B4807A', to: '#DFBDB1', accent: '#6A3D3A', suggestedSheet: 'shell',    collection: 'terra' },
   { key: 'emeraldgold',   name: 'Emerald & Gold',    description: 'Bottle green with an antique-gold accent',                 from: '#1D4A3C', to: '#2E6A54', accent: '#A98235', suggestedSheet: 'ivory',    collection: 'afterdark' },
   { key: 'sapphireblush', name: 'Sapphire & Blush',  description: 'Midnight sapphire with a deep rose accent',                from: '#1D2C52', to: '#3A4B78', accent: '#B04A68', suggestedSheet: 'blush',    collection: 'afterdark' },
   { key: 'plumchampagne', name: 'Plum & Champagne',  description: 'Velvet plum with an antique-bronze accent',                from: '#3C1F3E', to: '#683C64', accent: '#8A6438', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'hibiscus',      name: 'Hibiscus',          description: 'Deep hibiscus wine with a raspberry-pink accent',          from: '#4A1426', to: '#7A2A45', accent: '#A63A62', suggestedSheet: 'petal',    collection: 'afterdark' },
   { key: 'tealcoral',     name: 'Deep Teal & Coral', description: 'Inky teal with a warm coral accent',                       from: '#113A41', to: '#1E5B62', accent: '#D9714F', suggestedSheet: 'mist',     collection: 'afterdark' },
   { key: 'cobaltblush',   name: 'Cobalt & Blush',    description: 'Electric cobalt with a raspberry-pink accent',             from: '#2747A0', to: '#4A68BE', accent: '#B8436A', suggestedSheet: 'blush',    collection: 'statement' },
   { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    description: 'Glossy cherry with a dark cocoa accent',                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
+  { key: 'cocoapink',     name: 'Cocoa & Pink',      description: 'Dark chocolate with a hot-pink accent, like a poster',      from: '#2B0B0A', to: '#4A1720', accent: '#B23A76', suggestedSheet: 'candy',    collection: 'statement' },
   { key: 'matchaink',     name: 'Matcha & Ink',      description: 'Whisked matcha with a deep ink-green accent',              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
   { key: 'tangerinenavy', name: 'Tangerine & Navy',  description: 'Juicy tangerine with a crisp navy accent',                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },
+  { key: 'royalyellow',    name: 'Royal Blue & Yellow', description: 'Royal blue with a golden-yellow accent',              from: '#2446A6', to: '#4167BC', accent: '#AA7600', suggestedSheet: 'butter',   collection: 'statement' },
+  { key: 'violetlime',     name: 'Violet & Lime',     description: 'Electric violet with a fresh lime accent',                from: '#55339B', to: '#7851B0', accent: '#647A16', suggestedSheet: 'sagemist', collection: 'statement' },
   { key: 'milkglaze',     name: 'Milk Glaze',        description: 'Barely-there oat into pure white, with a soft taupe accent', from: '#F3EFEA', to: '#FFFFFF', accent: '#8A7766', suggestedSheet: 'milk',      collection: 'clean' },
   { key: 'glazedrose',    name: 'Glazed Rose',       description: 'A sheer pink glaze over white, with a dusty-rose accent',    from: '#F1E4DE', to: '#FFFFFF', accent: '#9E6A66', suggestedSheet: 'shell',     collection: 'clean' },
   { key: 'coconutink',    name: 'Coconut & Ink',     description: 'All white with a near-black accent',                         from: '#FFFFFF', to: '#F1EEEA', accent: '#22201E', suggestedSheet: 'milk',      collection: 'clean' },
   { key: 'almondsilk',    name: 'Almond Silk',       description: 'Almond into silk, with a toasted-almond accent',             from: '#E6D8C6', to: '#F5EEE4', accent: '#7A664C', suggestedSheet: 'beige',     collection: 'clean' },
   { key: 'cloud',         name: 'Cloud',             description: 'Soft cloud grey into white, with a slate accent',            from: '#E8E9EB', to: '#FFFFFF', accent: '#3E4859', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'sagemilk',      name: 'Sage & Milk',       description: 'Pale sage into milky white, with a deep green accent',      from: '#E8EEE6', to: '#FBFCFA', accent: '#4E6A55', suggestedSheet: 'sagemist', collection: 'clean' },
+  { key: 'bluelinen',     name: 'Blue & Linen',     description: 'Blue mist into warm linen, with a slate-blue accent',       from: '#E5EEF1', to: '#FBF8F2', accent: '#3D6174', suggestedSheet: 'mist',     collection: 'clean' },
   { key: 'whitegold',     name: 'White & Gold',      description: 'Clean white warming into gold, with a polished-gold accent', from: '#FFFFFF', to: '#F2E7D2', accent: '#9C7633', suggestedSheet: 'milk',      collection: 'gilded' },
   { key: 'blackgold',     name: 'Black & Gold',      description: 'Near-black with an antique-gold accent',                     from: '#0D0C0A', to: '#2A2418', accent: '#98742D', suggestedSheet: 'dove',      collection: 'gilded' },
   { key: 'antiquebronze', name: 'Antique Bronze',    description: 'Dark bronze into burnished gold, with a bronze accent',      from: '#5E4424', to: '#8E6C3E', accent: '#7A5A2B', suggestedSheet: 'champagne', collection: 'gilded' },
@@ -380,35 +404,57 @@ export function decodeCustomTheme(key: string | null | undefined): { backdrop: s
 // ── Full key encoding (base theme + optional content-area suffix) ────────────
 
 /** Compose the stored profile_theme value from a base key, a sheet colour, a
- *  hero finish and a card shape. Every part before a non-default one is
+ *  hero finish, a card shape and a page style (constants/pageStyles). Every part before a non-default one is
  *  written out, so the parts never shift position. */
 export function encodeThemeKey(
   base: string,
   sheet?: string,
   finish: HeroFinish = DEFAULT_HERO_FINISH,
   shape: CardShape = DEFAULT_CARD_SHAPE,
+  pageStyle: PageStyleKey = DEFAULT_PAGE_STYLE,
+  policyLook: PolicyPictureLook = DEFAULT_POLICY_PICTURE_LOOK,
+  /** Branding → Custom's picks, written only while the page style is Custom. */
+  custom: CustomChoices = DEFAULT_CUSTOM_CHOICES,
 ): string {
+  if (pageStyle === 'custom') {
+    return `${base}|${sheet || SHEET_BG}|${finish}|${shape}|${pageStyle}|${policyLook}|${encodeCustomChoices(custom)}`;
+  }
+  if (policyLook !== DEFAULT_POLICY_PICTURE_LOOK) {
+    return `${base}|${sheet || SHEET_BG}|${finish}|${shape}|${pageStyle}|${policyLook}`;
+  }
+  if (pageStyle !== DEFAULT_PAGE_STYLE) return `${base}|${sheet || SHEET_BG}|${finish}|${shape}|${pageStyle}`;
   if (shape !== DEFAULT_CARD_SHAPE) return `${base}|${sheet || SHEET_BG}|${finish}|${shape}`;
   if (finish !== DEFAULT_HERO_FINISH) return `${base}|${sheet || SHEET_BG}|${finish}`;
   return sheet && sheet !== SHEET_BG ? `${base}|${sheet}` : base;
 }
 
-/** Split a stored profile_theme value into base key, sheet colour, hero finish
- *  and card shape. Anything unreadable falls back to the default for that part. */
+/** Split a stored profile_theme value into base key, sheet colour, hero finish,
+ *  card shape, page style, policy pictures and Custom's picks. Anything unreadable falls back to the default for that part. */
 export function parseThemeKey(key: string | null | undefined): {
   base: string | null;
   sheet: string;
   finish: HeroFinish;
   shape: CardShape;
+  pageStyle: PageStyleKey;
+  policyLook: PolicyPictureLook;
+  custom: CustomChoices;
 } {
-  if (!key) return { base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH, shape: DEFAULT_CARD_SHAPE };
-  const [base, sheet, finish, shape] = key.split('|');
+  if (!key) {
+    return {
+      base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH, shape: DEFAULT_CARD_SHAPE,
+      pageStyle: DEFAULT_PAGE_STYLE, policyLook: DEFAULT_POLICY_PICTURE_LOOK, custom: DEFAULT_CUSTOM_CHOICES,
+    };
+  }
+  const [base, sheet, finish, shape, pageStyle, policyLook, custom] = key.split('|');
   const validSheet = /^#[0-9a-fA-F]{6}$/.test(sheet ?? '') ? sheet! : SHEET_BG;
   return {
     base: base ?? null,
     sheet: validSheet,
     finish: isHeroFinish(finish) ? finish : DEFAULT_HERO_FINISH,
     shape: isCardShape(shape) ? shape : DEFAULT_CARD_SHAPE,
+    pageStyle: isPageStyleKey(pageStyle) ? pageStyle : DEFAULT_PAGE_STYLE,
+    policyLook: isPolicyPictureLook(policyLook) ? policyLook : DEFAULT_POLICY_PICTURE_LOOK,
+    custom: parseCustomChoices(custom),
   };
 }
 

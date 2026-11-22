@@ -5,7 +5,7 @@
 // through `setDraft`, so SAVE PROFILE stays one transaction across all nine
 // categories (see the screen's note on selectedCategory).
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { AppTheme } from '../../constants/theme';
@@ -13,10 +13,13 @@ import { SKIN_TONES } from '../../constants/skinTones';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import type { BeautyData, CategoryKey, Gender } from '../../types/beautyProfile';
 import {
-  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES, hairGoalsFor,
-  MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_LENGTHS, NAIL_SHAPES,
-  SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY,
+  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES,
+  MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_CONDITIONS, NAIL_LENGTHS,
+  NAIL_SERVICES, NAIL_SHAPES, NAIL_STYLES, STYLE_AESTHETICS, STYLE_OCCASIONS, STYLE_ROUTINES, AESTHETICS_BY_VIBE,
+  type DescribedOption,
+  SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY, hairTreatmentHistory,
 } from './options';
+import { tailoredOptions, type TailoredQuestion } from './tailoredOptions';
 
 interface Props {
   category: CategoryKey;
@@ -27,6 +30,8 @@ interface Props {
 }
 
 export function CategoryEditor({ category, draft, editing, setDraft, P }: Props) {
+  // Which tailored questions have "More options" open.
+  const [showAll, setShowAll] = useState<Partial<Record<TailoredQuestion, boolean>>>({});
   const setSingle = (field: keyof BeautyData, value: string) => {
     if (!editing) return;
     Haptics.selectionAsync().catch(() => {});
@@ -82,6 +87,94 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           <Text style={chipTextStyle(isOn(opt))}>{opt}</Text>
         </TouchableOpacity>
       ))}
+    </View>
+  );
+
+  // A question that follows an earlier answer shows only the options that
+  // suit it, under "Suited to your 4C hair" (owner, 2026-11-17: the options
+  // should change, not just the label). Everything else folds under "More
+  // options", and anything already picked always shows.
+  const renderTailored = (
+    question: TailoredQuestion,
+    picked: string[],
+    isOn: (opt: string) => boolean,
+    onPress: (opt: string) => void,
+  ) => {
+    const { suited, rest, because } = tailoredOptions(question, draft);
+    if (!because) return renderChips(withSaved(rest, picked), isOn, onPress);
+    const shown = withSaved(suited, picked);
+    const folded = rest.filter(o => !shown.includes(o));
+    const open = !!showAll[question];
+    return (
+      <>
+        <Text style={[styles.suitedLabel, { color: P.accentText }]}>{`Suited to ${because}`.toUpperCase()}</Text>
+        <View style={[styles.chips, styles.chipsTight]}>
+          {shown.map(opt => (
+            <TouchableOpacity
+              key={opt}
+              style={chipStyle(isOn(opt))}
+              onPress={() => onPress(opt)}
+              activeOpacity={editing ? 0.5 : 1}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isOn(opt), disabled: !editing }}
+            >
+              <Text style={chipTextStyle(isOn(opt))}>{opt}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {folded.length > 0 ? (
+          <TouchableOpacity
+            style={styles.moreToggle}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowAll(prev => ({ ...prev, [question]: !open })); }}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLabel={open ? 'Fewer options' : `More options, ${folded.length}`}
+          >
+            <Text style={[styles.suitedLabel, styles.moreText, { color: P.sub }]}>
+              {open ? 'FEWER OPTIONS ▴' : `MORE OPTIONS (${folded.length}) ▾`}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {open && folded.length > 0 ? renderChips(folded, isOn, onPress) : <View style={styles.tailoredGap} />}
+      </>
+    );
+  };
+
+  // Options picked as cards: the name, and a line saying what it looks like.
+  const renderCards = (
+    options: readonly DescribedOption[],
+    isOn: (name: string) => boolean,
+    onPress: (name: string) => void,
+    columns: 2 | 1,
+  ) => (
+    <View style={[styles.cards, columns === 1 && styles.cardsOne]}>
+      {options.map(({ name, line }) => {
+        const on = isOn(name);
+        return (
+          <TouchableOpacity
+            key={name}
+            style={[
+              styles.card,
+              columns === 2 ? styles.cardHalf : styles.cardFull,
+              { backgroundColor: on ? P.accentDim : P.surface, borderColor: on ? P.accent : P.border },
+            ]}
+            onPress={() => onPress(name)}
+            activeOpacity={editing ? 0.6 : 1}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on, disabled: !editing }}
+            accessibilityLabel={`${name}. ${line}`}
+          >
+            <View style={styles.cardTop}>
+              <Text style={[styles.cardName, { color: P.text }]} numberOfLines={1}>{name}</Text>
+              <View style={[styles.cardTick, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.accent : 'transparent' }]}>
+                {on ? <Text style={[styles.cardTickMark, { color: P.onAccent }]}>✓</Text> : null}
+              </View>
+            </View>
+            <Text style={[styles.cardLine, { color: P.sub }]} numberOfLines={2}>{line}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 
@@ -143,7 +236,7 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
 
           {sectionHead('SKIN CONCERNS', { selected: draft.skinConcerns.length, total: SKIN_CONCERNS.length })}
           {sub('Select all that apply')}
-          {renderChips(SKIN_CONCERNS, o => draft.skinConcerns.includes(o), o => toggleExclusive('skinConcerns', 'None', o))}
+          {renderTailored('skinConcerns', draft.skinConcerns, o => draft.skinConcerns.includes(o), o => toggleExclusive('skinConcerns', 'None', o))}
 
           {sectionHead('SENSITIVE AREAS', { selected: draft.sensitiveAreas.length, total: SENSITIVE_AREAS.length }, { optional: true })}
           {sub('Areas of sensitivity for treatments like waxing or facial work')}
@@ -160,49 +253,68 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
 
           {sectionHead('SCALP CONDITION', { selected: draft.scalpCondition.length, total: SCALP_CONDITIONS.length }, { optional: true })}
           {sub('Your scalp. Pick all that apply.')}
-          {renderChips(withSaved(SCALP_CONDITIONS, draft.scalpCondition), o => draft.scalpCondition.includes(o), o => toggleMulti('scalpCondition', o))}
+          {renderTailored('scalpCondition', draft.scalpCondition, o => draft.scalpCondition.includes(o), o => toggleMulti('scalpCondition', o))}
 
           {sectionHead('COLOUR & TREATMENT HISTORY', { selected: draft.treatmentHistory.length, total: TREATMENT_HISTORY.length })}
           {sub('Previous professional treatments')}
-          {renderChips(TREATMENT_HISTORY, o => draft.treatmentHistory.includes(o), o => toggleExclusive('treatmentHistory', 'None', o))}
+          {/* Hair skips a stored 'Lash extensions' (see hairTreatmentHistory). */}
+          {renderTailored('treatmentHistory', hairTreatmentHistory(draft.treatmentHistory), o => draft.treatmentHistory.includes(o), o => toggleExclusive('treatmentHistory', 'None', o))}
 
           {sectionHead('HAIR GOALS', { selected: draft.hairGoals.length, total: HAIR_GOALS.length }, { optional: true })}
           {sub("What you're looking to achieve. Pick as many as you like.")}
-          {renderChips(withSaved(hairGoalsFor(draft.hairType), draft.hairGoals), o => draft.hairGoals.includes(o), o => toggleMulti('hairGoals', o))}
+          {renderTailored('hairGoals', draft.hairGoals, o => draft.hairGoals.includes(o), o => toggleMulti('hairGoals', o))}
         </>
       );
 
     case 'nails':
+      // Their own nails first: they decide what suits them, which decides length, then shape.
       return (
         <>
+          {sectionHead('YOUR NATURAL NAILS', { selected: draft.nailCondition.length, total: NAIL_CONDITIONS.length }, { optional: true })}
+          {sub('What your own nails are like. Pick all that apply.')}
+          {renderChips(withSaved(NAIL_CONDITIONS, draft.nailCondition), o => draft.nailCondition.includes(o), o => toggleMulti('nailCondition', o))}
+
+          {sectionHead('WHAT YOU USUALLY GET', { selected: draft.nailService.length, total: NAIL_SERVICES.length }, { optional: true })}
+          {sub('The nail services you book. Pick all you have.')}
+          {renderTailored('nailService', draft.nailService, o => draft.nailService.includes(o), o => toggleMulti('nailService', o))}
+
           {sectionHead('PREFERRED LENGTH', { selected: draft.nailLength.length, total: NAIL_LENGTHS.length }, { optional: true })}
           {sub('How long you like your nails. Pick all you wear.')}
-          {renderChips(withSaved(NAIL_LENGTHS, draft.nailLength), o => draft.nailLength.includes(o), o => toggleMulti('nailLength', o))}
+          {renderTailored('nailLength', draft.nailLength, o => draft.nailLength.includes(o), o => toggleMulti('nailLength', o))}
 
           {sectionHead('PREFERRED SHAPE', { selected: draft.nailShape.length, total: NAIL_SHAPES.length }, { optional: true })}
           {sub('Nail shapes you like. Pick as many as you want.')}
-          {renderChips(withSaved(NAIL_SHAPES, draft.nailShape), o => draft.nailShape.includes(o), o => toggleMulti('nailShape', o))}
+          {renderTailored('nailShape', draft.nailShape, o => draft.nailShape.includes(o), o => toggleMulti('nailShape', o))}
+
+          {sectionHead('LOOKS YOU LIKE', { selected: draft.nailStyle.length, total: NAIL_STYLES.length }, { optional: true })}
+          {sub('French, chrome, art… pick as many as you like.')}
+          {renderChips(withSaved(NAIL_STYLES, draft.nailStyle), o => draft.nailStyle.includes(o), o => toggleMulti('nailStyle', o))}
+
+          {sectionHead('COLOURS YOU GO FOR', { selected: draft.nailColours.length, total: NAIL_COLOURS.length }, { optional: true })}
+          {sub('Pick all you wear.')}
+          {renderTailored('nailColours', draft.nailColours, o => draft.nailColours.includes(o), o => toggleMulti('nailColours', o))}
         </>
       );
 
     case 'lashesBrows':
+      // What they have now comes first: it decides which styles suit them.
       return (
         <>
-          {sectionHead('LASH STYLE', { selected: draft.lashStyle.length, total: LASH_STYLES.length }, { optional: true })}
-          {sub('Lash looks you like. Pick as many as you want.')}
-          {renderChips(withSaved(LASH_STYLES, draft.lashStyle), o => draft.lashStyle.includes(o), o => toggleMulti('lashStyle', o))}
-
           {sectionHead('LASH STATUS', { selected: draft.lashStatus ? 1 : 0, total: 1 }, { optional: true })}
           {sub('Current situation')}
           {renderChips(LASH_STATUS, o => draft.lashStatus === o, o => setSingle('lashStatus', o))}
 
-          {sectionHead('BROW STYLE', { selected: draft.browStyle.length, total: BROW_STYLES.length }, { optional: true })}
-          {sub('Brow looks you like. Pick as many as you want.')}
-          {renderChips(withSaved(BROW_STYLES, draft.browStyle), o => draft.browStyle.includes(o), o => toggleMulti('browStyle', o))}
+          {sectionHead('LASH STYLE', { selected: draft.lashStyle.length, total: LASH_STYLES.length }, { optional: true })}
+          {sub('Lash looks you like. Pick as many as you want.')}
+          {renderTailored('lashStyle', draft.lashStyle, o => draft.lashStyle.includes(o), o => toggleMulti('lashStyle', o))}
 
           {sectionHead('BROW CONDITION', { selected: draft.browCondition.length, total: BROW_CONDITIONS.length }, { optional: true })}
           {sub('Your natural brows. Pick all that apply.')}
           {renderChips(withSaved(BROW_CONDITIONS, draft.browCondition), o => draft.browCondition.includes(o), o => toggleMulti('browCondition', o))}
+
+          {sectionHead('BROW STYLE', { selected: draft.browStyle.length, total: BROW_STYLES.length }, { optional: true })}
+          {sub('Brow looks you like. Pick as many as you want.')}
+          {renderTailored('browStyle', draft.browStyle, o => draft.browStyle.includes(o), o => toggleMulti('browStyle', o))}
         </>
       );
 
@@ -215,26 +327,45 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
 
           {sectionHead('FINISH', { selected: draft.makeupFinish.length, total: MAKEUP_FINISH.length }, { optional: true })}
           {sub('Skin finishes you like. Pick all you wear.')}
-          {renderChips(withSaved(MAKEUP_FINISH, draft.makeupFinish), o => draft.makeupFinish.includes(o), o => toggleMulti('makeupFinish', o))}
+          {renderTailored('makeupFinish', draft.makeupFinish, o => draft.makeupFinish.includes(o), o => toggleMulti('makeupFinish', o))}
 
           {sectionHead('EYE STYLE', { selected: draft.makeupEyes.length, total: MAKEUP_EYES.length }, { optional: true })}
           {sub('Eye looks you go for. Pick as many as you want.')}
-          {renderChips(withSaved(MAKEUP_EYES, draft.makeupEyes), o => draft.makeupEyes.includes(o), o => toggleMulti('makeupEyes', o))}
+          {renderTailored('makeupEyes', draft.makeupEyes, o => draft.makeupEyes.includes(o), o => toggleMulti('makeupEyes', o))}
 
           {sectionHead('LIP PREFERENCE', { selected: draft.makeupLips.length, total: MAKEUP_LIPS.length }, { optional: true })}
           {sub('Lip looks you go for. Pick as many as you want.')}
-          {renderChips(withSaved(MAKEUP_LIPS, draft.makeupLips), o => draft.makeupLips.includes(o), o => toggleMulti('makeupLips', o))}
+          {renderTailored('makeupLips', draft.makeupLips, o => draft.makeupLips.includes(o), o => toggleMulti('makeupLips', o))}
         </>
       );
 
-    case 'general':
+    case 'general': {
+      // The aesthetics that go with their vibe come first; none are hidden.
+      const suitedAesthetics = new Set(draft.styleVibe.flatMap(v => AESTHETICS_BY_VIBE[v] ?? []));
+      const aesthetics = [
+        ...STYLE_AESTHETICS.filter(a => suitedAesthetics.has(a.name)),
+        ...STYLE_AESTHETICS.filter(a => !suitedAesthetics.has(a.name)),
+      ];
       return (
         <>
           {sectionHead('STYLE VIBE', { selected: draft.styleVibe.length, total: STYLE_VIBES.length })}
           {sub('How would you describe your overall look? Pick as many as fit.')}
           {renderChips(withSaved(STYLE_VIBES, draft.styleVibe), o => draft.styleVibe.includes(o), o => toggleMulti('styleVibe', o))}
+
+          {sectionHead('AESTHETICS YOU LOVE', { selected: draft.styleAesthetics.length, total: STYLE_AESTHETICS.length }, { optional: true })}
+          {sub(suitedAesthetics.size > 0 ? 'The ones that go with your vibe are first. Pick any you love.' : 'Pick any you love.')}
+          {renderCards(aesthetics, o => draft.styleAesthetics.includes(o), o => toggleMulti('styleAesthetics', o), 2)}
+
+          {sectionHead('OCCASIONS YOU BOOK FOR', { selected: draft.styleOccasions.length, total: STYLE_OCCASIONS.length }, { optional: true })}
+          {sub('When do you usually get your hair, nails or makeup done? Pick all that apply.')}
+          {renderChips(withSaved(STYLE_OCCASIONS, draft.styleOccasions), o => draft.styleOccasions.includes(o), o => toggleMulti('styleOccasions', o))}
+
+          {sectionHead('TIME SPENT GETTING READY', { selected: draft.styleRoutine ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('On a normal day, how long do your hair and makeup take? It helps providers suggest looks you can keep up.')}
+          {renderCards(STYLE_ROUTINES, o => draft.styleRoutine === o, o => setSingle('styleRoutine', o), 1)}
         </>
       );
+    }
 
     case 'personalisation':
       return (
@@ -306,6 +437,22 @@ const styles = StyleSheet.create({
   optionalBadge:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic' },
 
   chips:    { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 24 },
+  cards:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
+  cardsOne: { flexDirection: 'column' },
+  card:     { borderRadius: 18, borderWidth: 1.5, padding: 14, gap: 6 },
+  cardHalf: { width: '48%', minHeight: 92 },
+  cardFull: { width: '100%' },
+  cardTop:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cardName: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 0.6, flexShrink: 1 },
+  cardTick: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  cardTickMark: { fontSize: 11, fontWeight: '700' },
+  cardLine: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16 },
+  // The suited chips sit close above "More".
+  chipsTight: { marginBottom: 12 },
+  suitedLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.4, marginBottom: 8 },
+  moreToggle: { alignSelf: 'flex-start', minHeight: 36, justifyContent: 'center' },
+  moreText: { marginBottom: 0 },
+  tailoredGap: { height: 12 },
   chip:     { borderRadius: 100, borderWidth: 1.5, paddingVertical: 9, paddingHorizontal: 15 },
   chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.7 },
 

@@ -28,3 +28,18 @@ describe('describeCancelRefund', () => {
     expect(describeCancelRefund({ ...base, refundedAmount: 88 }, early)).toBeNull();
   });
 });
+
+describe('late cancel with a late cancellation fee (deposit only, half policy)', () => {
+  const booking = { paymentStatus: PaymentStatus.DEPOSIT_PAID, amountPaid: 21, providerName: 'Bloom', depositAmount: 20 };
+  it('uses the chosen wording in place of the generic warning', () => {
+    const copy = describeCancelRefund(booking, { policyApplies: true, depositNonRefundable: false, lateCancelFeePence: 3000 });
+    expect(copy?.confirmLine).toBe("Late cancellation: you'll lose your £20.00 deposit and may be charged up to £30.00 more.");
+    expect(copy?.replacesWarning).toBe(true);
+    expect(copy?.doneMessage).toContain('may charge up to £30.00 more');
+  });
+  it('says nothing about a charge when cancelling in good time', () => {
+    const copy = describeCancelRefund(booking, { policyApplies: false, depositNonRefundable: false, lateCancelFeePence: 3000 });
+    expect(copy?.replacesWarning).toBeUndefined();
+    expect(copy?.confirmLine).not.toContain('£30.00');
+  });
+});

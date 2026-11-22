@@ -31,6 +31,9 @@ import {
   rememberContacts,
   findContactsOnCerviced,
   hashNormalisedNumber,
+  savedNameLine,
+  savedNamesByNumber,
+  searchContacts,
 } from '../features/social/contacts';
 
 /** The live server's social_phone_hash('07700 900123'), checked 2026-11-08. */
@@ -80,9 +83,9 @@ describe('findContactsOnCerviced', () => {
     expect(sent).not.toContain('Mum');
     expect(sent).not.toContain('Bea');
     expect(mockGetContactsAsync).toHaveBeenCalledWith({ fields: ['phoneNumbers', 'name'] });
-    // The match is the account's own name, never the saved one.
+    // The match leads with the account's own name; the saved one rides along, phone only.
     expect(out.matches).toEqual([
-      { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null },
+      { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null, savedName: 'Mum' },
     ]);
     expect(out.invites).toEqual([{ key: 'id:c2', name: 'Bea', number: '07700 900456' }]);
   });
@@ -128,5 +131,53 @@ describe('buildInviteList', () => {
   it('texts the first usable number as saved', () => {
     const out = buildInviteList([{ name: 'Bea', phoneNumbers: [{ number: '1' }, { number: '+44 7700 900456' }] }], new Set());
     expect(out).toEqual([{ key: 'n:Bea|447700900456', name: 'Bea', number: '+44 7700 900456' }]);
+  });
+});
+
+describe('saved names on matches', () => {
+  it('maps each number to the first name it is saved under', () => {
+    const out = savedNamesByNumber([
+      { name: ' Sis ', phoneNumbers: [{ number: '07700 900123' }] },
+      { name: 'Amara work', phoneNumbers: [{ number: '+44 7700 900123' }] },
+      { name: '', phoneNumbers: [{ number: '07700 900456' }] },
+    ]);
+    expect(Array.from(out.entries())).toEqual([['447700900123', 'Sis']]);
+  });
+
+  it('reads "Sis in your contacts", and says nothing when it would repeat the name', () => {
+    expect(savedNameLine({ name: 'Amara Johnson', savedName: 'Sis' })).toBe('Sis in your contacts');
+    expect(savedNameLine({ name: 'Amara Johnson', savedName: 'amara johnson' })).toBeNull();
+    expect(savedNameLine({ name: 'Amara Johnson', savedName: null })).toBeNull();
+    expect(savedNameLine({ name: 'Amara Johnson', savedName: '  ' })).toBeNull();
+  });
+});
+
+describe('searchContacts', () => {
+  const result = {
+    matches: [
+      { userId: 'u1', name: 'Amara Johnson', avatarUrl: null, myStatus: null, followsMe: null, savedName: 'Sis' },
+      { userId: 'u2', name: 'Bea Lane', avatarUrl: null, myStatus: null, followsMe: null, savedName: null },
+    ],
+    invites: [
+      { key: 'a', name: 'Chloe', number: '+44 7700 900111' },
+      { key: 'b', name: 'Dani', number: '07700 900222' },
+    ],
+  };
+
+  it('returns everything for a blank search', () => {
+    expect(searchContacts(result, '  ')).toBe(result);
+  });
+
+  it('finds a match by account name or saved name, ignoring case', () => {
+    expect(searchContacts(result, 'sis').matches.map((m) => m.userId)).toEqual(['u1']);
+    expect(searchContacts(result, 'LANE').matches.map((m) => m.userId)).toEqual(['u2']);
+  });
+
+  it('finds an invite by name, or by number with or without the 0 / +44', () => {
+    expect(searchContacts(result, 'chl').invites.map((c) => c.key)).toEqual(['a']);
+    expect(searchContacts(result, '07700 900111').invites.map((c) => c.key)).toEqual(['a']);
+    expect(searchContacts(result, '+447700900222').invites.map((c) => c.key)).toEqual(['b']);
+    // Two digits isn't a number search.
+    expect(searchContacts(result, '11').invites).toEqual([]);
   });
 });
