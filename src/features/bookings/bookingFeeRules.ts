@@ -37,7 +37,8 @@ export function isChargeableLateCancel(terms: BookingFeeTerms): boolean {
   const start = new Date(`${terms.bookingDate}T${terms.bookingTime}`).getTime();
   const cancelled = Date.parse(terms.cancelledAt);
   const hoursUntil = Number.isFinite(start) && Number.isFinite(cancelled) ? (start - cancelled) / 3_600_000 : 0;
-  return hoursUntil >= 0 && hoursUntil < terms.cancelNoticeHours;
+  // After the start counts as late too, as on the server.
+  return hoursUntil < terms.cancelNoticeHours;
 }
 
 export function feeChargeWindow(terms: BookingFeeTerms, nowMs: number): FeeChargeWindow {

@@ -523,9 +523,9 @@ Pay or PayPal.
 
 | Situation | Who starts it | What the client gets back | What the provider keeps | CERVICED's fee |
 |---|---|---|---|---|
-| Provider declines or cancels a paid booking | Provider | Everything, automatically | Nothing | Refunded |
-| Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). | Automatic (every 5 min) | Everything, automatically, or for a request made since card holds (section 2.1.1) the hold released and nothing taken | Nothing | Refunded |
-| Client cancels **before** the provider's cancellation window | Client | Everything | Nothing | Refunded |
+| Provider declines or cancels a paid booking. They can decline a request at any time, but can cancel a confirmed booking only before it starts (UK time). Once it has started, is in progress or is marked as their no-show, they use **Issue a refund** instead, which doesn't rewrite what happened. Live since 13 Nov (`20261113110000`) | Provider | Everything, automatically | Nothing | Refunded |
+| Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). Since 13 Nov (`20261113130000`) the provider can't accept after that time either, even before the 5-minute job has run. | Automatic (every 5 min) | Everything, automatically, or for a request made since card holds (section 2.1.1) the hold released and nothing taken | Nothing | Refunded |
+| Client cancels **before** the provider's cancellation window. Cancelling **after the start time** is a late cancel, not an early one (the rows below apply): the database half (`20261113120000`) has been live since 13 Nov, the money half (`isLateClientCancel` in `apply-cancellation-refund` and `booking-fee`) is live once `apply-cancellation-refund` and `booking-fee` are deployed from this change. A request withdrawn before the provider accepts takes nothing either way (its card was only held, section 2.1.1) | Client | Everything | Nothing | Refunded |
 | Client cancels and the booking's frozen policy has a **non-refundable deposit**, with no bigger late penalty | Client | Everything except the deposit | The deposit (at most half the service price if they paid in full) | Refunded |
 | Same, but cancelled late under a penalty worth more than the deposit | Client | As the penalty rows below | The penalty, never less than the deposit | Kept |
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
@@ -1238,7 +1238,7 @@ Keep the list short and review it monthly.
 | `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them, or leaves a held one to `settle-request-card-holds` |
 | `settle-request-card-holds` | Every 5 min | `process_request_card_holds()`: calls `settle-held-payment` only when a hold needs placing, a bank check has lapsed, or a request has an answer to act on |
-| `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
+| `auto-complete-bookings` | Every 30 min | Marks finished bookings completed (by the booking's UK end time since 13 Nov, `20261113140000`; it was an hour late in summer before), which makes tipping available |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
 | `refund-request-deadlines` | Hourly at :25 | `process_refund_request_deadlines()`: reminds the provider at 2 days, passes the request to CERVICED at 3 |
 
