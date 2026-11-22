@@ -11,6 +11,9 @@
 //   • late: only on a booking that actually went ahead
 //   • only if the client agreed to fees when they paid, and paid by card in-app
 //   • once per booking (the unique index enforces it; this gives the reason)
+//   • late and no-show: once per VISIT (user decision 2026-11-13). Services
+//     booked back to back are one visit, so one late or no-show fee covers
+//     them all; booking-fee finds the visit (isVisitFee, sameVisit below)
 //
 // LATE CANCELLATION (user decisions 2026-11-12/13 — auto-memory
 // late-cancel-half-top-up): under a "Half the price" policy, a client who paid
@@ -43,6 +46,9 @@ export interface FeeEligibilityInput {
   clientConsented: boolean;
   /** A non-failed fee row already exists for this booking. */
   alreadyCharged: boolean;
+  /** A non-failed late or no-show fee already exists on another booking in
+   *  the same visit (sameVisit). Ignored for a late cancellation fee. */
+  visitAlreadyCharged?: boolean;
   nowMs: number;
 }
 
@@ -66,6 +72,9 @@ export function checkFeeEligibility(input: FeeEligibilityInput): FeeEligibility 
     return { ok: false, error: `This client didn't save a card for fees when they booked, so a ${label} can't be charged in the app.` };
   }
   if (input.alreadyCharged) return { ok: false, error: 'A fee has already been charged for this booking.' };
+  if (isVisitFee(input.kind) && input.visitAlreadyCharged) {
+    return { ok: false, error: VISIT_ALREADY_CHARGED };
+  }
 
   if (input.kind === 'no_show' && input.status !== 'no_show') {
     return { ok: false, error: 'Mark the booking as a no-show before charging the no-show fee.' };
@@ -89,6 +98,26 @@ export function checkFeeEligibility(input: FeeEligibilityInput): FeeEligibility 
   }
 
   return { ok: true, amountPence: amount };
+}
+
+export const VISIT_ALREADY_CHARGED =
+  "A late or no-show fee has already been charged for this visit. It covers every service booked back to back, so it can't be charged again.";
+
+/** Late and no-show fees are charged once per visit; a late cancellation fee
+ *  is half of each service's own price, so it stays per booking. */
+export function isVisitFee(kind: FeeKind): boolean {
+  return kind === 'late' || kind === 'no_show';
+}
+
+/** Whether two bookings are one visit: paid in the same checkout (the caller
+ *  only passes bookings from it), with the same provider and client, on the
+ *  same day. Back-to-back services are; group_booking_id isn't used because
+ *  the app sets it and card checkouts don't always carry it. */
+export function sameVisit(
+  a: { provider_id: string; user_id: string; booking_date: string },
+  b: { provider_id: string; user_id: string; booking_date: string },
+): boolean {
+  return a.provider_id === b.provider_id && a.user_id === b.user_id && a.booking_date === b.booking_date;
 }
 
 /** Statuses a booking can be in and still end up with a fee charged. */
