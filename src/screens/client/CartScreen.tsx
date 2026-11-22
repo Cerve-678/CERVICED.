@@ -331,6 +331,10 @@ interface PaymentModalProps {
   /** The checkout went through: which one, and how much of it is only held
    *  on the card for requests (null if that couldn't be read). */
   onCheckoutPaid?: (checkoutBatchId: string, plan: CheckoutHoldPlan | null) => void;
+  /** True from the moment the payment is handed to Stripe until it's settled
+   *  or has failed. While it is, leaving the Cart must not cancel the checkout:
+   *  the card may already be approved (CartScreen abandonOutstandingCheckout). */
+  onPaymentInFlight?: (inFlight: boolean) => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -654,6 +658,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentComplete,
     onPaymentPending,
     onCheckoutPaid,
+    onPaymentInFlight,
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
@@ -831,6 +836,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         }
 
         let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
+        // From here the card can be approved at any moment, so leaving the
+        // Cart must not cancel the checkout (cleared in finally).
+        onPaymentInFlight?.(true);
         if (method === 'wallet') {
           // The wallet sheet shows the amount it's given, so give it the
           // server-priced intent's amount rather than the cart's own sum.
@@ -936,11 +944,12 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         onClose();
         onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
       } finally {
+        onPaymentInFlight?.(false);
         setIsProcessing(false);
         setConfirming(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, onPaymentInFlight, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
@@ -2106,6 +2115,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // 20260810180302 — so the booking wouldn't be re-created, it would just
   // fail. Abandoning is therefore skipped while this is set.
   const isClaimingRef = useRef(false);
+  const paymentInFlightRef = useRef(false);
 
   /**
    * Give back the slots this checkout is holding.
@@ -2127,6 +2137,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
    */
   const abandonOutstandingCheckout = useCallback(() => {
     if (isClaimingRef.current) return;
+    // A payment already handed to Stripe is settled by the server
+    // (reconcile-checkouts); cancelling here would release a card the client
+    // has just approved and drop their booking.
+    if (paymentInFlightRef.current) return;
     const heldBatch = holdBatchIdRef.current;
     if (heldBatch) {
       holdBatchIdRef.current = null;
@@ -4806,6 +4820,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
                 onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}
+                onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}
                 onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
@@ -4823,7 +4838,9 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
                   setShowPaymentModal(false);
-                  setShowPaymentSuccessModal(true);
+                  // Paid after the client left the Cart: the success sheet would
+                  // float over another screen, so the booking notification tells them.
+                  if (navigation.isFocused()) setShowPaymentSuccessModal(true);
                 }}
                 onBookingFailed={(message) => {
                   // Booking failed after payment (or during) — the held

@@ -88,3 +88,31 @@ describe('CartScreen hands the slots back on every exit it can see', () => {
     expect(CART).toContain('isClaimingRef.current = false;');
   });
 });
+
+describe('leaving the Cart while a payment is going through', () => {
+  // Found 2026-11-22: a client who left the Cart during "Confirming your
+  // payment…" (a tapped notification, say) cancelled their own checkout, so
+  // the server released the card they had just approved and dropped the booking.
+  const abandon = CART.slice(
+    CART.indexOf('const abandonOutstandingCheckout = useCallback'),
+    CART.indexOf('}, [releaseCartCheckoutSlots]);'),
+  );
+  const pay = CART.slice(CART.indexOf('const StripePaymentModal'));
+
+  it('does not cancel a checkout whose payment is in flight', () => {
+    expect(abandon).toContain('if (paymentInFlightRef.current) return;');
+    expect(abandon.indexOf('paymentInFlightRef.current')).toBeLessThan(abandon.indexOf('cancelCheckout('));
+  });
+
+  it('marks the payment in flight before Stripe is asked, and clears it however it ends', () => {
+    expect(pay.indexOf('onPaymentInFlight?.(true)')).toBeGreaterThan(-1);
+    expect(pay.indexOf('onPaymentInFlight?.(true)')).toBeLessThan(pay.indexOf('confirmPlatformPayPayment(clientSecret'));
+    const fin = pay.slice(pay.indexOf('} finally {') + '} finally {'.length);
+    expect(fin.slice(0, fin.indexOf('}'))).toContain('onPaymentInFlight?.(false)');
+    expect(CART).toContain('onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}');
+  });
+
+  it('shows the success sheet only while the Cart is on screen', () => {
+    expect(CART).toContain('if (navigation.isFocused()) setShowPaymentSuccessModal(true);');
+  });
+});

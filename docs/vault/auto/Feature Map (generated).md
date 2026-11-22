@@ -75,7 +75,7 @@ Curated: [[Availability & Slots]] · **239 files**
 
 ## Payments
 Curated: [[Payments]] · **202 files**
-- `src/screens/client/CartScreen.tsx` _(534)_
+- `src/screens/client/CartScreen.tsx` _(547)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -110,7 +110,7 @@ Curated: [[Payments]] · **202 files**
 ## Booking flow
 Curated: [[Booking Flow]] · **416 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
-- `src/screens/client/CartScreen.tsx` _(726)_
+- `src/screens/client/CartScreen.tsx` _(732)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(605)_
 - `src/services/becca/capabilities/client.ts` _(601)_
@@ -251,7 +251,7 @@ Curated: [[Booking Flow]] · **242 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/RescheduleScreen.tsx` _(164)_
-- `src/screens/client/CartScreen.tsx` _(157)_
+- `src/screens/client/CartScreen.tsx` _(160)_
 - `src/services/becca/capabilities/client.ts` _(149)_
 - `src/services/database/reschedule.ts` _(138)_
 - `src/screens/provider/PoliciesScreen.tsx` _(90)_
@@ -347,7 +347,7 @@ Curated: [[Services]] · **66 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **105 files**
-- `src/screens/client/CartScreen.tsx` _(486)_
+- `src/screens/client/CartScreen.tsx` _(493)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/services/database/services.ts` _(50)_
