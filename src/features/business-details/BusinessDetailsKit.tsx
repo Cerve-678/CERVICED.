@@ -63,25 +63,65 @@ export function useBusinessPalette(): Palette {
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-export function Card({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+export function Card({ title, sub, children, action }: {
+  title: string; sub?: string; children: React.ReactNode;
+  /** Sits at the right of the title, like a remove button. */
+  action?: React.ReactNode;
+}) {
   const C = useBusinessPalette();
   // C.card (#FFFFFF light / #252220 dark), not C.surface — matches the white
   // cards on BookingDetailScreen, which is the reference for card treatment.
   return (
     <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
-      <Text style={[s.cardTitle, { color: C.text }]}>{title}</Text>
+      {action ? (
+        <View style={s.cardTitleRow}>
+          <Text style={[s.cardTitle, { color: C.text, flex: 1 }]}>{title}</Text>
+          {action}
+        </View>
+      ) : (
+        <Text style={[s.cardTitle, { color: C.text }]}>{title}</Text>
+      )}
       {sub ? <Text style={[s.cardSub, { color: C.sub }]}>{sub}</Text> : null}
       {children}
     </View>
   );
 }
 
+// ─── MinusButton ──────────────────────────────────────────────────────────────
+
+/** The round "−" that takes away something added with "+": a note, Travel,
+ *  Emergency appointments, one of Your Sections, or one FAQ question. */
+export function MinusButton({ label, onPress, style }: { label: string; onPress: () => void; style?: object }) {
+  const C = useBusinessPalette();
+  return (
+    <TouchableOpacity
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+      activeOpacity={0.6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={10}
+      style={[minusSt.btn, { borderColor: C.border, backgroundColor: C.surface }, style]}
+    >
+      <Text style={[minusSt.text, { color: C.sub }]}>−</Text>
+    </TouchableOpacity>
+  );
+}
+
+/** Puts a MinusButton over a Field, level with its label. */
+export const MINUS_ON_FIELD = { position: 'absolute', top: -6, right: 0, zIndex: 1 } as const;
+
+const minusSt = StyleSheet.create({
+  btn:  { width: 26, height: 26, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  text: { fontSize: 18, lineHeight: 20, fontWeight: '500' },
+});
+
 // ─── Field ────────────────────────────────────────────────────────────────────
 
-export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline }: {
+export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline, maxLength }: {
   label: string; value: string; onChange?: (v: string) => void;
   placeholder?: string; readOnly?: boolean; note?: string;
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'decimal-pad'; multiline?: boolean;
+  maxLength?: number;
 }) {
   const C = useBusinessPalette();
   return (
@@ -102,6 +142,7 @@ export function Field({ label, value, onChange, placeholder, readOnly, note, key
           editable={!readOnly}
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}
+          maxLength={maxLength}
         />
         {readOnly && <Ionicons name="lock-closed-outline" size={14} color={C.sub} style={{ marginRight: 12 }} />}
       </View>
@@ -271,6 +312,7 @@ export const s = StyleSheet.create({
 
   card:      { backgroundColor: CP.card, borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
   cardTitle: { fontFamily: FONT_HEAD, fontSize: 15, color: CP.text, marginBottom: 4, letterSpacing: 0.3 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   cardSub:   { fontFamily: FONT_BODY, fontWeight: '500', fontSize: 12, color: CP.sub, lineHeight: 17, marginBottom: 16 },
 
   // A value the provider can read but not edit, shown in place of an input.

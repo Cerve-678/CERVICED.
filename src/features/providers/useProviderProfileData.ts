@@ -11,6 +11,7 @@ import {
   getProviderProfilePreviewBySlug,
   getProviderPortfolio,
   getProviderProfileViewerContext,
+  peekCachedProviderProfile,
   getProviderReviews,
   trackUserInteraction,
 } from "../../services/databaseService";
@@ -19,6 +20,7 @@ import type { UnclaimedProviderDetail } from "../../services/providerClaimServic
 import userLearningService from "../../services/userLearningService";
 import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
+import { isProviderProfileUuid } from "../../utils/providerProfileLink";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
 import { mapProviderReviews } from "./reviewPresentation";
@@ -72,9 +74,17 @@ export function useProviderProfileData(
     knownOwnedProviderId,
   );
   knownOwnedProviderIdRef.current = knownOwnedProviderId;
-  const [provider, setProvider] = useState<ProviderProfileData | null>(null);
-  const [providerDbId, setProviderDbId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A profile already in the cache (an Explore prefetch, or My Profile's logo
+  // tap) draws on the first frame. Starting on the skeleton and swapping a
+  // frame later read as a flash, most of all on the logo preview.
+  const [seed] = useState(() => {
+    const cached = peekCachedProviderProfile(providerSlug);
+    return cached ? { profile: mapProviderProfileData(cached), id: cached.id } : null;
+  });
+  const [provider, setProvider] = useState<ProviderProfileData | null>(seed?.profile ?? null);
+  const [providerDbId, setProviderDbId] = useState<string | null>(seed?.id ?? null);
+  const [loading, setLoading] = useState(!seed);
+  const keepSeedRef = useRef(seed !== null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [unclaimedProvider, setUnclaimedProvider] =
     useState<UnclaimedProviderDetail | null>(null);
@@ -102,10 +112,17 @@ export function useProviderProfileData(
   useEffect(() => {
     profileGenerationRef.current += 1;
     let cancelled = false;
-    setLoading(true);
+    // The first run keeps the first frame's cached copy; a later slug change
+    // looks in the cache again.
+    if (keepSeedRef.current) {
+      keepSeedRef.current = false;
+    } else {
+      const cached = peekCachedProviderProfile(providerSlug);
+      setProvider(cached ? mapProviderProfileData(cached) : null);
+      setProviderDbId(cached?.id ?? null);
+      setLoading(!cached);
+    }
     setLoadFailed(false);
-    setProvider(null);
-    setProviderDbId(null);
     setUnclaimedProvider(null);
     setReviews([]);
     setReviewsLoading(true);
@@ -139,7 +156,14 @@ export function useProviderProfileData(
         if (!data) data = await fullProfileRequest;
         if (cancelled) return;
         if (!data) {
-          const unclaimed = await getUnclaimedProviderDetail(providerSlug);
+          // Unclaimed directory listings are only ever opened by their UUID,
+          // and the lookup matches providers.id (a uuid column). Passing a
+          // slug — which is what the cart, Home and Explore send — makes
+          // Postgres reject the query, so a provider that has simply gone
+          // offline showed "Could not load provider" instead of "not found".
+          const unclaimed = isProviderProfileUuid(providerSlug)
+            ? await getUnclaimedProviderDetail(providerSlug)
+            : null;
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;
         }

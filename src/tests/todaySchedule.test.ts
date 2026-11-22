@@ -2,6 +2,7 @@
 // until 2pm, the booking cards lead from 2pm, and the summary leads again once
 // the last client is done. The cards always show the next five bookings.
 import {
+  bookingCardsLead,
   buildTodaySchedule,
   minutesOfDay,
   shortClientName,
@@ -75,6 +76,21 @@ describe('buildTodaySchedule', () => {
 
   it('treats a day with nothing booked as done', () => {
     expect(at(9, 0, []).phase).toBe('dayDone');
+  });
+
+  it('puts the coming-up cards first on a free day with bookings coming up', () => {
+    const later = [booking('t', '10:00:00', '11:00:00', { booking_date: TOMORROW })];
+    const free = at(9, 0, later);
+    expect(free.phase).toBe('dayDone');
+    expect(bookingCardsLead(free)).toBe(true);
+    // Nothing coming up either: the summary's "FREE TODAY" stays on top.
+    expect(bookingCardsLead(at(9, 0, []))).toBe(false);
+  });
+
+  it('keeps the summary on top before 2pm and once the day is done', () => {
+    expect(bookingCardsLead(at(8, 30))).toBe(false);
+    expect(bookingCardsLead(at(14, 0))).toBe(true);
+    expect(bookingCardsLead(at(16, 0))).toBe(false);
   });
 
   it('counts a completed booking as done even before its end time', () => {

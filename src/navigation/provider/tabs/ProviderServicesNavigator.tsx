@@ -18,6 +18,7 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
+import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import { ProviderServicesStackParamList } from '../../types';
 
@@ -35,6 +36,20 @@ export default function ProviderServicesNavigator() {
         name="ProviderServicesMain"
         component={ProviderMyProfileScreen}
         options={{ headerShown: false }}
+      />
+
+      {/* Tapping the logo on My Profile opens the client-facing preview with
+          a brief fade, while retaining the full-screen swipe to close. */}
+      <ProviderServicesStack.Screen
+        name="MyPublicProfile"
+        component={ProviderProfileScreen as React.ComponentType<any>}
+        options={{
+          headerShown: false,
+          animation: 'fade',
+          animationDuration: 250,
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+        }}
       />
 
       <ProviderServicesStack.Screen

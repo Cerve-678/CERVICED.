@@ -1,0 +1,1964 @@
+// src/features/providers/ProfileHero.tsx
+//
+// Pieces of the public profile's hero that the profile and Branding's preview
+// both draw, so the preview can't drift from what clients actually see: the
+// logo in its page-style frame, Cover's pills, and the business name's size.
+
+import React, { useId } from "react";
+import { StyleSheet, Text, TouchableOpacity, View, type TextStyle } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
+import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
+
+import { LogoCircle } from "../../components/FramedLogo";
+import { PressedHero } from "./heroes/EmbossedHero";
+import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
+import { GazetteHero } from "./heroes/GazetteHero";
+import { StudioHero } from "./heroes/StudioHero";
+import { NovelHero } from "./heroes/NovelHero";
+import { outlineInk } from "./ProfilePageStyle";
+import type { HeroNameFont, PageStyle } from "../../constants/pageStyles";
+import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
+import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
+import type { LogoFraming } from "../../types/database";
+import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroPhoto";
+import { SheerHero } from "./heroes/SheerHero";
+import { CallingCardHero } from "./heroes/CallingCardHero";
+import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
+
+/** The business name under the logo; a thin script is drawn larger than
+ *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
+export const HERO_NAME_SIZE = 30;
+export const HERO_NAME_LINE_HEIGHT = 42;
+
+/** Up to two initials, for a provider with no logo. */
+export function logoInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map(word => word[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+/**
+ * The logo in the hero, in the page style's frame: Scrapbook mounts it as a
+ * polaroid, Spa adds a fine outer ring, Glossy a shiny one, Arch and Framed
+ * round only its top. Without a logo it shows the initials on the accent.
+ */
+export function HeroLogo({
+  uri,
+  framing,
+  name,
+  fallbackColor,
+  accent,
+  heroText,
+  pageStyle,
+  onPress,
+  accessibilityLabel,
+  size = 148,
+  badge,
+}: {
+  uri: string | null | undefined;
+  framing?: LogoFraming | null;
+  name: string;
+  fallbackColor: string;
+  accent: string;
+  /** The hero's text colour; Spa's outer ring follows it. */
+  heroText: string;
+  pageStyle: PageStyle;
+  /** Tap to see the logo in full. Left out in the preview. */
+  onPress?: () => void;
+  accessibilityLabel?: string;
+  /** The logo's width and height; the hero layouts draw it smaller beside text. */
+  size?: number;
+  /** A small round button on the logo's lower-right edge (the profile's Recommend). */
+  badge?: React.ReactNode;
+}) {
+  // Everything below is drawn for 148pt; other sizes scale it.
+  const box = { width: size, height: size, borderRadius: size / 2 };
+  const ringOut = (extra: number) => ({
+    top: -extra, left: -extra, width: size + extra * 2, height: size + extra * 2, borderRadius: size / 2 + extra,
+  });
+  const frame =
+    pageStyle.logo === "arch"
+      ? [styles.arch, { borderTopLeftRadius: size / 2, borderTopRightRadius: size / 2 }]
+      : pageStyle.logo === "polaroid" || pageStyle.logo === "mat"
+        ? styles.polaroidPhoto
+        : pageStyle.logo === "tilted"
+          ? [styles.tilted, { borderRadius: Math.round(size * 0.16) }]
+          : pageStyle.logo === "rounded"
+            ? { borderRadius: Math.round(size * 0.26) }
+          : pageStyle.logo === "sharp"
+            ? { borderRadius: Math.round(size * 0.04) }
+          : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
+            || pageStyle.logo === "accentRing"
+            ? styles.thinRim
+            : null;
+
+  const logo = uri ? (
+    <LogoCircle uri={uri} framing={framing} style={[styles.logo, box, frame]} />
+  ) : (
+    <View style={[styles.logo, box, frame, styles.initialsWrap, { backgroundColor: fallbackColor }]}>
+      <Text style={[styles.initials, { fontSize: 28 * (size / 148) }]}>{logoInitials(name)}</Text>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <View
+        style={
+          pageStyle.logo === "polaroid" ? styles.polaroid
+          : pageStyle.logo === "mat" ? styles.matFrame
+          : undefined
+        }
+      >
+        <View style={pageStyle.logo === "mat" ? [styles.mat, { padding: Math.round(size * 0.08) }] : undefined}>
+        <View style={[styles.wrapper, { width: size, height: size }]}>
+          {pageStyle.logo === "accentRing" ? (
+            <View style={[styles.doubleRing, ringOut(9 * (size / 148)), { borderColor: accent, borderWidth: 2 }]} pointerEvents="none" />
+          ) : null}
+          {pageStyle.logo === "glossRing" ? (
+            <LinearGradient
+              colors={["#FFFFFF", blend(accent, "#FFFFFF", 0.45), "#FFFFFF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.glossRing, ringOut(8 * (size / 148))]}
+              pointerEvents="none"
+            />
+          ) : null}
+          {pageStyle.logo === "doubleRing" ? (
+            <View style={[styles.doubleRing, ringOut(11 * (size / 148)), { borderColor: withAlpha(heroText, 0.7) }]} pointerEvents="none" />
+          ) : null}
+          {uri && onPress ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={onPress}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={accessibilityLabel}
+            >
+              {logo}
+            </TouchableOpacity>
+          ) : (
+            logo
+          )}
+          {/* Sits on top of the logo, so it must let taps through. */}
+          <LinearGradient
+            colors={["rgba(255,255,255,0.3)", "transparent"]}
+            style={[styles.gloss, box, frame]}
+            pointerEvents="none"
+          />
+          {badge ? (
+            // Centred on a round logo's edge at 45°, which is 0.146 of the
+            // size in from the box's corner; half the badge's width back out.
+            <View style={[styles.badge, { right: size * 0.146 - BADGE_HALF, bottom: size * 0.146 - BADGE_HALF }]}>
+              {badge}
+            </View>
+          ) : null}
+        </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Half of a HeroLogo badge's width (RecommendBadge is 30pt). */
+const BADGE_HALF = 15;
+
+// ── Hero layouts ─────────────────────────────────────────────────────────────
+
+export interface ProfileHeroLayoutProps {
+  pageStyle: PageStyle;
+  name: string;
+  /** What they do ("LASHES · BROWS"): Arch's curved caption and Spa's top line. */
+  kicker: string;
+  location: string;
+  heroText: string;
+  heroSub: string;
+  heroIsDark: boolean;
+  /** The logo at a given size. */
+  renderLogo: (size: number) => React.ReactNode;
+  /** The name row (name + verified tick) at a multiple of the standard size. */
+  renderName: (options: { scale: number; letterSpacing?: number }) => React.ReactNode;
+  /** The small-caps line under the name, or Cover's pills. */
+  meta: React.ReactNode;
+  /** Stars, years of experience and the slots pill with its bell (or a
+   *  link-only provider's Book block). Every layout shows these. */
+  details: React.ReactNode;
+  /** Their About, for the layouts that carry it in the hero (Arch, Framed, Duet). */
+  about: React.ReactNode;
+  /** The theme accent: Editorial's full stop, Heritage's script, Duet's film strip. */
+  accent: string;
+  /** Up to two of their portfolio photos (Editorial's back card, Duet's film strip). */
+  photoUris?: readonly string[];
+  /** Their star rating, for Groovy's starburst. Left out when there are no CERVICED reviews. */
+  rating?: string | null;
+  /** The verified tick beside the name, for the layouts that draw the name themselves. */
+  isVerified?: boolean;
+  /** The theme's backdrop colour (the gradient's first stop): Calling Card's
+   *  satin, Embossed's pressed letters and Novel's title page are drawn in it. */
+  heroColour: string;
+  /** The theme's card colour: Gazette's hero sheet, Boutique's product panel. */
+  cardColour: string;
+  /** Jumps to Services: Studio's Book now. Left out when there are
+   *  no services on the page (a link-only provider), and then there's no button. */
+  onBookNow?: (() => void) | undefined;
+  /** The content sheet's colour: Lounge's cut-out name and the strip it
+   *  lands on, Hush's print borders. */
+  sheetColour?: string;
+  /** Opens one of Hush's photos full size. Left out in the preview. */
+  onOpenHeroPhoto?: ((index: number) => void) | undefined;
+  /** The Business Name Font they picked, on a style that lets it replace its
+   *  own lettering (pickedNameFont); null keeps the style's own. */
+  pickedNameFont?: string | null;
+  /** How the provider framed each hero photo, by URL (Branding → Your Photos).
+   *  Pass a memoized value: it feeds a context. Missing = centred, unzoomed. */
+  photoFrames?: HeroPhotoFrames;
+}
+
+/** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
+export function kickerPhrase(kicker: string): string {
+  const parts = kicker.split("·").map(part => part.trim().toLowerCase()).filter(Boolean);
+  if (parts.length === 0) return "";
+  const joined = parts.length === 1 ? parts[0]! : `${parts.slice(0, -1).join(", ")} & ${parts[parts.length - 1]}`;
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+/** The name split for the two-voice heroes: all but the last word, and the last word. */
+function splitLast(name: string): [string, string] {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return [words[0] ?? "", ""];
+  return [words.slice(0, -1).join(" "), words[words.length - 1]!];
+}
+
+/** The name split the other way: the first word, and the rest. */
+function splitFirst(name: string): [string, string] {
+  const words = name.trim().split(/\s+/);
+  return [words[0] ?? "", words.slice(1).join(" ")];
+}
+
+/**
+ * The top of the profile, laid out by the page style (pageStyles.PageHero).
+ * Classic and Glossy stack the logo over the name as the profile always has;
+ * the others move the name, the logo and the words round them as their
+ * template did on the 2026-11-13 canvas.
+ */
+export function ProfileHeroLayout(props: ProfileHeroLayoutProps) {
+  const { photoFrames } = props;
+  const body = <ProfileHeroLayoutBody {...props} />;
+  return photoFrames ? <HeroPhotoFramesContext.Provider value={photoFrames}>{body}</HeroPhotoFramesContext.Provider> : body;
+}
+
+function ProfileHeroLayoutBody({
+  pageStyle,
+  name,
+  kicker,
+  location,
+  heroText,
+  heroSub,
+  heroIsDark,
+  renderLogo,
+  renderName,
+  meta,
+  details,
+  about,
+  accent,
+  photoUris,
+  rating,
+  isVerified,
+  heroColour,
+  cardColour,
+  onBookNow,
+  sheetColour,
+  onOpenHeroPhoto,
+  pickedNameFont = null,
+}: ProfileHeroLayoutProps) {
+  // Quiet, Signature, Hush and Pinboard draw the name themselves: in the picked font,
+  // when there is one, at the size that top draws it.
+  const pickedName = (size: number): TextStyle | null => (pickedNameFont ? pickedNameFontStyle(pickedNameFont, size) : null);
+  const shadow = heroIsDark ? layout.shadow : null;
+  const tick = isVerified ? (
+    <Ionicons name="checkmark-circle" size={18} color={heroIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+  ) : null;
+  // The accent stays the accent on a pale hero; over a dark photo it is lifted
+  // so it still reads.
+  const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
+
+  switch (pageStyle.hero) {
+    case "orbitMark":
+      return (
+        <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
+          <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 4, marginBottom: 20 }}>YOUR SPACE TO SHINE</Text>
+          <View style={{ width: 236, height: 236, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ position: "absolute", width: 226, height: 226, borderRadius: 113, borderWidth: 1, borderColor: withAlpha(heroText, 0.32) }} />
+            <View style={{ position: "absolute", width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: withAlpha(heroText, 0.55) }} />
+            <View style={{ position: "absolute", top: 20, right: 26, width: 16, height: 16, borderRadius: 8, backgroundColor: heroAccent }} />
+            <View style={{ position: "absolute", bottom: 26, left: 22, width: 9, height: 9, borderRadius: 5, backgroundColor: heroText }} />
+            {renderLogo(128)}
+          </View>
+          <View accessible accessibilityRole="header" accessibilityLabel={name} style={{ alignItems: "center", marginTop: 16, maxWidth: "100%" }}>
+            <Text style={[{ color: heroText, fontFamily: "PoiretOne_400Regular", fontSize: 38, letterSpacing: 2, textAlign: "center" }, pickedName(38), shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+            {tick}
+          </View>
+          {kicker ? <Text style={{ color: heroSub, fontSize: 11, letterSpacing: 2, textAlign: "center", marginTop: 8 }}>{kicker.toUpperCase()}</Text> : null}
+          <View style={{ width: 54, height: 1, backgroundColor: heroAccent, marginTop: 21, marginBottom: 13 }} />
+          {meta}{details}
+        </View>
+      );
+    case "typeblockMark":
+      // The rail runs the full height of the block, down beside the details
+      // too (owner, 2026-11-20: it stopped short of "the rest of the words").
+      return (
+        <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
+          <View style={{ flexDirection: "row" }}>
+            <View style={{ width: 18, backgroundColor: heroAccent, marginRight: 18, justifyContent: "flex-end", paddingBottom: 12, alignItems: "center" }}>
+              {/* A slot as tall as the turned word, so it sits inside the rail
+                  rather than hanging off its end. The word only just fit 90pt,
+                  so a bigger text size cut it off (owner, 2026-11-20): it's a
+                  fixed mark like an icon, so it keeps its size, with room to spare. */}
+              <View style={{ width: 18, height: 110, alignItems: "center", justifyContent: "center" }}>
+                <Text allowFontScaling={false} style={{ color: heroIsDark ? "#211B19" : "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 10, transform: [{ rotate: "-90deg" }], width: 110, textAlign: "center", letterSpacing: 2 }} numberOfLines={1}>EST. TODAY</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ minHeight: 250, justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>THE PROFILE / 01</Text>
+                  {renderLogo(58)}
+                </View>
+                <View accessible accessibilityRole="header" accessibilityLabel={name}>
+                  <Text style={[{ color: heroText, fontFamily: "BebasNeue_400Regular", fontSize: 56, lineHeight: 60, letterSpacing: -0.5 }, pickedName(56), shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>{name.toUpperCase()}</Text>
+                  <View style={{ width: "100%", height: 4, backgroundColor: heroAccent, marginTop: 4, marginBottom: 10 }} />
+                  {kicker ? <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 1.4 }}>{kicker.toUpperCase()}</Text> : null}
+                  {tick}
+                </View>
+              </View>
+              <View style={{ marginTop: 18 }}>{meta}{details}</View>
+            </View>
+          </View>
+        </View>
+      );
+    case "filmstripMark": {
+      const frames = [photoUris?.[0], photoUris?.[1]];
+      return (
+        <View style={{ paddingHorizontal: 18, paddingTop: 20, paddingBottom: 25 }}>
+          <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: withAlpha(heroText, 0.65), paddingVertical: 7 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
+              <Text style={{ color: heroText, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2 }}>SELECTED WORK</Text>
+              <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10 }}>01 — 02</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {frames.map((uri, index) => (
+                <TouchableOpacity key={index} style={{ flex: 1, aspectRatio: 158 / 190, backgroundColor: withAlpha(heroAccent, 0.24), overflow: "hidden" }} disabled={!uri || !onOpenHeroPhoto} onPress={() => onOpenHeroPhoto?.(index)} activeOpacity={0.88} accessibilityRole={uri && onOpenHeroPhoto ? "imagebutton" : undefined} accessibilityLabel={uri ? `${name} work photo ${index + 1}` : undefined}>
+                  {uri ? <HeroPhoto uri={uri} /> : <Text style={{ position: "absolute", bottom: 10, left: 10, color: heroSub, fontFamily: "TenorSans_400Regular", fontSize: 28 }}>0{index + 1}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+              <Text style={{ color: heroSub, fontSize: 10 }}>FRAME 01</Text><Text style={{ color: heroSub, fontSize: 10 }}>FRAME 02</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 19, gap: 13 }}>
+            {renderLogo(54)}
+            <View style={{ flex: 1 }} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[{ color: heroText, fontFamily: "TenorSans_400Regular", fontSize: 27, lineHeight: 35 }, pickedName(27), shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+              {kicker ? <Text style={{ color: heroSub, fontSize: 10, letterSpacing: 1.5, marginTop: 3 }}>{kicker.toUpperCase()}</Text> : null}
+            </View>
+            {tick}
+          </View>
+          <View style={{ marginTop: 14 }}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "roseCampaign": {
+      // Custom's Rose top (owner, 2026-11-19: "keep rose hero, add to custom
+      // hero only"): a campaign block, the name and a rule on a deep panel
+      // beside one chosen work photo, framed in a soft rose line.
+      const photo = photoUris?.[0];
+      const rose = blend(accent, "#FFFFFF", heroIsDark ? 0.65 : 0.35);
+      return (
+        <View style={layout.roseWrap}>
+          <View style={layout.roseHeader}>
+            <Text style={[layout.roseOverline, { color: heroText }]}>A FRESH TAKE ON YOUR ROUTINE</Text>
+            {renderLogo(42)}
+          </View>
+          <View style={[layout.roseFeature, { borderColor: rose }]}>
+            <View style={[layout.roseCopy, { backgroundColor: withAlpha(heroColour, 0.92) }]}>
+              <Text style={[layout.roseEyebrow, { color: rose }]}>{kicker || "EXPERIENCE THE DIFFERENCE"}</Text>
+              <Text style={[layout.roseName, pickedName(31), { color: rose }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.62} accessibilityRole="header">{name}</Text>
+              {tick}
+              <View style={[layout.roseRule, { backgroundColor: rose }]} />
+              <Text style={[layout.roseSmall, { color: heroText }]}>{location || "DISCOVER THE SERVICES"}</Text>
+            </View>
+            <TouchableOpacity
+              style={[layout.rosePhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.62) }]}
+              disabled={!photo || !onOpenHeroPhoto}
+              onPress={() => onOpenHeroPhoto?.(0)}
+              accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+              accessibilityLabel={photo ? `${name} featured work` : undefined}
+              activeOpacity={0.88}
+            >{photo ? <HeroPhoto uri={photo} /> : null}</TouchableOpacity>
+          </View>
+          <View style={layout.roseFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "posterCover": {
+      // Poster (owner's coach-grid board, 2026-11-19): what they do on a
+      // pill, the name in huge two-tone caps, a handwritten line in a
+      // sparkle loop beside one of their photos taped on like a print.
+      const [first, last] = splitLast(name);
+      const pop = heroIsDark ? blend(accent, "#FFFFFF", 0.5) : accent;
+      const popInk = isDarkColor(pop) ? "#FFFFFF" : "#1F1214";
+      const label = kickerPhrase(kicker);
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.posterWrap}>
+          <View style={layout.posterTopRow}>
+            {label ? (
+              <View style={[layout.posterPill, { backgroundColor: pop }]}>
+                <Text style={[layout.posterPillText, { color: popInk }]} numberOfLines={1}>{label.toUpperCase()}</Text>
+              </View>
+            ) : <View />}
+            {renderLogo(46)}
+          </View>
+          <View accessible accessibilityRole="header" accessibilityLabel={name} style={layout.posterNameBlock}>
+            <Text style={[layout.posterName, pickedName(54), { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{first.toUpperCase()}</Text>
+            {last ? <Text style={[layout.posterName, pickedName(54), { color: pop }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{last.toUpperCase()}</Text> : null}
+            {tick}
+          </View>
+          <View style={layout.posterLower}>
+            <View style={layout.posterLoop}>
+              <Svg width={168} height={72} viewBox="0 0 168 72" style={StyleSheet.absoluteFill}>
+                <Path d="M18 38 C 22 12, 140 6, 156 30 C 168 52, 100 66, 66 64 C 26 62, 4 50, 22 26" fill="none" stroke={heroText} strokeWidth={1.4} strokeLinecap="round" />
+                <Path d="M8 34 L10 29 L12 34 L17 36 L12 38 L10 43 L8 38 L3 36 Z" fill={heroText} />
+                <Path d="M156 50 L157.6 46 L159.2 50 L163 51.6 L159.2 53.2 L157.6 57 L156 53.2 L152 51.6 Z" fill={heroText} />
+              </Svg>
+              <Text style={[layout.posterScript, { color: heroText }]} numberOfLines={2}>book in{"\n"}with me</Text>
+            </View>
+            {photo ? (
+              <TouchableOpacity
+                style={layout.posterPrint}
+                disabled={!onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(0)}
+                accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={`${name} work photo`}
+                activeOpacity={0.88}
+              >
+                <View style={layout.posterPrintPhoto}><HeroPhoto uri={photo} /></View>
+                <View style={layout.posterTape} pointerEvents="none" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <View style={layout.posterFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "echoName": {
+      // Hibiscus (owner's drink-post board, 2026-11-19): the name repeated
+      // large and faint behind everything, one chosen photo, and a deep
+      // round panel over its corner with the name in condensed caps.
+      const echo = name.trim().toUpperCase();
+      const photo = photoUris?.[0];
+      const panel = heroIsDark ? blend(heroColour, "#000000", 0.35) : blend(accent, "#000000", 0.45);
+      const panelPop = blend(accent, "#FFFFFF", 0.62);
+      const phrase = kickerPhrase(kicker);
+      const panelBody = (
+        <View style={[layout.echoPanel, { backgroundColor: panel }, photo ? layout.echoPanelOver : null]}>
+          <Text style={[layout.echoLead, { color: "#FFF4F6" }]}>WELCOME TO</Text>
+          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.echoName, pickedName(32), { color: panelPop }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+            {isVerified ? <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" accessibilityLabel="Verified" /> : null}
+          </View>
+          {phrase ? (
+            <View style={[layout.echoTag, { backgroundColor: withAlpha(panelPop, 0.22) }]}>
+              <Text style={[layout.echoTagText, { color: "#FFF4F6" }]} numberOfLines={1}>{phrase}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+      return (
+        <View style={layout.echoWrap}>
+          <View style={layout.echoBehind} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants">
+            {[0, 1, 2, 3, 4, 5].map(row => (
+              <Text key={row} style={[layout.echoRow, { color: withAlpha(heroText, 0.1) }]} numberOfLines={1}>{`${echo} ${echo} ${echo}`}</Text>
+            ))}
+          </View>
+          <View style={layout.echoTop}>{renderLogo(46)}</View>
+          {photo ? (
+            <View style={layout.echoStage}>
+              <TouchableOpacity
+                style={[layout.echoPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.5) }]}
+                disabled={!onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(0)}
+                accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={`${name} featured work`}
+                activeOpacity={0.88}
+              ><HeroPhoto uri={photo} /></TouchableOpacity>
+              {panelBody}
+            </View>
+          ) : panelBody}
+          <View style={layout.echoFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "storefrontBanner": {
+      // Storefront (owner's Shopify board, 2026-11-19): one chosen photo the
+      // full width of the page with the logo over its top, then a soft band
+      // with the name in heavy slanted caps, like a shop's home page.
+      const photo = photoUris?.[0];
+      const band = sheetColour ?? blend(accent, "#FFFFFF", 0.82);
+      const bandDark = isDarkColor(band);
+      const bandInk = bandDark ? "#FFFFFF" : blend(accent, "#1A0F12", 0.55);
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.storeWrap}>
+          <TouchableOpacity
+            style={[layout.storePhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.45) }]}
+            disabled={!photo || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={photo ? `${name} featured work` : undefined}
+            activeOpacity={0.9}
+          >
+            {photo ? <HeroPhoto uri={photo} /> : null}
+            <LinearGradient colors={["rgba(0,0,0,0.28)", "transparent"]} style={layout.storeShade} pointerEvents="none" />
+            <View style={layout.storeLogo}>{renderLogo(52)}</View>
+          </TouchableOpacity>
+          <View style={[layout.storeBand, { backgroundColor: band }]}>
+            {phrase ? <Text style={[layout.storeOver, { color: withAlpha(bandInk, 0.6) }]} numberOfLines={1}>{phrase.toUpperCase()}</Text> : null}
+            <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.storeName, pickedName(30), { color: bandInk }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+              {isVerified ? <Ionicons name="checkmark-circle" size={17} color={bandDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+            </View>
+          </View>
+          <View style={layout.storeFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "pinboardHeader": {
+      // Pinboard: up to three of their photos side by side as rounded pins of
+      // uneven heights, like a Pinterest board, then the logo beside the name
+      // in the picked font, what they do and their area.
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      const pins = (photoUris ?? []).slice(0, 3);
+      const pinFill = blend(accent, "#FFFFFF", 0.6);
+      // Uneven heights, tops level: 150, 124, 138 (one photo: 156 across).
+      const pinHeights = [layout.pinboardPinTall, layout.pinboardPinShort, layout.pinboardPinMid];
+      const pin = (index: number, size: object) => (
+        <TouchableOpacity
+          activeOpacity={onOpenHeroPhoto ? 0.88 : 1}
+          disabled={!onOpenHeroPhoto}
+          onPress={() => onOpenHeroPhoto?.(index)}
+          style={[layout.pinboardPin, { backgroundColor: pinFill }, size]}
+          accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
+          accessibilityLabel={`Photo ${index + 1} of ${pins.length}`}
+        >
+          {pins[index] ? <HeroPhoto uri={pins[index]} /> : null}
+        </TouchableOpacity>
+      );
+      return (
+        <View style={[layout.pinboardWrap, { marginTop: pins.length ? 12 : TEXT_FIRST_DROP }]}>
+          {pins.length ? (
+            <View style={layout.pinboardBoard}>
+              {pins.map((uri, index) => (
+                <View key={uri} style={layout.pinboardColumn}>
+                  {pin(index, pins.length === 1 ? layout.pinboardPinOnly : pinHeights[index] ?? layout.pinboardPinTall)}
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <View style={[layout.pinboardIdentity, pins.length ? layout.pinboardIdentityUnderPins : null]}>
+            {renderLogo(pins.length ? 64 : 82)}
+            <View style={layout.pinboardText} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <View style={layout.tickRow}>
+                <Text style={[layout.pinboardName, pickedName(27), { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{name}</Text>
+                {tick}
+              </View>
+              {phrase ? <Text style={[layout.pinboardPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.pinboardDetails}>{details}</View>
+          <View style={[layout.pinboardRule, { backgroundColor: withAlpha(heroText, 0.28) }]} />
+        </View>
+      );
+    }
+    case "atelierLetterhead":
+      return (
+        <View style={layout.atelierFront}>
+          <View style={[layout.atelierTopRule, { backgroundColor: withAlpha(heroText, 0.58) }]} />
+          <View style={layout.atelierTopRow}>
+            <Text style={[layout.atelierOverline, { color: heroSub }, shadow]}>A PLACE FOR YOUR NEXT APPOINTMENT</Text>
+            {renderLogo(54)}
+          </View>
+          <View style={layout.atelierNameRow}>
+            <Text
+              accessible
+              accessibilityRole="header"
+              style={[layout.atelierName, { color: heroText }, shadow]}
+              numberOfLines={3}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >{name}</Text>
+            {tick}
+          </View>
+          <View style={[layout.atelierUnderRule, { backgroundColor: withAlpha(heroText, 0.58) }]} />
+          <View style={layout.atelierMeta}>{meta}</View>
+          <View style={layout.atelierDetails}>{details}</View>
+        </View>
+      );
+    case "portfolioFront": {
+      const cover = photoUris?.[0];
+      return (
+        <View style={layout.portfolioFront}>
+          <TouchableOpacity
+            activeOpacity={cover && onOpenHeroPhoto ? 0.88 : 1}
+            disabled={!cover || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={cover && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={cover ? `${name} cover photo` : undefined}
+            style={[layout.portfolioCover, { backgroundColor: blend(heroColour, "#282322", 0.45) }]}
+          >
+            {cover ? <HeroPhoto uri={cover} /> : null}
+            <LinearGradient colors={["transparent", "rgba(0,0,0,0.42)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <Text style={layout.portfolioCoverLabel}>SELECTED WORK</Text>
+          </TouchableOpacity>
+          <View style={layout.portfolioIdentity}>
+            <View style={layout.portfolioLogo}>{renderLogo(70)}</View>
+            <Text style={[layout.portfolioEyebrow, { color: heroSub }, shadow]}>THE ARTIST & THE WORK</Text>
+          </View>
+          <View style={layout.portfolioName}>{renderName({ scale: 1.08 })}</View>
+          <View style={layout.portfolioMeta}>{meta}</View>
+          <View style={layout.portfolioDetails}>{details}</View>
+        </View>
+      );
+    }
+    case "cover":
+      // The name is the cover line, low over the photo, with a small logo
+      // sitting on top of it at the right.
+      return (
+        <View style={layout.coverTop}>
+          <View style={layout.coverLogo}>{renderLogo(58)}</View>
+          <View style={layout.infoCenter}>
+            {renderName({ scale: 1.6 })}
+            {meta}
+            {details}
+          </View>
+        </View>
+      );
+
+    case "masthead": {
+      // Arch: the name as the page's heading, then the arched logo with
+      // what they do curved over it, beside "Meet …" and their About.
+      const firstName = name.split(" ")[0] ?? name;
+      return (
+        <>
+          <View style={layout.mastHead}>
+            <Text style={[layout.kicker, { color: heroSub }, shadow]}>WELCOME TO MY BOOKING PAGE</Text>
+            {renderName({ scale: 1.45 })}
+            {location ? (
+              <Text style={[layout.located, { color: heroSub }, shadow]}>Located in {location}</Text>
+            ) : null}
+          </View>
+          <View style={layout.mastRow}>
+            <View style={layout.mastLogo}>
+              {kicker ? <CurvedCaption text={kicker} color={heroText} width={158} /> : null}
+              {renderLogo(124)}
+            </View>
+            <View style={layout.mastAbout}>
+              <Text style={[layout.meet, { color: heroText }, shadow]}>Meet</Text>
+              <Text style={[layout.meetName, { color: heroText }, shadow]} numberOfLines={2}>{firstName}</Text>
+              {about}
+            </View>
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+    }
+
+    case "sideBySide":
+      // Framed: the logo on the left, the welcome on the right.
+      return (
+        <>
+          <View style={layout.sideRow}>
+            {renderLogo(118)}
+            <View style={layout.sideText}>
+              <Text style={[layout.welcome, { color: heroSub }, shadow]}>WELCOME TO</Text>
+              {renderName({ scale: 0.95 })}
+              {about}
+              {location ? (
+                <View style={layout.locatedRow}>
+                  <Ionicons name="location-outline" size={13} color={heroSub} />
+                  <Text style={[layout.locatedScript, { color: heroSub }, shadow]}>located in</Text>
+                  <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={2}>{location}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "poster":
+      // Scrapbook: a polaroid and a big name.
+      return (
+        <>
+          {renderLogo(112)}
+          <View style={layout.infoCenterTight}>
+            {renderName({ scale: 1.4 })}
+            {meta}
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "spa":
+      // Spa: a quiet line of what they do, the name spaced out, a ringed logo.
+      return (
+        <View style={[layout.infoCenter, layout.textFirst]}>
+          {kicker ? <Text style={[layout.spaKicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
+          {renderName({ scale: 1.15, letterSpacing: 4 })}
+          <View style={layout.spaLogo}>{renderLogo(116)}</View>
+          {details}
+        </View>
+      );
+
+    case "editorial": {
+      // Editorial: "Zara" light over "OKAFOR." bold, two tilted cards beside it.
+      const [first, rest] = splitFirst(name);
+      const bold = (rest || first).toUpperCase();
+      return (
+        <View style={layout.edWrap}>
+          <View style={layout.edTop}>
+            <View style={layout.edNameCol} accessible accessibilityRole="header" accessibilityLabel={name}>
+              {rest ? (
+                <Text style={[layout.edLight, { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit>
+                  {first}
+                </Text>
+              ) : null}
+              <View style={layout.tickRow}>
+                <Text
+                  style={[layout.edBold, { color: heroText }, shadow]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.55}
+                >
+                  {bold}
+                  <Text style={{ color: heroAccent }}>.</Text>
+                </Text>
+                {tick}
+              </View>
+            </View>
+            <View style={layout.edCards}>
+              <View style={[layout.edBack, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]}>
+                {photoUris?.[0] ? (
+                  <HeroPhoto uri={photoUris[0]} />
+                ) : null}
+              </View>
+              <View style={layout.edFront}>{renderLogo(86)}</View>
+            </View>
+          </View>
+          <View style={[layout.edRule, { borderTopColor: heroText }]}>
+            <Text style={[layout.edKicker, { color: heroText }, shadow]} numberOfLines={2}>{kicker}</Text>
+            {location ? (
+              <Text style={[layout.edLocation, { color: heroSub }, shadow]} numberOfLines={2}>{location}</Text>
+            ) : null}
+          </View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "crest": {
+      // Heritage: their name curved round the top of a dotted seal, the logo
+      // in the middle, and what they do with their area under it.
+      const curveName = name.toUpperCase();
+      const curveSize = Math.max(9, Math.min(17, (290 / Math.max(curveName.length, 1) - 3) / 0.72));
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={[layout.infoCenter, layout.sealTop]}>
+          <View style={layout.seal} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <SealRing
+              name={curveName}
+              font="Cinzel-Bold"
+              size={curveSize}
+              text={heroText}
+              ring={heroIsDark ? withAlpha(heroText, 0.8) : accent}
+            />
+            <View style={layout.sealLogo}>{renderLogo(128)}</View>
+          </View>
+          {tick}
+          {phrase ? <Text style={[layout.sealPhrase, { color: heroText }, shadow]}>{phrase}</Text> : null}
+          {location ? (
+            <Text style={[layout.sealLocated, { color: heroSub }, shadow]} numberOfLines={2}>
+              {location.toUpperCase()}
+            </Text>
+          ) : null}
+          {details}
+        </View>
+      );
+    }
+
+    case "duet": {
+      // Duet: a welcome card in the theme's card colour on a soft accent
+      // shadow, the logo beside the name (owner, 2026-11-16: the card should
+      // match the theme, not always be white). What they do isn't repeated
+      // here: Additional Information lists it as Category (owner, 2026-11-15).
+      const [script, caps] = splitFirst(name);
+      const duetInk = cardInk(cardColour);
+      const cardIsDark = isDarkColor(cardColour);
+      // The script is the accent, deepened on a pale card and lifted on a dark one.
+      const cardAccent = cardIsDark
+        ? (isDarkColor(accent) ? blend(accent, "#FFFFFF", 0.55) : accent)
+        : (isDarkColor(accent) ? accent : blend(accent, "#000000", 0.35));
+      return (
+        <View style={layout.duetWrap}>
+          <View>
+            <View style={[layout.duetCardShadow, { backgroundColor: blend(accent, cardIsDark ? "#000000" : "#FFFFFF", 0.45) }]} pointerEvents="none" />
+            <View style={[layout.duetCard, { backgroundColor: cardColour, borderColor: duetInk.text }]}>
+              <View style={layout.duetCardRow}>
+              <View style={layout.logoNoGap}>{renderLogo(92)}</View>
+              <View style={layout.duetCardText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[layout.duetHey, { color: duetInk.sub }]}>HEY GORGEOUS, WELCOME TO</Text>
+                <Text style={[layout.duetScript, { color: cardAccent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                  {script}
+                </Text>
+                {caps ? (
+                  <Text style={[layout.duetCaps, { color: duetInk.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {caps.toUpperCase()}
+                  </Text>
+                ) : null}
+                {/* The stars sit with their years in the line under the name,
+                    to the left (owner, 2026-11-15), drawn by the profile in
+                    `details` like every other style. */}
+                {location ? (
+                  <Text style={[layout.duetLocated, { color: duetInk.sub }]} numberOfLines={2}>{location.toUpperCase()}</Text>
+                ) : null}
+                {isVerified ? (
+                  <Ionicons name="checkmark-circle" size={18} color={cardIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                ) : null}
+              </View>
+              </View>
+              {/* Their years in the card, the slots pill with Instagram under
+                  it. The profile puts the slots pill on a line of its own and
+                  inks these with cardInk(card colour), as this card is. */}
+              <View style={layout.duetInfoRow}>
+                {details}
+              </View>
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    case "groovy": {
+      // Groovy: a sticker sheet. The logo as a round sticker, their rating as a
+      // starburst, the name on a tilted pill with a hard shadow, and tag stickers.
+      const badgeInk = isDarkColor(accent) ? "#FFFFFF" : "#1E2A4A";
+      return (
+        <View style={layout.groovyWrap}>
+          <View style={layout.groovyTopRow}>
+            <View style={layout.groovyLogo}>{renderLogo(100)}</View>
+            {rating ? <Starburst rating={rating} fill={heroText} ink={heroIsDark ? "#1F1A18" : "#FFFFFF"} /> : null}
+          </View>
+          <View style={layout.groovyBadgeWrap} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <View style={[layout.groovyBadgeShadow, { backgroundColor: heroText }]} pointerEvents="none" />
+            <View style={[layout.groovyBadge, { backgroundColor: accent, borderColor: heroText }]}>
+              <Text
+                style={[
+                  layout.groovyBadgeName,
+                  { color: badgeInk },
+                ]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+              >
+                {name.toLowerCase()}
+              </Text>
+              {tick}
+            </View>
+          </View>
+          <View style={layout.groovyTags}>
+            {location ? (
+              <View style={[layout.groovyTag, layout.groovyTagLeft, { backgroundColor: blend(accent, "#FFFFFF", 0.6), borderColor: heroText }]}>
+                <Text style={layout.groovyTagText} numberOfLines={2}>{location.toUpperCase()}</Text>
+              </View>
+            ) : null}
+            {kicker ? (
+              <View style={[layout.groovyTag, layout.groovyTagRight, { borderColor: heroText }]}>
+                <Text style={layout.groovyTagText} numberOfLines={2}>{kicker}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </View>
+      );
+    }
+
+    case "exhibition": {
+      // Gallery: a wall label over a rule, the name large, then the logo
+      // framed and matted.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.galleryWrap}>
+          <View style={[layout.galleryLabels, { borderTopColor: heroText }]}>
+            <Text style={[layout.galleryLabel, { color: heroSub }, shadow]} numberOfLines={2}>{name.toUpperCase()}</Text>
+            <Text style={[layout.galleryLabel, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text>
+            <Text style={[layout.galleryLabel, layout.galleryLabelEnd, { color: heroSub }, shadow]} numberOfLines={2}>
+              {location.toUpperCase()}
+            </Text>
+          </View>
+          <View style={layout.tickRow}>
+            <Text
+              style={[
+                layout.galleryName,
+                { color: heroText },
+                shadow,
+              ]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {phrase ? <Text style={[layout.galleryPhrase, { color: heroSub }, shadow]}>{phrase}.</Text> : null}
+          <View style={layout.galleryArt}>{renderLogo(176)}</View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "labelCard": {
+      // Apothecary (owner, 2026-11-16: simple, but in the theme): the logo,
+      // then the name on the same label as the page's cards (their card
+      // colour, a fine outline and an accent rule inside it), then what they
+      // do and the details.
+      const labelInk = cardInk(cardColour);
+      return (
+        <>
+          {renderLogo(124)}
+          <View style={layout.labelWrap}>
+            <View style={[layout.labelCard, { backgroundColor: cardColour, borderColor: outlineInk(cardColour) }]}>
+              <View style={[layout.labelInner, { borderColor: withAlpha(accent, 0.7) }]} pointerEvents="none" />
+              <View style={layout.labelNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[layout.labelName, { color: labelInk.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {isVerified ? (
+                  <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                ) : null}
+              </View>
+            </View>
+          </View>
+          <View style={layout.infoCenter}>
+            {meta}
+            {details}
+          </View>
+        </>
+      );
+    }
+
+    case "blockName": {
+      // Snapshot: three of their photos edge to edge, then the name huge in
+      // condensed caps on a block of the accent, the logo beside it, then the
+      // area and what they do as square tags.
+      const blockInk = isDarkColor(accent) ? "#FFFFFF" : "#111111";
+      const tags = kicker.split("·").map(part => part.trim()).filter(Boolean);
+      return (
+        <View style={layout.blockWrap}>
+          <View style={layout.blockPhotos}>
+            {(["left", "middle", "right"] as const).map((slot, i) => (
+              <View key={slot} style={[layout.blockPhoto, { backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.4 : 0.6) }]}>
+                {photoUris?.[i] ? (
+                  <HeroPhoto uri={photoUris[i]} />
+                ) : null}
+              </View>
+            ))}
+          </View>
+          <View style={[layout.blockBox, { backgroundColor: accent }]}>
+            <View style={layout.blockNameCol} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.blockName, { color: blockInk }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>
+                {name.toUpperCase()}
+              </Text>
+              {tick}
+            </View>
+            <View style={layout.logoNoGap}>{renderLogo(72)}</View>
+          </View>
+          <View style={layout.blockInfo}>
+            {location ? <Text style={[layout.blockArea, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+            {tags.length ? (
+              <View style={layout.blockTags}>
+                {tags.map(label => (
+                  <View key={label} style={[layout.blockTag, { borderColor: heroText }]}>
+                    <Text style={[layout.blockTagText, { color: heroText }]} numberOfLines={1}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View style={layout.leftDetails}>{details}</View>
+          </View>
+        </View>
+      );
+    }
+
+    case "signed": {
+      // Signature: a big logo in an accent ring, the whole name signed across
+      // its foot in a pen signature, the words round it in Gloock. Every line
+      // is in full ink: the pale accent and the faded sub colour read too faint
+      // under a fine pen script (owner, 2026-11-15).
+      const pen = heroIsDark ? "#FFFFFF" : blend(accent, "#000000", 0.5);
+      return (
+        <View style={[layout.infoCenter, layout.textFirst]}>
+          <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
+          <View style={layout.signedLogo}>{renderLogo(148)}</View>
+          <View style={layout.signedNameRow} pointerEvents="none" accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text
+              style={[layout.signedName, pickedName(40), { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.45}
+            >
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {location ? <Text style={[layout.signedLocated, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+          {kicker ? <Text style={[layout.signedKicker, { color: heroText }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+          <View style={layout.signedDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "quietBand": {
+      // Quiet: their photo left clear, then a pale band across it with the
+      // name and a ringed logo. The band is paper, so its ink is fixed.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.quietWrap}>
+          {location ? <Text style={[layout.quietArea, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+          <View style={layout.quietBand}>
+            <View style={layout.quietRow}>
+              <View style={layout.quietText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={[layout.quietName, pickedName(36)]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+                  {tick}
+                </View>
+                {phrase ? <Text style={layout.quietPhrase}>{phrase}</Text> : null}
+              </View>
+              <View style={[layout.quietRing, { borderColor: accent }]}>
+                <View style={layout.logoNoGap}>{renderLogo(72)}</View>
+              </View>
+            </View>
+            {kicker ? (
+              <>
+                <View style={layout.quietRule} />
+                <Text style={layout.quietKicker}>{kicker.split(" · ").join(" ✦ ")}</Text>
+              </>
+            ) : null}
+          </View>
+          <View style={layout.quietDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "veil":
+      // Sheer: their photo under a see-through black veil (heroes/SheerHero).
+      return (
+        <SheerHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "pressed":
+      // Embossed: the name pressed straight into the theme backdrop (heroes/EmbossedHero).
+      return (
+        <PressedHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          backdrop={heroColour}
+          heroSub={heroSub}
+          // HeroLogo keeps 20pt under itself, which pushed the logo up out of
+          // the middle of its stamped ring (owner, 2026-11-16).
+          logo={<View style={layout.logoNoGap}>{renderLogo(104)}</View>}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "callingCard":
+      // Calling Card: satin folds in the theme colour, and a cream card held by an accent clip with
+      // the logo, the name and the details on it (heroes/CallingCardHero).
+      return (
+        <CallingCardHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          heroColour={heroColour}
+          logo={renderLogo(76)}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "productPage":
+      // Boutique: a product page, their logo on their colour, the name as the title (heroes/BoutiqueHero).
+      return (
+        <BoutiqueHero
+          name={name}
+          location={location}
+          kicker={kicker}
+          accent={accent}
+          cardColour={cardColour}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "gazette":
+      // Gazette: a newsprint front page over their photo, the logo in the
+      // masthead's left ear; the stars, years and slots pill under the sheet.
+      return (
+        <>
+          <View style={layout.textFirst}>
+            <GazetteHero
+              name={name}
+              kicker={kicker}
+              location={location}
+              rating={rating}
+              cardColour={cardColour}
+              logo={<View style={layout.logoNoGap}>{renderLogo(64)}</View>}
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+            />
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "studio":
+      // Studio: a studio website's top, what they do in chunky caps on a deep
+      // bar and their name pressed into a panel of the accent (heroes/StudioHero).
+      return (
+        <StudioHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          // The tick sits beside the name on the accent panel.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(accent) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+          onBookNow={onBookNow}
+        />
+      );
+
+    case "lounge":
+      // Lounge: the name cut out of the page across a panel of their colour (heroes/DemureHeroes).
+      return (
+        <LoungeHero
+          name={name}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "softCard":
+      return (
+        <SoftFocusHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          // The tick sits on the pale tinted card.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color="#007AFF" accessibilityLabel="Verified" /> : null}
+        />
+      );
+
+    case "hushFan":
+      return (
+        <HushHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          shadow={shadow}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+          photoUris={photoUris ?? []}
+          paper={sheetColour ?? cardColour}
+          onOpenPhoto={onOpenHeroPhoto}
+          nameStyle={pickedName(44)}
+        />
+      );
+
+    case "appHeader": {
+      // Pure: the logo on the left, the name beside it with what they do and
+      // their area under it, then the stars and slots pill, all left-aligned.
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.appWrap}>
+          <View style={layout.appRow}>
+            {renderLogo(76)}
+            <View style={layout.appText} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <View style={layout.tickRow}>
+                <Text style={[layout.appName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {tick}
+              </View>
+              {phrase ? <Text style={[layout.appPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "gridHeader": {
+      // Grid: a box of fine lines with the logo and name in it, and the
+      // stars and slots pill in a ruled cell along its foot.
+      const line = withAlpha(heroText, 0.35);
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.gridWrap}>
+          <View style={[layout.gridBox, { borderColor: line }]}>
+            <View style={layout.gridTop}>
+              {renderLogo(64)}
+              <View style={layout.appText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={[layout.gridName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {name}
+                  </Text>
+                  {tick}
+                </View>
+                {phrase ? <Text style={[layout.appPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+              </View>
+            </View>
+            <View style={[layout.gridFoot, { borderTopColor: line }]}>{details}</View>
+          </View>
+        </View>
+      );
+    }
+
+    case "slateHeader": {
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.slateWrap}>
+          <View style={layout.slateRow}>
+            <View style={layout.slateTitle}>{renderName({ scale: 1.12 })}</View>
+            <View style={layout.logoNoGap}>{renderLogo(56)}</View>
+          </View>
+          <View style={[layout.slateRule, { backgroundColor: heroAccent }]} />
+          {phrase ? <Text style={[layout.slatePhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "haloHeader": {
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.haloWrap}>
+          <View style={[layout.haloRing, { borderColor: withAlpha(heroAccent, 0.65) }]}>
+            <View style={layout.logoNoGap}>{renderLogo(78)}</View>
+          </View>
+          <View style={layout.haloName}>{renderName({ scale: 0.96 })}</View>
+          {phrase ? <Text style={[layout.haloPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+          <View style={[layout.haloRule, { backgroundColor: heroAccent }]} />
+          <View style={layout.haloDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "prismHeader": {
+      // Custom's Prism top: angled planes of the accent behind the logo and
+      // the name, which is in their Business Name Font like every Custom top.
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.prismWrap}>
+          <View style={[layout.prismStage, { borderColor: withAlpha(heroText, 0.35), backgroundColor: withAlpha(accent, 0.16) }]}>
+            <Svg width="100%" height="100%" viewBox="0 0 320 230" style={StyleSheet.absoluteFill} pointerEvents="none" preserveAspectRatio="xMidYMid slice">
+              <Polygon points="0,0 196,0 92,230 0,230" fill={accent} opacity={0.38} />
+              <Polygon points="242,0 320,0 320,230 150,230" fill={heroText} opacity={0.12} />
+              <Path d="M202 0 L99 230 M248 0 L152 230" stroke={heroText} strokeOpacity={0.28} strokeWidth={1.5} />
+            </Svg>
+            <View style={[layout.prismLogo, layout.logoNoGap]}>{renderLogo(62)}</View>
+            <View style={layout.prismText}>
+              <View style={layout.prismName}>{renderName({ scale: 0.97 })}</View>
+              {phrase ? <Text style={[layout.prismPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.prismDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "stripes":
+      return (
+        <StripesHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          // The tick sits on the strip, usually a pale shade of the accent.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(stripesHeroColour(accent)) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+        />
+      );
+
+    case "bow":
+      return (
+        <BowHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          heroText={heroText}
+          heroSub={heroSub}
+          shadow={shadow}
+          accent={accent}
+          photoUri={photoUris?.[0]}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "titlePage":
+      // Novel: a book's title page set straight on the backdrop (heroes/NovelHero).
+      return (
+        <NovelHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          heroAccent={heroAccent}
+          shadow={shadow}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "archWindow": {
+      // Retreat: their chosen photo in a tall arched window, the logo resting
+      // on its foot, then the name in Marcellus, what they do and the details,
+      // all centred. No photo: the window is their colour with the logo in it.
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.archWrap}>
+          <View style={[layout.archWindow, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
+            {photo ? (
+              <HeroPhoto uri={photo} />
+            ) : (
+              <View style={layout.logoNoGap}>{renderLogo(92)}</View>
+            )}
+          </View>
+          {photo ? <View style={[layout.archLogo, layout.logoNoGap]}>{renderLogo(60)}</View> : null}
+          <View style={layout.archNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.archName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {kicker ? <Text style={[layout.archKicker, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+          <View style={layout.archDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "colourBlock": {
+      // Riviera: a block of their colour from the very top, what they do in
+      // small caps, the name huge in Fraunces' soft black italic, and the logo
+      // sitting over the block's lower corner. The details follow under it.
+      const blockInk = isDarkColor(accent) ? "#FFFFFF" : "#1A1512";
+      return (
+        <View style={layout.colourBlockWrap}>
+          <View style={[layout.colourBlock, { backgroundColor: accent }]}>
+            {kicker ? <Text style={[layout.colourBlockKicker, { color: withAlpha(blockInk, 0.85) }]} numberOfLines={2}>{kicker}</Text> : null}
+            <View style={layout.colourBlockNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.colourBlockName, { color: blockInk }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.55}>
+                {name}
+              </Text>
+              {tick}
+            </View>
+            <View style={layout.colourBlockLogo}>{renderLogo(68)}</View>
+          </View>
+          <View style={layout.colourBlockDetails}>
+            {location ? <Text style={[layout.colourBlockPlace, { color: heroSub }, shadow]} numberOfLines={2}>{location}</Text> : null}
+            {details}
+          </View>
+        </View>
+      );
+    }
+
+    case "split": {
+      // Posy: their chosen photo down the left half with a soft corner, the
+      // logo, the name in Young Serif and what they do on the right, then the
+      // stars and slots across the foot. No photo: that half is their colour
+      // with the logo on it, and the right side goes without a second logo.
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.splitWrap}>
+          <View style={layout.splitRow}>
+            <View style={[layout.splitPhoto, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
+              {photo ? (
+                <HeroPhoto uri={photo} />
+              ) : (
+                <View style={layout.logoNoGap}>{renderLogo(96)}</View>
+              )}
+            </View>
+            <View style={layout.splitText}>
+              {photo ? <View style={layout.logoNoGap}>{renderLogo(52)}</View> : null}
+              <View style={layout.splitNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[layout.splitName, { color: heroText }, shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {tick}
+              </View>
+              {kicker ? <Text style={[layout.splitKicker, { color: heroSub }, shadow]} numberOfLines={3}>{kicker}</Text> : null}
+              {location ? <Text style={[layout.splitPlace, { color: heroSub }, shadow]} numberOfLines={2}>{location}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.splitDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "customLeft":
+      // Custom · Cards: the logo on the left, the name and what they do beside it.
+      return (
+        <>
+          <View style={layout.customLeftRow}>
+            {renderLogo(84)}
+            <View style={layout.customLeftText}>
+              {renderName({ scale: 0.9 })}
+              {meta}
+            </View>
+          </View>
+          <View style={layout.customLeftDetails}>{details}</View>
+        </>
+      );
+
+    case "customBig":
+      // Custom · Big Name: no logo, what they do in small caps, then the name large.
+      return (
+        <View style={layout.customBig}>
+          {kicker ? <Text style={[layout.kicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
+          {renderName({ scale: 1.6 })}
+          {location ? <Text style={[layout.customBigPlace, { color: heroSub }, shadow]}>{location}</Text> : null}
+          <View style={layout.customBigDetails}>{details}</View>
+        </View>
+      );
+
+    default:
+      return (
+        <>
+          {renderLogo(148)}
+          <View style={layout.infoCenter}>
+            {renderName({ scale: 1 })}
+            {meta}
+            {details}
+          </View>
+        </>
+      );
+  }
+}
+
+/** Words curved over the top of Arch's logo. */
+function CurvedCaption({ text, color, width }: { text: string; color: string; width: number }) {
+  const id = `arc${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const r = (width - 20) / 2;
+  return (
+    <Svg width={width} height={r * 0.62} viewBox={`0 0 ${width} ${r * 0.62}`} style={layout.caption} pointerEvents="none">
+      <Defs>
+        <Path id={id} d={`M10 ${r * 0.62 + r * 0.6} A${r} ${r} 0 0 1 ${width - 10} ${r * 0.62 + r * 0.6}`} fill="none" />
+      </Defs>
+      <SvgText fill={color} fontSize={9.5} letterSpacing={2.2} fontFamily="Jura-VariableFont_wght" fontWeight="700">
+        <TextPath href={`#${id}`} startOffset="50%" textAnchor="middle">
+          {text.toUpperCase()}
+        </TextPath>
+      </SvgText>
+    </Svg>
+  );
+}
+
+/** Groovy's starburst sticker with their rating. */
+function Starburst({ rating, fill, ink }: { rating: string; fill: string; ink: string }) {
+  return (
+    <View style={layout.starburst} pointerEvents="none" accessible accessibilityLabel={`Rated ${rating}`}>
+      <Svg width={100} height={100} viewBox="0 0 100 100" style={StyleSheet.absoluteFill}>
+        <Polygon
+          fill={fill}
+          points="100,50 89.6,60.6 93.3,75 79,79 75,93.3 60.6,89.6 50,100 39.4,89.6 25,93.3 21,79 6.7,75 10.4,60.6 0,50 10.4,39.4 6.7,25 21,21 25,6.7 39.4,10.4 50,0 60.6,10.4 75,6.7 79,21 93.3,25 89.6,39.4"
+        />
+      </Svg>
+      <Text style={[layout.starburstStar, { color: ink }]}>★</Text>
+      <Text style={[layout.starburstRating, { color: ink }]}>{rating}</Text>
+      <Text style={[layout.starburstWord, { color: ink }]}>RATED</Text>
+    </View>
+  );
+}
+
+/** Heritage's seal: their name round the top, a star at the foot, a dotted ring. */
+function SealRing({
+  name, font, size, text, ring,
+}: { name: string; font: string; size: number; text: string; ring: string }) {
+  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
+  return (
+    <Svg width={250} height={250} viewBox="0 0 220 220" style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <Path id={`sealTop${id}`} d="M14 110A96 96 0 0 1 206 110" fill="none" />
+      </Defs>
+      <SvgText fill={text} fontSize={size} letterSpacing={3} fontFamily={font}>
+        <TextPath href={`#sealTop${id}`} startOffset="50%" textAnchor="middle">{name}</TextPath>
+      </SvgText>
+      <SvgText x={110} y={205} fill={text} fontSize={11} textAnchor="middle">✦</SvgText>
+      <Circle cx={110} cy={110} r={74} fill="none" stroke={ring} strokeWidth={3.5} strokeDasharray="0.1 7" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** The heroes that draw the business name in the font picked in Branding →
+ *  Name (through renderName). Every other style letters the name in its own
+ *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader", "roseCampaign"];
+
+export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
+  return (BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont) || !!pageStyle.nameFontPickable;
+}
+
+/** The Business Name Font to draw the name in on a style that keeps its own
+ *  lettering until one is picked: their font once it's anything but Classic
+ *  (the default), otherwise null for the style's own. */
+export function pickedNameFont(pageStyle: PageStyle, brandFont: string | null | undefined): string | null {
+  return pageStyle.nameFontPickable && brandFont && brandFont !== DEFAULT_PROVIDER_FONT ? brandFont : null;
+}
+
+/** The picked font at a top's own name size, thin scripts drawn larger and
+ *  given the taller line their loops need, as everywhere else. */
+export function pickedNameFontStyle(fontKey: string, size: number): TextStyle {
+  const fontSize = size * resolveProviderFontScale(fontKey);
+  return {
+    fontFamily: resolveProviderFontFamily(fontKey),
+    fontSize,
+    lineHeight: resolveProviderNameLineHeight(fontKey, fontSize),
+  };
+}
+
+/** The name's face, size and line on a top that letters it in the style's own
+ *  font (heroNameFont) instead of the Branding name font. With a picked font
+ *  (pickedNameFont), that face at the style's size, capitals and spacing. */
+export function heroNameFontStyle(font: HeroNameFont, size: number, pickedFont: string | null = null): TextStyle {
+  const fontSize = size * (font.scale ?? 1);
+  return {
+    ...(pickedFont
+      ? pickedNameFontStyle(pickedFont, fontSize)
+      : { fontFamily: font.fontFamily, fontSize, lineHeight: Math.round(fontSize * (font.lineRatio ?? 1.35)) }),
+    ...(font.transform ? { textTransform: font.transform } : null),
+    ...(font.letterSpacing ? { letterSpacing: font.letterSpacing } : null),
+  };
+}
+
+/**
+ * Whether this style draws the stars, years and slots pill on a separate
+ * surface rather than straight on the hero, so the profile uses that
+ * surface's ink.
+ */
+export function detailsSitOnCard(pageStyle: PageStyle): boolean {
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage"
+    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes";
+}
+
+/**
+ * Whether this style lays its own dark layer over the hero (Sheer's veil), so
+ * the profile and the preview ink the hero white whatever is behind it.
+ */
+export function heroIsDarkForStyle(pageStyle: PageStyle): boolean {
+  return pageStyle.hero === "veil";
+}
+
+/** The ink for details on that card. */
+/** On that card the slots pill takes a line of its own under the pills and years. */
+export const DETAILS_OWN_LINE = { width: "100%", alignItems: "center" } as const;
+
+export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
+
+
+/** How much lower a hero that opens on text starts than one that opens on the logo. */
+const TEXT_FIRST_DROP = 48;
+
+const layout = StyleSheet.create({
+  posterWrap: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 22 },
+  posterTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  posterPill: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 30, maxWidth: "70%" },
+  posterPillText: { fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 0.6 },
+  posterNameBlock: { alignItems: "flex-start" },
+  posterName: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 54, lineHeight: 56, letterSpacing: -2, paddingTop: 6 },
+  posterLower: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
+  posterLoop: { width: 168, height: 72, alignItems: "center", justifyContent: "center" },
+  posterScript: { fontFamily: "DancingScript_700Bold", fontSize: 18, lineHeight: 20, textAlign: "center", transform: [{ rotate: "-4deg" }] },
+  posterPrint: { width: 138, padding: 6, paddingBottom: 6, backgroundColor: "#FFFDF9", transform: [{ rotate: "4deg" }], shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  posterPrintPhoto: { width: "100%", height: 156, overflow: "hidden", backgroundColor: "#EEE" },
+  posterTape: { position: "absolute", top: -9, left: 40, width: 58, height: 18, backgroundColor: "rgba(238,232,220,0.82)", transform: [{ rotate: "-6deg" }] },
+  posterFoot: { alignItems: "flex-start", gap: 9, marginTop: 18 },
+  echoWrap: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 22, overflow: "hidden" },
+  echoBehind: { position: "absolute", top: 0, left: -30, right: -30, bottom: 0, justifyContent: "space-around" },
+  echoRow: { fontFamily: "Oswald-Bold", fontSize: 64, lineHeight: 72, letterSpacing: 1 },
+  echoTop: { flexDirection: "row", justifyContent: "flex-start", marginBottom: 12 },
+  echoStage: { minHeight: 262 },
+  echoPhoto: { position: "absolute", right: 0, top: 0, width: "60%", height: 230, borderRadius: 22, overflow: "hidden" },
+  echoPanel: { borderRadius: 22, paddingHorizontal: 18, paddingVertical: 18 },
+  echoPanelOver: { position: "absolute", left: 0, bottom: 0, width: "64%" },
+  echoLead: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 4 },
+  echoName: { fontFamily: "Oswald-Bold", fontSize: 32, lineHeight: 40, marginTop: 2, flexShrink: 1 },
+  echoTag: { alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 4, marginTop: 6 },
+  echoTagText: { fontFamily: "LibreBaskerville-Italic", fontSize: 12 },
+  echoFoot: { alignItems: "center", gap: 9, marginTop: 18 },
+  storeWrap: { paddingBottom: 22 },
+  storePhoto: { height: 300, overflow: "hidden" },
+  storeShade: { position: "absolute", top: 0, left: 0, right: 0, height: 96 },
+  storeLogo: { position: "absolute", top: 14, left: 0, right: 0, alignItems: "center" },
+  storeBand: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 20 },
+  storeOver: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 3.5, marginBottom: 6 },
+  storeName: { fontFamily: "Archivo-ExtraBold", fontSize: 30, lineHeight: 38, textAlign: "center", transform: [{ skewX: "-10deg" }], flexShrink: 1 },
+  storeFoot: { alignItems: "center", gap: 9, paddingHorizontal: 20, marginTop: 16 },
+  roseWrap: { paddingHorizontal: 18, paddingTop: 17, paddingBottom: 24 },
+  roseHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 52 },
+  roseOverline: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.4, flexShrink: 1 },
+  roseFeature: { flexDirection: "row", height: 248, borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  roseCopy: { width: "54%", paddingHorizontal: 14, paddingVertical: 16, justifyContent: "center", alignItems: "flex-start" },
+  roseEyebrow: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.2, marginBottom: 9 },
+  roseName: { fontFamily: "Italiana_400Regular", fontSize: 31, lineHeight: 36 },
+  roseRule: { width: 44, height: 1, marginTop: 12, marginBottom: 10 },
+  roseSmall: { fontFamily: "Manrope-Bold", fontSize: 8, letterSpacing: 1.2 },
+  rosePhoto: { flex: 1, overflow: "hidden" },
+  roseFoot: { alignItems: "center", gap: 8, marginTop: 16 },
+  shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
+  infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },
+  // Short on purpose: the board is a taste of their work, not a wall (156pt).
+  pinboardBoard: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  pinboardColumn: { flex: 1 },
+  pinboardPin: {
+    borderRadius: 18, overflow: "hidden",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
+  pinboardPinTall: { height: 150 },
+  pinboardPinShort: { height: 124 },
+  pinboardPinMid: { height: 138 },
+  pinboardPinOnly: { height: 156 },
+  pinboardIdentity: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 4 },
+  pinboardIdentityUnderPins: { marginTop: 16, gap: 12 },
+  pinboardText: { flex: 1, minWidth: 0 },
+  pinboardName: { fontFamily: "Manrope-Bold", fontSize: 27, lineHeight: 33, flexShrink: 1 },
+  pinboardPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 4 },
+  pinboardDetails: { alignItems: "flex-start", marginTop: 16, paddingHorizontal: 4 },
+  pinboardRule: { height: 1, marginTop: 22, marginHorizontal: 4 },
+  atelierFront: { paddingHorizontal: 28, marginTop: 38, marginBottom: 28 },
+  atelierTopRule: { height: StyleSheet.hairlineWidth, alignSelf: "stretch" },
+  atelierTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14, marginTop: 13 },
+  atelierOverline: { flex: 1, fontFamily: "HankenGrotesk-Medium", fontSize: 9, letterSpacing: 2.1, lineHeight: 15 },
+  atelierNameRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, marginTop: 14 },
+  atelierName: { flexShrink: 1, fontFamily: "Bellefair-Regular", fontSize: 52, lineHeight: 57, letterSpacing: 0.3, textAlign: "left" },
+  atelierUnderRule: { height: StyleSheet.hairlineWidth, alignSelf: "stretch", marginTop: 16 },
+  atelierMeta: { alignItems: "flex-start", marginTop: 16 },
+  atelierDetails: { alignItems: "flex-start", marginTop: 8 },
+  portfolioFront: { paddingHorizontal: 20, marginBottom: 24 },
+  portfolioCover: { height: 230, borderRadius: 18, overflow: "hidden", justifyContent: "flex-end", padding: 18 },
+  portfolioCoverLabel: { color: "#FFFFFF", fontFamily: "HankenGrotesk-Medium", fontSize: 10, letterSpacing: 2.6 },
+  portfolioIdentity: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: -12 },
+  portfolioLogo: { width: 74, alignItems: "center", justifyContent: "center" },
+  portfolioEyebrow: { fontFamily: "HankenGrotesk-Medium", fontSize: 9, letterSpacing: 2, flexShrink: 1 },
+  portfolioName: { alignItems: "center", paddingHorizontal: 8, marginTop: -2 },
+  portfolioMeta: { alignItems: "center", marginTop: 2 },
+  portfolioDetails: { alignItems: "center", marginTop: 10 },
+  appWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  appRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  appText: { flex: 1, minWidth: 0 },
+  appName: { fontFamily: "Manrope-Bold", fontSize: 26, lineHeight: 32, letterSpacing: -0.3, flexShrink: 1 },
+  appPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, marginTop: 3 },
+  gridWrap: { paddingHorizontal: 16, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  gridBox: { borderWidth: 1, borderRadius: 16 },
+  gridTop: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
+  gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
+  gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
+  slateWrap: { paddingHorizontal: 20, marginTop: 40, marginBottom: 28 },
+  slateRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  slateTitle: { flex: 1, minWidth: 0, alignItems: "flex-start" },
+  slateRule: { height: 2, borderRadius: 1, marginTop: 14, marginBottom: 12 },
+  slatePhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 20 },
+  haloWrap: { alignItems: "center", paddingHorizontal: 20, marginTop: 24, marginBottom: 28 },
+  haloRing: { width: 102, height: 102, borderWidth: 1, borderRadius: 51, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  haloName: { alignItems: "center", maxWidth: "100%" },
+  haloPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 6 },
+  haloRule: { width: 34, height: 2, borderRadius: 1, marginTop: 18, marginBottom: 4 },
+  haloDetails: { alignItems: "center", marginTop: 12 },
+  // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
+  // Retreat: the window starts below the header buttons, centred.
+  archWrap: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  archWindow: {
+    width: 196, height: 236, overflow: "hidden", alignItems: "center", justifyContent: "center",
+    borderTopLeftRadius: 98, borderTopRightRadius: 98, borderBottomLeftRadius: 6, borderBottomRightRadius: 6,
+  },
+  archLogo: { marginTop: -30 },
+  archNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 12 },
+  archName: { fontFamily: "Marcellus-Regular", fontSize: 30, lineHeight: 40, textAlign: "center", flexShrink: 1 },
+  archKicker: { fontFamily: "DidactGothic-Regular", fontSize: 10.5, lineHeight: 15, letterSpacing: 2.4, textAlign: "center", marginTop: 4 },
+  archDetails: { alignItems: "center", alignSelf: "stretch", marginTop: 12 },
+  // Riviera: the block runs from the very top, under the header buttons; its
+  // words start below them. The logo hangs over the block's lower right corner.
+  colourBlockWrap: { marginBottom: 26 },
+  colourBlock: { paddingTop: TEXT_FIRST_DROP + 22, paddingBottom: 30, paddingLeft: 22, paddingRight: 104 },
+  colourBlockKicker: { fontFamily: "Jost-Light", fontSize: 11, lineHeight: 15, letterSpacing: 2.6 },
+  colourBlockNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  // Fraunces' soft black italic leans past its box: 1.3× and a little room on the right.
+  colourBlockName: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 46, lineHeight: 60, paddingRight: 6, flexShrink: 1 },
+  colourBlockLogo: { position: "absolute", right: 20, bottom: -54 },
+  colourBlockDetails: { alignItems: "flex-start", paddingLeft: 20, paddingRight: 104, marginTop: 12, gap: 8 },
+  colourBlockPlace: { fontFamily: "Jost-Light", fontSize: 13, lineHeight: 18 },
+  // Posy: the photo half runs from the very top (under the header buttons, as
+  // Snapshot's strip does); the text half starts below them.
+  splitWrap: { marginBottom: 26 },
+  splitRow: { flexDirection: "row", minHeight: 300 },
+  splitPhoto: { flex: 1, borderBottomRightRadius: 26, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  splitText: { flex: 1, justifyContent: "flex-end", gap: 8, paddingLeft: 16, paddingRight: 18, paddingTop: TEXT_FIRST_DROP + 8 },
+  splitNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  // Young Serif's caps need 1.3× or their tops crop.
+  splitName: { fontFamily: "YoungSerif-Regular", fontSize: 26, lineHeight: 34, flexShrink: 1 },
+  splitKicker: { fontFamily: "Figtree-SemiBold", fontSize: 9.5, lineHeight: 14, letterSpacing: 1.8 },
+  splitPlace: { fontFamily: "Figtree-SemiBold", fontSize: 12, lineHeight: 16 },
+  splitDetails: { alignItems: "flex-start", paddingHorizontal: 20, marginTop: 14 },
+  customLeftRow: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP },
+  customLeftText: { flex: 1, alignItems: "flex-start" },
+  customLeftDetails: { alignItems: "flex-start", paddingHorizontal: 20, marginTop: 10, marginBottom: 26 },
+  customBig: { alignItems: "flex-start", paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  customBigPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13, marginTop: 2 },
+  customBigDetails: { alignItems: "flex-start", marginTop: 10 },
+  infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
+  labelWrap: { alignSelf: "stretch", paddingHorizontal: 28, marginBottom: 14 },
+  labelCard: { borderWidth: 1, paddingHorizontal: 22, paddingVertical: 20 },
+  // As the page's label cards (ProfilePageStyle innerRule).
+  labelInner: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
+  labelNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  // Marcellus SC: its caps need 1.28× or their tops crop.
+  labelName: { fontFamily: "MarcellusSC-Regular", fontSize: 28, lineHeight: 38, letterSpacing: 2.5, textAlign: "center", flexShrink: 1 },
+  coverTop: { paddingTop: 64 },
+  // HeroLogo keeps 20pt under itself; pull the name back up under the logo.
+  coverLogo: { alignSelf: "flex-end", marginRight: 28, marginBottom: -14 },
+  kicker: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 10, letterSpacing: 2.4, marginBottom: 8 },
+  // Arch, Spa and Framed open on a line of text (Framed's beside its logo),
+  // not on the logo alone, so they start lower:
+  // at the logo's height the first line sat under the header buttons.
+  mastHead: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 18 },
+  located: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12, letterSpacing: 0.6, marginTop: 4 },
+  mastRow: { flexDirection: "row", alignItems: "flex-end", gap: 14, paddingHorizontal: 20, marginBottom: 10 },
+  mastLogo: { alignItems: "center" },
+  caption: { marginBottom: -6 },
+  mastAbout: { flex: 1, paddingBottom: 20 },
+  meet: { fontFamily: "PinyonScript_400Regular", fontSize: 34, lineHeight: 50, paddingHorizontal: 6 },
+  meetName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 26, lineHeight: 34, marginBottom: 6 },
+  sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
+  sideText: { flex: 1, alignItems: "center" },
+  welcome: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, letterSpacing: 2 },
+  locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18, paddingHorizontal: 3 },
+  locatedPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12, flexShrink: 1 },
+  textFirst: { marginTop: TEXT_FIRST_DROP },
+  spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
+  spaLogo: { marginTop: 16 },
+  tickRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  leftDetails: { alignItems: "flex-start", marginTop: 12 },
+  // Editorial
+  edWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  edTop: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginBottom: 14 },
+  edNameCol: { flex: 1, minWidth: 0 },
+  prismWrap: { paddingHorizontal: 16, marginTop: 28, marginBottom: 28 },
+  prismStage: { height: 230, borderRadius: 24, borderWidth: 1, overflow: "hidden" },
+  prismLogo: { position: "absolute", top: 18, right: 18 },
+  prismText: { position: "absolute", left: 20, right: 20, bottom: 18 },
+  prismName: { alignItems: "flex-start" },
+  prismPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 5 },
+  prismDetails: { alignItems: "flex-start", paddingHorizontal: 6, marginTop: 16 },
+  edLight: { fontFamily: "LeagueSpartan-Light", fontSize: 50, lineHeight: 64, letterSpacing: -1 },
+  edBold: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 44, lineHeight: 57, letterSpacing: -1.2, flexShrink: 1 },
+  edCards: { width: 132, height: 146 },
+  edBack: {
+    position: "absolute", left: 0, top: 14, width: 84, height: 118, borderRadius: 12, overflow: "hidden",
+    transform: [{ rotate: "-5deg" }],
+  },
+  edFront: { position: "absolute", right: 0, top: 4, transform: [{ rotate: "5deg" }] },
+  edRule: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderTopWidth: 1.5, paddingTop: 10 },
+  edKicker: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 11, letterSpacing: 1.6, flexShrink: 1 },
+  edLocation: { fontFamily: "LeagueSpartan-Light", fontSize: 12, flexShrink: 1, textAlign: "right" },
+  logoNoGap: { marginBottom: -20 },
+  // Heritage
+  sealTop: { marginTop: 24 },
+  seal: { width: 250, height: 250 },
+  sealLogo: { position: "absolute", top: 61, left: 61 },
+  sealPhrase: { fontFamily: "LibreBaskerville-Italic", fontSize: 18, marginTop: 6 },
+  sealLocated: { fontFamily: "Cinzel-Medium", fontSize: 11, letterSpacing: 3, marginTop: 6, marginBottom: 10, textAlign: "center" },
+  // Duet
+  duetWrap: { paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP + 24, marginBottom: 26 },
+  duetCardShadow: { position: "absolute", top: 8, left: 7, right: -7, bottom: -8, borderRadius: 28 },
+  duetCard: {
+    backgroundColor: "#FFFFFF", borderWidth: 1.5,
+    borderColor: "#1F1A1C", borderRadius: 28, paddingVertical: 20, paddingHorizontal: 16,
+  },
+  // A wider gap than the other rows: the accent ring stands out round the
+  // logo, and the script's first letter swings left into that space.
+  duetCardRow: { flexDirection: "row", alignItems: "center", gap: 20 },
+  duetCardText: { flex: 1, minWidth: 0 },
+  duetHey: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60" },
+  // paddingLeft: Ms Madi's capitals start left of the text box, and RN clips
+  // whatever falls outside it, so the first letter looked cut by the logo.
+  // Room both sides: the script's swashes reach past its box and were clipped.
+  duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20, paddingHorizontal: 12 },
+  duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
+  duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
+  duetInfoRow: {
+    flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center",
+    columnGap: 10, rowGap: 12, marginTop: 18,
+  },
+  // Groovy
+  groovyWrap: { paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
+  groovyTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingHorizontal: 12 },
+  groovyLogo: { transform: [{ rotate: "-8deg" }], marginBottom: -20, zIndex: 2 },
+  groovyBadgeWrap: { marginTop: -6, transform: [{ rotate: "-4deg" }] },
+  groovyBadgeShadow: { position: "absolute", top: 7, left: 6, right: -6, bottom: -7, borderRadius: 100 },
+  groovyBadge: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 2.5, borderRadius: 100,
+    paddingVertical: 14, paddingHorizontal: 18,
+  },
+  groovyBadgeName: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 50, lineHeight: 64, letterSpacing: -1.5, textAlign: "center", flexShrink: 1 },
+  groovyTags: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 14, marginTop: 22, marginBottom: 18 },
+  // As wide as the row allows, and two lines if it needs them: a 200pt cap
+  // cut "KENSINGTON AND CHELSEA" off.
+  groovyTag: { borderWidth: 2, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#FFFDF6", maxWidth: "100%" },
+  groovyTagLeft: { transform: [{ rotate: "5deg" }] },
+  groovyTagRight: { transform: [{ rotate: "-6deg" }] },
+  groovyTagText: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4, color: "#1E2A4A", textAlign: "center" },
+  starburst: { width: 96, height: 96, alignItems: "center", justifyContent: "center", transform: [{ rotate: "14deg" }] },
+  starburstStar: { fontSize: 12, lineHeight: 14 },
+  starburstRating: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 22, lineHeight: 29 },
+  starburstWord: { fontSize: 8, fontWeight: "800", letterSpacing: 1 },
+  // Gallery
+  galleryWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  galleryLabels: { flexDirection: "row", gap: 10, borderTopWidth: 1, paddingTop: 8 },
+  galleryLabel: { flex: 1, fontFamily: "DidactGothic-Regular", fontSize: 10, letterSpacing: 1.2, lineHeight: 15 },
+  galleryLabelEnd: { textAlign: "right" },
+  galleryName: { fontFamily: "InstrumentSerif-Regular", fontSize: 60, lineHeight: 77, letterSpacing: -1.5, marginTop: 22, flexShrink: 1 },
+  galleryPhrase: { fontFamily: "InstrumentSerif-Italic", fontSize: 21, marginTop: 6 },
+  galleryArt: { alignItems: "center", marginTop: 26 },
+  // Snapshot
+  blockWrap: { marginBottom: 26 },
+  blockPhotos: { flexDirection: "row" },
+  blockPhoto: { flex: 1, height: 220, overflow: "hidden" },
+  blockBox: {
+    flexDirection: "row", alignItems: "center", gap: 12, marginTop: -58, marginRight: 40,
+    paddingLeft: 20, paddingRight: 14, paddingVertical: 16,
+  },
+  blockNameCol: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  blockName: { fontFamily: "Anton-Regular", fontSize: 54, lineHeight: 70, letterSpacing: 0.5, flexShrink: 1 },
+  blockInfo: { paddingHorizontal: 20, marginTop: 16 },
+  blockArea: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },
+  blockTags: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  blockTag: { borderWidth: 2, paddingHorizontal: 10, paddingVertical: 5 },
+  blockTagText: { fontSize: 10.5, fontWeight: "800", letterSpacing: 1.2 },
+  // Signature
+  signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 13, letterSpacing: 4, marginBottom: 14 },
+  signedLogo: { marginBottom: -20 },
+  signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -50, alignSelf: "stretch", justifyContent: "center" },
+  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 82, lineHeight: 120, flexShrink: 1, textAlign: "center" },
+  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 14, letterSpacing: 3, marginTop: 2, textAlign: "center" },
+  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 12.5, letterSpacing: 2, marginTop: 6, textAlign: "center" },
+  signedDetails: { alignItems: "center", marginTop: 14 },
+  // Quiet: the band is paper, so its ink is fixed.
+  quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },
+  quietBand: { backgroundColor: "#FBFCF8", marginTop: 170, paddingHorizontal: 24, paddingVertical: 22 },
+  quietRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  quietText: { flex: 1, minWidth: 0 },
+  // Josefin Sans, so Quiet no longer shares Apothecary's Marcellus.
+  quietName: { fontFamily: "JosefinSans_600SemiBold", fontSize: 36, lineHeight: 47, letterSpacing: 6, color: "#2C3527", flexShrink: 1 },
+  quietPhrase: { fontFamily: "JosefinSans_400Regular", fontSize: 16, lineHeight: 22, color: "#56614F", marginTop: 4 },
+  quietRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  quietRule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: "#BFCAB6", marginTop: 16, marginBottom: 12 },
+  quietKicker: { fontSize: 9.5, letterSpacing: 2.2, color: "#2C3527" },
+  quietDetails: { alignItems: "center", marginTop: 18 },
+});
+
+/** Cover's white pills under the name. */
+export function HeroPills({ labels }: { labels: readonly string[] }) {
+  return (
+    <View style={styles.pillRow}>
+      {labels.map(label => (
+        <View key={label} style={styles.pill}>
+          <Text style={styles.pillText} numberOfLines={1}>{label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { alignItems: "center", marginBottom: 20, marginTop: 0 },
+  wrapper: { position: "relative", width: 148, height: 148 },
+  logo: {
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    borderWidth: 4,
+    borderColor: "rgba(255, 253, 251, 0.9)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  gloss: { position: "absolute", top: 0, left: 0, width: 148, height: 148, borderRadius: 74 },
+  badge: { position: "absolute" },
+  initialsWrap: { alignItems: "center", justifyContent: "center" },
+  initials: { color: "#fff", fontSize: 28, fontWeight: "800" },
+  arch: { borderRadius: 10, borderTopLeftRadius: 74, borderTopRightRadius: 74 },
+  polaroidPhoto: { borderRadius: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 },
+  thinRim: { borderWidth: 2 },
+  tilted: { borderWidth: 3, borderColor: "#FFFFFF" },
+  squareLogo: { borderRadius: 4, borderWidth: 3, shadowOpacity: 0, elevation: 0 },
+  matFrame: {
+    backgroundColor: "#1F1F1F", padding: 4,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 8,
+  },
+  mat: { backgroundColor: "#FBFAF7" },
+  polaroid: {
+    backgroundColor: "#FFFFFF",
+    padding: 8,
+    paddingBottom: 30,
+    transform: [{ rotate: "-3deg" }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  glossRing: { position: "absolute", top: -8, left: -8, width: 164, height: 164, borderRadius: 82 },
+  doubleRing: { position: "absolute", top: -11, left: -11, width: 170, height: 170, borderRadius: 85, borderWidth: 1.5 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, paddingHorizontal: 24, marginBottom: 12 },
+  // minHeight, not height: the label grows with the chosen text size.
+  pill: { minHeight: 28, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 100, backgroundColor: "#FFFFFF", justifyContent: "center", maxWidth: 220 },
+  pillText: { fontFamily: "BakbakOne-Regular", fontSize: 10, letterSpacing: 1, color: "#1F1A18" },
+});

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { isDatabaseLayerFile, readDatabaseLayer } from './databaseLayerSource';
 
 const screensRoot = path.join(__dirname, '..', 'screens');
 const sourceRoot = path.join(__dirname, '..');
@@ -24,12 +25,9 @@ function allSourceFiles(directory: string): string[] {
 
 describe('screen Supabase boundary', () => {
   it('keeps the shared Supabase client inside the database boundary', () => {
-    const allowed = new Set([
-      path.join(sourceRoot, 'lib', 'supabase.ts'),
-      path.join(sourceRoot, 'services', 'databaseService.ts'),
-    ]);
+    const client = path.join(sourceRoot, 'lib', 'supabase.ts');
     for (const file of allSourceFiles(sourceRoot)) {
-      if (allowed.has(file)) continue;
+      if (file === client || isDatabaseLayerFile(file)) continue;
       const source = fs.readFileSync(file, 'utf8');
       expect(source).not.toMatch(/from ['"][^'"]*\/lib\/supabase['"]/);
     }
@@ -43,10 +41,7 @@ describe('screen Supabase boundary', () => {
   });
 
   it('routes auth screens through typed service helpers', () => {
-    const database = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const database = readDatabaseLayer();
 
     for (const helper of [
       'signInWithEmailPassword',

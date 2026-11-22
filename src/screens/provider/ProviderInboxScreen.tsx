@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -36,6 +37,14 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
+import {
+  filterInboxConversations,
+  hasInboxFilters,
+  INBOX_DATE_CHIPS,
+  INBOX_READ_CHIPS,
+  NO_INBOX_FILTERS,
+  type InboxFilters,
+} from '../../features/providers/inboxFilters';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -265,6 +274,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter === 'enquiries' ? 'enquiries' : 'messages');
 
   const [loadError,     setLoadError]     = useState<string | null>(null);
+  // Narrows whichever tab is open. Kept when switching tabs so "Unread" stays
+  // on while the provider checks both.
+  const [filters,       setFilters]       = useState<InboxFilters>(NO_INBOX_FILTERS);
+  const filtersOn = hasInboxFilters(filters);
 
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
   const [replyText,    setReplyText]    = useState('');
@@ -402,12 +415,30 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const outstandingCount = unreadCounts.enquiries + unreadCounts.messages;
   // Link-only: every conversation, so one from before they switched to their
   // own booking link can't disappear behind a tab they no longer have.
-  const flatItems = useMemo(
+  const tabItems = useMemo(
     () => isLinkOnly
       ? conversations
       : conversations.filter(c => filter === 'messages' ? c.has_booking : !c.has_booking),
     [conversations, filter, isLinkOnly],
   );
+  const flatItems = useMemo(
+    () => filterInboxConversations(tabItems, filters),
+    [tabItems, filters],
+  );
+
+  const toggleReadFilter = useCallback((key: InboxFilters['read']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(prev => ({ ...prev, read: prev.read === key ? null : key }));
+  }, []);
+  const toggleDateFilter = useCallback((key: InboxFilters['date']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(prev => ({ ...prev, date: prev.date === key ? null : key }));
+  }, []);
+  const clearFilters = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(NO_INBOX_FILTERS);
+    Keyboard.dismiss();
+  }, []);
   const showEnquiries = isLinkOnly || filter === 'enquiries';
 
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -490,6 +521,68 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
         </View>
         )}
 
+        {/* ── Search + filters ────────────────────────────────────── */}
+        <View style={[s.filterBar, { backgroundColor: P.card, borderBottomColor: P.border }]}>
+          <View style={[s.searchBox, { backgroundColor: P.surface }]}>
+            <Ionicons name="search" size={15} color={P.sub} />
+            <TextInput
+              style={[s.searchInput, { color: P.text }]}
+              value={filters.search}
+              onChangeText={search => setFilters(prev => ({ ...prev, search }))}
+              placeholder="Search by name"
+              placeholderTextColor={P.sub}
+              autoCorrect={false}
+              autoCapitalize="words"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              accessibilityLabel="Search conversations by name"
+            />
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={s.chipRow}
+          >
+            {INBOX_READ_CHIPS.map(c => {
+              const on = filters.read === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  activeOpacity={0.75}
+                  onPress={() => toggleReadFilter(c.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[s.chip, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}
+                >
+                  <Text style={[s.chipText, { color: on ? P.onAccent : P.text }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={[s.chipDivider, { backgroundColor: P.border }]} />
+            {INBOX_DATE_CHIPS.map(c => {
+              const on = filters.date === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  activeOpacity={0.75}
+                  onPress={() => toggleDateFilter(c.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[s.chip, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}
+                >
+                  <Text style={[s.chipText, { color: on ? P.onAccent : P.text }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {filtersOn && (
+              <TouchableOpacity activeOpacity={0.75} onPress={clearFilters} style={s.clearChip} accessibilityRole="button">
+                <Text style={[s.chipText, { color: P.accent }]}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+
         {/* ── List ────────────────────────────────────────────────── */}
         {loading ? (
           <View style={{ backgroundColor: P.card, flex: 1 }}>
@@ -504,6 +597,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
             }
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={{ paddingBottom: FLOATING_TAB_BAR_CLEARANCE }}
             renderItem={({ item, index }) => (
               <ConversationRow
@@ -527,7 +622,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             ListHeaderComponent={
               // With rows on screen the banner sits above them; with none, the
               // empty state below shows the failure instead of an empty inbox.
-              loadError && flatItems.length > 0 ? (
+              loadError && tabItems.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
                     {loadError} This list may be out of date.
@@ -539,7 +634,19 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               ) : undefined
             }
             ListEmptyComponent={
-              loadError ? (
+              tabItems.length > 0 ? (
+                // There are conversations here, the filters just hide them all.
+                <View style={s.empty}>
+                  <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
+                    <Ionicons name="search-outline" size={36} color={P.sub} />
+                  </View>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>Nothing matches</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>No conversations here fit these filters.</Text>
+                  <TouchableOpacity onPress={clearFilters} style={[s.retryBtn, { borderColor: P.border }]}>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>Clear filters</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : loadError ? (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name="cloud-offline-outline" size={36} color={P.sub} />
@@ -754,6 +861,15 @@ const s = StyleSheet.create({
   filterLabel:  { fontSize: 13, fontWeight: '600' },
   filterBadge:  { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+
+  filterBar:   { paddingTop: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, paddingHorizontal: 12, height: 38, borderRadius: 100 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  chipRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  chip:        { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
+  chipText:    { fontSize: 13, fontWeight: '600' },
+  chipDivider: { width: StyleSheet.hairlineWidth, height: 20, marginHorizontal: 2 },
+  clearChip:   { paddingHorizontal: 8, paddingVertical: 7 },
 
   empty:      { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },

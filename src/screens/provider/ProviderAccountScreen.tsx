@@ -31,7 +31,8 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getCurrentRefreshToken, getProviderDisplayNameByUserId, getUnreadNotificationCount } from '../../services/databaseService';
+import { getCurrentRefreshToken, getProviderDisplayNameByUserId } from '../../services/databaseService';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 import { dobToParts } from '../../utils/dateUtils';
@@ -141,7 +142,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { user, logout, switchMode, hatState, myBookingMode } = useAuth();
   const isAdmin = useIsCervicedAdmin(user?.id);
   // This screen is a link-only provider's Profile tab. The CERVICED-booking
-  // shortcuts (Analytics, Offers, Clientele, Schedule, Booking history) don't
+  // shortcuts (Analytics, Offers, Clientele, Payouts, Booking history) don't
   // apply to them — their analytics are on Home — so they get Edit profile and
   // Branding in the hero, and a Your Business section of the parts of a
   // profile they have, in place of those.
@@ -163,12 +164,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const [providerDisplayName, setProviderDisplayName] = useState<string | null>(null);
   // Unread notifications waiting in the *other* (client) hat, surfaced on the
   // switch control so a dual-role user never misses them while in provider mode.
-  const [clientUnread, setClientUnread] = useState(0);
-
-  useFocusEffect(useCallback(() => {
-    if (!hatState.owned.client) { setClientUnread(0); return; }
-    getUnreadNotificationCount('client').then(setClientUnread).catch(() => {});
-  }, [hatState.owned.client]));
+  const clientUnread = useUnreadNotificationCount('client', hatState.owned.client);
 
   // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
   // screen that never unmounts, so a one-time check could get permanently
@@ -415,7 +411,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.myBusiness')}</Text>
               <View style={styles.carousel}>
-                <CarouselCard key="schedule" icon="calendar-today" title={t('providerAccount.myBusiness.schedule.title')} subtitle={t('providerAccount.myBusiness.schedule.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
+                <CarouselCard key="payouts" icon="payment" title={t('providerAccount.myBusiness.payouts.title')} subtitle={t('providerAccount.myBusiness.payouts.sub')} onPress={() => navigation.navigate('Payments')} P={P} />
                 <CarouselCard key="inbox" icon="email" title={t('providerAccount.myBusiness.inbox.title')} subtitle={t('providerAccount.myBusiness.inbox.sub')} onPress={() => navigation.navigate('ProviderInbox')} P={P} />
                 <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} />
               </View>

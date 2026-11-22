@@ -1,6 +1,7 @@
 // Pins the colour collections and the hero finish added to Branding & Style
 // on 2026-11-03: every set sits in a listed collection, the finish survives a
 // save and reload inside profile_theme, and keys saved before it still read.
+import { DEFAULT_CUSTOM_CHOICES } from '../constants/customPageStyle';
 import {
   DEFAULT_PROVIDER_THEME,
   NEUTRAL_CARD,
@@ -10,6 +11,7 @@ import {
   THEME_COLLECTIONS,
   encodeCustomTheme,
   encodeThemeKey,
+  isDarkColor,
   parseThemeKey,
   resolveProviderTheme,
 } from '../constants/providerThemes';
@@ -41,13 +43,17 @@ describe('theme collections', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('carries the owner’s fifteen picks, plus the eight Clean Girl and Gilded ones', () => {
+  it('carries the existing picks and the six new chic, clean and bold sets', () => {
     const picked = PROVIDER_THEMES.filter(t => t.collection !== 'classics').map(t => t.name);
-    expect(picked).toHaveLength(23);
-    expect(picked).toEqual(expect.arrayContaining(['Tangerine & Navy', 'Emerald & Gold', 'Oat Milk', 'Desert Rose']));
+    expect(picked).toHaveLength(32);
+    expect(picked).toEqual(expect.arrayContaining([
+      'Tangerine & Navy', 'Emerald & Gold', 'Oat Milk', 'Desert Rose',
+      'Ivory & Oxblood', 'Cocoa & Cream', 'Sage & Milk', 'Blue & Linen',
+      'Royal Blue & Yellow', 'Violet & Lime',
+    ]));
     const second = PROVIDER_THEMES.filter(t => t.collection === 'clean' || t.collection === 'gilded').map(t => t.name);
     expect(second).toEqual([
-      'Milk Glaze', 'Glazed Rose', 'Coconut & Ink', 'Almond Silk', 'Cloud',
+      'Milk Glaze', 'Glazed Rose', 'Coconut & Ink', 'Almond Silk', 'Cloud', 'Sage & Milk', 'Blue & Linen',
       'White & Gold', 'Black & Gold', 'Antique Bronze',
     ]);
   });
@@ -58,6 +64,33 @@ describe('theme collections', () => {
     for (const theme of PROVIDER_THEMES.filter(t => t.collection === 'clean' || t.collection === 'gilded')) {
       const sheet = SHEET_OPTIONS.find(o => o.key === theme.suggestedSheet)!.color;
       expect({ theme: theme.key, ok: contrast(theme.tokens.accent, sheet) >= 3 }).toEqual({ theme: theme.key, ok: true });
+    }
+  });
+
+  it('keeps the six new combinations readable on their hero and content area', () => {
+    const keys = ['ivoryoxblood', 'cocoacream', 'sagemilk', 'bluelinen', 'royalyellow', 'violetlime'];
+    for (const key of keys) {
+      const theme = PROVIDER_THEMES.find(t => t.key === key)!;
+      const sheet = SHEET_OPTIONS.find(o => o.key === theme.suggestedSheet)!.color;
+      const heroInk = isDarkColor(theme.tokens.gradient[0]) ? '#FFFFFF' : '#26201E';
+      expect(contrast(theme.tokens.accent, sheet)).toBeGreaterThanOrEqual(3);
+      expect(contrast(heroInk, theme.tokens.gradient[0])).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(heroInk, theme.tokens.gradient[1])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('keeps the pink-board sets (2026-11-19) readable on their hero and their new pink content areas', () => {
+    for (const key of ['blushcocoa', 'hibiscus', 'cocoapink']) {
+      const theme = PROVIDER_THEMES.find(t => t.key === key)!;
+      const sheet = SHEET_OPTIONS.find(o => o.key === theme.suggestedSheet)!.color;
+      const heroInk = isDarkColor(theme.tokens.gradient[0]) ? '#FFFFFF' : '#26201E';
+      expect({ key, accentOnSheet: contrast(theme.tokens.accent, sheet) >= 3 }).toEqual({ key, accentOnSheet: true });
+      expect({ key, heroFrom: contrast(heroInk, theme.tokens.gradient[0]) >= 4.5 }).toEqual({ key, heroFrom: true });
+      expect({ key, heroTo: contrast(heroInk, theme.tokens.gradient[1]) >= 4.5 }).toEqual({ key, heroTo: true });
+    }
+    // Dark text stays readable on both new pinks.
+    for (const key of ['petal', 'candy']) {
+      expect(contrast('#26201E', SHEET_OPTIONS.find(o => o.key === key)!.color)).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -87,13 +120,15 @@ describe('hero finish in profile_theme', () => {
       sheet: '#FBF6EC',
       finish: 'split',
       shape: 'rounded',
+      pageStyle: 'classic',
+      policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 
   it('reads keys saved before the finish existed as a blend', () => {
-    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded' });
-    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
-    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
+    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
+    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
+    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
   });
 
   it('round-trips Sheen, which builds before it read as a blend', () => {
@@ -102,6 +137,8 @@ describe('hero finish in profile_theme', () => {
       sheet: '#EBEBEA',
       finish: 'sheen',
       shape: 'rounded',
+      pageStyle: 'classic',
+      policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 
@@ -112,7 +149,7 @@ describe('hero finish in profile_theme', () => {
   it('keeps a custom set readable with a finish on the end', () => {
     const base = encodeCustomTheme('#1D4A3C', '#FCFBFA', '#A98235');
     const key = encodeThemeKey(base, '#FBF6EC', 'solid');
-    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded' });
+    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
     expect(resolveProviderTheme(key).accent).toBe('#A98235');
   });
 
@@ -128,6 +165,21 @@ describe('Sheen', () => {
     const [a, b, light, c, d] = sheenColors('#FFFFFF', '#F2E7D2');
     expect([a, b, c, d]).toEqual(['#FFFFFF', '#F2E7D2', '#F2E7D2', '#FFFFFF']);
     expect(lum(light)).toBeGreaterThan(lum('#F2E7D2'));
+  });
+
+  it('runs a soft band across a custom colour instead of a stripe of the pale content area', () => {
+    // A custom set is saved as backdrop → content area (Branding's save).
+    const custom = sheenColors('#7A2E4D', SHEET_BG);
+    expect(custom[0]).toBe('#7A2E4D');
+    expect(custom[4]).toBe('#7A2E4D');
+    expect(custom).not.toContain(SHEET_BG);
+    // The band stays close to their colour, nowhere near the near-white sheet.
+    expect(contrast(custom[2], '#7A2E4D')).toBeLessThan(2);
+    expect(contrast(custom[2], SHEET_BG)).toBeGreaterThan(2.5);
+  });
+
+  it('leaves real two-colour sets as they were', () => {
+    expect(sheenColors('#1A1A1A', '#C9A227').slice(0, 2)).toEqual(['#1A1A1A', '#C9A227']);
   });
 
   it('keeps the band softer on a dark hero', () => {
@@ -172,6 +224,8 @@ describe('card shape in profile_theme', () => {
       sheet: '#F8ECF0',
       finish: 'glow',
       shape: 'square',
+      pageStyle: 'classic',
+      policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 

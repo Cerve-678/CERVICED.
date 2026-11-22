@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readDatabaseLayer } from "./databaseLayerSource";
 
 describe("ProviderProfileScreen data architecture", () => {
   const source = readFileSync(
@@ -40,6 +41,12 @@ describe("ProviderProfileScreen data architecture", () => {
   });
 
   it("keeps state-independent profile sections outside the screen component", () => {
+    // The page under the hero is drawn by the shared ProviderPageSheet.
+    const page = readFileSync(
+      join(__dirname, "../features/providers/page/ProviderPageSheet.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("<ProviderPageSheet");
     for (const section of [
       "ProviderSpecialitiesSection",
       "ProviderReviewPreviewSection",
@@ -48,10 +55,12 @@ describe("ProviderProfileScreen data architecture", () => {
       "ProviderPortfolioSection",
       "ProviderAdditionalInfoSection",
     ]) {
-      expect(source).toContain(`<${section}`);
+      expect(page).toContain(`<${section}`);
     }
-    expect(source).not.toContain("portfolioColumns.map(");
-    expect(source).not.toContain("reviews.slice(0, 5).map(");
+    for (const file of [source, page]) {
+      expect(file).not.toContain("portfolioColumns.map(");
+      expect(file).not.toContain("reviews.slice(0, 5).map(");
+    }
   });
 
   it("caps inline media and virtualizes the full portfolio", () => {
@@ -156,10 +165,7 @@ describe("ProviderProfileScreen data architecture", () => {
   });
 
   it("resolves an owned provider id deterministically and does not swallow the error", () => {
-    const db = readFileSync(
-      join(__dirname, "../services/databaseService.ts"),
-      "utf8",
-    );
+    const db = readDatabaseLayer();
     const fn = db.slice(
       db.indexOf("export async function getProviderIdForUserId"),
       db.indexOf("export async function getProviderBrandingByUserId"),

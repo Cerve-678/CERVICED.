@@ -123,6 +123,9 @@ export interface ProviderRegistrationData {
   hasCustomGradient: boolean;
   accentColor: string;
   profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
+  /** Branding → Business Name Font (providers.brand_font), read only so
+   *  previews letter the name as the profile does. Branding saves it. */
+  brandFont?: string | null;
   logo: string | null;
   /** How the logo sits in each Home card. Null = fill and centre. Cleared
    *  whenever a new logo is picked, since it describes the old image. */
@@ -224,6 +227,7 @@ export interface ProviderRegistrationData {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;
     depositType?: string;
@@ -233,8 +237,8 @@ export interface ProviderRegistrationData {
     policyImageUrls?: string[];
   } | null;
   // Enforced cancellation window (providers.cancellation_notice_hours) — set
-  // via the separate Automations screen, not this form, but the client-facing
-  // Policy tab prefers it over bookingPolicies.cancelNotice when both exist.
+  // from Policies, not this form. The database keeps bookingPolicies.cancelNotice
+  // saying the same thing (keep_cancel_notice_in_step), and wins if they differ.
   cancellationNoticeHours: number;
 }
 
@@ -1083,6 +1087,7 @@ export function providerRowToRegistrationData(
     // NULL round-trips as null — see the field's note on ProviderRegistrationData.
     addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
     backgroundImage: provider.background_image_url ?? null,
+    brandFont: provider.brand_font ?? null,
     isVerified: provider.is_verified ?? false,
     rating: Number(provider.rating) || 0,
     whatsapp: provider.whatsapp_number ?? '',

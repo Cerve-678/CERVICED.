@@ -1,5 +1,4 @@
 import { TREATMENT_HISTORY, hairTreatmentHistory } from '../features/beauty-profile/options';
-import { areaRows } from '../features/beauty-profile/bodyMap';
 import { highlightCategory } from '../features/beauty-profile/highlights';
 import { EMPTY_BEAUTY_DATA, type BeautyData } from '../types/beautyProfile';
 
@@ -17,11 +16,6 @@ describe('lash extensions are not in Hair', () => {
   it('is dropped from a stored history, keeping the rest in order', () => {
     expect(hairTreatmentHistory(['Coloured', 'Lash extensions', 'Hair extensions']))
       .toEqual(['Coloured', 'Hair extensions']);
-  });
-
-  it('is not listed on the Hair pin of the map', () => {
-    const rows = areaRows('hair', profile({ treatmentHistory: ['Lash extensions'] }));
-    expect(rows.find(r => r.label === 'History')?.value).toBeNull();
   });
 
   it('is not a Hair highlight', () => {

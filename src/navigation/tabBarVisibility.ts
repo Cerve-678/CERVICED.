@@ -27,11 +27,22 @@ export const QUICK_ACCESS_ROUTES: readonly string[] = [
 ];
 
 /**
+ * Screens that never show the bottom nav, whichever tab opened them, and
+ * nor does anything opened from them. Branding is reached from Settings, the
+ * provider Home and My Services; its Save bar sits at the foot of the screen
+ * (owner, 2026-11-17: hide the bottom nav in Branding). Payments & payouts
+ * too, including from My Profile's Payouts card (owner, 2026-11-18); it has
+ * its own Done button.
+ */
+export const ROUTES_WITHOUT_TAB_BAR: readonly string[] = ['Branding', 'Payments'];
+
+/**
  * Whether the bottom nav is hidden on `tab` when its stack holds `stack`
  * (route names from the root up to the screen being shown, which is last).
  * An empty stack means the tab has not navigated anywhere yet, so it is on its root.
  */
 export function stackHidesTabBar(tab: string, stack: readonly string[]): boolean {
+  if (stack.some(name => ROUTES_WITHOUT_TAB_BAR.includes(name))) return true;
   if (tab === SETTINGS_TAB) {
     const top = stack[stack.length - 1];
     return top !== undefined && !SETTINGS_ROUTES_WITH_TAB_BAR.includes(top);

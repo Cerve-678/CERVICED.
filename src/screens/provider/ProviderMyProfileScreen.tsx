@@ -42,6 +42,7 @@ import {
   Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  type ViewInstance,
 } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
@@ -56,7 +57,7 @@ import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import { LogoCircle } from '../../components/FramedLogo';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -72,6 +73,7 @@ import {
   addPortfolioItem,
   createMyService,
   deletePortfolioItem,
+  refreshCachedProviderProfile,
   getMyBookmarkCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
@@ -97,6 +99,7 @@ import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
+import { bookingCardsLead } from '../../features/providers/todaySchedule';
 import {
   TodayBookingCards,
   TodaySummaryCard,
@@ -106,6 +109,10 @@ import type { BookingWithAddOns } from '../../types/database';
 import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { CoachMarkTour, type CoachMarkStep } from '../../components/CoachMarkTour';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
+import { myProfileTourSteps, type MyProfileTourKey } from '../../features/providers/myProfileTour';
 import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -119,6 +126,7 @@ import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows'
 import { RecentBookingRow } from '../../features/providers/RecentBookingRow';
 import { RECENT_ACTIVITY_PREVIEW } from '../../features/providers/recentBookingActivity';
 import { useCalendarViewPreference } from '../../features/provider-bookings/calendarViewPreference';
+import type { PackFormKind } from '../../features/info-packs/PackFormHint';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   toEditorValue,
@@ -131,6 +139,7 @@ import {
   deriveAutomationsSet,
   buildGoLiveSteps,
   buildGoLiveHeadline,
+  goLiveCardLeads,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -1184,6 +1193,94 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Branding');
   }, [navigation]);
 
+  // Keep a fresh copy of the profile as clients see it ready while My Profile
+  // is open, so the logo tap below opens it with the profile already drawn.
+  // Refreshed on every focus, so coming back from Edit Profile
+  // picks the edit up. Not before go-live: clients can't see it yet.
+  const isLiveForPreview = goLive?.isLive !== false;
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerSlug || !isLiveForPreview) return;
+      refreshCachedProviderProfile(providerSlug).catch((error: unknown) => {
+        logger.warn('Could not warm own profile for the logo preview:', error);
+      });
+    }, [providerSlug, isLiveForPreview]),
+  );
+
+  // Tapping the logo shows the profile exactly as clients see it. Clients
+  // can't open it at all before go-live, so say that rather than open a
+  // "Provider not found" page. Unknown status (load failed) still opens it,
+  // same as the QR sheet.
+  const handleOpenClientView = useCallback(() => {
+    if (!providerSlug) return;
+    Haptics.selectionAsync().catch(() => {});
+    if (goLive?.isLive === false) {
+      Alert.alert(
+        'Not live yet',
+        'Clients will see your profile once you go live. Finish the steps on this page to get there.',
+      );
+      return;
+    }
+    navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
+  }, [navigation, providerSlug, goLive?.isLive]);
+
+  // ── First-visit spotlight tour ─────────────────────────────────────────
+  // Rings what's at the top of My Profile when it opens. A target that isn't
+  // drawn, or is off screen (the go-live card once it has moved down the
+  // page), is skipped by CoachMarkTour itself. My Profile stays mounted as a
+  // tab and the tour is a full-screen Modal, so it waits for focus, the same
+  // as Home's tour.
+  const isFocused = useIsFocused();
+  const [showTour, setShowTour] = useState(false);
+  const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+  const tourCheckedRef = useRef(false);
+  const tourTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tourLogoRef = useRef<ViewInstance>(null);
+  const tourEditRef = useRef<ViewInstance>(null);
+  const tourShortcutsRef = useRef<ViewInstance>(null);
+  const tourTabsRef = useRef<ViewInstance>(null);
+  const tourStatusRef = useRef<ViewInstance>(null);
+  const tourIsLive = goLive?.isLive === true;
+  const tourHasQr = !!providerId;
+  const tourSteps = useMemo<CoachMarkStep[]>(() => {
+    const refs: Record<MyProfileTourKey, React.RefObject<ViewInstance | null>> = {
+      logo: tourLogoRef,
+      edit: tourEditRef,
+      shortcuts: tourShortcutsRef,
+      tabs: tourTabsRef,
+      status: tourStatusRef,
+    };
+    return myProfileTourSteps({ isLive: tourIsLive, hasQrButton: tourHasQr }).map(step => ({
+      ...step,
+      target: { ref: refs[step.key] },
+    }));
+  }, [tourIsLive, tourHasQr]);
+  const profileReady = !!providerData && !isLoading;
+  useEffect(() => {
+    // Only once the page itself is drawn: before that there is nothing to
+    // ring, and the loading shell would be what got spotlighted.
+    if (tourCheckedRef.current || !user?.id || !profileReady) return;
+    tourCheckedRef.current = true;
+    const userId = user.id;
+    void (async () => {
+      const decision = await resolveTourForUser(TOUR_KEYS.PROVIDER_MY_PROFILE, tourSteps, userId);
+      if (!decision.show) return;
+      setTourStepKeys(decision.steps.map(step => step.key));
+      // Recorded on show, not on finish — see tourService.
+      void recordTourSeen(TOUR_KEYS.PROVIDER_MY_PROFILE, userId, decision.stampVersion);
+      // Lets the header and the go-live card finish laying out first.
+      tourTimerRef.current = setTimeout(() => setShowTour(true), 700);
+    })();
+  }, [user?.id, profileReady, tourSteps]);
+  useEffect(() => () => {
+    if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
+  }, []);
+  const visibleTourSteps = useMemo(
+    () => (tourStepKeys ? tourSteps.filter(step => tourStepKeys.includes(step.key)) : []),
+    [tourSteps, tourStepKeys],
+  );
+  const finishTour = useCallback(() => setShowTour(false), []);
+
   // Today's two cards. They haptick on their own presses, so these only
   // navigate.
   const todaySchedule = useTodaySchedule(providerId);
@@ -1297,7 +1394,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const closeEditor = useCallback(() => setEditorOpen(false), []);
 
   const handleSaveService = useCallback(
-    async (draft: MyServiceDraft) => {
+    async (draft: MyServiceDraft, then?: PackFormKind) => {
       if (!providerId) return;
       setSaving(true);
       try {
@@ -1310,6 +1407,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
         setEditorOpen(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        // From the editor's Info Pack / Form tip: saved, now open it.
+        if (then) navigation.navigate(then === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm');
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -1321,7 +1420,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         setSaving(false);
       }
     },
-    [providerId, editingId, editingCategory],
+    [providerId, editingId, editingCategory, navigation],
   );
 
   const handleToggleActive = useCallback(async (service: DbService) => {
@@ -1610,9 +1709,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       ? TONE_COLOR[headline.tone]
       : accentColor;
 
-  /* The go-live card. It leads the dashboard while anything is still
-     outstanding and drops to the bottom once the profile is finished —
-     at that point it's a receipt, not an instruction. */
+  /* The go-live card. It leads the dashboard until setup is 80% done and
+     clients can book, then drops to the bottom: at that point it's a
+     receipt, not an instruction. While the profile is still loading it
+     stays on top, where it always used to be. */
+  const statusLeads = goLiveCardLeads(setup.percent, goLive?.isLive ?? false);
   const todaySummaryCard = todaySchedule ? (
     <TodaySummaryCard
       schedule={todaySchedule}
@@ -1628,6 +1729,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       onOpenBooking={handleOpenBooking}
     />
   ) : null;
+  const cardsOnTop = todaySchedule ? bookingCardsLead(todaySchedule) : false;
 
   const statusSection = (
     <>
@@ -1637,7 +1739,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           steps stay one tap away rather than always occupying the
           top of the screen for a provider who's already live. */}
       {headline && goLiveWithHealth ? (
-        <View style={styles.dashCardShadow}>
+        <View ref={tourStatusRef} collapsable={false} style={styles.dashCardShadow}>
           <BlurView
             intensity={cardBlurIntensity}
             tint={cardBlurTint}
@@ -1847,20 +1949,29 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              {providerData.logo ? (
-                <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
-                  <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                    {providerData.providerName
-                      .split(' ')
-                      .map(w => w[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity
+                ref={tourLogoRef}
+                onPress={handleOpenClientView}
+                disabled={!providerSlug}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="See your profile as clients see it"
+              >
+                {providerData.logo ? (
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
+                    <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                      {providerData.providerName
+                        .split(' ')
+                        .map(w => w[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Counts live here rather than in a sentence under the Services
@@ -1900,6 +2011,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               {/* Ink pill, like every CTA in the reference — and it has to
                   invert over a dark hero photo to stay the loud one. */}
               <TouchableOpacity
+                ref={tourEditRef}
                 style={[styles.primaryAction, { backgroundColor: heroIsDark ? '#FFFFFF' : '#101010' }]}
                 onPress={handleEditProfile}
                 activeOpacity={0.85}
@@ -1910,6 +2022,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   EDIT PROFILE
                 </Text>
               </TouchableOpacity>
+              {/* Grouped only so the tour can ring all three at once; same
+                  gap as the row, so nothing moves. */}
+              <View ref={tourShortcutsRef} collapsable={false} style={styles.circleGroup}>
               <TouchableOpacity
                 style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
                 onPress={handleEditSchedule}
@@ -1939,6 +2054,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   <Ionicons name="qr-code-outline" size={19} color={PP.text} />
                 </TouchableOpacity>
               ) : null}
+              </View>
             </View>
           </View>
 
@@ -1949,6 +2065,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   tab rather than one scroll that buries the services under
                   status cards. */}
               <View
+                ref={tourTabsRef}
+                collapsable={false}
                 style={[
                   styles.tabBar,
                   { backgroundColor: withAlpha(PP.card, PP.isDark ? 0.6 : 0.75), borderColor: PP.border },
@@ -1981,14 +2099,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {tab === 'dashboard' ? (
                 <>
-                  {setup.percent === 100 ? null : statusSection}
+                  {statusLeads ? statusSection : null}
 
                   {/* ── Today ──────────────────────────────────────────────────
                       Two cards around the rest of the dashboard: the summary
                       leads until 2pm and again once the last client is done,
-                      the booking cards lead in between. Whichever isn't on
-                      top sits under Your work. */}
-                  {todaySchedule?.phase === 'cardsLead' ? todayBookingCards : todaySummaryCard}
+                      the booking cards lead in between, and on a free day
+                      with bookings coming up. Whichever isn't on top sits
+                      under Your work. */}
+                  {cardsOnTop ? todayBookingCards : todaySummaryCard}
 
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
@@ -2257,7 +2376,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   </View>
 
                   {/* ── Today, the other card ──────────────────────────────── */}
-                  {todaySchedule?.phase === 'cardsLead' ? todaySummaryCard : todayBookingCards}
+                  {cardsOnTop ? todaySummaryCard : todayBookingCards}
 
                   {/* ── Recent activity ────────────────────────────────────── */}
                   {recentBookings.length > 0 ? (
@@ -2416,7 +2535,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
-                  {setup.percent === 100 ? statusSection : null}
+                  {statusLeads ? null : statusSection}
                 </>
               ) : (
                 <>
@@ -2494,6 +2613,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             onClose={() => setProfileQrVisible(false)}
           />
         ) : null}
+        {/* Waits behind the Fully Booked certificate rather than stacking a
+            second full-screen Modal on top of it. */}
+        <CoachMarkTour
+          visible={showTour && isFocused && !certificate}
+          steps={visibleTourSteps}
+          onFinish={finishTour}
+        />
         {certificate ? (
           <FullyBookedCertificate
             visible
@@ -2516,6 +2642,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         saving={saving}
         palette={editorPalette}
         onSave={handleSaveService}
+        // Info Packs and Forms go with CERVICED bookings, which link-only
+        // providers don't take.
+        {...(myBookingMode === 'external' ? {} : { onSaveAndOpen: handleSaveService })}
         onClose={closeEditor}
       />
     </View>
@@ -2750,6 +2879,11 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 0.4,
+  },
+  circleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   circleAction: {
     width: 48,

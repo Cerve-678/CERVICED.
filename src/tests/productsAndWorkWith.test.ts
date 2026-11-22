@@ -75,11 +75,15 @@ describe('what the client sees', () => {
   });
 
   it('no longer folds products into the Good to know sentence', () => {
-    const src = read('screens', 'client', 'ProviderProfileScreen.tsx');
-    expect(src).not.toContain('Works with ${');
+    // Built in features/providers/additionalInfo, shared with the provider's
+    // own preview on Policies & Info.
+    const screen = read('screens', 'client', 'ProviderProfileScreen.tsx');
+    const src = read('features', 'providers', 'additionalInfo.ts');
+    expect(screen).toContain('additionalInfoGroups(provider, pageStyle)');
+    expect(screen).not.toContain('Works with ${');
+    expect(screen).not.toContain('WorkWithBlock');
     expect(src).toContain('productsGroup(provider)');
     expect(src).toContain('groups.push(...workWithGroups(provider))');
-    expect(src).not.toContain('WorkWithBlock');
   });
 });
 

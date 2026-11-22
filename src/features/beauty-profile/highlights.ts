@@ -1,7 +1,7 @@
 // src/features/beauty-profile/highlights.ts
 //
 // Pure derivation of each category's headline answer (the big word on the
-// body map's panel and on its My Profile tile) and the smaller answers under it. The
+// landing card and on its My Profile tile) and the smaller answers under it. The
 // completeness numbers still come from src/utils/beautyProfileStats.ts; this file only
 // decides which of the client's own answers lead.
 //
@@ -38,7 +38,7 @@ function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): st
   switch (key) {
     case 'hair':        return nonEmpty([d.hairType, d.scalpCondition.map(c => L.scalp(c)), d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
     case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);
-    case 'nails':       return nonEmpty([d.nailShape, d.nailLength]);
+    case 'nails':       return nonEmpty([d.nailShape, d.nailLength, d.nailService, d.nailStyle, d.nailColours]);
     case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.browCondition]);
     case 'makeup':      return nonEmpty([d.makeupCoverage, d.makeupFinish, d.makeupEyes, d.makeupLips]);
     case 'general':     return nonEmpty([d.styleVibe, d.serviceInterests]);

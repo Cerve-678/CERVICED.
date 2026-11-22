@@ -1447,3 +1447,104 @@ Decide whether access should end when a booking is cancelled or declined, and
 whether it should lapse after a set time (for example, some months after the
 appointment). Parked by the user on 2026-11-08: "leave for now but put in to
 do review future". Raised by the security review of #342.
+
+## 33. To do — make a second copy of the same form impossible in the database (2026-11-18)
+
+A client should never get the same form twice for one booking. Today the app
+makes sure of it (PRs #598, #607):
+
+- the Forms client list shows "Already has this form" and won't let you tick it;
+- sending skips any booking that already has the form, or one with the same name;
+- the booking page only offers forms that booking doesn't have;
+- auto-send never adds a form to a booking that already has one.
+
+What's missing is a database rule, like info packs already have
+(`booking_info_packs` is unique on `booking_id, info_pack_id`). Without it, two
+phones sending the same form to the same appointment at the same instant could
+both get through. Live had no duplicates on 2026-11-18.
+
+The fix:
+
+1. A unique index on `booking_intake_forms (booking_id, library_form_id)`.
+   Rows with no library form (NULL) aren't affected.
+2. `ON CONFLICT DO NOTHING` on the two auto-send inserts
+   (`handle_auto_send_intake_form`, `apply_hold_claimed_side_effects`), so the
+   rule can never make a booking fail to confirm. Redefine both from live with
+   md5 guards.
+3. `sendLibraryFormToBookings` switches to an upsert that ignores duplicates,
+   and only notifies the clients whose form was really added.
+
+Parked by the user on 2026-11-18: "put it in to do". Needs a migration (check
+`supabase/MIGRATION_OWNER.md`) and a forced-rollback dry run before applying.
+
+## 34. To do — make the waitlist match the user's design (2026-11-19)
+
+The user says the waitlist that's built isn't the one they designed. The
+design board is the In-App Waitlist artifact:
+https://claude.ai/artifact/Nt2QjLCdj5etrvJ93zaTyh
+
+**Client side (the user's words, 2026-11-18):** "I am supposed to have a tick
+in the provider's page, it's not supposed to be in Bookings."
+
+What's built today (#474):
+
+- On the provider's page, a waitlisted service shows a "2nd in line ✕" chip
+  (✕ leaves the waitlist), or "Held for you" when a slot is being held. Since
+  #663 it is drawn in `src/features/providers/page/ProviderPageServices.tsx`;
+  the screen only passes `waitlistPlaces`, `onLeaveWaitlist`,
+  `onJoinWaitlist` and `onOpenHeldPlace`.
+- The client's Bookings tab has a "WAITING FOR" section of place cards
+  (`src/features/bookings/WaitlistPlaceCard.tsx`).
+
+On 2026-11-10 the user picked idea B, "Waiting lives in Bookings", from that
+artifact, which is why the Bookings section exists. No mockup on the board
+shows a tick on the provider page. So the request may reverse that pick.
+**Ask before building:**
+
+1. Is it only a tick ("✓ On the waitlist") on the service, with the Bookings
+   section kept? Or does the waitlist come out of Bookings completely, so the
+   provider page is the only place?
+2. If it leaves Bookings: where does a client see a slot being held for
+   them, and pay for it? Today that's the "Held for you" card in Bookings plus
+   the waitlist alert.
+3. How does a client leave the waitlist, if the ✕ is replaced by a tick?
+
+Offer a side-by-side mockup (light and dark) built from the current code,
+before writing any code.
+
+**Provider side drifts from design B too** (provider waitlist cards on the To
+Do tab, `ProviderBookingHistoryScreen.tsx`):
+
+- no countdown bar while a slot is held for someone;
+- the button says "Leave it open" where the design says "Open to everyone";
+- no next person's name ("Offer it to Jo");
+- no dates under the client's name.
+
+Fix these after the client side is settled, so both sides come from one
+pass over the same board.
+
+Context: the provider is told when someone joins (#636, "Mini Manicure ·
+3rd in line" / "Faith joined your waitlist."). Any wording change on the
+client side should stay consistent with that alert.
+
+Parked by the user on 2026-11-19: "put waitlist stuff in to do with artifact
+and all". No migration expected for the client tick alone.
+
+## 35. To do — keep the "unread in your other mode" line live (2026-11-19)
+
+When the Notifications list is empty, it can say "You're all caught up here —
+but you have 3 unread in client mode." That number is fetched once, when the
+screen opens (`otherHatUnread` in `src/screens/shared/NotificationsScreen.tsx`).
+If a notification for the other hat arrives while you're on the screen, the
+line doesn't change until you open it again.
+
+Nothing is lost and every bell is right; it's cosmetic.
+
+The fix: replace the one-off fetch with the shared hook the bells already use,
+`useUnreadNotificationCount(isProvider ? 'client' : 'provider', hasOtherHat)`
+(`src/features/notifications/useUnreadNotificationCount.ts`, #665). App only,
+no migration.
+
+Found in the 2026-11-19 sweep for gaps between the two hats (after #665 and
+#666); that sweep found nothing else. Parked by the user on 2026-11-19: "put
+in to do".

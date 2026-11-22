@@ -208,7 +208,7 @@ that, putting it right means taking money back from Jo (section 2.8).
 |---|---|
 | **Checkout batch** | One checkout. It can contain several bookings with several providers |
 | **Hold (slot)** | A time slot reserved for 5 minutes while the client pays |
-| **Authorise / capture** | Authorise = the bank reserves the money on the card. Capture = the money is actually taken. CERVICED captures straight after authorising |
+| **Authorise / capture** | Authorise = the bank reserves the money on the card. Capture = the money is actually taken. CERVICED captures straight after authorising, except a request's payment, which stays authorised (held) until its provider accepts (section 2.1.1) |
 | **Held payout** | The provider's share, waiting at CERVICED until its release time |
 | **Release / transfer** | CERVICED sending a held payout to the provider's Stripe account |
 | **Bank payout** | Stripe sending money from the provider's Stripe account to their bank. Stripe does this, not CERVICED |
@@ -236,6 +236,42 @@ that, putting it right means taking money back from Jo (section 2.8).
    price per add-on, the same on every service). An add-on's extra time
    lengthens the booking's end time but never changes its price. **Not live
    until migration `20261105223541_universal_add_ons` is applied.**
+   **The policy is frozen here too.** Each booking stores the provider's
+   live booking policy (`bookings.policy_snapshot`, read by the server, never
+   copied from the app) and the moment the client ticked the Confirm & Pay
+   box (`policy_accepted_at`). Cancellation refunds use that frozen copy. If
+   the app's copy of the policy, the one the cart showed, differs from the
+   live one on any money term (cancel window, penalty or fee, deposit
+   settings, late/no-show fee) or on the provider's written terms, checkout
+   is refused and names the provider and service, so nobody is charged under
+   terms they never saw. An older build or a Quick Book item sends no copy,
+   so nothing is compared; the live policy is still what gets frozen. The
+   cancel window is frozen from `providers.cancellation_notice_hours` when
+   set, which the app's copy doesn't carry, so a change to that column alone
+   isn't caught (Part 6). *Live since 13 November (`20261113090000`); the app part needs a new
+   build. Until then no card-paid booking had either (0 of 94 on 13 November), so their
+   refunds use the provider's current policy; they are not backfilled.*
+   **Promo codes are priced here too.** A provider's promo code applied in
+   the cart is sent with each item and re-checked by the server (the
+   provider's own code, active, in date in UK time). The discount is a
+   percentage of the service and its add-ons, or a fixed amount, capped at
+   the service price, and nothing for a service or category outside the
+   code's scope. **The provider pays for it:** the booking's price
+   (`base_price`) is stored after the discount (`promo_discount` and
+   `promotion_id` record which code and how much), so the fee is worked out
+   on the discounted price and the payout, deposit, late/no-show caps and
+   refunds all follow what was actually charged. With a fixed deposit the
+   discount comes off the balance paid at the appointment, not the card
+   charge. An ended or invalid code is refused by name; the cart drops ended
+   codes before Confirm & Pay. A checkout that comes to £0 after a code is
+   refused (Stripe can't take £0); the provider can add that booking
+   themselves. Promotions can't be saved below 0% or above 100%, or with a
+   negative amount. Receipts don't show the discount as its own line yet
+   (`bookings.promo_discount` holds it). *Live since 13 November. Until
+   migration
+   `20261113100000_promo_code_charged_at_checkout` the code never reached the
+   server, so the card was charged full price while the cart showed the
+   discount. The app needs a new build to send the code.*
 2. **Add the fee** from section 1.3.
 3. **Check the provider can be paid.** If any provider in the basket hasn't
    finished setting up their Stripe account, checkout is refused.
@@ -289,9 +325,106 @@ received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 "refunded" notices don't send and the 5-minute job has nothing to call. The
 "Confirming your payment…" screen needs a new app build.*
 
+**Waitlist slots** are paid for through this same checkout. When a slot
+opens and the provider has **Auto** on, the next client in line gets it held
+for 10 minutes (an `on_hold` booking); with Auto off the provider is told and
+offers it from Bookings (since 18 November, `20261118150000`). "Confirm & pay" puts that slot in the cart at its fixed time;
+`prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
+database like any item, and the checkout can't outlast the hold: the 10
+minutes keep running while the client pays. Nothing is booked until
+`finalize_checkout` captures the payment. If the time runs out or the client
+passes, the hold row is deleted (never a cancelled booking), they come off that
+waitlist, and the slot goes to the next person (provider's Auto setting on) or
+opens to everyone and back to the provider to offer (off). A schedule closed
+because it filled lets only the waitlist have a freed slot. A
+provider offering a time by hand also creates a 10-minute hold, never an unpaid
+booking. *Live since 16 November (`20261113210000`); the app part needs a new
+build. Before that the old path booked waitlist slots with £0 paid, though none
+ever was.*
+
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
 and CERVICED never records, collects or confirms it** (section 2.9).
+
+### 2.1.1 Requests: the card is held, not charged
+
+*Built on `feat/request-card-hold` (owner's decision, 14 November). Not live
+until migration `20261116100000` is applied, `settle-held-payment` and
+`request-card-hold` are deployed (new), `create-payment-intent`,
+`finalize-payment-intent`, `stripe-webhook`, `reconcile-checkouts`,
+`refund-payment` and `apply-cancellation-refund` are redeployed, and an app
+build ships.*
+
+**Every request has its own card hold** (a provider without auto-accept, or an
+emergency out-of-hours request, that costs something). The client's bank shows
+a pending hold, not a payment. Each hold is charged the moment **that**
+provider accepts, whatever the other bookings in the basket are doing.
+
+| What happens to the request | Money |
+|---|---|
+| The provider accepts | The hold is taken straight away. The client gets "Booking confirmed" and "Payment received", and the provider's payout is created then, released after the appointment as usual |
+| The provider declines, or doesn't answer by the deadline (24 hours, or 1 hour before the start if sooner) | The hold is released; nothing is taken and the booking reads **Not charged**. The client is told "You won't be charged" |
+| The client withdraws it before it's answered | **Never charged**, whatever the provider's policy: they never committed to it |
+| Accepted, then cancelled | A normal paid booking: the provider's policy applies (full refund in good time, late rules, non-refundable deposit). The provider cancelling refunds in full |
+
+**Instant bookings in the same basket** are charged at checkout exactly as
+before. One payment sheet, confirmed once:
+
+| Basket | What the sheet's payment is | Other requests |
+|---|---|---|
+| No requests | The whole checkout, charged | — |
+| Instant bookings + requests | The instant bookings, charged at once | Each request held separately, right after |
+| Requests only | The first request's own hold (not charged) | Each other request held separately, right after |
+
+**PayPal** is offered only when the basket has no requests: a request's hold
+is placed on a card (card, Apple Pay or Google Pay). The card is saved to the
+client's Stripe Customer at checkout so the other holds can be placed on it
+(`setup_future_usage = on_session`, or `off_session` when the checkout also
+has late/no-show fees).
+
+**Bank checks.** A bank may want an extra check (a code, a tap in its app)
+before allowing a hold. The success screen shows "Your bank wants to confirm
+the hold for the … request". Confirmed, the request goes to the provider as
+normal. Until then it is reserved but not sent; after **30 minutes** (owner's
+decision) it is cancelled, the slot is freed and nothing is held. A hold the
+bank refuses outright is dropped the same way, and the client is told the
+request wasn't sent.
+
+**Mechanics.** `create-payment-intent` calls `plan_checkout_holds` once,
+before the sheet's payment exists. It writes one `request_card_holds` row per
+request and fixes `checkout_batches.sheet_amount_pence`, so a provider turning
+auto-accept on mid-checkout can't change what the sheet was for.
+`settleCheckout` then:
+
+- captures the sheet's payment as before, unless it is a request's hold
+  (`on_sheet`), which it leaves uncaptured;
+- runs `finalize_checkout`, which books the instant bookings and the
+  on-sheet request (`payment_status = 'authorised'`), and leaves every other
+  request `on_hold` for 35 minutes;
+- places the other holds (`placeRequestHolds`: PaymentIntent, manual capture,
+  confirmed server-side with `use_stripe_sdk`). `request_hold_placed` books
+  each approved one with the same notices and `payment_status = 'authorised'`,
+  or records `needs_action` (30-minute deadline) or drops it.
+
+No provider payout exists while a booking is `authorised`. When a held
+request is answered, `on_held_request_answered` posts to
+`settle-held-payment`. `begin_request_hold_settlement` decides capture,
+release or wait under a row lock and records the decision, so a retry repeats
+the same Stripe call (idempotency keys `request_hold_capture_<hold>` /
+`request_hold_release_<hold>`). `complete_request_hold_settlement` marks the
+booking `fully_paid`/`deposit_paid` (which creates its payout through
+`create_held_payout_on_finalize`) or `not_charged`. A booking cancelled in the
+seconds while its capture is sent to Stripe is refunded through the normal
+path (`refund_booking_async`). Only the server can set or clear
+`authorised`/`not_charged` (`guard_held_payment_status`).
+
+The `settle-request-card-holds` cron (every 5 minutes) places holds a dropped
+call missed, lapses bank checks past their deadline, and settles answered
+requests. The app reports a confirmed bank check through `request-card-hold`;
+the webhook (`payment_intent.amount_capturable_updated`) covers an app closed
+mid-check. Requests are answered within 24 hours, well inside a card
+authorisation's 7 days. If a hold has somehow gone when a provider accepts,
+support is emailed once and the hold stays `settling` for a person to resolve.
 
 ### 2.2 Paying the provider (payouts)
 
@@ -310,7 +443,7 @@ appointment ends ─► + 24 hours (the same for every provider)
 - **The release hold is always 24 hours**, set by the database when the
   payout is created (`create_held_payout_on_finalize`).
 - **The bank payout schedule** is chosen by the provider in *Payments &
-  payouts → Payment settings*: daily, weekly on a weekday, or monthly on the
+  payouts → Settings*: daily, weekly on a weekday, or monthly on the
   1st, 15th or last day. Stripe holds it, not CERVICED: `create-connect-account`
   sets it on their connected account through Stripe's Balance Settings API and
   reads it back from there, so a change made in Stripe's own dashboard shows
@@ -337,7 +470,8 @@ payout before sending it:
 |---|---|
 | Is a refund request open on this booking? | Wait, and try again on the next run |
 | Is the booking still confirmed or completed? | Cancel the payout. Nothing is sent |
-| Was the payment fully refunded, or is it disputed at the bank? | Skip it |
+| Was the payment fully refunded? | Skip it |
+| Is the payment disputed at the bank? | Only this booking's part matters (section 2.7): not part of the dispute, pay it; part of an open dispute, or waiting for an admin to pick, wait; CERVICED won, pay it; CERVICED lost, cancel the payout |
 | Does every refund on the charge match CERVICED's refund ledger? | Skip it (an unexplained refund needs a person) |
 | Does the provider owe money? | Take that out first (section 2.8). If it uses the whole payout, nothing is sent and the payout is marked paid |
 
@@ -368,11 +502,19 @@ details are fixed. The app is built to tell the provider and support, but
 only if Stripe sends CERVICED events from providers' accounts, which **isn't
 confirmed** (Part 6).
 
-**What the provider sees** (*Payments & payouts*): the Overview, Booking
-payments, Payouts and Payment settings sections. Each held payout shows
-"Eligible for release from <date>. This is not a bank arrival date."
-Providers never see CERVICED's fee, the client's fee-inclusive total or
-CERVICED's revenue.
+**What the provider sees** (*Payments & payouts*): one card with four tabs,
+Overview, Bookings, Payouts and Settings. A held payout is called
+**Processing** (an "i" beside the word explains the 24-hour hold), and one
+sent to their Stripe balance is **Sent for payday**. Tapping a booking payment
+opens its timeline: booked and paid, the appointment, any tip or charged late / no-show fee, processing
+until `release_after`, any refund request or bank dispute, then sent for
+payday and paid to the bank on their schedule. The timeline can't say which
+bank payout a booking went out in, because CERVICED doesn't match Stripe
+payouts to bookings. Providers never see CERVICED's fee, the client's
+fee-inclusive total or CERVICED's revenue. The **non-refundable deposit**
+switch sits in Settings → Deposits, beside the deposit itself (moved from
+Policies on 17 Nov). A link-only provider still sets it in Policies, as a line
+on their profile only.
 
 ### 2.3 Cancellations and refunds
 
@@ -382,16 +524,17 @@ Pay or PayPal.
 | Situation | Who starts it | What the client gets back | What the provider keeps | CERVICED's fee |
 |---|---|---|---|---|
 | Provider declines or cancels a paid booking | Provider | Everything, automatically | Nothing | Refunded |
-| Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). Since 13 Nov (`20261113130000`) the provider can't accept after that time either, even before the 5-minute job has run. | Automatic (every 5 min) | Everything, automatically | Nothing | Refunded |
+| Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). Since 13 Nov (`20261113130000`) the provider can't accept after that time either, even before the 5-minute job has run. | Automatic (every 5 min) | Everything, automatically, or for a request made since card holds (section 2.1.1) the hold released and nothing taken | Nothing | Refunded |
 | Client cancels **before** the provider's cancellation window | Client | Everything | Nothing | Refunded |
 | Client cancels and the booking's frozen policy has a **non-refundable deposit**, with no bigger late penalty | Client | Everything except the deposit | The deposit (at most half the service price if they paid in full) | Refunded |
 | Same, but cancelled late under a penalty worth more than the deposit | Client | As the penalty rows below | The penalty, never less than the deposit | Kept |
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
-| Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit or half the price | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is **half the price** | Client | Nothing. The provider may also charge the client's saved card the rest up to half the price (section 2.5.1) | The whole deposit, plus that charge if the provider makes it | Kept |
 | Client cancels inside the window, **paid in full**; the policy is **keep the deposit** | Client | Everything except the kept amount and the fee | The deposit's amount, at most half the service price | Kept |
-| Client cancels inside the window, **paid in full**; the policy is **half the price** (no longer offered; policies and bookings saved before 2 Nov can still say it) | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
-| Client cancels inside the window, **paid in full**; the policy is **custom** | Client | Everything except the kept amount and the fee | The £ amount the provider set, at most half the service price | Kept |
-| Client cancels inside the window, **paid only a deposit**; the policy is **custom** | Client | Whatever is left of the deposit | The £ amount the provider set, at most the deposit and at most half the service price | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **half the price** | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **custom** (no longer offered since 13 Nov; only bookings made 2–13 Nov can say it) | Client | Everything except the kept amount and the fee | The £ amount the provider set, at most half the service price | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is **custom** (same) | Client | Whatever is left of the deposit | The £ amount the provider set, at most the deposit and at most half the service price | Kept |
 | Provider gives a **full** refund (any reason) | Provider | Everything not yet refunded | Nothing | Refunded |
 | Provider gives a **partial** refund | Provider | The amount they choose, from their share | The rest | Kept |
 | CERVICED approves a refund request | Admin | Same as the provider's full/partial rules | — | As above |
@@ -436,6 +579,14 @@ Pay or PayPal.
   applies to new bookings only. Bookings older than that column were filled
   with the window in force when it was added; a row without one falls back to
   the provider's current window. Migration `20261103040000`, applied 3 November; `apply-cancellation-refund` v13 reads it.
+  The written choice (`booking_policies.cancelNotice`, the copy frozen into a
+  booking's policy and shown on the client's booking page) always says the
+  window applied: a database trigger rewrites it from the column whenever
+  either changes, never the other way round. Three providers whose two copies
+  disagreed were brought in line, with no change to any window applied.
+  Link-only providers are left alone: their notice is only their own text.
+  *Migration `20261113180000_cancel_notice_one_value`, on branch
+  `fix/cancel-notice-one-value`.*
 - **Rescheduling doesn't reset the window.** If the client *asks* to
   reschedule once the window has already started, and the move goes ahead,
   the booking is marked (`bookings.late_reschedule_from`). Cancelling it
@@ -448,6 +599,16 @@ Pay or PayPal.
   (`late_reschedule_rule_starts_at()`, fixed when the migration ran). Client
   Terms §13 says so. *Live since 1 November (migration `20261101130000`,
   `apply-cancellation-refund` v8). The warnings need the next app build.*
+- **A provider's reschedule offer stops at the start.** A provider can offer
+  new times "cancel if declined": if the client declines, the booking is
+  cancelled and fully refunded. Once the appointment has started (UK time) a
+  provider can't send or answer with new times, and a client can't decline a
+  cancel-if-declined offer sent just before the start, because that would
+  cancel and fully refund a booking already under way, which a provider cancel
+  isn't allowed to do either. Both sides are told to message the other to sort
+  it out. *On branch `fix/no-reschedule-offer-after-start` (migration
+  `20261113170000_no_reschedule_offer_after_start`); the app wording needs the
+  next build, the server refusal works on any build.*
 - When a late cancellation keeps money, both sides are told: the provider
   ("You kept the £20 deposit…") and the client ("£40 refunded…").
 - **PayPal:** the same rules apply. Stripe allows PayPal refunds up to 180
@@ -505,6 +666,16 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
   own message, which stays in the app.
 - Requests are only for bookings paid through the app, with one open request
   per booking.
+- **A client can ask until the end of the fifth UK day after the day of the
+  appointment** (appointment on the 10th, last day the 15th). After that
+  `request_booking_refund()` refuses, and the app's ⋯ sheet says when it
+  closed (complaints stay in the ⋯ menu as usual). **Only bookings made from
+  13 Nov 2026 23:05 UTC**, when migration `20261113190000` was applied
+  (`refund_request_window_starts_at()`;
+  `client_bookings.refund_request_window_applies`); older bookings have no
+  limit. The same five days cover every reason, a wrong charge included.
+  Complaints have no limit. A request already open carries on as normal, and
+  a provider can still refund at any time. Live since 13 November.
 - **While a request is open, the provider's payout for that booking is
   held.** The provider is told so in the notification, the email, on the
   booking and on Payments.
@@ -531,8 +702,13 @@ their grace period) and **no-show**. Each is capped at **50% of the service
 price**.
 
 On the Policies screen, the late fee and grace period sit in the Late section.
-The no-show fee appears when the provider picks **Custom** as the no-show
-action, and picking any other action clears it. The one grace period still
+The no-show charge comes from the no-show action **Half the price** (since
+13 November; it replaced Custom, a typed £ fee, and saved Custom fees became
+Half). On a deposit-only booking it's half of (service price + add-ons)
+minus the deposit, frozen on the booking at checkout, like the late
+cancellation fee in 2.5.1; the deposit itself is kept because a no-show gets
+no refund. A client who paid in full has nothing more to pay. Bookings made
+before then keep the £ fee they were booked with The one grace period still
 stops a no-show being marked until it has passed.
 
 | Rule | Detail |
@@ -546,6 +722,7 @@ stops a no-show being marked until it has passed.
 | The provider receives | The fee **minus Stripe's actual card fee**, held 24 hours, then sent, less any money they owe (section 2.8) |
 | CERVICED | Takes nothing |
 | Saved card | The client can't remove it until 24 hours after the appointment |
+| Where the provider charges it | **Two places, same server checks** (since 19 November; reaches providers with the next app build). (1) **The booking page**: only a button per fee on the booking's policy (late, no-show, and a late cancellation fee while it can be charged), greyed out until it can be charged (late fee from the start time; no-show fee once the client is marked a no-show), live until 24 hours after the appointment, then gone. Once charged, the button stays greyed out saying what happened ("Late fee charged · £10.00"). It never opens Payments. (2) **Payments & payouts → that booking's payment**: the Booking payment sheet is where a fee is charged, refunded or a dispute answered. There's no separate fees list or fee sheet any more. A booking payment with a fee still to charge says so on its row ("Can charge a late arrival fee"), and Overview counts them. A charged fee shows as "+ £x fee" on the row and as a line in the sheet, added to the total unless it was refunded or taken back (a bank dispute shows on that line) |
 
 **If the card is declined** (or the bank wants the client to approve the
 payment):
@@ -566,6 +743,25 @@ The fee's payout is paused while a dispute is open.
 **Legal flag:** the Terms §6 wording and the checkout tick box were written as
 directed, not by a lawyer. A fee must read as a genuine estimate of loss, not
 a penalty (LEGAL-COMPLIANCE-NOTES §17).
+
+### 2.5.1 Late cancellation fee (deposit only, half-price policy)
+
+On the Policies screen a late cancellation can be **No penalty**, **Deposit
+kept** or **Half the price** (the Custom £ amount was removed on 13 November;
+saved Custom policies became Half). When a client who paid **only a deposit**
+cancels inside the notice period under Half, the deposit is kept as before,
+and the provider may also charge the rest up to half the price.
+
+| Rule | Detail |
+|---|---|
+| Amount | Half of (service price + add-ons) minus the deposit, rounded down to the penny, frozen on the booking when it's made (`bookings.late_cancel_fee_pence`). None if the deposit is already half or more, if the client paid in full, or if there's no notice period. Example: £100 with a £20 deposit → £30 |
+| Agreement | Its own tick box at checkout, separate from the late and no-show fees (wording `2026-11-13-late-cancel`). The record keeps the amount per provider. Older app builds can't agree to it, so they can't check out with such a booking |
+| Who charges | The provider, from the cancelled booking's page ("Charge late-cancel fee"). Nothing is charged automatically; if they don't press it, nothing more is taken |
+| When | Any time after the late cancel until **24 hours after the appointment would have ended** |
+| Only if | The provider had accepted the booking, the client then cancelled it themselves inside the notice period (or after moving it once the window had started), paid only a deposit, and the booking's frozen policy is Half. A withdrawn request is never charged |
+| Notices | The client's cancel sheet says "Late cancellation: you'll lose your £X deposit and may be charged up to £Y more." After the cancel, both sides are told the charge is available |
+| Everything else | As the late and no-show fees above: same card, declines, payment requests, retries, disputes, payout minus Stripe's card fee, nothing to CERVICED, card can't be removed until the window closes |
+| Which booking | Every fee (late, no-show or late cancellation) is charged only on a booking that its checkout actually made (`checkout_batch_items`). A booking row a provider added themselves can't borrow a client's payment and agreement |
 
 ### 2.6 Tips
 
@@ -594,21 +790,133 @@ disputed tip still on hold is skipped rather than marked reversed.
 
 ### 2.7 Chargebacks (bank disputes)
 
-When a client's bank forcibly reverses a payment:
+A chargeback is a client asking their bank to force a payment back.
 
-1. Stripe takes the disputed amount from CERVICED's balance and tells
-   CERVICED.
-2. CERVICED immediately takes back what the provider was paid for that
-   payment, for booking payouts and late/no-show fee payouts alike. Each is
-   taken back once only, even if Stripe repeats the event.
-3. If the provider's balance can't cover it, the rest becomes a debt
-   (section 2.8).
-4. A payout not yet sent is skipped by the payout job while the dispute is
-   open.
+**Live since 16 November 2026.** Migrations `20261115090000` (disputes per
+booking) and `20261116120000` (what the provider sees) are applied, and
+`stripe-webhook`, `release-payouts` and `assign-bank-dispute` are deployed.
+Still to do: the app build that adds the admin *Money → Disputes* tab and the
+provider's dispute lines, and a test-mode dispute to confirm Stripe still
+pays the other providers while a dispute is open on their payment.
 
-**Not automated:** responding to the dispute with evidence is done by hand in
+#### Why the bank deals with CERVICED, not the provider
+
+The bank only deals with the business that charged the card, and in the app
+that is CERVICED:
+
+- The client pays once at checkout. That one card payment goes into
+  **CERVICED's** Stripe account, and CERVICED then sends each provider their
+  share as a separate transfer (Stripe "separate charges and transfers").
+  This is what lets one basket cover several providers.
+- So the client's statement shows CERVICED, the bank opens the dispute
+  against CERVICED, and Stripe takes the money from **CERVICED's** balance.
+  The bank never sees the provider.
+- Providers have Stripe **Express** accounts, attached to CERVICED's. Stripe
+  holds CERVICED responsible if a provider's balance can't cover money taken
+  back.
+
+CERVICED therefore can't step out of a dispute, but it stays a pass-through:
+the bank decides who wins, and the provider whose booking it was carries the
+cost (decided 17 October, unchanged).
+
+**Considered and not chosen (16 November):** charging the card on each
+provider's own Stripe account instead ("direct charges"), so the bank deals
+with the provider. It would turn one basket into one card charge per
+provider (and possibly one bank check each), need saved cards copied to each
+provider, need full Standard Stripe accounts for providers (Express would
+still leave CERVICED liable), and mean rebuilding checkout, refunds, fees,
+tips and payouts. The owner kept the current set-up.
+
+#### What happens, step by step
+
+1. **The dispute arrives.** Stripe takes the disputed amount from CERVICED's
+   balance and tells CERVICED.
+2. **CERVICED works out which booking(s) it is about.** CERVICED knows
+   exactly how the payment was split between providers, but the bank says
+   only *which payment* and *how much*, never which booking. So the disputed
+   amount is matched against that split, using what each booking cost the
+   client (its price or deposit plus its share of the service fee), first
+   after any refunds and then before them:
+
+   | The disputed amount | Means | What happens |
+   |---|---|---|
+   | The payment paid one booking | That booking | Take back from that provider |
+   | Equals exactly one booking, or one set of bookings | Those bookings | Take back from those providers only. The rest are paid as normal |
+   | Equals every booking on the payment | The whole payment | Take back from every provider on it |
+   | Anything else, or two sets that both fit (two £50 bookings and £50 disputed; or a part of a booking, such as £30 of a £50 one) | Can't tell | **Nothing is taken back yet.** Every unpaid payout on the payment waits, support is emailed, and an admin picks the booking(s) in *Money → Disputes*. Then it goes as above |
+   | No booking on it was paid in the app | Nothing to take | Nothing happens |
+
+   **Considered and not chosen (16 November):** splitting an unclear dispute
+   automatically between the providers by their share, instead of an admin
+   picking. The owner kept the admin pick.
+3. **Taking back.** It works as for a refund: CERVICED reverses what the
+   provider was paid for that booking, and anything their Stripe balance
+   can't cover becomes a debt (section 2.8). Each payout is taken back once
+   only, even if Stripe repeats the event or an admin presses twice. An
+   admin's pick is saved before any money moves, so a second admin can't pick
+   differently. If taking back doesn't finish, the dispute stays on
+   *Money → Disputes* marked "didn't finish" until it's pressed again.
+4. **A payout not yet sent waits for the outcome.** If CERVICED wins, it is
+   paid as normal. If CERVICED loses, it is cancelled, because the money went
+   back to the client.
+5. **If CERVICED wins, the provider is paid back automatically**: what was
+   reversed from their Stripe balance for that dispute comes back as a
+   separate transfer, tagged with the dispute. Two things are not automatic,
+   so support is emailed to do them by hand: cancelling a part that became a
+   debt (and paying back anything already taken from later payouts), and
+   paying back a late/no-show fee's payout taken back for the dispute.
+6. **Won before anyone picked the booking:** nothing was taken and nothing is
+   owed, so every payout on the payment carries on.
+7. **If CERVICED loses:** the money stays with the client. Nothing is paid
+   back.
+
+A late/no-show fee has a payment of its own, so a dispute on one only ever
+concerns that provider. Stripe can send a dispute's events out of order, so
+each step reads the dispute's current state from Stripe; a "closed" that
+arrives first records the dispute and applies the outcome in one go.
+
+**Not automated:** responding to the bank with evidence is done by hand in
 the Stripe Dashboard (runbook R6). Stripe's own dispute fee is **not** passed
-on to the provider; CERVICED absorbs it.
+on to the provider; CERVICED pays it.
+
+#### What the provider sees
+
+On Payments → booking payments and fees, read through
+`provider_bank_dispute_states()`. It returns only the provider's own bookings,
+and never the dispute's amount, reason or Stripe ids.
+
+| Situation | Line shown |
+|---|---|
+| Dispute open, payout not sent yet | On hold · bank dispute |
+| Dispute open, payout already taken back | Taken back · bank dispute open |
+| Payment disputed, CERVICED still matching it to a booking | On hold · bank dispute on this payment |
+| CERVICED won and money was returned | Paid back · dispute won |
+| CERVICED won and nothing had been taken | The normal line (Processing / Sent for payday) |
+| The client's bank won | Taken back · bank dispute lost, or Not paid · bank dispute lost |
+| A late/no-show fee won back (support pays it by hand) | Dispute won · being paid back |
+
+#### What the Terms say, and the owner's choices
+
+Provider Terms §9, "Bank disputes", describes all of the above to providers:
+the bank decides, CERVICED works out which booking a dispute concerns and may
+hold every payout on that payment until it has, a lost dispute is not paid,
+a won one is paid and anything taken back is returned "within a reasonable
+time", CERVICED pays the dispute fee, and a provider who disagrees can ask
+support to review. Owner's choices on 16 November: promise the payback, with
+"within a reasonable time" (1A + 1B); explain how the booking is chosen and
+that other payouts may wait (2A); no 15-day notice of the change while the
+provider base is still being built. Not lawyer-reviewed: see
+`LEGAL-COMPLIANCE-NOTES.md` §28.
+
+#### Known gaps
+
+- A payout being sent at the exact moment a dispute arrives can still go out
+  without being taken back (this was already possible before).
+- The admin list shows at most 50 open disputes.
+- A wrong admin pick can only be corrected by hand; the system refuses a
+  second, different answer.
+- Debt cancellation and fee paybacks after a win are done by hand from a
+  support email.
 
 ### 2.8 When a provider owes money (debts)
 
@@ -689,7 +997,7 @@ one broken, it's a top-severity bug: stop and escalate.
 | 1 | The app never decides an amount. Every price, fee, refund and payout is recalculated on the server | Server functions; the app sends only ids |
 | 2 | A provider's payout is never more than what the client paid minus CERVICED's fee | Database check |
 | 3 | Each booking has at most one payout, and each payout is sent at most once, even if a job runs twice | Unique keys + Stripe idempotency keys |
-| 4 | Nothing is paid out for a cancelled, fully refunded or disputed booking | Re-checked at release |
+| 4 | Nothing is paid out for a cancelled or fully refunded booking, or while a bank dispute about it is open or unmatched (section 2.7) | Re-checked at release |
 | 5 | Nothing is paid out while a refund request is open | Re-checked at release |
 | 6 | Every payout is held at least 24 hours after the appointment ends | Database check + allowed values |
 | 7 | Money taken back from a provider is never lost or taken twice. What Stripe won't reverse becomes a recorded debt, and a deduction is given back if its payout fails | Debt ledger + idempotent take-back |
@@ -699,6 +1007,7 @@ one broken, it's a top-severity bug: stop and escalate.
 | 11 | Card data never touches CERVICED | Stripe's own card fields; only brand, last 4 and expiry are read from Stripe |
 | 12 | Only the server can move money. App users can't call any payout, debt or refund function directly | Function permissions (service role only) |
 | 13 | Off-app payments are never tracked | Product rule (section 2.9) |
+| 14 | A waitlist slot is never booked without the client paying for it | `claim_waitlist_hold` was dropped; a hold only becomes a booking in `finalize_checkout` (20261113210000) |
 
 ---
 
@@ -810,16 +1119,23 @@ provider's own policy, so the policy needs a solicitor's input.
 ### R6. A chargeback (bank dispute) arrives
 
 1. Stripe emails the account owner, and the dispute appears in the Stripe
-   Dashboard. The provider's share has already been taken back automatically
-   (section 2.7).
-2. In the Stripe Dashboard, respond **before the deadline Stripe shows**,
+   Dashboard. If the amount matched a booking, that provider's share has
+   already been taken back automatically, and nobody else's (section 2.7).
+2. **If support got a "needs you to pick the booking" email**, open *Money →
+   Disputes* in the app. Pick the booking(s) the client is disputing: the
+   reason in Stripe, and any message from the client's bank, usually names
+   the service. Until you do, nothing is taken back and every unpaid payout on
+   that payment waits.
+3. In the Stripe Dashboard, respond **before the deadline Stripe shows**,
    with evidence: the booking details and confirmation, any messages, the
    cancellation/fee policy and the client's agreement to it, and proof the
    service happened.
-3. If CERVICED wins, the money comes back to CERVICED. Paying the provider
-   back is **manual** today: escalate to engineering.
-4. If CERVICED loses, there's nothing more to do. A provider debt may now
-   exist (R5).
+4. If CERVICED wins, the provider is paid back automatically. If part of it
+   had become a debt, support is emailed: cancel what's left of that debt
+   and pay back anything already taken from their later payouts
+   (engineering).
+5. If CERVICED loses, there's nothing more to do. Their unpaid payout for
+   that booking is cancelled, and a provider debt may now exist (R5).
 
 ### R7. A client disputes a late/no-show fee
 
@@ -875,7 +1191,8 @@ Keep the list short and review it monthly.
   `providers.stripe_payouts_enabled` gates checkout and tips.
 - **Money is server-owned.** Every money action is a Supabase Edge Function
   or a `SECURITY DEFINER` database function. The app reaches them only
-  through `src/services/databaseService.ts` (CLAUDE.md).
+  through the database layer, `src/services/databaseService.ts` and the
+  topic files it re-exports from `src/services/database/` (CLAUDE.md).
 - **Idempotency everywhere.** Booking payout transfers use the
   `payout_transfer_<id>` key (`cancelpay_transfer_<id>` when a client
   cancellation settles it) and carry `payout_id` in their metadata, which is
@@ -894,8 +1211,11 @@ Keep the list short and review it monthly.
 | Function | Called by | What it does |
 |---|---|---|
 | `create-payment-intent` | App (checkout) | Re-prices the batch, checks providers are payout-ready, enforces fee consent, creates the PaymentIntent |
-| `finalize-payment-intent` | App | Captures; moves bookings `on_hold` → `pending`/`confirmed`; records the payment method |
-| `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes, bank payout failures |
+| `finalize-payment-intent` | App | Captures; moves bookings `on_hold` → `pending`/`confirmed`; records the payment method. Places each request's card hold; a request's own hold on the sheet isn't captured (section 2.1.1) |
+| `settle-held-payment` | DB trigger and cron (service role only) | Takes or releases a request's card hold once it's answered; the sweep also places missed holds and lapses bank checks (section 2.1.1) |
+| `request-card-hold` | App (success screen) | Hands the app a hold's bank check and records the result (section 2.1.1) |
+| `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes (matched to bookings by `_shared/bankDispute.ts` / `disputePlan.ts`), bank payout failures |
+| `assign-bank-dispute` | App (admins only) | An admin's pick of which booking(s) a dispute is about: takes back from those providers, then records it (`assign_bank_dispute`) |
 | `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over |
 | `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; support alerts |
 | `refund-payment` | Provider, admin, or the server (`refund_booking_async`) | Full and partial refunds; reconciles the payout |
@@ -915,7 +1235,8 @@ Keep the list short and review it monthly.
 | `release-due-payouts` | Every 15 min | `process_due_payouts()` → `release-payouts`, only when something is due |
 | `expire-cart-holds` | Every minute | Frees unpaid 5-minute slot holds |
 | `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
-| `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them |
+| `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them, or leaves a held one to `settle-request-card-holds` |
+| `settle-request-card-holds` | Every 5 min | `process_request_card_holds()`: calls `settle-held-payment` only when a hold needs placing, a bank check has lapsed, or a request has an answer to act on |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
 | `refund-request-deadlines` | Hourly at :25 | `process_refund_request_deadlines()`: reminds the provider at 2 days, passes the request to CERVICED at 3 |
@@ -924,7 +1245,8 @@ Keep the list short and review it monthly.
 
 | Name | Kind | What it does |
 |---|---|---|
-| `prepare_checkout` | RPC | Validates the basket and places 5-minute holds |
+| `prepare_checkout` | RPC | Validates the basket and places 5-minute holds. A waitlist item (`waitlist_hold_id`) reuses its held row and caps the checkout at the hold's own end |
+| `offer_waitlist_slot`, `invite_next_waitlist_entry`, `end_waitlist_hold`, `expire_waitlist_holds` | Functions / cron (every minute) | Offer a 10-minute waitlist hold; end one that wasn't paid for and offer it on or hand it back to the provider |
 | `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
 | `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
@@ -934,7 +1256,9 @@ Keep the list short and review it monthly.
 | `release_provider_shortfalls` / `release_fee_payout_shortfalls` | RPC (service role) | Give deductions back when nothing was sent |
 | `after_shortfall_notify_provider`, `after_payout_sent_notify_debt_recovered`, `after_fee_payout_sent_notify_debt_recovered` | Triggers | The two debt notices |
 | `request_booking_refund`, `pass_refund_request_to_cerviced`, `close_refund_request_on_refund` | RPCs / trigger | The refund request flow |
-| `admin_retry_payout`, `admin_decline_refund_request`, `admin_money_overview`, `is_cerviced_admin` | RPCs (admins) | The admin Money screen |
+| `admin_retry_payout`, `admin_decline_refund_request`, `admin_money_overview`, `admin_bank_disputes`, `is_cerviced_admin` | RPCs (admins) | The admin Money screen |
+| `provider_bank_dispute_states` | RPC (providers, own bookings only) | Where a bank dispute on each of the provider's bookings and fees stands, for their payout list (section 2.7). No amount, reason or Stripe ids |
+| `record_bank_dispute`, `assign_bank_dispute`, `close_bank_dispute` | RPCs (service role) | Record a dispute with its bookings in one go; record an admin's pick; record the bank's outcome. The last two lock the dispute before any money moves |
 | `money_needing_attention`, `process_money_daily_summary` | Functions | The daily email's data, and its trigger |
 | `refund_booking_async` | Function | A server-initiated full refund (provider cancel, expiry) |
 | `provider_cancel_own_booking` | RPC | A provider declining or cancelling; fires the full refund |
@@ -957,8 +1281,9 @@ so Stripe retries.
 
 | Table | Holds | Statuses |
 |---|---|---|
-| `checkout_batches` | One checkout: amount due, platform fee, `outcome` (`not_charged`, `refunded` or `abandoned` when it ended without bookings) | `prepared` → `finalised` / `expired` / `cancelled` |
-| `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; cleared by a later provider-proposed move) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
+| `checkout_batches` | One checkout: amount due, platform fee, `sheet_amount_pence` (what the payment sheet's payment is for, once requests are held separately), `outcome` (`not_charged`, `refunded` or `abandoned` when it ended without bookings) | `prepared` → `finalised` / `expired` / `cancelled` |
+| `request_card_holds` | One card hold per request in a checkout: amount, its PaymentIntent, `on_sheet`, bank-check deadline (section 2.1.1). Server-only | `planned` → (`needs_action`) → `authorised` → `settling` → `captured` / `released`; never placed: `dropped` |
+| `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; cleared by a later provider-proposed move) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed`, `authorised` (a request's payment held on the card), `not_charged` (the hold released) |
 | `provider_payouts` | One per paid booking: `gross_amount`, `platform_fee`, `payout_amount`, `deducted_pence`, `release_after`, `release_claimed_at`, `attempt_count`, `failure_cause` | `held` → `transferred` / `cancelled` / `reversed` / `failed` |
 | `booking_refunds` | A ledger of every refund (pence, and whether it has been applied to the payout) | — |
 | `refund_requests` | Client requests; `passed_automatically` (no reply in 3 days), `provider_reminded_at` | `with_provider` → `under_review` → `refunded` / `declined` (a decline needs a note) |
@@ -967,8 +1292,10 @@ so Stripe retries.
 | `booking_tips` | Tips (£1–£500) | `pending`, `succeeded`, `failed`, `refunded`; payouts work like fee payouts |
 | `provider_shortfalls` | Debts: `amount_pence`, `recovered_pence`, `source` (`refund`, `cancellation`, `fee_refund`, `bank_dispute`) | Open while `recovered_pence < amount_pence`; `settled_at` is set when paid off |
 | `provider_shortfall_recoveries` | Each deduction: the debt plus exactly one of `payout_id` / `fee_charge_id` | — |
+| `payment_disputes` | One per bank dispute: amount, reason, Stripe's status, how its bookings were chosen (`attribution`: `single_booking`, `amount`, `whole_charge`, `needs_admin`, `admin`) | `outcome` `won`/`lost` once closed |
+| `payment_dispute_bookings` | The bookings a dispute covers: `role` `disputed` (money taken back) or `frozen` (waiting for an admin), `taken_back_at`, and what was paid back after a win | — |
 | `client_stripe_customers` | Client ↔ Stripe Customer (service role only) | — |
-| `admin_users` / `admin_actions` | Admins, and an append-only log of their actions (`retry_payout`, `approve_refund`, `decline_refund_request`) | — |
+| `admin_users` / `admin_actions` | Admins, and an append-only log of their actions (`retry_payout`, `approve_refund`, `decline_refund_request`, `create_account`, `assign_bank_dispute`) | — |
 
 ### 5.4 Money notifications
 
@@ -1031,14 +1358,16 @@ Ranked, most important first.
 | 2 | **Only one admin** (the owner, added 31 October) | If they're away, nobody can retry payouts or answer refund requests | Add a second admin before launch (runbook R10) |
 | 3 | **Legal flag:** the provider Terms on cerviced.co still describe a "payout period" the provider chooses (how long CERVICED holds their share). Since 10 November CERVICED always holds 24 hours and the provider chooses their Stripe bank schedule instead; nobody has reworded the Terms | The Terms don't match what happens | The user decides the wording, then a solicitor checks it (LEGAL-COMPLIANCE-NOTES) |
 | 4 | **Legal flag:** the late-cancel charge (the whole deposit, or up to half the price) now also follows a late reschedule, and the 3-day and 5-working-day refund promises are new. None of this has been lawyer-reviewed | The charge could be challenged as unfair under consumer law | Ask a solicitor before live money (LEGAL-COMPLIANCE-NOTES) |
-| 5 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
+| 5 | **Chargeback responses are manual.** A won dispute pays the provider back automatically, except a part that became a debt | A missed deadline loses money; a debt from a won dispute needs cancelling by hand | Runbook R6 |
 | 6 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
 | 7 | **Tip chargebacks land on CERVICED** | Small losses | Decide whether to take a lost tip dispute back from the provider |
 | 8 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
+| 12 | **The cancel window can disagree with the written policy.** `cancel_notice_hours()` uses `providers.cancellation_notice_hours` first and the policy's `cancelNotice` only when the column is empty. On 13 November four live providers had them disagree (Nails Studio and Uniquely Aesthetics 24h vs 48h written, Daminkfinesse 48h vs 24h, CuratedByCilva 24h vs 12h) | A client can be judged by a window different from the one they were shown | Find which editor writes only one of them, then make one the source |
+| 13 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
+| 14 | **Waitlist checkout has never run end to end.** No waitlist offer has ever been sent in production, and the new pay-at-confirm path hasn't been tried in Stripe test mode | A broken step would only show as nobody being offered a slot | Rehearse it in test mode after the migration (hold, pay, decline, time running out, Auto-fill on and off) |
 
 ---
 
@@ -1050,6 +1379,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 |---|---|---|
 | 29 Sep | Stripe Connect with separate charges and transfers, and Express accounts | CERVICED holds the funds and controls payout timing |
 | 29 Sep | Full refunds return CERVICED's fee; partial refunds keep it | Keeping the fee on a full refund was judged likely unlawful in the UK |
+| 14 Nov | Every request has its own card hold, taken the moment its provider accepts; instant bookings in the same basket are charged at checkout; a withdrawn request is never charged; PayPal only without requests; 30 minutes to confirm a bank check (replaces the unapplied 12 November one-hold-per-checkout design) | A declined request no longer waits 5–10 working days for a refund of money that should never have left, and no request waits on another's answer |
 | 3 Oct | Client cancellations follow the provider's frozen policy: no charge, keep the deposit, or keep the full price (changed 1 November) | Predictable for both sides; a client is never charged more than they paid |
 | 12–13 Oct | Late/no-show fees: in-app, 50% cap, 24-hour window, no CERVICED cut | Protects providers without CERVICED profiting from penalties |
 | 13 Oct | Fee disputes go to the provider, not CERVICED | CERVICED doesn't judge fees |
@@ -1057,6 +1387,8 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 18 Oct | A payout is held while a refund request is open | A refund can then come out of money CERVICED still has |
 | 18 Oct | A provider who can't cover a reversal owes it from future payouts | Keeps the books whole without charging the provider directly |
 | 19 Oct | Fee agreement records are kept six years, including after account deletion | Evidence for disputes and claims |
+| 13 Nov | Promo codes are funded by the provider and the fee is charged on the discounted price | It is the provider's promotion; the cart already showed the fee on the discounted total |
+| 13 Nov | Card checkouts freeze the provider's live policy and refuse when it differs from what the cart showed | Refunds were using the provider's current policy for every card booking; binding a client to terms changed after they added the service would be unfair |
 | 19 Oct | A fee the card can't pay becomes a 7-day payment request, with up to 3 automatic retries on declines | A fair chance to pay before it lapses |
 | 19 Oct | A saved card can't be removed until 24 hours after its appointment | It may be needed for a fee |
 | 21 Oct | Failed payouts are retried after about 1, 2 and 4 days, then wait for a person | Most failures are temporary |
@@ -1068,6 +1400,8 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 5 Nov | Add-ons belong to the provider, not one service: one price everywhere, optional extra time, can be paused. Bookings keep the name and price paid | Providers retyped the same add-on per service, and a price change meant editing every copy |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 13 Nov | The no-show action Custom (a typed £ fee) is replaced by **Half the price**: on a deposit-only booking the provider keeps the deposit and may charge the rest up to half the price after marking the no-show. Paid in full: nothing more. Saved Custom fees became Half (one live provider, £25). Live since 16 November (`20261113200000_no_show_half`); the app part needs a new build; no edge function changes | The user's call: the same rule as a late cancellation, no typed amounts. **Not lawyer-reviewed** |
+| 13 Nov | Custom on a late cancellation is replaced by one **Half the price** option. A client who paid only a deposit and cancels late under it keeps losing the deposit, and the provider may also charge their saved card the rest up to half the price, from the booking, within 24 hours of the appointment's end. Agreed in its own tick box at checkout. Clients can also be held to moving a booking within the same calendar month. Not live until migration `20261113160000_late_cancel_half_top_up` is applied, `booking-fee`, `apply-cancellation-refund`, `create-payment-intent` and `client-saved-cards` are deployed, and a new app build ships | The user's call: providers wanted half of the price, not just a small deposit, when a deposit-only client cancels late. **Not lawyer-reviewed** |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 8 Nov | A paid deposit gets its own "Deposit paid" line on the client's receipt (booking details, PDF, confirmation email), under Total beside "Paid (incl. fee)". It's part of the price, so Total, Paid and Due don't change. (First built above Total; moved the same day because it read as an addition) | The client wanted to see the deposit amount itself, not only the Paid figure that includes the fee |
@@ -1076,6 +1410,8 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 6 Nov | The £25.99 monthly price comes off every full-membership screen; only "2 months free" stays | Pricing isn't final, so the app shouldn't name a number yet |
 | 2 Nov | A provider has 24 hours, not 48, to answer a booking request. Still fully refunded if they don't | The user's call, 2 November 2026 |
 | 3 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED refunds its fee when the deposit is the only thing kept | The user's call (2 and 3 Nov), including not waiting for a solicitor. **Not lawyer-reviewed** |
+| 10 Nov | A waitlist slot is paid for at checkout like any booking: 15-minute hold, the clock keeps running while paying, missing it or passing takes the client off that waitlist. "Offer automatically" rolls a lapsed slot to the next person; off, it opens to everyone and the provider can offer it. A provider's own offer is a hold too | Confirming used to book with £0 paid: no deposit, fee, saved card or policy agreement. The user's call, 10 November 2026 |
+| 18 Nov | Waitlist **Auto** decides the first hold as well as the roll-on: with it off, a freed slot goes back to the provider to offer. Holds are 10 minutes, not 15. Closing when full works with the waitlist on, and the waitlist alone gets a slot freed while closed | The owner's call, 18 November 2026: "Enable waitlist" is the manual waitlist and Auto the automatic hold |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |
@@ -1083,6 +1419,11 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 12 Nov | One payout's Stripe check failing no longer stops the payout job; it becomes a failed try on the usual schedule. A checkout whose payment Stripe doesn't have is closed as abandoned and support is told | One bad payout could otherwise hold up every provider's payout indefinitely, and the September test checkout had errored every 5 minutes since |
 | 12 Nov | Deleting an account or profile waits until no money on it is still moving (`account_deletion_blockers`); the 30-day job re-checks and deletes each account on its own. Live since 12 November (migration `20261112110000_account_deletion_waits_for_money`) | Deleting used to erase held payouts, open refund requests and debts with nothing paid, refunded or recovered, and one tipped client made every deletion in a run fail |
 | 12 Nov | A cancelled booking whose refund never went out is sent again (`process_unsent_refunds`, every 10 minutes: 5 tries, then daily) and listed in support's daily email after an hour. Live since 12 November (migration `20261112120000_retry_unsent_refunds`; `apply-cancellation-refund`, `refund-payment` and `money-daily-summary` deployed) | Every refund after a cancel was a single unchecked call: if it failed, the client's money stayed taken and nothing noticed |
+| 13 Nov | A provider can't offer new times once an appointment has started, and a client can't decline a cancel-if-declined offer after the start. Each side is told to message the other. Live since 13 November (migration `20261113170000`); the in-app note needs a new build | A "cancel if declined" offer was a side door to the full refund that a provider cancel after the start is refused |
+| 13 Nov | A provider's written cancellation notice always says the window actually applied; the database rewrites the text from the window, never the reverse. Daminkfinesse (24h → 48h), Nails Studio (48h → 24h) and CuratedByCilva (12h → 24h) were corrected; no window applied changed. Live since 13 November (migration `20261113180000`) | Clients saw one notice on the profile and another on their booking page |
+| 13 Nov | Refund requests close at the end of the fifth UK day after the appointment day, for bookings made from then on, for every reason; complaints stay open | Gives clients time to notice a problem while letting a booking's money settle; older bookings keep the terms they were booked under; the owner's rule |
+| 15 Nov | A bank dispute takes money back only from the provider(s) whose booking it's about, matched by amount; when the amount fits no booking, or more than one way, an admin picks and nothing is taken back until then. A won dispute pays the provider back automatically | One payment can pay several providers, and taking from all of them punished providers the client had no complaint about. An admin picking was chosen over splitting the cost across everyone on the payment, which would still charge providers the client had no complaint about |
+| 16 Nov | Bank disputes live. CERVICED stays in the middle because it charges the card (one payment per basket); paying each provider directly was considered and not chosen. An unclear dispute stays an admin pick, not an automatic split by share. Providers see "Paid back · dispute won" and the other dispute lines. Provider Terms §9 explains it all; no 15-day notice while the provider base is being built | Keeps the one-checkout basket; the bank decides and the provider whose booking it was carries the cost |
 
 ---
 

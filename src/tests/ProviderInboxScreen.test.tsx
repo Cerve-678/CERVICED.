@@ -81,3 +81,23 @@ it('gives each row a solid background so Mark read and Reply stay hidden until s
     expect(props.childrenContainerStyle?.backgroundColor).toBe('#FFFFFF');
   }
 });
+
+it('filters the open tab by read state and name, and offers a way out when nothing matches', async () => {
+  render(<ProviderInboxScreen navigation={navigation} route={{ params: { initialFilter: 'enquiries' } }} />);
+  await screen.findByText('Visitor');
+
+  fireEvent.press(screen.getByText('Read'));
+  expect(screen.queryByText('Visitor')).toBeNull();
+  expect(screen.getByText('Nothing matches')).toBeTruthy();
+
+  fireEvent.press(screen.getByText('Clear filters'));
+  expect(screen.getByText('Visitor')).toBeTruthy();
+
+  fireEvent.press(screen.getByText('Unread'));
+  expect(screen.getByText('Visitor')).toBeTruthy();
+
+  fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'nobody');
+  expect(screen.queryByText('Visitor')).toBeNull();
+  fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'vis');
+  expect(screen.getByText('Visitor')).toBeTruthy();
+});

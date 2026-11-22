@@ -5,7 +5,7 @@ const read = (...p: string[]): string =>
   fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
 
 /**
- * THE BUG: Beauty Profile's views (body map, All profile, a category,
+ * THE BUG: Beauty Profile's views (the landing, All profile, a category,
  * Maintenance, setup) are state inside one screen, so a back-swipe popped the
  * whole screen instead of going back one view.
  */
@@ -21,6 +21,14 @@ describe('Beauty Profile back-swipe', () => {
     expect(screen).toMatch(/type === 'GO_BACK' \|\| type === 'POP'\) \{ stepBack\(\); return; \}/);
     expect(screen).toContain('setLeaving(data.action);');
     expect(screen).toContain('navigation.dispatch(leaving);');
+  });
+
+  it('turns the native swipe off while a view is open, and steps back with its own edge swipe', () => {
+    // The native iOS swipe can't be held: it popped to Settings, then the
+    // screen came back (owner, 2026-11-17).
+    expect(screen).toContain('navigation.setOptions({ gestureEnabled: !innerOpen });');
+    expect(screen).toContain('stepBackRef.current();');
+    expect(screen).toContain('{...edgeSwipe.panHandlers}');
   });
 
   it("steps setup back the way setup's own back button does", () => {

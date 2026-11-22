@@ -32,12 +32,13 @@ import { composePassOnReason, PASS_ON_REASONS, passRefundRequestOn, type PassOnR
 import { isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
+import { dueByLabel, isOverdue } from '../../features/intake-forms/formDeadline';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { useAppDialog } from '../../components/AppDialog';
-import { getRescheduleBlock, getStaleRequestBlock } from '../../utils/rescheduleBlockedReason';
+import { getRescheduleBlock, getStaleRequestBlock, PROVIDER_STARTED_BLOCK } from '../../utils/rescheduleBlockedReason';
 import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
 import {
   getActiveRescheduleRequest,
@@ -90,13 +91,12 @@ import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { formsNotYetSent, packsNotYetSent } from '../../features/info-packs/infoPackLogic';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
-import { formatPickList } from '../../features/beauty-profile/pickList';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
 import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
-import { hairTreatmentHistory } from '../../features/beauty-profile/options';
+import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -724,9 +724,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       setInitSent(true);
     } catch (err) {
       logger.error('[ProviderBookingDetail] send reschedule response failed:', err);
+      // A DB guard (P0001) is written for the provider, e.g. the appointment
+      // started while this sheet was open; show it as it is.
       setInitInputError(err instanceof Error && (err.message.startsWith('Cancel if declined is not available yet') || err.message.startsWith('Reschedule notes are not available yet'))
         ? err.message
-        : respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
+        : toUserMessageAllowingDbGuard(
+            err,
+            respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.',
+            'ProviderBookingDetail.sendReschedule',
+          ));
     } finally {
       setInitLoading(false);
     }
@@ -1817,147 +1823,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           color={P.sub}
                         />
                       </TouchableOpacity>
-                      {profileExpanded && (() => {
-                        const catLabel = (label: string) => (
-                          <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 1.2, color: P.sub, opacity: 0.6, marginTop: 14, marginBottom: 6, textTransform: 'uppercase' }}>
-                            {label}
-                          </Text>
-                        );
-                        const chipRow = (items: string[], color?: string) => (
-                          <View style={styles.profileChips}>
-                            {items.map((item, i) => (
-                              <View key={i} style={[styles.profileChip, {
-                                backgroundColor: color ? color + '18' : P.surface,
-                                borderColor: color ? color + '44' : isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.10)',
-                              }]}>
-                                <Text style={[styles.profileChipText, { color: color ?? P.text }]}>{item}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        );
-
-                        const CR = (items: string[], color?: string) => chipRow(items, color);
-                        const hairHistory = hairTreatmentHistory(clientProfile.treatmentHistory);
-
-                        const hasSkin = (clientProfile.skinType.length > 0) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
-                        const hasHair = (clientProfile.hairType.length > 0) || (clientProfile.scalpCondition.length > 0) || (clientProfile.hairGoals.length > 0) || (hairHistory.length > 0);
-                        const hasNails = (clientProfile.nailLength.length > 0) || (clientProfile.nailShape.length > 0);
-                        const hasLashesBrows = (clientProfile.lashStyle.length > 0) || (clientProfile.lashStatus) || (clientProfile.browStyle.length > 0) || (clientProfile.browCondition.length > 0);
-                        const hasMakeup = (clientProfile.makeupCoverage.length > 0) || (clientProfile.makeupFinish.length > 0) || (clientProfile.makeupEyes.length > 0) || (clientProfile.makeupLips.length > 0);
-                        const hasStyle = clientProfile.styleVibe.length > 0;
-                        const hasAlerts = (clientProfile.allergies.length > 0) || (clientProfile.medicalNotes);
-
-                        return (
-                          <>
-                            {/* ── HEALTH & ALERTS (always first) ── */}
-                            {hasAlerts && catLabel('Health & Alerts')}
-                            {clientProfile.allergies.length > 0 && (
-                              <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                <Text style={[styles.rowLabel, { color: '#FF9500' }]}>⚠ Allergies</Text>
-                                {CR(clientProfile.allergies, '#FF9500')}
-                              </View>
-                            )}
-                            {clientProfile.medicalNotes ? (
-                              <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                <Text style={[styles.rowLabel, { color: '#FF3B30' }]}>⚕ Medical notes</Text>
-                                <Text style={[styles.rowValue, { color: P.text, flex: 1, textAlign: 'left', marginLeft: 8 }]}>{clientProfile.medicalNotes}</Text>
-                              </View>
-                            ) : null}
-
-                            {/* ── SKIN ── */}
-                            {hasSkin && (
-                              <>
-                                {catLabel('Skin')}
-                                {clientProfile.skinType.length > 0 ? <Row label="Skin type" value={formatPickList(clientProfile.skinType)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.skinTone ? <Row label="Skin tone" value={clientProfile.skinTone} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.skinConcerns.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Skin concerns</Text>
-                                    {CR(clientProfile.skinConcerns)}
-                                  </View>
-                                )}
-                                {clientProfile.sensitiveAreas.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Sensitive areas</Text>
-                                    {CR(clientProfile.sensitiveAreas)}
-                                  </View>
-                                )}
-                              </>
-                            )}
-
-                            {/* ── HAIR ── */}
-                            {hasHair && (
-                              <>
-                                {catLabel('Hair')}
-                                {clientProfile.hairType.length > 0 ? <Row label="Hair type" value={formatPickList(clientProfile.hairType)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.scalpCondition.length > 0 ? <Row label="Scalp condition" value={formatPickList(clientProfile.scalpCondition)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {hairHistory.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Treatment history</Text>
-                                    {CR(hairHistory)}
-                                  </View>
-                                )}
-                                {clientProfile.hairGoals.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Hair goals</Text>
-                                    {CR(clientProfile.hairGoals)}
-                                  </View>
-                                )}
-                              </>
-                            )}
-
-                            {/* ── NAILS ── */}
-                            {hasNails && (
-                              <>
-                                {catLabel('Nails')}
-                                {clientProfile.nailLength.length > 0 ? <Row label="Preferred length" value={formatPickList(clientProfile.nailLength)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailShape.length > 0 ? <Row label="Preferred shape" value={formatPickList(clientProfile.nailShape)} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── LASHES & BROWS ── */}
-                            {hasLashesBrows && (
-                              <>
-                                {catLabel('Lashes & Brows')}
-                                {clientProfile.lashStyle.length > 0 ? <Row label="Lash style" value={formatPickList(clientProfile.lashStyle)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.lashStatus ? <Row label="Lash status" value={clientProfile.lashStatus} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.browStyle.length > 0 ? <Row label="Brow style" value={formatPickList(clientProfile.browStyle)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.browCondition.length > 0 ? <Row label="Brow condition" value={formatPickList(clientProfile.browCondition)} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── MAKEUP ── */}
-                            {hasMakeup && (
-                              <>
-                                {catLabel('Makeup')}
-                                {clientProfile.makeupCoverage.length > 0 ? <Row label="Coverage" value={formatPickList(clientProfile.makeupCoverage)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupFinish.length > 0 ? <Row label="Finish" value={formatPickList(clientProfile.makeupFinish)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupEyes.length > 0 ? <Row label="Eye style" value={formatPickList(clientProfile.makeupEyes)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupLips.length > 0 ? <Row label="Lip preference" value={formatPickList(clientProfile.makeupLips)} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── STYLE ── */}
-                            {hasStyle && (
-                              <>
-                                {catLabel('Style')}
-                                <Row label="Style vibe" value={formatPickList(clientProfile.styleVibe)} textColor={P.text} divColor={rowDiv} />
-                              </>
-                            )}
-
-                            {/* ── CONSENT ── */}
-                            {catLabel('Consent')}
-                            {(
-                              <Row
-                                label="Photography consent"
-                                value={clientProfile.photographyConsent ? 'Yes' : 'No'}
-                                textColor={P.text} divColor={rowDiv} last
-                                valueColor={clientProfile.photographyConsent ? '#34C759' : '#FF3B30'}
-                              />
-                            )}
-                          </>
-                        );
-                      })()}
+                      {profileExpanded && (
+                        <ClientBeautyProfileDetails
+                          profile={clientProfile}
+                          text={P.text}
+                          sub={P.sub}
+                          surface={P.surface}
+                          divider={rowDiv}
+                          isDark={isDarkMode}
+                        />
+                      )}
                     </View>
                     <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   </>
@@ -2038,7 +1913,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           <Text style={[styles.intakeFormSub, { color: P.sub }]}>
                             {done
                               ? `Answered${form.completedAt ? ` ${formatShortDayDate(new Date(form.completedAt))}` : ''} · tap to see the answers`
-                              : `Sent ${formatShortDayDate(new Date(form.sentAt))} · not answered yet`}
+                              : isOverdue(form.dueAt, form.status, Date.now())
+                                ? `Sent ${formatShortDayDate(new Date(form.sentAt))} · was due ${dueByLabel(form.dueAt)}`
+                                : `Sent ${formatShortDayDate(new Date(form.sentAt))} · ${form.dueAt ? `due ${dueByLabel(form.dueAt)}` : 'not answered yet'}`}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -2137,13 +2014,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     provider is never owed that fee, so this row shows the
                     provider's own cut: the full service price when paid in
                     full, or just the deposit (fee-free at source) otherwise. */}
-                {(booking.amountPaid ?? 0) > 0 && (
+                {(booking.amountPaid ?? 0) > 0 && booking.paymentStatus !== PaymentStatus.NOT_CHARGED && (
                   <Row
-                    label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
+                    label={booking.paymentStatus === PaymentStatus.AUTHORISED
+                      // A request's payment is held on the client's card and
+                      // only taken when you accept it.
+                      ? (booking.paymentType === 'deposit' ? 'Deposit held, taken only if you accept' : 'Payment held, taken only if you accept')
+                      : booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
                     value={`£${(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
-                    valueColor="#34C759"
+                    valueColor={booking.paymentStatus === PaymentStatus.AUTHORISED ? P.sub : '#34C759'}
                     bold
                   />
                 )}
@@ -2245,7 +2126,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         ))}
                       </View>
                     )}
-                    {canRespondToReschedule && (
+                    {canRespondToReschedule && !apptStartPassed && (
                       <TouchableOpacity
                         style={[styles.respondBtn, { backgroundColor: '#FF9500' }]}
                         onPress={() => setShowInitRescheduleModal(true)}
@@ -2253,6 +2134,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       >
                         <Text style={styles.respondBtnText}>Respond to Reschedule</Text>
                       </TouchableOpacity>
+                    )}
+                    {/* After the start the server refuses new times (see
+                        PROVIDER_STARTED_BLOCK), so offer the way forward instead. */}
+                    {canRespondToReschedule && apptStartPassed && (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={[styles.rescheduleNote, { color: P.sub }]}>{PROVIDER_STARTED_BLOCK.message}</Text>
+                        {!!clientUserId && (
+                          <TouchableOpacity onPress={handleOpenChat} activeOpacity={0.7} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+                            <Text style={[styles.rescheduleNote, { color: P.accent, fontWeight: '600' }]}>Message the client</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
                 </>
@@ -2311,7 +2204,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       marginBottom: 10,
                     }}
                   >
-                    {providerRequestNote(requestDeadline)}
+                    {providerRequestNote(requestDeadline, undefined, booking.paymentStatus === PaymentStatus.AUTHORISED)}
                   </Text>
                 )}
                 <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
@@ -2368,6 +2261,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             colors={{ card: P.card, text: P.text, sub: P.sub, border: P.border, accent: P.accent, onAccent: P.ice }}
             showConfirm={showConfirm}
             showAlert={showAlert}
+            // Just the charge button here; refunds and disputes are on the
+            // booking's payment in Payments & payouts.
+            bookingPage
           />
         )}
 
@@ -4229,31 +4125,6 @@ const styles = StyleSheet.create({
   dialogBtnText: {
     fontSize: 17,
     fontWeight: '400',
-  },
-
-  // ── Client profile chips ──
-  profileChipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-    gap: 8,
-  },
-  profileChips: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'flex-end',
-  },
-  profileChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  profileChipText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
 
   // ── Notes section ──

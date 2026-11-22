@@ -1,3 +1,4 @@
+import type { OwnSections } from './ownSections';
 import type { BusinessType, LogoFraming } from '../../types/database';
 
 export interface ProviderProfileAddOn {
@@ -38,6 +39,9 @@ export interface ProviderProfileData {
   location: string;
   /** Public "How to get there", shown in Additional Information. */
   publicDirections: string;
+  /** The provider's own sections (Key Information, FAQs…), cleaned. Each
+   *  shows as its own section under Additional Information. */
+  ownSections: OwnSections;
   businessType: BusinessType | null;
   rating: number;
   /** providers.automation_settings.scheduleReleaseDay — day of month (1-31)
@@ -122,6 +126,7 @@ export interface ProviderProfileData {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     depositMode?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;
