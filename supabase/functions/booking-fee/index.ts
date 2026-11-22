@@ -111,12 +111,14 @@ async function visitSiblingIds(
   return (rows ?? []).filter(row => sameVisit(row, booking)).map(row => row.id as string);
 }
 
-/** Late or no-show fees on these bookings that are charged or in progress. */
-async function liveVisitFees(bookingIds: string[]): Promise<{ id: string; created_at: string }[]> {
+/** Late or no-show fees on these bookings that aren't failed: charged, going
+ *  through, waiting on the client, or refunded. A row stuck at 'processing'
+ *  counts too, since it may have reached Stripe. */
+async function liveVisitFees(bookingIds: string[]): Promise<{ id: string }[]> {
   const { data, error } = await admin.from('booking_fee_charges')
-    .select('id, created_at').in('booking_id', bookingIds).in('kind', ['late', 'no_show']).neq('status', 'failed');
+    .select('id').in('booking_id', bookingIds).in('kind', ['late', 'no_show']).neq('status', 'failed');
   if (error) throw error;
-  return (data ?? []) as { id: string; created_at: string }[];
+  return (data ?? []) as { id: string }[];
 }
 
 interface ProviderRow { id: string; stripe_account_id: string | null; stripe_payouts_enabled: boolean | null }
@@ -241,18 +243,19 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     booking_id: booking.id, provider_id: provider.id, client_user_id: booking.user_id,
     kind, amount_pence: eligibility.amountPence, stripe_account_id: provider.stripe_account_id,
     fee_consent_record_id: consent!.id,
-  }).select('id, created_at').single();
+  }).select('id').single();
   if (insertError) {
     if (insertError.code === '23505') return json({ error: 'A fee has already been charged for this booking.' }, 409);
     throw insertError;
   }
   // The unique index is per booking, so two taps on two services of the same
-  // visit could both get here. Each sees the other's row now; the earlier one
-  // goes ahead and this one steps aside before Stripe is called.
+  // visit could both get here. Fail closed: with any other fee row in the
+  // visit now visible, this one steps aside before Stripe is called. Whichever
+  // commits second always sees the first, so at most one goes ahead (both may
+  // step aside; the provider taps again). Ordering by created_at isn't safe:
+  // it's the transaction's start, not when the row became visible.
   if (visitIds.length > 0) {
-    const others = await liveVisitFees(visitIds);
-    const beaten = others.some(o => o.created_at < row.created_at || (o.created_at === row.created_at && o.id < row.id));
-    if (beaten) {
+    if ((await liveVisitFees(visitIds)).length > 0) {
       const { error: deleteError } = await admin.from('booking_fee_charges').delete().eq('id', row.id).eq('status', 'processing');
       if (deleteError) throw deleteError;
       return json({ error: VISIT_ALREADY_CHARGED }, 409);
