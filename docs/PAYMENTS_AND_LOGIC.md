@@ -716,6 +716,7 @@ stops a no-show being marked until it has passed.
 | Agreement | The client ticks to agree at checkout. CERVICED stores a record of who agreed, when, which wording version (checked by fingerprint), the amounts per provider and the app version. Records are kept **six years**, even after the account is deleted |
 | Amount | Frozen onto the booking when it's made. The app can never send a different figure |
 | When | Once per booking, from the start of the appointment until **24 hours after it ends** |
+| Once per visit | One late **or** no-show fee per **visit**, not per service (user decision 2026-11-13; `booking-fee` since 22 November). A visit is the services a client paid for in one checkout with the same provider on the same day, so three back-to-back services can be charged one fee, on whichever booking the provider picks (each booking's own frozen amount, still capped at half its price). `group_booking_id` isn't used: the app sets it, and card checkouts don't always carry it. Two taps on two services at once: the earlier fee row goes ahead and the later one is removed before Stripe is called. The late cancellation fee (2.5.1) stays per booking. The booking page and Payments still offer the button on the other services of a charged visit; the server refuses with a plain reason |
 | No-show | Only after the provider marks the booking a no-show, and only after their grace period |
 | Late | Only on a booking that went ahead |
 | How it's paid | Charged to the card saved at checkout. Card payments only |
