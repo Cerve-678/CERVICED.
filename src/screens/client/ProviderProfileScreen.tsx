@@ -1287,6 +1287,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isOwnProvider,
     viewerChecked,
   });
+  // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
+  // this component is typed by the ProviderProfile route it mostly serves.
+  const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
+  // The owner's logo preview shows the Book buttons as clients see them
+  // (user, 2026-11-22). A tap still goes through handleBook, which stops
+  // them booking themselves.
+  const showBookButtons = canBookProvider || (asOwnPreview && viewerChecked && providerDbId !== null);
 
   // A provider-only account reaches this screen by scanning someone's QR code.
   // It sees what clients see, but Bookings, Cart and Chat don't exist in the
@@ -2400,9 +2407,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [provider]);
 
   // Configure the navigation header with your gradient and icons
-  // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
-  // this component is typed by the ProviderProfile route it mostly serves.
-  const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
   React.useLayoutEffect(() => {
     // The owner tapping their logo on My Profile: the page alone, no header
     // and no buttons. They close it by swiping (MyPublicProfile's options).
@@ -3481,6 +3485,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   const openBookings = () => navigation.navigate("Bookings" as never);
   const openWaitlistJoin = (service: ServiceData) => {
+    // The owner's logo preview shows the waitlist button too; same stop as handleBook.
+    if (isOwnProvider) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      showAlert("That's your profile", "You can't join your own waitlist.", "center");
+      return;
+    }
     setWaitlistNotes("");
     setWaitlistModal({ visible: true, service });
   };
@@ -3516,7 +3526,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       expandedServiceIds={expandedServices}
       onToggleExpanded={toggleServiceExpanded}
       onOpenImages={openImageViewer}
-      canBook={canBookProvider}
+      canBook={showBookButtons}
       takingBookings={takingBookings}
       serviceFullyBooked={serviceFullyBooked}
       serviceNearTermAvailability={serviceNearTermAvailability}
@@ -4398,7 +4408,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             jumps to Services and then goes. Not while selecting several (that
             bar takes this spot), and never for a link-only provider (no
             services here). */}
-        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
+        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && showBookButtons && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
           <View style={[styles.pinnedBookBar, squareButtons && styles.pinnedBookBarSquare, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
             <View style={styles.pinnedBookText}>
               <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
