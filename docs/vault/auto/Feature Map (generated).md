@@ -247,7 +247,7 @@ Curated: [[Booking Flow]] · **85 files**
 Curated: [[Booking Flow]] · **242 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
-- `src/screens/client/BookingDetailScreen.tsx` _(243)_
+- `src/screens/client/BookingDetailScreen.tsx` _(245)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/RescheduleScreen.tsx` _(164)_
