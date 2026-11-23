@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  fix/web-provider-terms-readable (Claude, 2026-11-23) — 20261123220000_provider_terms_readable_signed_out, written, NOT applied
 ```
 
 ### Applied 2026-11-23 (the public web page reads reviews, address and open/closed)
