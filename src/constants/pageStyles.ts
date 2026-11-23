@@ -59,7 +59,6 @@ export type PageStyleKey =
   | 'filmstrip'
   | 'neon'
   | 'receipt'
-  | 'index'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -99,7 +98,6 @@ export type PageHeading =
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
   | 'neonScript' // a lowercase handwritten word in the accent, glowing like a lit tube on a dark page (Neon)
   | 'receiptCaps' // spaced till-roll caps over a dashed rule, like a receipt's headings (Receipt)
-  | 'tabCaps'  // small bold caps written on the section's file tab (Index)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -130,8 +128,7 @@ export type PageCards =
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
   | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
   | 'lit'  // a rounded card outlined in the accent, glowing on a dark page (Neon)
-  | 'receipt' // a square slip of paper, no shadow, a fine edge, like a till receipt (Receipt)
-  | 'indexTab'; // an index card with a margin line, a tinted file tab on its top edge naming the section, the tabs staggered down the page (Index)
+  | 'receipt'; // a square slip of paper, no shadow, a fine edge, like a till receipt (Receipt)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -218,7 +215,6 @@ export type PageHero =
   | 'filmstripMark' // two chosen images in a numbered film strip above the identity
   | 'neonSign' // a dark wall: the name as a glowing neon script sign, a lit tube under it, what they do in thin caps (Neon)
   | 'receiptHead' // a till receipt with torn edges: ringed logo, the name in spaced caps, area, stars, a barcode and a thank-you (Receipt)
-  | 'indexCard' // a pile of index cards: the name on a ruled front card with a margin line, the logo stamped in its corner (Index)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -758,12 +754,6 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'receiptHead', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     serviceLayout: 'menu', buttonShape: 'stamp',
-  },
-  {
-    key: 'index', name: 'Index', description: 'A little card file: your name on a ruled index card, each section a divider with its own tab',
-    heading: 'tabCaps', cards: 'indexTab', policies: 'definition', logo: 'circle',
-    hero: 'indexCard', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
 

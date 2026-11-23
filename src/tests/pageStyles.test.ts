@@ -24,7 +24,6 @@ import {
   sheetInk,
   showsDividerAbove,
   STRIPE_TINT,
-  indexTabPlace,
 } from '../features/providers/ProfilePageStyle';
 import { heroIsDarkForStyle, heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
@@ -68,7 +67,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'receipt', 'index',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'receipt',
     ]);
   });
 
@@ -689,27 +688,5 @@ describe('Receipt', () => {
     expect(surface?.borderRadius).toBe(0);
     expect(surface?.shadowOpacity).toBe(0);
     expect(surface?.backgroundColor).toBe('#FFFFFF');
-  });
-});
-
-describe('Index', () => {
-  const index = getPageStyle('index');
-
-  it('files the page as index cards, with its own top, tab headings and divider cards', () => {
-    expect(index.hero).toBe('indexCard');
-    expect(index.heading).toBe('tabCaps');
-    expect(index.cards).toBe('indexTab');
-    for (const other of PAGE_STYLES.filter(s => s.key !== 'index')) {
-      expect(other.hero).not.toBe('indexCard');
-      expect(other.heading).not.toBe('tabCaps');
-      expect(other.cards).not.toBe('indexTab');
-    }
-  });
-
-  it('steps the tabs left, middle, right in the order the profile draws its sections', () => {
-    expect(indexTabPlace('about')).toBe('flex-start');
-    expect(indexTabPlace('policies')).toBe('center');
-    expect(indexTabPlace('services')).toBe('flex-end');
-    expect(indexTabPlace('policyPages')).toBe('flex-start');
   });
 });
