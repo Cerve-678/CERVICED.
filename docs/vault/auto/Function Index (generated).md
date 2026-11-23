@@ -5,7 +5,7 @@
 
 #generated
 
-**4277 functions** across **628 files**.
+**4280 functions** across **630 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -270,7 +270,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (61)
+### `src/features/providers/` (63)
 - `aboutPreview.ts` — **aboutPreview**
 - `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
@@ -280,6 +280,7 @@
 - `CalendarChooserSheet.tsx` — **CalendarChooserSheet**
 - `CalendarSyncCard.tsx` — blockedLine · **CalendarSyncCard** · disconnect · load · openChooser · saveChoice · sync · toggleCalendar
 - `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · tomorrow
+- `contactOptions.ts` — **providerContactOptions**
 - `conversionSteps.ts` — **buildConversionSteps** · **countLeftToGoLive**
 - `CustomPageMaker.tsx` — **CustomPageMaker** · CustomPartPicker · **CustomTapPanel** · FontRow · guard · LayoutSketch · set · tap
 - `descriptionTopics.ts` — **learnDescriptionTopics** · meaningful
@@ -311,6 +312,7 @@
 - `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **capsuleServiceSurface** · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **LatteBookBar** · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · **pourBandStyle** · **pourPalette** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **usePourPalette** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — aboutBody · lines · noop · previewPrice · **ProfileStylePreview** · zone
+- `ProviderContactSheet.tsx` — **ProviderContactSheet**
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
 - `ProviderProfileSections.tsx` — columns · featureTile · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderOwnSections** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
 - `ProviderReviewsModal.tsx` — averageRating
@@ -658,7 +660,7 @@
 - `withTimeout.ts` — **withTimeout**
 
 ### `src/web/` (6)
-- `ProviderWebPage.tsx` — additionalInfo · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openContact · openImages · openReviews · openUrl · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType
+- `ProviderWebPage.tsx` — additionalInfo · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openContact · openImages · openReviews · openUrl · pickContact · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**

@@ -111,6 +111,8 @@ import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ProviderReviewsModal } from "../../features/providers/ProviderReviewsModal";
+import { ProviderContactSheet } from "../../features/providers/ProviderContactSheet";
+import { providerContactOptions } from "../../features/providers/contactOptions";
 import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
 import { ProviderPageHero } from "../../features/providers/page/ProviderPageHero";
 import { ProviderPageSheet } from "../../features/providers/page/ProviderPageSheet";
@@ -2183,87 +2185,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   }, [provider, providerDbId, navigation, isOwnProvider, viewingOtherAsProvider]);
 
-  // The communication options this provider actually publishes, in the order
-  // the Contact card lists them. Built once so the sheet and that card can't
-  // drift apart on which methods count as available.
-  //
-  // PUBLIC contact, deliberately NOT gated on preferred_contact_methods. There
-  // are two audiences with two different sources of truth:
-  //   • this profile / Get In Touch — general enquiries from anyone browsing,
-  //     driven by the contact details set in Business Profile → InfoReg step 03
-  //     ("What clients see on your public profile"). Filling a field in there
-  //     is what publishes it.
-  //   • Booking Details → Contact — clients who already hold a confirmed
-  //     appointment, driven by the Contact Preferences toggles
-  //     (providers.preferred_contact_methods) and the booked-client details
-  //     beside them (get_booked_client_contact, see ProviderCommunicationsScreen).
-  // Those toggles used to gate this card too, which collapsed both audiences
-  // onto one setting and contradicted what both screens' own copy promised.
-  const contactOptions = useMemo(() => {
-    if (!provider) return [];
-    const options: {
-      key: string;
-      icon: keyof typeof Ionicons.glyphMap;
-      label: string;
-      detail: string;
-      url: string;
-    }[] = [];
-    if (provider.phone) {
-      options.push({
-        key: "phone",
-        icon: "chatbubble-outline",
-        label: "Text message",
-        detail: provider.phone,
-        url: `sms:${provider.phone.replace(/\s/g, "")}`,
-      });
-    }
-    if (provider.whatsapp) {
-      options.push({
-        key: "whatsapp",
-        icon: "logo-whatsapp",
-        label: "WhatsApp",
-        detail: provider.whatsapp,
-        url: `https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, "")}`,
-      });
-    }
-    if (provider.email) {
-      options.push({
-        key: "email",
-        icon: "mail-outline",
-        label: "Email",
-        detail: provider.email,
-        url: `mailto:${provider.email}`,
-      });
-    }
-    if (provider.instagram) {
-      options.push({
-        key: "instagram",
-        icon: "logo-instagram",
-        label: "Instagram",
-        detail: `@${provider.instagram}`,
-        url: `https://instagram.com/${provider.instagram}`,
-      });
-    }
-    if (provider.website) {
-      options.push({
-        key: "website",
-        icon: "globe-outline",
-        label: "Website",
-        detail: provider.website,
-        url: provider.website,
-      });
-    }
-    if (provider.tiktok) {
-      options.push({
-        key: "tiktok",
-        icon: "logo-tiktok",
-        label: "TikTok",
-        detail: `@${provider.tiktok}`,
-        url: `https://tiktok.com/@${provider.tiktok}`,
-      });
-    }
-    return options;
-  }, [provider]);
+  // The communication options this provider publishes (features/providers/
+  // contactOptions, shared with the website's Get In Touch).
+  const contactOptions = useMemo(() => (provider ? providerContactOptions(provider) : []), [provider]);
 
   // Configure the navigation header with your gradient and icons
   React.useLayoutEffect(() => {
@@ -3591,93 +3515,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             profile, where in-app chat isn't possible. Themed with this
             provider's own palette (OP) like every other surface here, rather
             than an OS Alert dropped on top of it. */}
-        <Modal
+        <ProviderContactSheet
           visible={contactSheetVisible}
-          animationType="fade"
-          transparent
-          statusBarTranslucent navigationBarTranslucent
-          onRequestClose={() => setContactSheetVisible(false)}
-        >
-          <Pressable
-            style={styles.contactSheetBackdrop}
-            onPress={() => setContactSheetVisible(false)}
-          >
-            <Pressable
-              style={[styles.contactSheet, { backgroundColor: OP.surface }]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <View style={[styles.contactSheetGrabber, { backgroundColor: OP.border }]} />
-              <Text style={[styles.contactSheetTitle, { color: OP.text }]}>
-                Your contact options
-              </Text>
-              <Text style={[styles.contactSheetSub, { color: OP.sub }]}>
-                What anyone browsing your profile sees for general enquiries,
-                from the contact details you set in Business Profile → Contact.
-                In-app messaging isn't available on your own profile.
-              </Text>
-
-              {contactOptions.length === 0 ? (
-                <Text style={[styles.contactSheetEmpty, { color: OP.sub }]}>
-                  You haven't published any contact details yet. Add them in
-                  Business Profile → Contact so people browsing can get in touch.
-                </Text>
-              ) : (
-                <View style={styles.contactSheetList}>
-                  {contactOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.key}
-                      style={[
-                        styles.contactSheetOption,
-                        { backgroundColor: OP.card, borderColor: OP.border },
-                      ]}
-                      activeOpacity={0.75}
-                      // Read-only, like the Contact card rows behind it —
-                      // this sheet only ever renders on your own profile, so
-                      // every option here would be a message to yourself.
-                      // The dialog is another native modal, so it can't be
-                      // presented in the same tick this one is dismissed —
-                      // iOS drops the second presentation and nothing appears.
-                      // Wait for the dismissal to finish first.
-                      onPress={() => {
-                        setContactSheetVisible(false);
-                        setTimeout(() => handleContactLink(option.url), 350);
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.contactSheetOptionIcon,
-                          { backgroundColor: OP.surface, borderColor: OP.border },
-                        ]}
-                      >
-                        <Ionicons name={option.icon} size={17} color={OP.text} />
-                      </View>
-                      <View style={styles.contactSheetOptionText}>
-                        <Text style={[styles.contactSheetOptionLabel, { color: OP.text }]}>
-                          {option.label}
-                        </Text>
-                        <Text
-                          style={[styles.contactSheetOptionDetail, { color: OP.sub }]}
-                          numberOfLines={1}
-                        >
-                          {option.detail}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={OP.sub} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[styles.contactSheetClose, { borderColor: OP.border }]}
-                onPress={() => setContactSheetVisible(false)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.contactSheetCloseText, { color: OP.text }]}>Close</Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+          onClose={() => setContactSheetVisible(false)}
+          title="Your contact options"
+          subtitle="What anyone browsing your profile sees for general enquiries, from the contact details you set in Business Profile → Contact. In-app messaging isn't available on your own profile."
+          emptyText="You haven't published any contact details yet. Add them in Business Profile → Contact so people browsing can get in touch."
+          options={contactOptions}
+          // Read-only, like the Contact card rows behind it — this sheet only
+          // ever renders on your own profile, so every option here would be a
+          // message to yourself. The dialog is another native modal, so it
+          // can't be presented in the same tick this one is dismissed — iOS
+          // drops the second presentation and nothing appears. Wait for the
+          // dismissal to finish first.
+          onPick={(option) => {
+            setContactSheetVisible(false);
+            setTimeout(() => handleContactLink(option.url), 350);
+          }}
+          colors={{ surface: OP.surface, card: OP.card, border: OP.border, text: OP.text, sub: OP.sub }}
+        />
 
         {/* Reviews Modal */}
         <ProviderReviewsModal
@@ -5082,87 +4938,6 @@ const styles = StyleSheet.create({
   },
 
   // Communication-options sheet (Get In Touch on your own profile)
-  contactSheetBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  contactSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 32,
-  },
-  contactSheetGrabber: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  contactSheetTitle: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  contactSheetSub: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  contactSheetEmpty: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  contactSheetList: {
-    gap: 8,
-  },
-  contactSheetOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  contactSheetOptionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  contactSheetOptionText: {
-    flex: 1,
-  },
-  contactSheetOptionLabel: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  contactSheetOptionDetail: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    marginTop: 1,
-  },
-  contactSheetClose: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderRadius: 100,
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-  contactSheetCloseText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    letterSpacing: 0.5,
-  },
 
   policyRowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,

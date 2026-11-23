@@ -57,7 +57,7 @@ Curated: [[Availability & Slots]] · **241 files**
 - `src/screens/client/CartScreen.tsx` _(57)_
 - `src/screens/client/RescheduleScreen.tsx` _(56)_
 - `supabase/availability_v2.sql` _(54)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(51)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(50)_
 - `src/screens/client/HomeScreen.tsx` _(48)_
 - `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `supabase/waitlist_holds.sql` _(43)_
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **203 files**
 - … +173 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **417 files**
+Curated: [[Booking Flow]] · **418 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/screens/client/CartScreen.tsx` _(732)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -126,8 +126,8 @@ Curated: [[Booking Flow]] · **417 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(143)_
 - `src/services/database/edgeFunctions.ts` _(143)_
 - `src/services/AvailabilityService.ts` _(141)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(135)_
 - `supabase/waitlist_holds.sql` _(134)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(133)_
 - `src/services/becca/engine.ts` _(130)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **417 files**
 - `src/types/booking.ts` _(109)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/database.ts` _(104)_
-- … +387 more
+- … +388 more
 
 ## Notifications
 Curated: [[Notifications]] · **215 files**
