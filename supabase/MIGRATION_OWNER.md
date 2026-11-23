@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  fix/web-provider-terms-readable (Claude, 2026-11-23) — 20261123220000_provider_terms_readable_signed_out, written, NOT applied
+OWNER:  (none)
 ```
+
+### Applied 2026-11-23 (signed-out visitors read a provider's written terms)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261123220000 | `provider_terms_readable_signed_out` | **APPLIED 2026-11-23** on the user's go-ahead (picked "Let visitors read them"), via `supabase db query --linked -f` from a worktree (the link file copied in; nothing run in the main folder), in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261123210000`, no unapplied migration above it on any open PR. md5 guard on live `get_provider_terms` matched (`97000329…`); the function is unchanged, only `GRANT EXECUTE … TO anon`. Forced-rollback dry run first, as anon: a live provider's terms returned (1 row), `provider_form_library` read directly returned 0 rows, live max and grants unchanged afterwards. Verified live: version recorded (live max); anon and authenticated both execute it; md5 unchanged; the public REST call answers 200 (was 401). The local web page then showed Keyshé Nail's terms and the "I agree" tick in the booking sheet. 5 live providers have written terms. |
 
 ### Applied 2026-11-23 (the public web page reads reviews, address and open/closed)
 
