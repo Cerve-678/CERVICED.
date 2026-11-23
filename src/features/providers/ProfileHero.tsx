@@ -26,6 +26,7 @@ import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroP
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
 import { NeonHero } from "./heroes/NeonHero";
+import { ReceiptHero } from "./heroes/ReceiptHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
@@ -290,6 +291,8 @@ function ProfileHeroLayoutBody({
   switch (pageStyle.hero) {
     case "neonSign":
       return <NeonHero name={name} kicker={kicker} accent={accent} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
+    case "receiptHead":
+      return <ReceiptHero name={name} kicker={kickerPhrase(kicker)} location={location} cardColour={cardColour} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
     case "orbitMark":
       return (
         <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
@@ -1584,7 +1587,7 @@ export function heroNameFontStyle(font: HeroNameFont, size: number, pickedFont: 
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
   return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage"
-    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes";
+    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes" || pageStyle.hero === "receiptHead";
 }
 
 /**
