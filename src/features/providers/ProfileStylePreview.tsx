@@ -278,6 +278,8 @@ export function ProfileStylePreview({
   const outlineBook = pageStyle.buttonShape === "outline" || pageStyle.buttonShape === "shopBox";
   const arrowBook = pageStyle.buttonShape === "arrowPill";
   const shopBook = pageStyle.buttonShape === "shopBox";
+  // Neon: a round outline in the accent, spaced caps.
+  const glowBook = pageStyle.buttonShape === "glowPill";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -639,8 +641,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, shopBook && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
