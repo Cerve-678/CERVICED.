@@ -143,8 +143,6 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   typeblock: { text: 'SERVICES' },
   filmstrip: { lead: '03', text: 'SERVICES' },
   neon: { text: 'services' },
-  receipt: { text: 'SERVICES' },
-  index: { text: 'SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -459,15 +457,6 @@ function MiniProfile({
         return <Text style={[mini.engravedCaps, { color: ink }]}>{heading.text}</Text>;
       case 'neonScript':
         return <Text style={[mini.neonScript, { color: isDarkColor(sheet) ? blend(accent, '#FFFFFF', 0.35) : blend(accent, '#000000', 0.25) }]}>{heading.text}</Text>;
-      case 'receiptCaps':
-        return (
-          <View style={{ alignSelf: 'stretch' }}>
-            <Text style={[mini.receiptCaps, { color: ink }]}>{heading.text}</Text>
-            <View style={[mini.receiptRule, { borderColor: withAlpha(ink, 0.5) }]} />
-          </View>
-        );
-      case 'tabCaps':
-        return <Text style={[mini.tabCaps, { color: ink }]}>{heading.text}</Text>;
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -641,15 +630,6 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.groupedCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'lit':
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 7, borderWidth: 1, borderColor: accent }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
-      case 'receipt':
-        return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
-      case 'indexTab':
-        return (
-          <View key={key}>
-            <View style={[mini.indexTab, { alignSelf: (['flex-start', 'center', 'flex-end'] as const)[key % 3], backgroundColor: blend(accent, cardColour, 0.55) }]} />
-            <View style={[mini.card, { backgroundColor: cardColour, borderRadius: 4 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
-          </View>
-        );
       case 'gridBox':
         return <View key={key} style={[mini.card, mini.gridCard, { backgroundColor: cardColour, borderColor: withAlpha(ink, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'soft':
@@ -746,23 +726,6 @@ function MiniProfile({
           <View style={[mini.neonWall, { backgroundColor: NEON_WALL }]}>
             <Text style={[mini.neonName, { color: neonColours(accent).tube, textShadowColor: neonColours(accent).glow }]}>Name</Text>
             <View style={[mini.neonTube, { backgroundColor: neonColours(accent).tube }]} />
-          </View>
-        ) : style.hero === 'receiptHead' ? (
-          // Receipt: a white slip with a name in spaced caps and a barcode.
-          <View style={mini.receiptHero}>
-            <View style={[mini.receiptSlip, { backgroundColor: cardColour }]}>
-              {logo}
-              <Text style={[mini.receiptName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>NAME</Text>
-              <View style={[mini.receiptBars, { borderColor: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} />
-            </View>
-          </View>
-        ) : style.hero === 'indexCard' ? (
-          // Index: a ruled front card on a tinted card behind it.
-          <View style={mini.indexHero}>
-            <View style={[mini.indexBehind, { backgroundColor: blend(accent, cardColour, 0.55) }]} />
-            <View style={[mini.indexFront, { backgroundColor: cardColour, borderLeftColor: blend(accent, cardColour, 0.35) }]}>
-              <Text style={[mini.indexName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>Your Name</Text>
-            </View>
           </View>
         ) : style.hero === 'echoName' ? (
           // Hibiscus: the name echoed faintly behind a photo and a deep round panel.
@@ -1403,18 +1366,6 @@ const mini = StyleSheet.create({
   neonWall: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   neonName: { fontFamily: 'MsMadi-Regular', fontSize: 30, lineHeight: 40, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
   neonTube: { width: 40, height: 1.5, borderRadius: 1 },
-  receiptCaps: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 8, letterSpacing: 1.5 },
-  receiptRule: { borderTopWidth: 1, borderStyle: 'dashed', marginTop: 2 },
-  receiptHero: { flex: 1, paddingHorizontal: 18, paddingVertical: 7 },
-  receiptSlip: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  receiptName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 9, letterSpacing: 2 },
-  receiptBars: { width: 36, height: 7, borderLeftWidth: 2, borderRightWidth: 3 },
-  tabCaps: { fontFamily: 'Figtree-SemiBold', fontSize: 8, letterSpacing: 1 },
-  indexTab: { width: 22, height: 5, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
-  indexHero: { flex: 1, padding: 10, justifyContent: 'center' },
-  indexBehind: { position: 'absolute', left: 14, right: 10, top: 12, bottom: 10, borderRadius: 3, transform: [{ rotate: '3deg' }] },
-  indexFront: { flex: 1, borderRadius: 3, borderLeftWidth: 1.5, paddingLeft: 10, justifyContent: 'center' },
-  indexName: { fontFamily: 'YoungSerif-Regular', fontSize: 12 },
   // Studio's bar, photo and headings.
   studioWrap: { alignSelf: 'stretch', flex: 1, marginHorizontal: 8 },
   studioBar: { height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },

@@ -30,8 +30,6 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
-import { DashedRule } from "./heroes/ReceiptHero";
-import { indexMargin, indexTints } from "./heroes/IndexHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -568,23 +566,6 @@ export function PageSectionHeading({
         </Text>
       );
     }
-    case "receiptCaps":
-      // Receipt: the title in spaced till-roll caps, a dashed rule under it.
-      return (
-        <View {...a11y} accessible style={headingStyles.receiptWrap}>
-          <Text style={[headingStyles.receiptCaps, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {words.toUpperCase()}
-          </Text>
-          <DashedRule colour={withAlpha(ink, 0.55)} />
-        </View>
-      );
-    case "tabCaps":
-      // Index: small bold caps, written on the section's file tab.
-      return (
-        <Text {...a11y} style={[headingStyles.tabCaps, { color: ink }]} numberOfLines={1}>
-          {words.toUpperCase()}
-        </Text>
-      );
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -815,7 +796,7 @@ function PageSectionSurface({
     );
   }
 
-  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block" || pageStyle.cards === "receipt"
+  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
     : pageStyle.cards === "clipped" ? 2
     : pageStyle.cards === "raised" ? 3
@@ -838,35 +819,6 @@ function PageSectionSurface({
           </Text>
         </View>
         <View style={[surfaceStyles.solid, surfaceStyles.tabbedCard, { backgroundColor: palette.cardBackground }]}>
-          {children}
-        </View>
-      </View>
-    );
-  }
-
-  if (pageStyle.cards === "indexTab" && !bare) {
-    // Index: a divider card in a card file. Its tab sticks up from the top
-    // edge in a tint of the accent, naming the section, and the tabs step
-    // left, middle, right down the page; a margin line runs down the card.
-    const place = indexTabPlace(section);
-    const tints = indexTints(palette.accent, palette.cardBackground);
-    const tint = place === "flex-start" ? tints[0] : place === "center" ? tints[1] : tints[2];
-    return (
-      <View style={[surfaceStyles.block, style]}>
-        <View style={[surfaceStyles.indexTab, { alignSelf: place, backgroundColor: tint }]}>
-          <PageSectionHeading section={section} palette={palette} title={title} color={isDarkColor(tint) ? "#F7F1F3" : "#1F1A1C"} />
-        </View>
-        <View
-          style={[
-            surfaceStyles.solid,
-            surfaceStyles.indexCard,
-            { backgroundColor: palette.cardBackground },
-            place === "flex-start" && { borderTopLeftRadius: 0 },
-            place === "flex-end" && { borderTopRightRadius: 0 },
-          ]}
-        >
-          <View style={[surfaceStyles.indexMargin, { backgroundColor: indexMargin(palette.accent, palette.cardBackground) }]} pointerEvents="none" />
-          {headingRight ? <View style={surfaceStyles.indexRight}>{headingRight}</View> : null}
           {children}
         </View>
       </View>
@@ -947,7 +899,6 @@ function PageSectionSurface({
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
           pageStyle.cards === "outlineRound" && [surfaceStyles.outlineRound, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "lit" && litSurface(palette.cardBackground, palette.accent, palette.background),
-          pageStyle.cards === "receipt" && receiptSurface(palette.cardBackground),
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -1057,26 +1008,6 @@ export function litSurface(card: string, accent: string, sheet: string): ViewSty
   };
 }
 
-/** Receipt's slip: square paper with a fine edge and no shadow. */
-export function receiptSurface(card: string): ViewStyle {
-  return {
-    backgroundColor: card,
-    borderRadius: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha(outlineInk(card), 0.18),
-    shadowOpacity: 0,
-    elevation: 0,
-  };
-}
-
-/** Where Index's file tab sits on a section: left, middle, right in turn,
- *  in the order the profile draws its sections, so the tabs step across the
- *  page like the dividers in a card box. */
-export function indexTabPlace(section: PageSectionKey): "flex-start" | "center" | "flex-end" {
-  const places = ["flex-start", "center", "flex-end"] as const;
-  return places[(Number.parseInt(SECTION_NUMBERS[section], 10) - 1) % 3]!;
-}
-
 export function serviceCardSurface(
   style: PageStyle,
   colours: { card: string; accent: string; sheet: string },
@@ -1085,19 +1016,6 @@ export function serviceCardSurface(
   switch (style.cards) {
     case "lit":
       return litSurface(colours.card, colours.accent, colours.sheet);
-    case "receipt":
-      return receiptSurface(colours.card);
-    case "indexTab":
-      // Index: each service on its own small card from the file.
-      return {
-        backgroundColor: colours.card,
-        borderWidth: 0,
-        borderRadius: 6,
-        shadowColor: "#26201E",
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
-      };
     case "none":
     case "open":
       return {
@@ -2058,9 +1976,6 @@ const headingStyles = StyleSheet.create({
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
   // Ms Madi draws small for its size, and its loops need the tall line.
   neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 58, marginBottom: 4 },
-  receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
-  receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
-  tabCaps: { fontFamily: "Figtree-SemiBold", fontSize: 12, letterSpacing: 1.5 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
@@ -2111,19 +2026,6 @@ const surfaceStyles = StyleSheet.create({
   tab: { alignSelf: "flex-start", marginLeft: 22, paddingHorizontal: 16, paddingTop: 7, paddingBottom: 5 },
   tabText: { fontFamily: "LilitaOne-Regular", fontSize: 10, lineHeight: 14, letterSpacing: 1.6 },
   tabbedCard: { borderRadius: 0 },
-  indexTab: { paddingHorizontal: 16, paddingTop: 7, paddingBottom: 5, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
-  indexCard: {
-    borderRadius: 10,
-    paddingLeft: 32,
-    shadowColor: "#26201E",
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-    overflow: "visible",
-  },
-  indexMargin: { position: "absolute", left: 20, top: 0, bottom: 0, width: 1.5 },
-  indexRight: { alignItems: "flex-end", marginBottom: 6 },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },
   block: { marginBottom: 24 },
