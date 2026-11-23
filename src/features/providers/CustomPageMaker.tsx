@@ -102,43 +102,34 @@ export function CustomPageMaker({
 
   return (
     <View style={locked && styles.lockedAll}>
-      {/* Where they stand: on Custom, or a button to start. */}
+      {/* Where they stand. No separate start button: any pick below, or Tap
+          Your Page, moves the page to Custom. */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Your Own Page</Text>
         {active ? (
-          <View style={styles.activeRow}>
+          <View style={[styles.activeRow, styles.activeRowGap]}>
             <Ionicons name="checkmark-circle" size={18} color={accent} />
             <Text style={[styles.sectionSubFlat, { color: P.sub }]}>Your page is using Custom. Choose a style under Layout to switch back.</Text>
           </View>
         ) : (
-          <>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>A plain page you make yourself. Pick a layout and fonts below.</Text>
-            <TouchableOpacity
-              style={[styles.useBtn, { backgroundColor: accent }]}
-              onPress={guard(() => {})}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={locked ? 'Use Custom, locked' : 'Use Custom'}
-            >
-              {locked ? <Ionicons name="lock-closed" size={14} color="#FFFFFF" /> : null}
-              <Text style={styles.useBtnText}>Use Custom</Text>
-            </TouchableOpacity>
-          </>
+          <Text style={[styles.sectionSub, { color: P.sub }]}>A plain page you make yourself. Tap your page, or pick a look and fonts below.</Text>
         )}
         {/* Changing one part at a time happens on the page itself. */}
         <TouchableOpacity
-          style={[styles.tapEditBtn, { borderColor: P.border, backgroundColor: P.surface }]}
+          style={[styles.tapEditBtn, { backgroundColor: accent }]}
           onPress={guard(onOpenTapEdit)}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Tap your page: change a part by tapping it on your page"
+          accessibilityLabel={locked ? 'Tap your page, locked' : 'Tap your page: change a part by tapping it on your page'}
         >
-          <Ionicons name="hand-left-outline" size={18} color={P.text} />
-          <View style={styles.coloursText}>
-            <Text style={[styles.tapEditTitle, { color: P.text }]}>Tap Your Page</Text>
-            <Text style={[styles.sectionSubFlat, { color: P.sub }]}>See your page and tap the part you want to change.</Text>
+          <View style={styles.tapEditIcon}>
+            <Ionicons name={locked ? 'lock-closed' : 'hand-left-outline'} size={18} color="#FFFFFF" />
           </View>
-          <Ionicons name="chevron-forward" size={18} color={P.sub} />
+          <View style={styles.coloursText}>
+            <Text style={styles.tapEditTitle}>Tap Your Page</Text>
+            <Text style={styles.tapEditSub}>See your page and tap the part you want to change.</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -531,8 +522,7 @@ const styles = StyleSheet.create({
   sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12, marginBottom: 16, opacity: 0.8 },
   sectionSubFlat: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12, opacity: 0.8, flexShrink: 1 },
   activeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  useBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 14, minHeight: 46 },
-  useBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, color: '#FFFFFF' },
+  activeRowGap: { marginBottom: 14 },
   layoutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   layoutOption: { width: '47%', flexGrow: 1, borderWidth: 1, borderRadius: 14, padding: 10 },
   selectedBorder: { borderWidth: 2 },
@@ -554,8 +544,11 @@ const styles = StyleSheet.create({
   panelTab: { minHeight: 36, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', justifyContent: 'center' },
   panelTabText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, color: '#FFFFFF' },
   partChip: { width: 136, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, minHeight: 74 },
-  tapEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 4 },
-  tapEditTitle: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '800', fontSize: 14 },
+  // The page's main button: filled in the accent, unlike the outlined Colours row.
+  tapEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 14 },
+  tapEditIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.22)' },
+  tapEditTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: '#FFFFFF' },
+  tapEditSub: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12, color: 'rgba(255,255,255,0.88)', marginTop: 2 },
   setCard: { width: 132, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 10, minHeight: 92 },
   setName: { paddingHorizontal: 3 },
   setHeading: { marginTop: 2 },
