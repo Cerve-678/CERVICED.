@@ -57,6 +57,7 @@ export type PageStyleKey =
   | 'orbit'
   | 'typeblock'
   | 'filmstrip'
+  | 'neon'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -94,6 +95,7 @@ export type PageHeading =
   | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
+  | 'neonScript' // a lowercase handwritten word in the accent, glowing like a lit tube on a dark page (Neon)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -122,7 +124,8 @@ export type PageCards =
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
-  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
+  | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
+  | 'lit';    // a rounded card outlined in the accent, glowing on a dark page (Neon)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -207,6 +210,7 @@ export type PageHero =
   | 'orbitMark' // identity held inside offset orbital rings, with the name below
   | 'typeblockMark' // asymmetric typographic block with a vertical accent rail
   | 'filmstripMark' // two chosen images in a numbered film strip above the identity
+  | 'neonSign' // a dark wall: the name as a glowing neon script sign, a lit tube under it, what they do in thin caps (Neon)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -337,7 +341,8 @@ export type ButtonShape =
   | 'textLink'  // no button at all: the word underlined in the accent (Muse)
   | 'outline'   // a round outline in the ink, no fill (Retreat)
   | 'arrowPill' // a filled pill, the word then a small arrow in a circle, like "Order now" (Hibiscus)
-  | 'shopBox';  // a small square outline, the word in spaced capitals, like "Shop now" (Storefront)
+  | 'shopBox'   // a small square outline, the word in spaced capitals, like "Shop now" (Storefront)
+  | 'glowPill'; // a round outline in the accent, the word in spaced capitals, glowing on a dark page (Neon)
 
 export interface HeroNameFont {
   fontFamily: string;
@@ -730,6 +735,13 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     divider: 'line',
     custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'neon', name: 'Neon', description: 'Your name as a glowing neon sign on a dark wall, lit outlines round your services',
+    heading: 'neonScript', cards: 'lit', policies: 'outlined', logo: 'circle',
+    hero: 'neonSign', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    roundedPhotos: true, buttonShape: 'glowPill',
   },
 ];
 

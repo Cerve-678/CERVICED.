@@ -544,6 +544,28 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "neonScript": {
+      // Neon: the title as a lowercase script word in the accent. On a dark
+      // page it's lifted and glows like the sign at the top; on a pale page
+      // it's deepened so it still reads, with no glow.
+      const dark = isDarkColor(palette.background);
+      const tube = dark ? blend(accent, "#FFFFFF", 0.35) : blend(accent, "#000000", 0.25);
+      return (
+        <Text
+          {...a11y}
+          style={[
+            headingStyles.neonScript,
+            { color: color ?? tube },
+            dark && { textShadowColor: accent, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+          ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
+          {words.toLowerCase()}
+        </Text>
+      );
+    }
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -876,6 +898,7 @@ function PageSectionSurface({
           pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
           pageStyle.cards === "outlineRound" && [surfaceStyles.outlineRound, { borderColor: outlineInk(palette.cardBackground) }],
+          pageStyle.cards === "lit" && litSurface(palette.cardBackground, palette.accent, palette.background),
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -965,12 +988,34 @@ export function WaveEdge({ color, position, width }: { color: string; position: 
  * Branding → Card Shape still wins on corners: the profile applies its square
  * style after this.
  */
+/** Neon's lit card: rounded, outlined in the accent, and on a dark page
+ *  glowing round its edge like a tube. On a pale page the glow would only
+ *  read as a smudge, so it's the outline alone there. iOS draws the glow;
+ *  Android draws the outline. */
+export function litSurface(card: string, accent: string, sheet: string): ViewStyle {
+  const dark = isDarkColor(sheet);
+  return {
+    backgroundColor: card,
+    borderWidth: 1.5,
+    borderColor: dark ? blend(accent, "#FFFFFF", 0.2) : accent,
+    borderRadius: 16,
+    shadowColor: accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: dark ? 0.75 : 0,
+    shadowRadius: 10,
+    elevation: 0,
+    overflow: "visible",
+  };
+}
+
 export function serviceCardSurface(
   style: PageStyle,
   colours: { card: string; accent: string; sheet: string },
 ): ViewStyle | null {
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
+    case "lit":
+      return litSurface(colours.card, colours.accent, colours.sheet);
     case "none":
     case "open":
       return {
@@ -1929,6 +1974,8 @@ const headingStyles = StyleSheet.create({
   // Calling Card's engraved caps (Forum), its own face.
   engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
+  // Ms Madi draws small for its size, and its loops need the tall line.
+  neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 58, marginBottom: 4 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
