@@ -27,6 +27,7 @@ import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
 import { NeonHero } from "./heroes/NeonHero";
 import { CapsuleHero } from "./heroes/CapsuleHero";
+import { MoodboardHero } from "./heroes/MoodboardHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
@@ -195,6 +196,8 @@ export interface ProfileHeroLayoutProps {
   accent: string;
   /** Up to two of their portfolio photos (Editorial's back card, Duet's film strip). */
   photoUris?: readonly string[];
+  /** Each of those photos' own portfolio caption, in the same order ("" when it has none): Moodboard's prints. */
+  photoCaptions?: readonly string[] | undefined;
   /** Their star rating, for Groovy's starburst. Left out when there are no CERVICED reviews. */
   rating?: string | null;
   /** The verified tick beside the name, for the layouts that draw the name themselves. */
@@ -268,6 +271,7 @@ function ProfileHeroLayoutBody({
   about,
   accent,
   photoUris,
+  photoCaptions,
   rating,
   isVerified,
   heroColour,
@@ -309,10 +313,27 @@ function ProfileHeroLayoutBody({
           onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
         />
       );
+    case "collage":
+      return (
+        <MoodboardHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
+          heroText={heroText}
+          photos={photoUris ?? []}
+          captions={photoCaptions ?? []}
+          renderLogo={renderLogo}
+          tick={tick}
+          details={details}
+          onBookNow={onBookNow}
+          onOpenPhoto={onOpenHeroPhoto}
+        />
+      );
     case "orbitMark":
       return (
         <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
-          <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 4, marginBottom: 20 }}>YOUR SPACE TO SHINE</Text>
           <View style={{ width: 236, height: 236, alignItems: "center", justifyContent: "center" }}>
             <View style={{ position: "absolute", width: 226, height: 226, borderRadius: 113, borderWidth: 1, borderColor: withAlpha(heroText, 0.32) }} />
             <View style={{ position: "absolute", width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: withAlpha(heroText, 0.55) }} />
