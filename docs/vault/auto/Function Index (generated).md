@@ -5,7 +5,7 @@
 
 #generated
 
-**4267 functions** across **626 files**.
+**4277 functions** across **628 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -270,7 +270,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (60)
+### `src/features/providers/` (61)
 - `aboutPreview.ts` — **aboutPreview**
 - `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
@@ -294,7 +294,7 @@
 - `HeroPhoto.tsx` — **FramedPhoto** · **HeroPhoto** · **heroPhotoFramesOf** · onLayout · onLoad
 - `HeroPhotoAdjust.tsx` — box · **HeroPhotoAdjustRow** · HeroPhotoAdjustSheet · onAreaLayout · responder · zoomBy
 - `HeroPhotoPicker.tsx` — **HeroPhotoPicker** · slotOf
-- `heroPhotos.ts` — **heroPhotos** · **toggleHeroPhotoPick**
+- `heroPhotos.ts` — **heroPhotos** · **heroPhotosForPage** · **toggleHeroPhotoPick**
 - `inboxFilters.ts` — **filterInboxConversations** · **hasInboxFilters** · matchesDate · startOfDay
 - `linkOnlyAnalytics.ts` — **bookTapRatio** · **lastSevenDaysOfBookTaps** · **sumLinkOnlyStats**
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
@@ -313,6 +313,7 @@
 - `ProfileStylePreview.tsx` — aboutBody · lines · noop · previewPrice · **ProfileStylePreview** · zone
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
 - `ProviderProfileSections.tsx` — columns · featureTile · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderOwnSections** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
+- `ProviderReviewsModal.tsx` — averageRating
 - `recentBookingActivity.ts` — bookedAgo · **describeRecentBooking**
 - `RecentBookingRow.tsx` — **RecentBookingRow**
 - `releaseQuickView.ts` — **describeReleaseQuickView**
@@ -347,8 +348,9 @@
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
 - `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**
 
-### `src/features/providers/page/` (6)
+### `src/features/providers/page/` (7)
 - `heroTopPadding.ts` — **heroTopPadding**
+- `jumpTargets.ts` — **pageJumpTargets**
 - `PinnedBarServices.tsx` — **pinnedBarServices** · **PinnedBarServiceText**
 - `ProviderPageHero.tsx` — **ProviderPageHero** · socialButton · StarIcon
 - `providerPagePalette.ts` — **buildProviderPagePalette** · **useProviderPagePalette**
@@ -444,7 +446,7 @@
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · leave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · measureKeyboardArea · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — additionalInfo · averageRating · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · formatDate · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroBell · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · hideSuccessMessage · jumpTargets · jumpToServices · loadWaitlistMap · notificationColors · notificationMessage · openBookings · openBookingSheet · openFullLogo · openHeroPhoto · openImageViewer · openLinkOnlyBooking · openOffersPanel · openPolicyImage · openSheets · openWaitlistJoin · policyPages · pressPinnedBook · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderInlineServices · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · selectedServicesFlat · selectedTotal · serviceCountsByType · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · toggleSelectMode · toggleServiceExpanded · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — additionalInfo · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · formatDate · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroBell · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · hideSuccessMessage · jumpTargets · jumpToServices · loadWaitlistMap · notificationColors · notificationMessage · openBookings · openBookingSheet · openFullLogo · openHeroPhoto · openImageViewer · openLinkOnlyBooking · openOffersPanel · openPolicyImage · openSheets · openWaitlistJoin · policyPages · pressPinnedBook · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderInlineServices · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · selectedServicesFlat · selectedTotal · serviceCountsByType · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · toggleSelectMode · toggleServiceExpanded · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · maxPickerDate · minPickerDate · monthLabel · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen · shownDateOptions
 - `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen
@@ -656,7 +658,7 @@
 - `withTimeout.ts` — **withTimeout**
 
 ### `src/web/` (6)
-- `ProviderWebPage.tsx` — heroPhotosForStyle · jumpTo · noop · openContact · openPhoto · openUrl · palette · **ProviderWebPage** · ProviderWebPageContent · renderServices · serviceCountsByType
+- `ProviderWebPage.tsx` — additionalInfo · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openContact · openImages · openReviews · openUrl · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**

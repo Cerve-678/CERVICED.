@@ -1,28 +1,48 @@
-/** A public, read-only provider page for links and QR codes at /@handle. */
+/**
+ * A public, read-only provider page for links and QR codes at /@handle.
+ *
+ * It loads through the same hook as the app's profile (useProviderProfileData)
+ * and draws the same hero, sheet and price list, so what a visitor sees here
+ * is what a client sees in the app. Booking stays in the app: the Book
+ * buttons are left off and "Open in app" sits in the top bar.
+ */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance, ViewInstance } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { FullImageViewer } from '../components/FullImageViewer';
+import { LogoZoomViewer } from '../components/LogoZoomViewer';
 import ProfileHeroBackdrop from '../components/ProfileHeroBackdrop';
+import { heroPhotoPickLimit } from '../constants/pageStyles';
 import { parseThemeKey } from '../constants/providerThemes';
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from '../features/providers/additionalInfo';
 import { heroPhotoFramesOf } from '../features/providers/HeroPhoto';
-import { heroPhotos } from '../features/providers/heroPhotos';
-import { mapProviderProfileData } from '../features/providers/profileMapper';
-import type { ProviderProfileData } from '../features/providers/profileTypes';
-import { policyImageEdges, policyImageUrls } from '../features/providers/policyImages';
+import { heroPhotosForPage } from '../features/providers/heroPhotos';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
+import { pageJumpTargets } from '../features/providers/page/jumpTargets';
 import { ProviderPageHero } from '../features/providers/page/ProviderPageHero';
 import { ProviderPageServices } from '../features/providers/page/ProviderPageServices';
 import { ProviderPageSheet } from '../features/providers/page/ProviderPageSheet';
-import { buildProviderPagePalette } from '../features/providers/page/providerPagePalette';
-import { getProviderBySlug, getProviderPortfolio } from '../services/databaseService';
-import type { DbPortfolioItem } from '../types/database';
+import { useProviderPagePalette } from '../features/providers/page/providerPagePalette';
+import { PolicyStoryViewer, usePolicyEdgeColours } from '../features/providers/PolicyPages';
+import { policyImageEdges, policyImageUrls } from '../features/providers/policyImages';
+import type { ProviderProfileData } from '../features/providers/profileTypes';
+import { ProviderReviewsModal } from '../features/providers/ProviderReviewsModal';
+import { useProviderProfileData } from '../features/providers/useProviderProfileData';
+import type { ProviderProfileDataState } from '../features/providers/useProviderProfileData';
+import { getPublicProviderAddress } from '../services/databaseService';
+import type { PublicProviderAddress } from '../services/databaseService';
+import { logger } from '../utils/logger';
+import { mapsUrlFor } from '../utils/mapsLink';
 import { SiteMessagePage } from './SiteMessagePage';
 
 const PAGE_WIDTH = 480;
+const TOP_BAR_HEIGHT = 54;
+/** The app's inline price list shows this many before "See all". */
+const SERVICES_COLLAPSED_LIMIT = 6;
 const noop = () => {};
 
 function openUrl(url: string) {
@@ -30,75 +50,46 @@ function openUrl(url: string) {
 }
 
 export function ProviderWebPage({ handle }: { handle: string }) {
-  const [provider, setProvider] = useState<ProviderProfileData | null>(null);
-  const [work, setWork] = useState<DbPortfolioItem[]>([]);
-  const [venue, setVenue] = useState<DbPortfolioItem[]>([]);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'notFound' | 'error'>('loading');
-  const [portfolioLoading, setPortfolioLoading] = useState(true);
-  const [portfolioError, setPortfolioError] = useState(false);
-  const [reload, setReload] = useState(0);
+  const data = useProviderProfileData(handle);
   const { height } = useWindowDimensions();
 
-  useEffect(() => {
-    let active = true;
-    setStatus('loading');
-    setProvider(null);
-    setWork([]);
-    setVenue([]);
-    setPortfolioLoading(true);
-    setPortfolioError(false);
-    void getProviderBySlug(handle, { forceRefresh: true }).then(async row => {
-      if (!active) return;
-      if (!row) { setStatus('notFound'); return; }
-      setProvider(mapProviderProfileData(row));
-      setStatus('ready');
-      try {
-        const photos = await getProviderPortfolio(row.id, { includeVenue: true });
-        if (active) { setWork(photos.work); setVenue(photos.venue); }
-      } catch {
-        if (active) setPortfolioError(true);
-      } finally {
-        if (active) setPortfolioLoading(false);
-      }
-    }).catch(() => {
-      if (active) setStatus('error');
-    });
-    return () => { active = false; };
-  }, [handle, reload]);
-
-  if (status === 'loading') return <SiteMessagePage title="Loading profile" body="Getting this provider’s page ready." />;
-  if (status === 'notFound') return <SiteMessagePage title="Profile unavailable" body="This provider’s page is not available right now." />;
-  if (status === 'error' || !provider) return <SiteMessagePage title="Couldn’t load profile" body="Please refresh the page and try again." />;
-  return (
-    <ProviderWebPageContent
-      provider={provider}
-      work={work}
-      venue={venue}
-      portfolioLoading={portfolioLoading}
-      portfolioError={portfolioError}
-      retry={() => setReload(value => value + 1)}
-      height={height}
-    />
-  );
+  if (data.loading) return <SiteMessagePage title="Loading profile" body="Getting this provider’s page ready." />;
+  if (data.loadFailed) return <SiteMessagePage title="Couldn’t load profile" body="Please refresh the page and try again." />;
+  if (!data.provider || !data.providerDbId) {
+    return <SiteMessagePage title="Profile unavailable" body="This provider’s page is not available right now." />;
+  }
+  return <ProviderWebPageContent provider={data.provider} providerDbId={data.providerDbId} data={data} height={height} />;
 }
 
 function ProviderWebPageContent({
-  provider, work, venue, portfolioLoading, portfolioError, retry, height,
+  provider, providerDbId, data, height,
 }: {
   provider: ProviderProfileData;
-  work: DbPortfolioItem[];
-  venue: DbPortfolioItem[];
-  portfolioLoading: boolean;
-  portfolioError: boolean;
-  retry: () => void;
+  providerDbId: string;
+  data: ProviderProfileDataState;
   height: number;
 }) {
-  const palette = useMemo(() => buildProviderPagePalette(provider), [provider]);
-  const [selectedServiceType, setSelectedServiceType] = useState(provider.serviceTypes[0] ?? '');
+  const palette = useProviderPagePalette(provider);
+  const { pageStyle, OP, adaptiveAccentColor, squareCards } = palette;
+  const isLinkOnly = provider.isLinkOnly;
+  const { work: workPortfolio, venue: venuePortfolio } = data.portfolio;
+
+  // ── Price list: the same type → category → first six as the app ──────────
+  // Kept as what was picked and checked against the current catalogue, since
+  // the first paint is the light profile and the full catalogue lands after.
+  const [pickedServiceType, setSelectedServiceType] = useState('');
+  const selectedServiceType = provider.categoriesByType[pickedServiceType] ? pickedServiceType : provider.serviceTypes[0] ?? '';
   const categoriesForType = provider.categoriesByType[selectedServiceType] ?? provider.categories;
   const categoryNames = Object.keys(categoriesForType);
-  const [selectedCategory, setSelectedCategory] = useState(categoryNames[0] ?? '');
-  const shownCategory = categoriesForType[selectedCategory] ? selectedCategory : categoryNames[0] ?? '';
+  const [pickedCategory, setSelectedCategory] = useState('');
+  const selectedCategory = categoriesForType[pickedCategory] ? pickedCategory : categoryNames[0] ?? '';
+  const selectedCategoryServices = categoriesForType[selectedCategory] ?? [];
+  // The app opens a sheet for the rest; here the list opens out in place.
+  const [showAllServices, setShowAllServices] = useState(false);
+  useEffect(() => setShowAllServices(false), [selectedServiceType, selectedCategory]);
+  const visibleServices = showAllServices
+    ? selectedCategoryServices
+    : selectedCategoryServices.slice(0, SERVICES_COLLAPSED_LIMIT);
   const [listWidth, setListWidth] = useState(0);
   const [expanded, setExpanded] = useState<Set<string | number>>(new Set());
   const serviceCountsByType = useMemo(() => {
@@ -107,39 +98,106 @@ function ProviderWebPageContent({
       counts[type] = Object.values(byCategory).reduce((total, list) => total + list.length, 0);
     }
     return counts;
-  }, [provider]);
-  const heroPhotosForStyle = useMemo(() => heroPhotos(work, 3), [work]);
-  const heroPhotoUris = heroPhotosForStyle.map(photo => photo.image_url);
-  const heroPhotoFrames = heroPhotoFramesOf(heroPhotosForStyle);
+  }, [provider.categoriesByType]);
+
+  // ── Hero photos: the style's picks and captions, as the app shows them ───
+  const heroPickLimit = heroPhotoPickLimit(pageStyle);
+  const heroPhotoItems = useMemo(() => heroPhotosForPage(workPortfolio, heroPickLimit), [workPortfolio, heroPickLimit]);
+  const heroPhotoUris = useMemo(() => heroPhotoItems.map(item => item.image_url), [heroPhotoItems]);
+  const heroPhotoCaptions = useMemo(() => heroPhotoItems.map(item => item.caption ?? ''), [heroPhotoItems]);
+  const heroPhotoFrames = useMemo(() => heroPhotoFramesOf(heroPhotoItems), [heroPhotoItems]);
+
+  // ── Contact: a salon on "Always visible" shows its full address ──────────
+  // The server decides who qualifies and returns null for everyone else.
+  const [publicAddress, setPublicAddress] = useState<PublicProviderAddress | null>(null);
+  useEffect(() => {
+    setPublicAddress(null);
+    if (isLinkOnly) return;
+    let cancelled = false;
+    getPublicProviderAddress(providerDbId)
+      .then(address => { if (!cancelled) setPublicAddress(address); })
+      .catch((error: unknown) => logger.warn('[ProviderWebPage] public address load failed:', error));
+    return () => { cancelled = true; };
+  }, [providerDbId, isLinkOnly]);
+  const contactDetails = useMemo(() => ({
+    location: publicAddress?.fullAddress ?? provider.location,
+    locationMapUrl: publicAddress ? mapsUrlFor(publicAddress) : null,
+    phone: provider.phone,
+    whatsapp: provider.whatsapp,
+    email: provider.email,
+    instagram: provider.instagram,
+    website: provider.website,
+  }), [publicAddress, provider]);
+  const additionalInfo = useMemo(() => ({
+    groups: additionalInfoGroups(provider, pageStyle),
+    goodToKnow: goodToKnowText(provider),
+    directions: howToGetThere(provider),
+  }), [provider, pageStyle]);
+
+  // ── Policy pictures ──────────────────────────────────────────────────────
+  const policyPages = useMemo(() => policyImageUrls(provider.bookingPolicies), [provider.bookingPolicies]);
+  const savedPolicyEdges = useMemo(() => policyImageEdges(provider.bookingPolicies), [provider.bookingPolicies]);
+  const policyEdges = usePolicyEdgeColours(policyPages, savedPolicyEdges);
+  const [policyStoryIndex, setPolicyStoryIndex] = useState<number | null>(null);
+  const [showPolicyImage, setShowPolicyImage] = useState(false);
+
+  // ── Section links and scrolling ──────────────────────────────────────────
   const aboutCardRef = useRef<ViewInstance>(null);
   const policiesSectionRef = useRef<ViewInstance>(null);
   const servicesSectionRef = useRef<ViewInstance>(null);
   const reviewsSectionRef = useRef<ViewInstance>(null);
   const policyPagesRef = useRef<ViewInstance>(null);
-  const jumpTo = useCallback((target: ViewInstance | null) => {
-    target?.measureInWindow((_x, y) => window.scrollBy({ top: y - 88, behavior: 'smooth' }));
+  const jumpTargets = useMemo(() => pageJumpTargets(provider, pageStyle.jumpBar, policyPages.length, {
+    about: aboutCardRef,
+    services: servicesSectionRef,
+    policies: policiesSectionRef,
+    policyPages: policyPagesRef,
+    reviews: reviewsSectionRef,
+  }), [provider, pageStyle.jumpBar, policyPages.length]);
+  // The page scrolls inside this ScrollView, not the window, so a jump has to
+  // move it: window.scrollBy did nothing here.
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollY = useRef(0);
+  const scrollToSection = useCallback((target: ViewInstance | null) => {
+    target?.measureInWindow((_x, y) => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + y - TOP_BAR_HEIGHT - 16), animated: true });
+    });
   }, []);
+
+  // ── Viewers, the same ones the app opens ─────────────────────────────────
+  const [photoViewer, setPhotoViewer] = useState<string[] | null>(null);
+  const openImages = useCallback((images: { uri: string }[], index: number) => {
+    const uri = images[index]?.uri;
+    if (uri) setPhotoViewer([uri]);
+  }, []);
+  const [showLogo, setShowLogo] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
+  const { loadAllReviews } = data;
+  const openReviews = useCallback(() => {
+    setShowReviews(true);
+    void loadAllReviews();
+  }, [loadAllReviews]);
+
   const openContact = useCallback(() => {
     if (provider.email) openUrl(`mailto:${provider.email}`);
     else if (provider.phone) openUrl(`tel:${provider.phone.replace(/\s/g, '')}`);
     else if (provider.website) openUrl(provider.website);
     else if (provider.instagram) openUrl(`https://instagram.com/${provider.instagram}`);
   }, [provider]);
-  const openPhoto = useCallback((images: { uri: string }[], index: number) => {
-    const url = images[index]?.uri;
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-  }, []);
+
   const renderServices = () => (
     <ProviderPageServices
       provider={provider}
       palette={palette}
-      services={categoriesForType[shownCategory] ?? []}
-      showAll={null}
+      services={visibleServices}
+      showAll={!showAllServices && selectedCategoryServices.length > SERVICES_COLLAPSED_LIMIT
+        ? { count: selectedCategoryServices.length, onPress: () => setShowAllServices(true) }
+        : null}
       selectedServiceType={selectedServiceType}
       serviceCountsByType={serviceCountsByType}
       onSelectServiceType={setSelectedServiceType}
       categoryNames={categoryNames}
-      selectedCategory={shownCategory}
+      selectedCategory={selectedCategory}
       onSelectCategory={setSelectedCategory}
       listWidth={listWidth}
       onListWidth={setListWidth}
@@ -149,9 +207,9 @@ function ProviderWebPageContent({
         if (next.has(id)) next.delete(id); else next.add(id);
         return next;
       })}
-      onOpenImages={(images, index) => openPhoto(images.map(image => ({ uri: image.uri })), index)}
+      onOpenImages={openImages}
       canBook={false}
-      takingBookings
+      takingBookings={data.takingBookings}
       serviceFullyBooked={{}}
       serviceNearTermAvailability={{}}
       onBook={noop}
@@ -170,7 +228,7 @@ function ProviderWebPageContent({
 
   return (
     <SafeAreaProvider>
-      <View style={[styles.root, { backgroundColor: palette.OP.bg }]}>
+      <View style={[styles.root, { backgroundColor: OP.bg }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => window.location.assign('/')} accessibilityRole="link">
             <Text style={styles.wordmark}>CERVICED</Text>
@@ -180,8 +238,16 @@ function ProviderWebPageContent({
           </TouchableOpacity>
         </View>
         <View style={styles.page}>
+          {/* The app's backdrop: their photo dimmed under a darker top, or the theme's gradient. */}
           {provider.backgroundImage ? (
-            <Image source={{ uri: provider.backgroundImage }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <>
+              <Image source={{ uri: provider.backgroundImage }} style={[StyleSheet.absoluteFill, styles.backdropPhoto]} contentFit="cover" transition={0} />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.18)', 'transparent']}
+                locations={[0, 0.35, 0.62]}
+                style={StyleSheet.absoluteFill}
+              />
+            </>
           ) : (
             <ProfileHeroBackdrop
               colors={provider.hasCustomGradient ? provider.gradient : [palette.baseTheme.hero, palette.baseTheme.bg]}
@@ -190,19 +256,26 @@ function ProviderWebPageContent({
             />
           )}
           {palette.veilTheme ? <VeilBackdrop style={StyleSheet.absoluteFill} /> : null}
-          <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
+          <ScrollView
+            ref={scrollRef}
+            style={styles.flex}
+            contentContainerStyle={styles.scroll}
+            onScroll={event => { scrollY.current = event.nativeEvent.contentOffset.y; }}
+            scrollEventThrottle={64}
+          >
             <ProviderPageHero
               provider={provider}
               palette={palette}
               heroPhotoUris={heroPhotoUris}
+              heroPhotoCaptions={heroPhotoCaptions}
               heroPhotoFrames={heroPhotoFrames}
-              isLinkOnly={provider.isLinkOnly}
+              isLinkOnly={isLinkOnly}
               recommendHeart={null}
               bell={{ enabled: false, loading: false, canSave: false }}
               aboutCardRef={aboutCardRef}
-              onOpenHeroPhoto={index => openPhoto(heroPhotoUris.map(uri => ({ uri })), index)}
-              onOpenLogo={() => provider.providerLogo?.uri && window.open(provider.providerLogo.uri, '_blank', 'noopener,noreferrer')}
-              onBookNow={() => jumpTo(servicesSectionRef.current)}
+              onOpenHeroPhoto={index => openImages(heroPhotoUris.map(uri => ({ uri })), index)}
+              onOpenLogo={() => setShowLogo(true)}
+              onBookNow={() => scrollToSection(servicesSectionRef.current)}
               onToggleBell={noop}
               onAboutCollapse={noop}
               onGetInTouch={openContact}
@@ -212,70 +285,84 @@ function ProviderWebPageContent({
             <ProviderPageSheet
               provider={provider}
               palette={palette}
-              isLinkOnly={provider.isLinkOnly}
-              takingBookings
-              closureReason={null}
+              isLinkOnly={isLinkOnly}
+              takingBookings={data.takingBookings}
+              closureReason={data.closureReason}
               minHeight={height}
               renderServices={renderServices}
-              additionalInfo={{
-                groups: additionalInfoGroups(provider, palette.pageStyle),
-                goodToKnow: goodToKnowText(provider),
-                directions: howToGetThere(provider),
-              }}
-              contactDetails={{
-                location: provider.location,
-                locationMapUrl: null,
-                phone: provider.phone,
-                whatsapp: provider.whatsapp,
-                email: provider.email,
-                instagram: provider.instagram,
-                website: provider.website,
-              }}
-              reviews={[]}
-              reviewsLoading={false}
-              openingHours={null}
-              openingHoursLoading={false}
-              workPortfolio={work}
-              venuePortfolio={venue}
-              portfolioLoading={portfolioLoading}
-              portfolioError={portfolioError}
-              onRetryPortfolio={retry}
-              policyPages={policyImageUrls(provider.bookingPolicies)}
-              policyEdges={policyImageEdges(provider.bookingPolicies)}
-              jumpTargets={[
-                { key: 'about', ref: aboutCardRef },
-                { key: 'services', ref: servicesSectionRef },
-                { key: 'policies', ref: policiesSectionRef },
-                { key: 'reviews', ref: reviewsSectionRef },
-              ]}
+              additionalInfo={additionalInfo}
+              contactDetails={contactDetails}
+              reviews={data.reviews}
+              reviewsLoading={data.reviewsLoading}
+              openingHours={data.openingHours}
+              openingHoursLoading={data.openingHoursLoading}
+              workPortfolio={workPortfolio}
+              venuePortfolio={venuePortfolio}
+              portfolioLoading={data.portfolioLoading}
+              portfolioError={data.portfolioError}
+              onRetryPortfolio={() => void data.reloadPortfolio()}
+              policyPages={policyPages}
+              policyEdges={policyEdges}
+              jumpTargets={jumpTargets}
               aboutCardRef={aboutCardRef}
               policiesSectionRef={policiesSectionRef}
               servicesSectionRef={servicesSectionRef}
               reviewsSectionRef={reviewsSectionRef}
               policyPagesRef={policyPagesRef}
-              onScrollToSection={jumpTo}
+              onScrollToSection={scrollToSection}
               onAboutCollapse={noop}
-              onOpenPolicyStory={noop}
-              onOpenPolicyImage={noop}
-              onOpenReviews={noop}
+              onOpenPolicyStory={setPolicyStoryIndex}
+              onOpenPolicyImage={() => setShowPolicyImage(true)}
+              onOpenReviews={openReviews}
               onContactLink={openUrl}
               onPublicContactLink={openUrl}
               onGetInTouch={openContact}
-              onOpenImage={openPhoto}
+              onOpenImage={openImages}
             />
           </ScrollView>
         </View>
       </View>
+
+      <FullImageViewer uris={policyPages} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />
+      <PolicyStoryViewer
+        urls={policyPages}
+        edges={policyEdges}
+        startIndex={policyStoryIndex}
+        title={`${provider.displayName} · Policy`}
+        onClose={() => setPolicyStoryIndex(null)}
+        onZoom={() => {
+          setPolicyStoryIndex(null);
+          setShowPolicyImage(true);
+        }}
+      />
+      <FullImageViewer uris={photoViewer ?? []} visible={photoViewer !== null} onClose={() => setPhotoViewer(null)} label="Photo" />
+      <LogoZoomViewer
+        uri={provider.providerLogo?.uri}
+        framing={provider.providerLogoFraming}
+        visible={showLogo}
+        onClose={() => setShowLogo(false)}
+        accessibilityName={provider.displayName}
+      />
+      <ProviderReviewsModal
+        isVisible={showReviews}
+        onClose={() => setShowReviews(false)}
+        reviews={data.reviews}
+        providerName={provider.providerName}
+        adaptiveAccentColor={adaptiveAccentColor}
+        providerGradient={provider.gradient ?? OP.gradient}
+        squareCards={squareCards}
+      />
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center' },
-  topBar: { width: '100%', maxWidth: PAGE_WIDTH, height: 54, backgroundColor: '#FFFFFF', paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topBar: { width: '100%', maxWidth: PAGE_WIDTH, height: TOP_BAR_HEIGHT, backgroundColor: '#FFFFFF', paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   wordmark: { color: '#5C4033', fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 1 },
   openApp: { color: '#5C4033', fontFamily: 'JosefinSans_600SemiBold', fontSize: 15 },
   page: { width: '100%', maxWidth: PAGE_WIDTH, flex: 1, overflow: 'hidden' },
+  backdropPhoto: { opacity: 0.88 },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
 });

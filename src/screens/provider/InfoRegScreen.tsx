@@ -44,7 +44,7 @@ import CategoryTabPill from '../../components/CategoryTabPill';
 import { ProfileStylePreview } from '../../features/providers/ProfileStylePreview';
 import { heroLabelsFrom, previewContentFrom } from '../../features/providers/previewContent';
 import { policyImageEdges, policyImageUrls } from '../../features/providers/policyImages';
-import { heroPhotos } from '../../features/providers/heroPhotos';
+import { heroPhotosForPage } from '../../features/providers/heroPhotos';
 import { getPageStyle, heroPhotoPickLimit } from '../../constants/pageStyles';
 import { heroPhotoFramesOf } from '../../features/providers/HeroPhoto';
 import { DEFAULT_PROVIDER_FONT } from '../../constants/providerFonts';
@@ -2463,7 +2463,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   if (!isLinkOnly) {
     const pageStyleKey = parseThemeKey(providerData.profileTheme).pageStyle;
     const pickLimit = heroPhotoPickLimit(getPageStyle(pageStyleKey));
-    const heroItems = pickLimit > 0 ? heroPhotos(portfolio, pickLimit) : portfolio.slice(0, 3);
+    const heroItems = heroPhotosForPage(portfolio, pickLimit);
     const heroUris = heroItems.map(item => item.image_url);
     // A full-screen preview drawn once per open, so not memoized (this sits below an early return).
     const heroFrames = heroPhotoFramesOf(heroItems);
