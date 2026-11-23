@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **123 files**
+Curated: [[Address Release]] · **124 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/services/database/addressRelease.ts` _(94)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **123 files**
 - `src/features/providers/goLiveStatus.ts` _(20)_
 - `src/services/addressLookupService.ts` _(20)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(18)_
-- … +93 more
+- … +94 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **241 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **86 files**
 - … +56 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **242 files**
+Curated: [[Booking Flow]] · **243 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(245)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **242 files**
 - `src/types/booking.ts` _(41)_
 - `src/types/database.ts` _(39)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
-- … +212 more
+- … +213 more
 
 ## Auth
 Curated: [[Contexts]] · **249 files**

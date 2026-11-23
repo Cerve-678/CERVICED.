@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-23 (the public web page reads reviews, address and open/closed)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261123210000 | `public_web_page_reads` | **APPLIED 2026-11-23** on the user's go-ahead (picked "Reviews with names" and "Yes, allow both"), via the Supabase MCP `execute_sql` (the CLI isn't linked in the main folder), in one transaction with its `schema_migrations` row. Lock `(none)`, live max `20261119200000`, no open PR above it. md5 guard on live `get_provider_reviews` matched (`60b2b861…`). Forced-rollback dry run first, as anon: 8 reviews, 7 named, the anonymous one nameless, 0 reviewer ids/avatars, taking-bookings answered, nothing left behind. Verified live: version recorded (live max); anon executes `get_provider_reviews`, `get_public_provider_address`, `provider_is_taking_bookings`; `provider_schedule_is_closed` still not anon; authenticated unchanged. Local web page then showed reviews and Keysh Nails' always-visible address with 0 console errors. PR #726. |
+
 ### Applied 2026-11-19 (providers move and zoom their hero photos)
 
 | Recorded version | Name | Verified live |
