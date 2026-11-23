@@ -1548,3 +1548,76 @@ no migration.
 Found in the 2026-11-19 sweep for gaps between the two hats (after #665 and
 #666); that sweep found nothing else. Parked by the user on 2026-11-19: "put
 in to do".
+
+## 36. Weekly audit findings - bookings, cancellations, reschedules, waitlist (2026-11-23)
+
+Area picked: ISO week 48, 48 mod 8 = 0, so bookings / cancellations /
+reschedules / waitlist. Checked against the live database (read-only) and the
+app. Two findings, both confirmed by reading the live function bodies.
+
+### 36a. A client who cancels with a provider that has no cancellation notice is still counted as a "late cancel"
+
+**What's wrong:** if a provider hasn't set a cancellation notice period, the
+rules everywhere else say nobody can cancel late. The database still counts a
+late cancel against the client if they cancel a confirmed booking less than 24
+hours before it starts.
+
+**Where:** live `cancel_own_booking()`: `v_late_threshold := CASE WHEN
+COALESCE(v_notice_hrs, 0) > 0 THEN v_notice_hrs ELSE 24 END`, then it adds 1
+to `client_provider_reliability.late_cancel_count`. The refund side says the
+opposite: `isLateClientCancel` in
+`supabase/functions/_shared/cancellationSettlement.ts:195` returns false when
+notice is 0 (tested in `src/tests/cancellationSettlement.test.ts`), and the
+Booking Detail warning (`BookingDetailScreen.tsx`, `isPastCancellationWindow`)
+doesn't warn when notice is 0. The function's own comment says it is the same
+rule as `isLateClientCancel`; it isn't.
+
+**Scenario:** provider has no notice period set. Client cancels a confirmed
+booking 3 hours before. No warning shown, full refund, no fee. But the
+provider's Clientele screen (`ProviderClienteleScreen.tsx:859`) now says "1
+late cancel" against that client, for breaking no rule. It builds up and may
+make the provider turn clients away unfairly.
+
+**Who:** clients (unfair record); providers (misleading history).
+**How sure:** high on the code. Live data today: no rows are affected yet
+(3 reliability rows have late cancels, none with a no-notice provider; 0
+cancelled bookings have a zero stored notice).
+
+**Fix:** make the threshold `v_notice_hrs` only, so notice 0 never counts as
+late, matching `isLateClientCancel`. Note the client record is a
+fairness/privacy-adjacent matter: the owner may want to decide whether a
+default 24h was meant on purpose. If so, the app warning and refund rule need
+the same default instead.
+
+### 36b. Two reschedule rules read the appointment time as UTC, not UK time (wrong by an hour in summer)
+
+**What's wrong:** the 2026-11-13 fix made cancel, no-show and "already
+started" checks read booking time as UK time. Two reschedule functions were
+missed and still read it as UTC. The server runs in UTC, so from late March to
+late October these checks are an hour out. In winter (now) they are correct,
+so nothing is visibly wrong today.
+
+**Where:**
+- live `request_reschedule_own_booking()`: the provider's reschedule notice
+  check uses `(booking_date + booking_time)::timestamp - NOW()` with no
+  `AT TIME ZONE 'Europe/London'`. The cancel-window check just below it in the
+  same function does use it, so one function computes the same appointment
+  time two ways.
+- live `process_expire_stale_reschedule_requests()`: the "never past the
+  appointment itself" cap is `b.booking_date::TIMESTAMP + b.booking_time`
+  compared to `NOW()`, also with no UK conversion.
+
+**Scenario (summer):** provider requires 24h reschedule notice. Booking is
+tomorrow 14:00 UK, which is 13:00 UTC. The function treats it as 14:00 UTC, an
+hour later than it really is. At 13:30 UK today the client really has 23.5
+hours, but the function counts 24.5, so the request goes through when it
+should be refused. In the same way an unanswered reschedule request stays open
+up to an hour past the appointment start.
+
+**Who:** providers (notice rule bent by up to an hour); clients (last-hour
+requests that stay open).
+**How sure:** high on the code; effect only while UK clocks are on BST.
+
+**Fix:** wrap both in `AT TIME ZONE 'Europe/London'` like the neighbouring
+checks. Also check the app's own notice check in `RescheduleScreen.tsx`
+(~line 531) uses device-local time and agrees.
