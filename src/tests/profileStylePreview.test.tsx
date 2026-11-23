@@ -334,6 +334,20 @@ describe('the portfolio and pinned bar, as on the profile', () => {
     expect(screen.queryAllByLabelText(/^Portfolio photo/)).toHaveLength(0);
   });
 
+  // On a phone, Yoga stretches a row's tiles to the row's height, which starts
+  // at 0, and ignores their aspectRatio: the arches drew 0pt tall and the
+  // portfolio vanished (the browser sizes them either way). The row must not
+  // stretch them.
+  it.each(['posy', 'retreat', 'storefront'] as const)('keeps %s\'s arched photos from collapsing on a phone', key => {
+    renderPreview(key);
+    const tile = screen.getAllByLabelText(/^Portfolio photo/)[0]!;
+    expect(StyleSheet.flatten(tile.props['style']).aspectRatio).toBeGreaterThan(0);
+    let row = tile.parent;
+    while (row && StyleSheet.flatten(row.props['style'])?.flexWrap !== 'wrap') row = row.parent;
+    expect(row).toBeTruthy();
+    expect(StyleSheet.flatten(row!.props['style']).alignItems).toBe('flex-start');
+  });
+
   it('pins Riviera\'s Book bar starting on their cheapest service, its price and length, without the business name', () => {
     renderPreview('riviera', 'default', {
       about: '',
