@@ -142,6 +142,8 @@ const sidePanelWidth = (screenWidth: number) => screenWidth * 0.85;
 // Hero → content transition: the logo/name/rating/slots float directly over the photo;
 // the content sheet starts right after them, rising over the photo with a rounded lip.
 const SHEET_LIP_RADIUS = 36;
+/** The native stack's bar under the status bar, where the back, bookmark and share buttons sit. */
+const NAV_BAR_HEIGHT = Platform.OS === "ios" ? 44 : 56;
 
 type ServiceData = ProviderProfileService;
 
@@ -1293,6 +1295,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
   // this component is typed by the ProviderProfile route it mostly serves.
   const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
+  // Where the back, bookmark and share buttons end, so a page top that runs
+  // out to the sides starts under them (heroTopPadding). The owner's preview
+  // has no header, so nothing moves there.
+  const { top: safeTop } = useSafeAreaInsets();
+  const headerBottom = asOwnPreview ? undefined : safeTop + NAV_BAR_HEIGHT;
   // The owner's logo preview shows the Book buttons as clients see them
   // (user, 2026-11-22), for looking at only: they don't respond to a tap
   // (user, 2026-11-23).
@@ -4511,6 +4518,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               heroPhotoCaptions={heroPhotoCaptions}
               heroPhotoFrames={heroPhotoFrames}
               isLinkOnly={isLinkOnly}
+              headerBottom={headerBottom}
               recommendHeart={recommendHeart}
               bell={heroBell}
               aboutCardRef={aboutCardRef}

@@ -38,6 +38,7 @@ import { BUSINESS_TYPE_ICON, BUSINESS_TYPE_LABEL } from "../profilePresentation"
 import type { ProviderProfileData } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 import type { HeroPhotoFrames } from "../HeroPhoto";
+import { heroTopPadding } from "./heroTopPadding";
 
 const SERIF = "Prata-Regular";
 const NAME_SIZE = HERO_NAME_SIZE;
@@ -57,6 +58,10 @@ export interface ProviderPageHeroProps {
   /** How the provider framed each of those photos, by URL. Memoized by the caller. */
   heroPhotoFrames: HeroPhotoFrames;
   isLinkOnly: boolean;
+  /** Where the app's back, bookmark and share buttons end, from the top of
+   *  the screen, so a top that reaches them starts under them. Left out
+   *  where nothing sits over the page (the website, the owner's preview). */
+  headerBottom?: number | undefined;
   /** Recommend's badge on the logo, when the viewer has one to show. */
   recommendHeart: ReturnType<typeof useProviderRecommend>["heart"];
   /** The bell beside the availability pill. */
@@ -87,6 +92,7 @@ export function ProviderPageHero({
   heroPhotoCaptions,
   heroPhotoFrames,
   isLinkOnly,
+  headerBottom,
   recommendHeart,
   bell,
   aboutCardRef,
@@ -123,7 +129,7 @@ export function ProviderPageHero({
   } = palette;
 
   return (
-    <View style={styles.heroInfoWrap}>
+    <View style={{ paddingTop: heroTopPadding(pageStyle.hero, heroPhotoUris.length > 0, headerBottom) }}>
       {/* The page style decides where the logo, the name and the
           words round them sit (ProfileHero.ProfileHeroLayout, shared
           with Branding's preview). Classic is the profile as it was. */}
@@ -498,9 +504,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 6,
-  },
-  heroInfoWrap: {
-    paddingTop: 100, // clears the status bar / back button over the hero photo
   },
   heroTextShadow: {
     textShadowColor: "rgba(0,0,0,0.55)",
