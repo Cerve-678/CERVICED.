@@ -43,6 +43,9 @@ export function ProviderProfileQrSheet({
   onClose,
 }: Props) {
   const pageUrl = providerWebPageUrl(providerSlug);
+  // Printed under the code, so a screenshot or print of the card still says
+  // where it goes and can be typed in. The bare domain redirects to www.
+  const printedLink = pageUrl.replace(/^https:\/\/(www\.)?/, "");
   const share = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await Share.share({
@@ -102,7 +105,7 @@ export function ProviderProfileQrSheet({
           <View
             style={styles.qrFrame}
             accessible
-            accessibilityLabel={`QR code for ${providerName}'s CERVICED profile`}
+            accessibilityLabel={`QR code for ${providerName}'s CERVICED profile, ${printedLink}`}
           >
             <QRCode
               value={pageUrl}
@@ -111,6 +114,9 @@ export function ProviderProfileQrSheet({
               backgroundColor="#FFFFFF"
               ecl="M"
             />
+            <Text style={styles.qrLink} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {printedLink}
+            </Text>
           </View>
           <Text style={[styles.hint, { color: subtextColor }]}>
             Keep it by your chair, on a card, or at your front desk.
@@ -120,15 +126,10 @@ export function ProviderProfileQrSheet({
             onPress={() => void copyLink()}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={copied ? "Link copied" : `Copy link, ${pageUrl.replace(/^https:\/\//, "")}`}
+            accessibilityLabel={copied ? "Link copied" : "Copy link"}
           >
-            <Text style={[styles.linkText, { color: textColor }]} numberOfLines={1}>
-              {copied ? "Copied" : pageUrl.replace(/^https:\/\//, "")}
-            </Text>
-            <View style={styles.linkAction}>
-              <Ionicons name={copied ? "checkmark" : "copy-outline"} size={16} color={accentColor} />
-              <Text style={[styles.linkActionText, { color: accentColor }]}>{copied ? "DONE" : "COPY LINK"}</Text>
-            </View>
+            <Ionicons name={copied ? "checkmark" : "copy-outline"} size={17} color={accentColor} />
+            <Text style={[styles.linkActionText, { color: accentColor }]}>{copied ? "COPIED" : "COPY LINK"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.shareButton, { backgroundColor: accentColor }]}
@@ -203,25 +204,28 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
   },
+  // Always dark on the card's white, whatever the sheet's theme, like the code.
+  qrLink: {
+    maxWidth: 220,
+    marginTop: 12,
+    color: "#171411",
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
   linkRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     alignSelf: "stretch",
-    gap: 10,
-    minHeight: 48,
+    gap: 8,
+    minHeight: 50,
     borderWidth: 1,
     borderRadius: 15,
-    paddingHorizontal: 16,
     marginTop: 18,
   },
-  linkText: {
-    flex: 1,
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  linkAction: { flexDirection: "row", alignItems: "center", gap: 5 },
-  linkActionText: { fontFamily: "BakbakOne-Regular", fontSize: 12, letterSpacing: 0.5 },
+  linkActionText: { fontFamily: "BakbakOne-Regular", fontSize: 14, letterSpacing: 0.5 },
   shareButton: {
     flexDirection: "row",
     alignItems: "center",
