@@ -141,6 +141,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   orbit: { text: 'S E R V I C E S' },
   typeblock: { text: 'SERVICES' },
   filmstrip: { lead: '03', text: 'SERVICES' },
+  receipt: { text: 'SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -453,6 +454,13 @@ function MiniProfile({
         );
       case 'engravedCaps':
         return <Text style={[mini.engravedCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'receiptCaps':
+        return (
+          <View style={{ alignSelf: 'stretch' }}>
+            <Text style={[mini.receiptCaps, { color: ink }]}>{heading.text}</Text>
+            <View style={[mini.receiptRule, { borderColor: withAlpha(ink, 0.5) }]} />
+          </View>
+        );
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -624,6 +632,8 @@ function MiniProfile({
       }
       case 'grouped':
         return <View key={key} style={[mini.card, mini.groupedCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'receipt':
+        return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gridBox':
         return <View key={key} style={[mini.card, mini.gridCard, { backgroundColor: cardColour, borderColor: withAlpha(ink, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'soft':
@@ -713,6 +723,15 @@ function MiniProfile({
                 <View style={[mini.polaroidPrintPhoto, { backgroundColor: photoFill }]} />
                 <View style={mini.tape} />
               </View>
+            </View>
+          </View>
+        ) : style.hero === 'receiptHead' ? (
+          // Receipt: a white slip with a name in spaced caps and a barcode.
+          <View style={mini.receiptHero}>
+            <View style={[mini.receiptSlip, { backgroundColor: cardColour }]}>
+              {logo}
+              <Text style={[mini.receiptName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>NAME</Text>
+              <View style={[mini.receiptBars, { borderColor: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} />
             </View>
           </View>
         ) : style.hero === 'echoName' ? (
@@ -1350,6 +1369,12 @@ const mini = StyleSheet.create({
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
+  receiptCaps: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 8, letterSpacing: 1.5 },
+  receiptRule: { borderTopWidth: 1, borderStyle: 'dashed', marginTop: 2 },
+  receiptHero: { flex: 1, paddingHorizontal: 18, paddingVertical: 7 },
+  receiptSlip: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  receiptName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 9, letterSpacing: 2 },
+  receiptBars: { width: 36, height: 7, borderLeftWidth: 2, borderRightWidth: 3 },
   // Studio's bar, photo and headings.
   studioWrap: { alignSelf: 'stretch', flex: 1, marginHorizontal: 8 },
   studioBar: { height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },

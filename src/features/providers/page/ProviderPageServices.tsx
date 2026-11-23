@@ -303,6 +303,8 @@ export function ProviderPageServices({
   // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
   const arrowPillButtons = pageStyle.buttonShape === "arrowPill";
   const shopBoxButtons = pageStyle.buttonShape === "shopBox";
+  // Receipt: a rubber stamp, a tilted outline in the accent.
+  const stampButtons = pageStyle.buttonShape === "stamp";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
   // The width the cards actually get: inside the list's side padding.
   const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
@@ -720,6 +722,7 @@ export function ProviderPageServices({
                           outlineButtons && [styles.outlineButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                           arrowPillButtons && styles.arrowPillButton,
                           shopBoxButtons && [styles.shopBoxButton, { borderColor: fullyBooked ? SV.border : SV.text }],
+                          stampButtons && [styles.stampButton, { borderColor: fullyBooked ? SV.border : adaptiveAccentColor }],
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -739,6 +742,7 @@ export function ProviderPageServices({
                             outlineButtons && !fullyBooked && { color: SV.text },
                             arrowPillButtons && !fullyBooked && { color: pillInk },
                             shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
+                            stampButtons && [styles.stampButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
                           ]}
                         >
                           {!takingBookings
@@ -1105,6 +1109,8 @@ const styles = StyleSheet.create({
   arrowPillCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.4, alignItems: "center", justifyContent: "center" },
   shopBoxButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 1, shadowOpacity: 0, elevation: 0, paddingHorizontal: 12 },
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
+  stampButton: { backgroundColor: "transparent", borderWidth: 2, borderRadius: 4, shadowOpacity: 0, elevation: 0, transform: [{ rotate: "-4deg" }] },
+  stampButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
   // the two, wider than the room left beside them, and wrap them one a row.

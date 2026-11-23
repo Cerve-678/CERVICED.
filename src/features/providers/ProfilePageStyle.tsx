@@ -30,6 +30,7 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
+import { DashedRule } from "./heroes/ReceiptHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -544,6 +545,16 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "receiptCaps":
+      // Receipt: the title in spaced till-roll caps, a dashed rule under it.
+      return (
+        <View {...a11y} accessible style={headingStyles.receiptWrap}>
+          <Text style={[headingStyles.receiptCaps, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {words.toUpperCase()}
+          </Text>
+          <DashedRule colour={withAlpha(ink, 0.55)} />
+        </View>
+      );
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -774,7 +785,7 @@ function PageSectionSurface({
     );
   }
 
-  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
+  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block" || pageStyle.cards === "receipt"
     ? 0
     : pageStyle.cards === "clipped" ? 2
     : pageStyle.cards === "raised" ? 3
@@ -876,6 +887,7 @@ function PageSectionSurface({
           pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
           pageStyle.cards === "outlineRound" && [surfaceStyles.outlineRound, { borderColor: outlineInk(palette.cardBackground) }],
+          pageStyle.cards === "receipt" && receiptSurface(palette.cardBackground),
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -965,12 +977,26 @@ export function WaveEdge({ color, position, width }: { color: string; position: 
  * Branding → Card Shape still wins on corners: the profile applies its square
  * style after this.
  */
+/** Receipt's slip: square paper with a fine edge and no shadow. */
+export function receiptSurface(card: string): ViewStyle {
+  return {
+    backgroundColor: card,
+    borderRadius: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: withAlpha(outlineInk(card), 0.18),
+    shadowOpacity: 0,
+    elevation: 0,
+  };
+}
+
 export function serviceCardSurface(
   style: PageStyle,
   colours: { card: string; accent: string; sheet: string },
 ): ViewStyle | null {
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
+    case "receipt":
+      return receiptSurface(colours.card);
     case "none":
     case "open":
       return {
@@ -1929,6 +1955,8 @@ const headingStyles = StyleSheet.create({
   // Calling Card's engraved caps (Forum), its own face.
   engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
+  receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
+  receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },

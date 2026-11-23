@@ -278,6 +278,8 @@ export function ProfileStylePreview({
   const outlineBook = pageStyle.buttonShape === "outline" || pageStyle.buttonShape === "shopBox";
   const arrowBook = pageStyle.buttonShape === "arrowPill";
   const shopBook = pageStyle.buttonShape === "shopBox";
+  // Receipt: a tilted rubber-stamp outline in the accent.
+  const stampBook = pageStyle.buttonShape === "stamp";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -639,8 +641,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, shopBook && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || stampBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], stampBook && [styles.bookOutline, styles.bookStamp, { borderColor: accent }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink || stampBook ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || stampBook) && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
@@ -817,6 +819,7 @@ const styles = StyleSheet.create({
   bookArrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingRight: 6 },
   bookArrowCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.3, alignItems: "center", justifyContent: "center" },
   bookShopBox: { borderWidth: 1, borderRadius: 1 },
+  bookStamp: { borderWidth: 2, borderRadius: 4, transform: [{ rotate: "-4deg" }] },
   bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },

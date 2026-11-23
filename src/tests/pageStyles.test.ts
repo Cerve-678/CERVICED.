@@ -67,7 +67,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'receipt',
     ]);
   });
 
@@ -633,5 +633,30 @@ describe('Poster, Hibiscus and Storefront (owner, 2026-11-19: "create something 
       expect(other.divider).not.toBe('sparkles');
       expect(['arrowPill', 'shopBox']).not.toContain(other.buttonShape);
     }
+  });
+});
+
+describe('Receipt', () => {
+  const receipt = getPageStyle('receipt');
+
+  it('prints the page as a till receipt, with its own top, headings, slips and stamp', () => {
+    expect(receipt.hero).toBe('receiptHead');
+    expect(receipt.heading).toBe('receiptCaps');
+    expect(receipt.cards).toBe('receipt');
+    expect(receipt.buttonShape).toBe('stamp');
+    expect(receipt.serviceLayout).toBe('menu');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'receipt')) {
+      expect(other.hero).not.toBe('receiptHead');
+      expect(other.heading).not.toBe('receiptCaps');
+      expect(other.cards).not.toBe('receipt');
+      expect(other.buttonShape).not.toBe('stamp');
+    }
+  });
+
+  it('draws its service slips square, flat and finely edged', () => {
+    const surface = serviceCardSurface(receipt, { card: '#FFFFFF', accent: '#C8402F', sheet: SHEET_BG });
+    expect(surface?.borderRadius).toBe(0);
+    expect(surface?.shadowOpacity).toBe(0);
+    expect(surface?.backgroundColor).toBe('#FFFFFF');
   });
 });
