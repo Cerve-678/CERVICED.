@@ -874,7 +874,7 @@ export const HUSH_TITLES: Record<PageSectionKey, string> = {
   about: 'hello',
   policies: 'a few gentle notes',
   services: 'services',
-  reviews: 'kind words',
+  reviews: 'reviews',
   hours: 'opening hours',
   contact: 'say hello',
   info: 'good to know',
