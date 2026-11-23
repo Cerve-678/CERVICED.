@@ -32,17 +32,22 @@ describe('profile QR sheet: copy link', () => {
     jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
   });
 
-  it('shows the page link and copies it, then says it was copied', async () => {
+  it('prints the page link on the QR card, so a screenshot or print says where it goes', () => {
+    renderSheet();
+    expect(screen.getByText('cerviced.co/@amara-lashes')).toBeTruthy();
+    expect(screen.getByLabelText("QR code for Amara Lashes's CERVICED profile, cerviced.co/@amara-lashes")).toBeTruthy();
+  });
+
+  it('copies the full page link, then says it was copied', async () => {
     (copyText as jest.Mock).mockResolvedValue(true);
     renderSheet();
-    expect(screen.getByText('www.cerviced.co/@amara-lashes')).toBeTruthy();
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Copy link, www.cerviced.co/@amara-lashes'));
+      fireEvent.press(screen.getByLabelText('Copy link'));
     });
 
     expect(copyText).toHaveBeenCalledWith('https://www.cerviced.co/@amara-lashes');
-    expect(screen.getByText('Copied')).toBeTruthy();
+    expect(screen.getByText('COPIED')).toBeTruthy();
     expect(Share.share).not.toHaveBeenCalled();
   });
 
@@ -51,10 +56,10 @@ describe('profile QR sheet: copy link', () => {
     renderSheet();
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Copy link, www.cerviced.co/@amara-lashes'));
+      fireEvent.press(screen.getByLabelText('Copy link'));
     });
 
     expect(Share.share).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://www.cerviced.co/@amara-lashes' }));
-    expect(screen.queryByText('Copied')).toBeNull();
+    expect(screen.queryByText('COPIED')).toBeNull();
   });
 });
