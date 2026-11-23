@@ -30,7 +30,7 @@ import {
 } from '../features/providers/ProfilePageStyle';
 import { moodboardName, moodboardPhotoAspect, moodboardPrint, moodboardTag } from '../features/providers/heroes/MoodboardHero';
 import { heroPhotoSlotAspect } from '../constants/pageStyles';
-import { CAPSULE_OAT, capsuleTones } from '../features/providers/heroes/CapsuleHero';
+import { capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { heroIsDarkForStyle, heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
@@ -707,25 +707,25 @@ describe('Capsule', () => {
     expect(heroPhotoPickLimit(capsule)).toBe(1);
   });
 
-  it('keeps both tones as light as a pale page and as dark as a dark one, so the ink reads', () => {
+  it('keeps the accent tint as light as a pale page and as dark as a dark one, so the ink reads', () => {
     for (const accent of ['#A9B49B', '#4A2C1E', '#E9799F']) {
-      for (const tone of capsuleTones(accent, '#FAF8F3')) expect(isDarkColor(tone)).toBe(false);
-      for (const tone of capsuleTones(accent, '#141512')) expect(isDarkColor(tone)).toBe(true);
+      expect(isDarkColor(capsuleTones(accent, '#FAF8F3', '#FFFFFF')[0])).toBe(false);
+      expect(isDarkColor(capsuleTones(accent, '#141512', '#1E1F1B')[0])).toBe(true);
     }
   });
 
-  it('pairs a tint of the accent with oat', () => {
-    const [tint, oat] = capsuleTones('#A9B49B', '#FFFFFF');
-    expect(tint).not.toBe(oat);
-    expect(capsuleTones('#E9799F', '#FFFFFF')[1]).toBe(oat);
-    expect(CAPSULE_OAT).toMatch(/^#[0-9A-F]{6}$/);
+  it('pairs a tint of their accent with their chosen card colour, no fixed colour of its own', () => {
+    const [tint, card] = capsuleTones('#A9B49B', '#FFFFFF', '#FDF5F7');
+    expect(card).toBe('#FDF5F7');
+    expect(tint).not.toBe(card);
+    expect(capsuleTones('#E9799F', '#FFFFFF', '#F3ECE2')[1]).toBe('#F3ECE2');
   });
 
   it('gives the services turns in the two tones, each a full pill', () => {
-    const [tint, oat] = capsuleTones('#A9B49B', '#FAF8F3');
-    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 0).backgroundColor).toBe(tint);
-    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 1).backgroundColor).toBe(oat);
-    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 2).backgroundColor).toBe(tint);
+    const [tint, card] = capsuleTones('#A9B49B', '#FAF8F3', '#FDF5F7');
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', '#FDF5F7', 0).backgroundColor).toBe(tint);
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', '#FDF5F7', 1).backgroundColor).toBe(card);
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', '#FDF5F7', 2).backgroundColor).toBe(tint);
     expect(serviceCardSurface(capsule, { card: '#FFFFFF', accent: '#A9B49B', sheet: '#FAF8F3' })?.borderRadius).toBe(45);
   });
 });

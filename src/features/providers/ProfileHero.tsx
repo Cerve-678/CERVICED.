@@ -303,13 +303,13 @@ function ProfileHeroLayoutBody({
           location={location}
           accent={accent}
           sheetColour={sheetColour ?? cardColour}
+          cardColour={cardColour}
           heroText={heroText}
           heroSub={heroSub}
           photo={photoUris?.[0]}
           renderLogo={renderLogo}
           tick={tick}
           details={details}
-          onBookNow={onBookNow}
           onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
         />
       );

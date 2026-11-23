@@ -1,9 +1,9 @@
 // Capsule's top (owner's pick 14 from the 2026-11-23 clean-girl round of the
 // "range of branding templates" canvas): pilates-studio calm, everything a
 // soft pill. Their chosen photo stands in a tall capsule; beside it sit the
-// logo, the name in light lowercase, their area and what they do as pill
-// chips in the two quiet tones. A full-width Book pill in the ink runs under
-// it, then the stars and slots.
+// logo with the name in light lowercase to its right, their area and what
+// they do as pill chips in the two tones, then the stars and slots. No Book
+// button in the top: the page's own Book buttons cover it (owner, 11-23).
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -11,15 +11,11 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 import { HeroPhoto } from "../HeroPhoto";
 
-/** The oat Capsule pairs with the accent's tint (the canvas's "sage and oat"). */
-export const CAPSULE_OAT = "#C9B394";
-
-/** Capsule's two quiet tones on a page of this colour: a soft tint of the
- *  accent, then oat, each blended toward the page so it stays as light (or as
- *  dark) as the page and the page's ink still reads on it. */
-export function capsuleTones(accent: string, sheet: string): readonly [string, string] {
-  const dark = isDarkColor(sheet);
-  return [blend(accent, sheet, dark ? 0.5 : 0.55), blend(CAPSULE_OAT, sheet, dark ? 0.72 : 0.6)];
+/** Capsule's two tones, both from the provider's own chosen colours: a soft
+ *  tint of their accent (blended toward the page so it stays as light, or as
+ *  dark, as the page), then their card colour exactly as picked. */
+export function capsuleTones(accent: string, sheet: string, card: string): readonly [string, string] {
+  return [blend(accent, sheet, isDarkColor(sheet) ? 0.5 : 0.55), card];
 }
 
 /** Ink for something drawn on one of the tones. */
@@ -35,13 +31,13 @@ export function CapsuleHero({
   location,
   accent,
   sheetColour,
+  cardColour,
   heroText,
   heroSub,
   photo,
   renderLogo,
   tick,
   details,
-  onBookNow,
   onOpenPhoto,
 }: {
   name: string;
@@ -51,6 +47,8 @@ export function CapsuleHero({
   accent: string;
   /** The content sheet's colour: the tones are blended toward it. */
   sheetColour: string;
+  /** Their chosen card colour: the second tone. */
+  cardColour: string;
   heroText: string;
   heroSub: string;
   /** Their chosen photo (Branding → Your Photos); none yet draws the capsule in the accent's tint with the logo in it. */
@@ -58,11 +56,9 @@ export function CapsuleHero({
   renderLogo: (size: number) => React.ReactNode;
   tick: React.ReactNode;
   details: React.ReactNode;
-  /** Jumps to Services. Left out for a link-only provider, and then there's no button. */
-  onBookNow?: (() => void) | undefined;
   onOpenPhoto?: (() => void) | undefined;
 }) {
-  const tones = capsuleTones(accent, sheetColour);
+  const tones = capsuleTones(accent, sheetColour, cardColour);
   const chips = kicker.split("·").map(part => part.trim().toLowerCase()).filter(Boolean);
   return (
     <View style={styles.wrap}>
@@ -75,15 +71,17 @@ export function CapsuleHero({
           accessibilityLabel={photo ? `${name} featured work` : undefined}
           activeOpacity={0.88}
         >
-          {photo ? <HeroPhoto uri={photo} /> : <View style={styles.capsuleLogo}>{renderLogo(76)}</View>}
+          {photo ? <HeroPhoto uri={photo} /> : <View style={styles.capsuleLogo}>{renderLogo(84)}</View>}
         </TouchableOpacity>
         <View style={styles.side}>
-          {photo ? renderLogo(44) : null}
-          <View accessible accessibilityRole="header" accessibilityLabel={name} style={styles.nameRow}>
-            <Text style={[styles.name, { color: heroText }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
-              {name.toLowerCase()}
-            </Text>
-            {tick}
+          <View style={styles.nameRow}>
+            {photo ? renderLogo(54) : null}
+            <View accessible accessibilityRole="header" accessibilityLabel={name} style={styles.nameAndTick}>
+              <Text style={[styles.name, { color: heroText }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {name.toLowerCase()}
+              </Text>
+              {tick}
+            </View>
           </View>
           {location ? <Text style={[styles.area, { color: heroSub }]} numberOfLines={1}>{location.toLowerCase()}</Text> : null}
           {chips.length ? (
@@ -100,17 +98,6 @@ export function CapsuleHero({
           ) : null}
         </View>
       </View>
-      {onBookNow ? (
-        <TouchableOpacity
-          style={[styles.book, { backgroundColor: heroText }]}
-          onPress={onBookNow}
-          accessibilityRole="button"
-          accessibilityLabel="Book a session"
-          activeOpacity={0.85}
-        >
-          <Text style={[styles.bookText, { color: isDarkColor(heroText) ? "#FAF8F3" : "#26241F" }]}>book a session</Text>
-        </TouchableOpacity>
-      ) : null}
       <View style={styles.foot}>{details}</View>
     </View>
   );
@@ -119,16 +106,15 @@ export function CapsuleHero({
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 26, gap: 18 },
   row: { flexDirection: "row", alignItems: "flex-end", gap: 16 },
-  capsule: { width: 128, height: 210, borderRadius: 999, overflow: "hidden" },
+  capsule: { width: 142, height: 232, borderRadius: 999, overflow: "hidden" },
   capsuleLogo: { flex: 1, alignItems: "center", justifyContent: "center" },
   side: { flex: 1, gap: 8, paddingBottom: 6 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  nameAndTick: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   name: { flexShrink: 1, fontFamily: "LeagueSpartan-Light", fontSize: 30, lineHeight: 33, letterSpacing: -0.8 },
   area: { fontFamily: "Figtree-SemiBold", fontSize: 12 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   chipText: { fontFamily: "Figtree-SemiBold", fontSize: 11 },
-  book: { minHeight: 48, borderRadius: 999, alignItems: "center", justifyContent: "center" },
-  bookText: { fontFamily: "Figtree-SemiBold", fontSize: 14 },
   foot: { alignItems: "center" },
 });

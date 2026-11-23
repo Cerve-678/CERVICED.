@@ -318,7 +318,7 @@ export function ProviderPageServices({
   const glowDark = isDarkColor(OP.bg);
   const glowLine = glowDark ? blend(adaptiveAccentColor, "#FFFFFF", 0.2) : adaptiveAccentColor;
   // Capsule: a full pill in the page's ink, the word in lowercase; each
-  // service a capsule, taking turns in the accent's tint and oat.
+  // service a capsule, taking turns in the accent's tint and their card colour.
   const darkPillButtons = pageStyle.buttonShape === "darkPill";
   const darkPillInk = isDarkColor(SV.text) ? "#FAF8F3" : "#26241F";
   const capsuleServices = pageStyle.cards === "capsule";
@@ -475,7 +475,7 @@ export function ProviderPageServices({
               styles.serviceItemCard,
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
-              capsuleServices && capsuleServiceSurface(adaptiveAccentColor, OP.bg, serviceIndex),
+              capsuleServices && capsuleServiceSurface(adaptiveAccentColor, OP.bg, OP.card, serviceIndex),
               squareCards && styles.squareCard,
               serviceTwoUp && (serviceTileWidth > 0 ? { width: serviceTileWidth } : styles.serviceTile),
             ]}
