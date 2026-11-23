@@ -741,7 +741,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'neonScript', cards: 'lit', policies: 'outlined', logo: 'circle',
     hero: 'neonSign', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    roundedPhotos: true, buttonShape: 'glowPill',
+    roundedPhotos: true, buttonShape: 'glowPill', nameFontPickable: true,
   },
 ];
 
