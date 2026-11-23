@@ -48,6 +48,7 @@ import {
   sheetInk,
   StyledPolicyList,
   type PageStylePalette,
+  capsuleServiceSurface,
 } from "./ProfilePageStyle";
 import type { HeroPhotoFrames } from "./HeroPhoto";
 
@@ -281,6 +282,8 @@ export function ProfileStylePreview({
   const shopBook = pageStyle.buttonShape === "shopBox";
   // Neon: a round outline in the accent, spaced caps.
   const glowBook = pageStyle.buttonShape === "glowPill";
+  // Capsule: a full pill in the page's ink, the word in lowercase.
+  const darkPillBook = pageStyle.buttonShape === "darkPill";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -596,7 +599,7 @@ export function ProfileStylePreview({
               key={index}
               intensity={surface ? 0 : blurIntensity}
               tint={blurTint}
-              style={[styles.serviceCard, { backgroundColor: cardBg, borderColor: OP.border }, surface, squareCards && styles.square, tiles && styles.tile]}
+              style={[styles.serviceCard, { backgroundColor: cardBg, borderColor: OP.border }, surface, pageStyle.cards === "capsule" && capsuleServiceSurface(accent, OP.bg, index), squareCards && styles.square, tiles && styles.tile]}
             >
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
@@ -643,8 +646,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], darkPillBook && { backgroundColor: serviceInk.text }, shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? "Book now" : darkPillBook ? "book" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
@@ -831,6 +834,7 @@ const styles = StyleSheet.create({
   bookArrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingRight: 6 },
   bookArrowCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.3, alignItems: "center", justifyContent: "center" },
   bookShopBox: { borderWidth: 1, borderRadius: 1 },
+  bookDarkPillText: { fontFamily: "Figtree-SemiBold" },
   bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },

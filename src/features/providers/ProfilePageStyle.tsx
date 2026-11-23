@@ -30,6 +30,7 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
+import { capsuleTones } from "./heroes/CapsuleHero";
 import { GlowText } from "./heroes/NeonHero";
 
 export interface PageStylePalette {
@@ -566,6 +567,19 @@ export function PageSectionHeading({
         </Text>
       );
     }
+    case "pillMark": {
+      // Capsule: a small pill in one of the two quiet tones, then the title
+      // soft and lowercase. The portfolio is "my work", as on the canvas.
+      const tone = capsuleTones(palette.accent, palette.background)[CAPSULE_MARK_TONE[section]];
+      return (
+        <View {...a11y} accessible style={headingStyles.pillMarkRow}>
+          <View style={[headingStyles.pillMark, { backgroundColor: tone }]} />
+          <Text style={[headingStyles.pillMarkTitle, { color: ink }]} numberOfLines={1}>
+            {section === "portfolio" && !custom ? "my work" : words.toLowerCase()}
+          </Text>
+        </View>
+      );
+    }
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -825,6 +839,20 @@ function PageSectionSurface({
     );
   }
 
+  if (pageStyle.cards === "capsule") {
+    // Capsule: the heading on the page, the section on a soft card in the
+    // oat tone with big round corners and no shadow.
+    const tone = capsuleTones(palette.accent, palette.background)[1];
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View style={[surfaceStyles.solid, surfaceStyles.capsuleCard, { backgroundColor: tone }, square && surfaceStyles.square]}>
+          {children}
+        </View>
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "pages") {
     // Novel: a square card with two page edges peeking out below and to the
     // right of it, like the closed block of a book.
@@ -1008,6 +1036,38 @@ export function litSurface(card: string, accent: string, sheet: string): ViewSty
   };
 }
 
+/** Which of Capsule's two tones each heading's pill mark is in: they take
+ *  turns, sage then oat, in the order the profile draws its sections. */
+const CAPSULE_MARK_TONE: Record<PageSectionKey, 0 | 1> = {
+  about: 0,
+  policies: 1,
+  services: 0,
+  policyPages: 1,
+  reviews: 0,
+  contact: 1,
+  hours: 0,
+  portfolio: 1,
+  info: 0,
+  specialities: 1,
+  keyInfo: 0,
+  faq: 1,
+  aftercare: 0,
+  custom: 1,
+  disclaimer: 0,
+};
+
+/** Capsule's service pill: the whole row a capsule. The services take turns
+ *  in the two tones, so the price list passes each row's place. */
+export function capsuleServiceSurface(accent: string, sheet: string, index: number): ViewStyle {
+  return {
+    backgroundColor: capsuleTones(accent, sheet)[index % 2],
+    borderWidth: 0,
+    borderRadius: 45,
+    shadowOpacity: 0,
+    elevation: 0,
+  };
+}
+
 export function serviceCardSurface(
   style: PageStyle,
   colours: { card: string; accent: string; sheet: string },
@@ -1016,6 +1076,8 @@ export function serviceCardSurface(
   switch (style.cards) {
     case "lit":
       return litSurface(colours.card, colours.accent, colours.sheet);
+    case "capsule":
+      return capsuleServiceSurface(colours.accent, colours.sheet, 0);
     case "none":
     case "open":
       return {
@@ -1979,6 +2041,9 @@ const headingStyles = StyleSheet.create({
   // nothing is cut off (owner, 2026-11-23).
   neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 68, paddingHorizontal: 8, marginBottom: 2, includeFontPadding: false },
   neonWrap: { alignSelf: "flex-start", marginLeft: -8 },
+  pillMarkRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  pillMark: { width: 18, height: 8, borderRadius: 999 },
+  pillMarkTitle: { fontFamily: "Figtree-SemiBold", fontSize: 18, lineHeight: 24 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
@@ -2029,6 +2094,7 @@ const surfaceStyles = StyleSheet.create({
   tab: { alignSelf: "flex-start", marginLeft: 22, paddingHorizontal: 16, paddingTop: 7, paddingBottom: 5 },
   tabText: { fontFamily: "LilitaOne-Regular", fontSize: 10, lineHeight: 14, letterSpacing: 1.6 },
   tabbedCard: { borderRadius: 0 },
+  capsuleCard: { borderRadius: 32 },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },
   block: { marginBottom: 24 },

@@ -26,6 +26,7 @@ import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroP
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
 import { NeonHero } from "./heroes/NeonHero";
+import { CapsuleHero } from "./heroes/CapsuleHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
@@ -290,6 +291,24 @@ function ProfileHeroLayoutBody({
   switch (pageStyle.hero) {
     case "neonSign":
       return <NeonHero name={name} kicker={kicker} accent={accent} heroColour={heroColour} pickedNameStyle={pickedName(62)} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
+    case "tallCapsule":
+      return (
+        <CapsuleHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
+          heroText={heroText}
+          heroSub={heroSub}
+          photo={photoUris?.[0]}
+          renderLogo={renderLogo}
+          tick={tick}
+          details={details}
+          onBookNow={onBookNow}
+          onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
+        />
+      );
     case "orbitMark":
       return (
         <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>

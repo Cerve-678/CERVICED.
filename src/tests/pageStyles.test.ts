@@ -25,7 +25,9 @@ import {
   sheetInk,
   showsDividerAbove,
   STRIPE_TINT,
+  capsuleServiceSurface,
 } from '../features/providers/ProfilePageStyle';
+import { CAPSULE_OAT, capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { heroIsDarkForStyle, heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
@@ -68,7 +70,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'capsule',
     ]);
   });
 
@@ -337,7 +339,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -677,5 +679,50 @@ describe('Neon', () => {
     expect(dark?.shadowOpacity).toBeGreaterThan(0);
     expect(light?.shadowOpacity).toBe(0);
     expect(light?.borderColor).toBe('#FF4F9A');
+  });
+});
+
+describe('Capsule', () => {
+  const capsule = getPageStyle('capsule');
+
+  it('draws the page in pills, with its own top, headings, cards, photos and Book shape', () => {
+    expect(capsule.hero).toBe('tallCapsule');
+    expect(capsule.heading).toBe('pillMark');
+    expect(capsule.cards).toBe('capsule');
+    expect(capsule.photoLayout).toBe('capsules');
+    expect(capsule.buttonShape).toBe('darkPill');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'capsule')) {
+      expect(other.hero).not.toBe('tallCapsule');
+      expect(other.heading).not.toBe('pillMark');
+      expect(other.cards).not.toBe('capsule');
+      expect(other.photoLayout).not.toBe('capsules');
+      expect(other.buttonShape).not.toBe('darkPill');
+    }
+  });
+
+  it('lets the provider pick the one photo for its tall capsule', () => {
+    expect(heroPhotoPickLimit(capsule)).toBe(1);
+  });
+
+  it('keeps both tones as light as a pale page and as dark as a dark one, so the ink reads', () => {
+    for (const accent of ['#A9B49B', '#4A2C1E', '#E9799F']) {
+      for (const tone of capsuleTones(accent, '#FAF8F3')) expect(isDarkColor(tone)).toBe(false);
+      for (const tone of capsuleTones(accent, '#141512')) expect(isDarkColor(tone)).toBe(true);
+    }
+  });
+
+  it('pairs a tint of the accent with oat', () => {
+    const [tint, oat] = capsuleTones('#A9B49B', '#FFFFFF');
+    expect(tint).not.toBe(oat);
+    expect(capsuleTones('#E9799F', '#FFFFFF')[1]).toBe(oat);
+    expect(CAPSULE_OAT).toMatch(/^#[0-9A-F]{6}$/);
+  });
+
+  it('gives the services turns in the two tones, each a full pill', () => {
+    const [tint, oat] = capsuleTones('#A9B49B', '#FAF8F3');
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 0).backgroundColor).toBe(tint);
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 1).backgroundColor).toBe(oat);
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 2).backgroundColor).toBe(tint);
+    expect(serviceCardSurface(capsule, { card: '#FFFFFF', accent: '#A9B49B', sheet: '#FAF8F3' })?.borderRadius).toBe(45);
   });
 });
