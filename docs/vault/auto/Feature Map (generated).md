@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **241 files**
 - … +211 more
 
 ## Payments
-Curated: [[Payments]] · **203 files**
+Curated: [[Payments]] · **205 files**
 - `src/screens/client/CartScreen.tsx` _(547)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
@@ -105,10 +105,10 @@ Curated: [[Payments]] · **203 files**
 - `src/types/booking.ts` _(33)_
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `src/services/database/adminMoney.ts` _(28)_
-- … +173 more
+- … +175 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **418 files**
+Curated: [[Booking Flow]] · **420 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/screens/client/CartScreen.tsx` _(732)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **418 files**
 - `src/types/booking.ts` _(109)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/database.ts` _(104)_
-- … +388 more
+- … +390 more
 
 ## Notifications
 Curated: [[Notifications]] · **215 files**
@@ -346,14 +346,14 @@ Curated: [[Services]] · **67 files**
 - … +37 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **106 files**
+Curated: [[Payments]] · **109 files**
 - `src/screens/client/CartScreen.tsx` _(493)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/services/database/services.ts` _(50)_
 - `src/services/database/edgeFunctions.ts` _(43)_
 - `src/contexts/CartContext.tsx` _(41)_
-- `src/components/BookingSheet.tsx` _(35)_
+- `src/components/BookingSheet.tsx` _(37)_
 - `src/services/AvailabilityService.ts` _(33)_
 - `src/services/becca/capabilities/client.ts` _(26)_
 - `src/services/database/checkout.ts` _(23)_
@@ -375,6 +375,6 @@ Curated: [[Payments]] · **106 files**
 - `src/types/booking.ts` _(7)_
 - `src/features/bookings/rebook.ts` _(6)_
 - `src/features/bookings/waitlist.ts` _(6)_
+- `src/web/WebCheckoutSheet.tsx` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
-- `src/constants/feeTerms.ts` _(5)_
-- … +76 more
+- … +79 more

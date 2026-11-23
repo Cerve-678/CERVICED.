@@ -1,10 +1,11 @@
 /**
- * A public, read-only provider page for links and QR codes at /@handle.
+ * A public provider page for links and QR codes at /@handle.
  *
  * It loads through the same hook as the app's profile (useProviderProfileData)
  * and draws the same hero, sheet and price list, so what a visitor sees here
- * is what a client sees in the app. Booking stays in the app: the Book
- * buttons are left off and "Open in app" sits in the top bar.
+ * is what a client sees in the app. Book opens the app's own BookingSheet and
+ * then the web's review (webBooking.ts); until payment is built that only
+ * shows in local development, and "Open in app" sits in the top bar.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -13,6 +14,8 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { BookingSheet } from '../components/BookingSheet';
+import type { BookingSheetProps, BookingSheetResult } from '../components/BookingSheet';
 import { FullImageViewer } from '../components/FullImageViewer';
 import { LogoZoomViewer } from '../components/LogoZoomViewer';
 import ProfileHeroBackdrop from '../components/ProfileHeroBackdrop';
@@ -29,7 +32,7 @@ import { ProviderPageSheet } from '../features/providers/page/ProviderPageSheet'
 import { useProviderPagePalette } from '../features/providers/page/providerPagePalette';
 import { PolicyStoryViewer, usePolicyEdgeColours } from '../features/providers/PolicyPages';
 import { policyImageEdges, policyImageUrls } from '../features/providers/policyImages';
-import type { ProviderProfileData } from '../features/providers/profileTypes';
+import type { ProviderProfileData, ProviderProfileService } from '../features/providers/profileTypes';
 import { ProviderContactSheet } from '../features/providers/ProviderContactSheet';
 import { providerContactOptions } from '../features/providers/contactOptions';
 import type { ProviderContactOption } from '../features/providers/contactOptions';
@@ -41,6 +44,9 @@ import type { PublicProviderAddress } from '../services/databaseService';
 import { logger } from '../utils/logger';
 import { mapsUrlFor } from '../utils/mapsLink';
 import { SiteMessagePage } from './SiteMessagePage';
+import { WEB_BOOKING_ENABLED, sheetInitialFrom } from './webBooking';
+import type { WebBookingChoice } from './webBooking';
+import { WebCheckoutSheet } from './WebCheckoutSheet';
 
 const PAGE_WIDTH = 480;
 const TOP_BAR_HEIGHT = 54;
@@ -217,6 +223,27 @@ function ProviderWebPageContent({
     }, 1500);
   }, []);
 
+  // ── Booking: the app's own sheet, then the web's checkout in place of the Cart ──
+  // A link-only provider takes bookings on their own site, as in the app.
+  const canBook = WEB_BOOKING_ENABLED && !isLinkOnly;
+  const [sheetService, setSheetService] = useState<ProviderProfileService | null>(null);
+  const [sheetInitial, setSheetInitial] = useState<BookingSheetProps['initial']>(undefined);
+  const [choice, setChoice] = useState<WebBookingChoice | null>(null);
+  const openBookingSheet = useCallback((service: ProviderProfileService) => {
+    setSheetInitial(undefined);
+    setSheetService(service);
+  }, []);
+  const submitBookingSheet = useCallback((result: BookingSheetResult) => {
+    if (sheetService) setChoice({ service: sheetService, result });
+    setSheetService(null);
+  }, [sheetService]);
+  const changeBooking = useCallback(() => {
+    if (!choice) return;
+    setSheetInitial(sheetInitialFrom(choice.result));
+    setSheetService(choice.service);
+    setChoice(null);
+  }, [choice]);
+
   const renderServices = () => (
     <ProviderPageServices
       provider={provider}
@@ -240,11 +267,11 @@ function ProviderWebPageContent({
         return next;
       })}
       onOpenImages={openImages}
-      canBook={false}
+      canBook={canBook}
       takingBookings={data.takingBookings}
       serviceFullyBooked={{}}
       serviceNearTermAvailability={{}}
-      onBook={noop}
+      onBook={openBookingSheet}
       selectMode={false}
       onToggleSelectMode={noop}
       selectedServiceIds={new Set()}
@@ -355,6 +382,35 @@ function ProviderWebPageContent({
         </View>
       </View>
 
+      {canBook ? (
+        <>
+          <BookingSheet
+            isVisible={sheetService !== null}
+            onClose={() => setSheetService(null)}
+            mode="add"
+            service={sheetService}
+            initial={sheetInitial}
+            onSubmit={submitBookingSheet}
+            adaptiveAccentColor={adaptiveAccentColor}
+            backgroundColor={OP.card}
+            providerIdentifier={providerDbId}
+            providerDisplayName={provider.displayName || provider.providerName}
+            providerKey={provider.providerName}
+            providerServiceCategory={provider.providerService}
+            bookingPolicies={provider.bookingPolicies ?? null}
+            showPolicyPagesCard={pageStyle.key !== 'classic'}
+            submitLabel="Continue"
+          />
+          <WebCheckoutSheet
+            choice={choice}
+            providerName={provider.displayName || provider.providerName}
+            accentColor={adaptiveAccentColor}
+            backgroundColor={OP.card}
+            onChange={changeBooking}
+            onClose={() => setChoice(null)}
+          />
+        </>
+      ) : null}
       <FullImageViewer uris={policyPages} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />
       <PolicyStoryViewer
         urls={policyPages}
