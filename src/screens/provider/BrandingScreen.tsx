@@ -177,6 +177,7 @@ export default function BrandingScreen({ navigation }: any) {
   // Branding → Your Photos (Hush): their work photos and the ones picked for
   // its hero, saved with everything else.
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
+  const [portfolioLoadState, setPortfolioLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   // Their About and categories, so Preview reads like their page (services stay outlines).
   const [previewContent, setPreviewContent]   = useState<PreviewContent | undefined>(undefined);
   const [previewPolicyPages, setPreviewPolicyPages] = useState<string[]>([]);
@@ -374,14 +375,18 @@ export default function BrandingScreen({ navigation }: any) {
         if (!active) return;
         const picks = work.filter(item => item.is_featured).map(item => item.id).slice(0, HERO_PHOTO_LIMIT);
         setPortfolioItems(work);
+        setPortfolioLoadState('ready');
         setHeroPicked(picks);
         savedHeroPicked.current = picks;
         const frames = Object.fromEntries(work.filter(item => item.hero_frame).map(item => [item.id, item.hero_frame]));
         setHeroFrames(frames);
         savedHeroFrames.current = frames;
       })
-      // The photo picker and the preview's photos just stay empty; the rest of Branding works.
-      .catch(e => logger.warn('[Branding] could not load the portfolio for Your Photos:', e));
+      .catch(e => {
+        if (!active) return;
+        setPortfolioLoadState('error');
+        logger.warn('[Branding] could not load the portfolio for Your Photos:', e);
+      });
     return () => { active = false; };
   }, [providerId]);
 
@@ -682,6 +687,15 @@ export default function BrandingScreen({ navigation }: any) {
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
                   The layout of your whole profile. Your colours and font stay as you set them.
                 </Text>
+                {portfolioLoadState === 'ready' && portfolioItems.length === 0 ? (
+                  <Text style={[styles.sectionSub, { color: P.sub }]}>
+                    Add work photos in My Services → Portfolio to show the portfolio on your profile.
+                  </Text>
+                ) : portfolioLoadState === 'error' ? (
+                  <Text style={[styles.sectionSub, { color: P.sub }]}>
+                    Your work photos could not be loaded. Reopen Branding to try again.
+                  </Text>
+                ) : null}
                 <PageStylePicker
                   value={pageStyle}
                   onChange={setPageStyle}

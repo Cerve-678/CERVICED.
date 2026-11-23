@@ -77,6 +77,8 @@ export interface ProviderPageSheetProps {
   workPortfolio: Props<typeof ProviderPortfolioSection>["items"];
   venuePortfolio: Props<typeof ProviderAdditionalInfoSection>["venueItems"];
   portfolioLoading: boolean;
+  portfolioError?: boolean;
+  onRetryPortfolio?: () => void;
   policyPages: string[];
   policyEdges: Props<typeof PolicyPagesShowcase>["edges"];
   /** Section shortcuts (Cover, Lounge) and where each one scrolls to. */
@@ -121,6 +123,8 @@ export function ProviderPageSheet({
   workPortfolio,
   venuePortfolio,
   portfolioLoading,
+  portfolioError = false,
+  onRetryPortfolio,
   policyPages,
   policyEdges,
   jumpTargets,
@@ -175,6 +179,8 @@ export function ProviderPageSheet({
     <ProviderPortfolioSection
       items={workPortfolio}
       loading={portfolioLoading}
+      loadError={portfolioError}
+      onRetry={onRetryPortfolio}
       palette={sectionPalette}
       onOpenImage={onOpenImage}
     />

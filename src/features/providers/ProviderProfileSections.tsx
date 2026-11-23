@@ -407,12 +407,16 @@ const PIN_MAX_HEIGHT = 170;
 export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSection({
   items,
   loading = false,
+  loadError = false,
+  onRetry,
   palette: rawPalette,
   onOpenImage,
   interactiveImages = true,
 }: {
   items: DbPortfolioItem[];
   loading?: boolean;
+  loadError?: boolean;
+  onRetry?: (() => void) | undefined;
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
   interactiveImages?: boolean;
@@ -444,7 +448,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
     return result;
   }, [items, inlineColumnWidth, pins, columnCount, columnGap]);
 
-  if (loading) {
+  if (loading && items.length === 0) {
     return (
       <View style={styles.portfolioSection}>
         <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
@@ -457,6 +461,19 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
     );
   }
 
+  if (items.length === 0 && loadError) {
+    return (
+      <View style={styles.portfolioSection}>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        <Text style={[styles.portfolioLoadError, { color: palette.sub }]}>Work photos could not be loaded.</Text>
+        {onRetry ? (
+          <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry loading portfolio">
+            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>Try again</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
   if (items.length === 0) return null;
 
   // Custom's Stamps: each photo a perforated postage stamp.
@@ -831,6 +848,7 @@ const styles = StyleSheet.create({
   portfolioHeading: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   portfolioStyledHeading: { flexShrink: 1, paddingTop: 16 },
   portfolioSeeAll: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12 },
+  portfolioLoadError: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, marginTop: 10, marginBottom: 8 },
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   // Posy: three arched photos to a row. A corner radius past half the side is
   // drawn at half, so 999 gives a full round top whatever the tile's width.

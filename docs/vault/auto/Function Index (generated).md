@@ -5,7 +5,7 @@
 
 #generated
 
-**4251 functions** across **623 files**.
+**4253 functions** across **623 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -327,7 +327,7 @@
 - `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
 - `useDescriptionTopics.ts` — **useDescriptionTopics**
 - `useProviderLogoFraming.ts` — flush · isFresh · **useProviderLogoFraming**
-- `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
+- `useProviderProfileData.ts` — loadAllReviews · loadPortfolio · reloadPortfolio · **useProviderProfileData**
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
