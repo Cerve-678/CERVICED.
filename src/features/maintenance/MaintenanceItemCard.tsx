@@ -1,9 +1,10 @@
 // src/features/maintenance/MaintenanceItemCard.tsx
 //
-// One maintenance item. A solid icon circle + "FROM BOOKING" marks an item a
-// completed booking made; a dashed outline circle + "MINE" marks one the client
-// added — the words repeat the icon so the difference never relies on shape
-// alone.
+// One maintenance item in the list under the sentence: icon, title, one line,
+// a time pill. Tapping it brings the item up into the sentence, where its
+// actions live. A solid icon circle marks an item a completed booking made; a
+// dashed outline circle plus "Added by you" marks one the client added — the
+// words repeat the icon so the difference never relies on shape alone.
 
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -14,10 +15,7 @@ import type { MaintenanceItem } from '../../types/maintenance';
 import type { TranslationKey, TranslationParams } from '../../i18n';
 import { formatShortDayDate } from '../../utils/dateUtils';
 import type { ItemPresentation } from './presentation';
-import {
-  FONT_BODY, FONT_DISPLAY, GhostButton, Pill, PrimaryButton, ProgressBar,
-  type PillTone, type SemanticColors, ui, hapticLight,
-} from './ui';
+import { FONT_BODY, FONT_DISPLAY, Pill, type PillTone, type SemanticColors, ui, hapticLight } from './ui';
 
 type T = (key: TranslationKey, params?: TranslationParams) => string;
 
@@ -86,94 +84,49 @@ interface Props {
   P: AppTheme;
   S: SemanticColors;
   t: T;
-  highlighted?: boolean;
-  busy?: boolean;
-  onAction: (item: MaintenanceItem, action: ItemAction) => void;
-  onMenu: (item: MaintenanceItem) => void;
+  /** Brings this item up into the sentence at the top of the screen. */
+  onPress: (item: MaintenanceItem) => void;
 }
 
-function MaintenanceItemCardImpl({ item, view, P, S, t, highlighted, busy, onAction, onMenu }: Props) {
+function MaintenanceItemCardImpl({ item, view, P, S, t, onPress }: Props) {
   const pill = itemPill(item, view, t);
-  const action = primaryActionFor(item, view);
   const fromBooking = item.origin === 'booking';
-  const overdue = view.state === 'overdue' && item.kind !== 'event';
+  const sub = fromBooking ? subline(item, t) : `${subline(item, t)} · ${t('maintenance.legend.mine')}`;
 
   return (
-    <View
-      style={[
-        ui.card, styles.card,
-        { backgroundColor: P.card, borderColor: highlighted ? P.accent : P.border, opacity: view.state === 'paused' ? 0.62 : 1 },
-      ]}
+    <TouchableOpacity
+      style={[ui.card, styles.card, { backgroundColor: P.card, borderColor: P.border, opacity: view.state === 'paused' ? 0.62 : 1 }]}
+      onPress={() => { hapticLight(); onPress(item); }}
+      activeOpacity={0.6}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.title}, ${sub}, ${pill.text}`}
+      accessibilityHint={t('maintenance.card.a11yHint')}
     >
-      <View style={styles.top}>
-        <View
-          style={[
-            styles.ico,
-            fromBooking
-              ? { backgroundColor: P.accentDim }
-              : { borderWidth: 1.5, borderStyle: 'dashed', borderColor: P.accentText },
-          ]}
-        >
-          <Ionicons name={iconFor(item)} size={18} color={P.accentText} />
-        </View>
-        <View style={styles.main}>
-          <Text style={[styles.title, { color: P.text }]} numberOfLines={2}>{item.title}</Text>
-          <Text style={[styles.sub, { color: P.sub }]} numberOfLines={2}>{subline(item, t)}</Text>
-          {item.note && (
-            <Text style={[styles.note, { color: P.text }]} numberOfLines={2}>{t('maintenance.item.note', { note: item.note })}</Text>
-          )}
-        </View>
-        <TouchableOpacity
-          onPress={() => { hapticLight(); onMenu(item); }}
-          style={styles.more}
-          activeOpacity={0.5}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('maintenance.item.menuA11y', { title: item.title })}
-        >
-          <Ionicons name="ellipsis-horizontal" size={20} color={P.sub} />
-        </TouchableOpacity>
+      <View
+        style={[
+          styles.ico,
+          fromBooking
+            ? { backgroundColor: P.accentDim }
+            : { borderWidth: 1.5, borderStyle: 'dashed', borderColor: P.accentText },
+        ]}
+      >
+        <Ionicons name={iconFor(item)} size={18} color={P.accentText} />
       </View>
-
-      {view.progressPercent !== null && item.kind !== 'event' && (
-        <ProgressBar percent={view.progressPercent} colour={overdue ? S.bad : P.accentText} track={P.sep} />
-      )}
-
-      <View style={styles.foot}>
-        <Pill text={pill.text} tone={pill.tone} P={P} S={S} />
-        <View style={styles.src}>
-          <Ionicons name={fromBooking ? 'calendar-outline' : 'person-outline'} size={11} color={P.sub} />
-          <Text style={[styles.srcText, { color: P.sub }]}>
-            {(fromBooking ? t('maintenance.origin.booking') : t('maintenance.origin.mine')).toUpperCase()}
-          </Text>
-        </View>
-        <View style={{ flex: 1 }} />
-        {action === 'rebook' && (
-          <PrimaryButton small P={P} label={t('maintenance.action.rebook')} disabled={busy} onPress={() => onAction(item, 'rebook')} />
-        )}
-        {action === 'find' && (
-          <GhostButton small P={P} label={t('maintenance.action.find')} disabled={busy} onPress={() => onAction(item, 'find')} />
-        )}
-        {action === 'resume' && (
-          <GhostButton small P={P} label={t('maintenance.action.resume')} disabled={busy} onPress={() => onAction(item, 'resume')} />
-        )}
+      <View style={styles.main}>
+        <Text style={[styles.title, { color: P.text }]} numberOfLines={2}>{item.title}</Text>
+        <Text style={[styles.sub, { color: P.sub }]} numberOfLines={2}>{sub}</Text>
       </View>
-    </View>
+      <Pill text={pill.text} tone={pill.tone} P={P} S={S} />
+    </TouchableOpacity>
   );
 }
 
 export const MaintenanceItemCard = React.memo(MaintenanceItemCardImpl);
 
 const styles = StyleSheet.create({
-  card: { padding: 14, gap: 10 },
-  top: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  ico: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  card: { padding: 14, flexDirection: 'row', gap: 12, alignItems: 'center', borderRadius: 20 },
+  ico: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   main: { flex: 1, minWidth: 0 },
-  title: { fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: 0.8, lineHeight: 19 },
-  sub: { fontFamily: FONT_BODY, fontSize: 12.5, marginTop: 2, lineHeight: 17 },
-  note: { fontFamily: FONT_BODY, fontSize: 12.5, marginTop: 4, lineHeight: 17, fontStyle: 'italic' },
-  more: { padding: 2 },
-  foot: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  src: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  srcText: { fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: 1.2 },
+  title: { fontFamily: FONT_DISPLAY, fontSize: 16, letterSpacing: 0.6, lineHeight: 20 },
+  sub: { fontFamily: FONT_BODY, fontSize: 13, marginTop: 2, lineHeight: 17, fontWeight: '600' },
 });
