@@ -14,8 +14,6 @@ export interface TimelineStep {
   state: TimelineStepState;
   amountPence?: number;
   note?: string | undefined;
-  /** Shows the "i" that explains what Processing means. */
-  explainsProcessing?: boolean;
 }
 
 /** What "Processing" means, shown behind every "i" beside the word. */
@@ -116,7 +114,7 @@ export function bookingPaymentTimeline(
 
   const processingDone = released || (stopped && releaseAt.getTime() <= now);
   steps.push({
-    key: 'processing', title: 'Processing', explainsProcessing: true,
+    key: 'processing', title: 'Processing',
     when: processingDone ? `Finished ${dayAndTime(releaseAt)}` : `Until ${dayAndTime(releaseAt)}`,
     state: processingDone ? 'done' : appointmentOver && !stopped ? 'now' : 'next',
   });

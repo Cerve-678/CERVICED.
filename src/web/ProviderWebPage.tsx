@@ -33,6 +33,9 @@ import { useProviderPagePalette } from '../features/providers/page/providerPageP
 import { PolicyStoryViewer, usePolicyEdgeColours } from '../features/providers/PolicyPages';
 import { policyImageEdges, policyImageUrls } from '../features/providers/policyImages';
 import type { ProviderProfileData, ProviderProfileService } from '../features/providers/profileTypes';
+import { ProviderContactSheet } from '../features/providers/ProviderContactSheet';
+import { providerContactOptions } from '../features/providers/contactOptions';
+import type { ProviderContactOption } from '../features/providers/contactOptions';
 import { ProviderReviewsModal } from '../features/providers/ProviderReviewsModal';
 import { useProviderProfileData } from '../features/providers/useProviderProfileData';
 import type { ProviderProfileDataState } from '../features/providers/useProviderProfileData';
@@ -184,12 +187,41 @@ function ProviderWebPageContent({
     void loadAllReviews();
   }, [loadAllReviews]);
 
+  // Get In Touch: the ways they publish, then their page in the app, where
+  // Get In Touch opens the chat (a visitor here isn't signed in, so there's
+  // no chat on the website).
+  const [contactSheetVisible, setContactSheetVisible] = useState(false);
+  const [contactNote, setContactNote] = useState<string | null>(null);
+  const contactOptions = useMemo<ProviderContactOption[]>(() => [
+    ...providerContactOptions(provider),
+    {
+      key: 'app',
+      icon: 'chatbubbles-outline',
+      label: 'Message in the CERVICED app',
+      detail: 'Opens their page in the app',
+      url: `cerviced://provider/${provider.id}`,
+    },
+  ], [provider]);
   const openContact = useCallback(() => {
-    if (provider.email) openUrl(`mailto:${provider.email}`);
-    else if (provider.phone) openUrl(`tel:${provider.phone.replace(/\s/g, '')}`);
-    else if (provider.website) openUrl(provider.website);
-    else if (provider.instagram) openUrl(`https://instagram.com/${provider.instagram}`);
-  }, [provider]);
+    setContactNote(null);
+    setContactSheetVisible(true);
+  }, []);
+  const pickContact = useCallback((option: ProviderContactOption) => {
+    openUrl(option.url);
+    if (option.key !== 'app') {
+      setContactSheetVisible(false);
+      return;
+    }
+    // A browser gives no answer when the app isn't installed. If the page is
+    // still showing a moment later, nothing opened: say so and keep the other
+    // ways in view.
+    setContactNote(null);
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        setContactNote('Nothing opened? The CERVICED app isn’t on this device. You can still reach them another way above.');
+      }
+    }, 1500);
+  }, []);
 
   // ── Booking: the app's own sheet, then the web's checkout in place of the Cart ──
   // A link-only provider takes bookings on their own site, as in the app.
@@ -398,6 +430,18 @@ function ProviderWebPageContent({
         visible={showLogo}
         onClose={() => setShowLogo(false)}
         accessibilityName={provider.displayName}
+      />
+      <ProviderContactSheet
+        visible={contactSheetVisible}
+        onClose={() => setContactSheetVisible(false)}
+        title="Get in touch"
+        subtitle={`Choose how you’d like to reach ${provider.displayName}.`}
+        emptyText=""
+        options={contactOptions}
+        onPick={pickContact}
+        note={contactNote}
+        maxWidth={PAGE_WIDTH}
+        colors={{ surface: OP.surface, card: OP.card, border: OP.border, text: OP.text, sub: OP.sub }}
       />
       <ProviderReviewsModal
         isVisible={showReviews}

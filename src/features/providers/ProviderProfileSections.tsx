@@ -32,6 +32,7 @@ import {
 } from "./ProfilePageStyle";
 import { plateMarkEdges } from "./heroes/EmbossedHero";
 import { SectionDivider } from "./pageParts";
+import { normalizeExternalBookingUrl } from "./externalBookingLink";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
@@ -204,6 +205,8 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   const palette = usePourPalette(rawPalette, "contact");
   const ink = sectionInk(palette);
   type ContactRow = { label: string; value: string; url: string | null; publicLink: boolean };
+  // Providers type their website themselves, often without https://.
+  const websiteUrl = normalizeExternalBookingUrl(contact.website);
   const rows = ([
     contact.location
       ? { label: "Location", value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
@@ -212,7 +215,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
     contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
     contact.email ? { label: "Email", value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
     contact.instagram ? { label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
-    contact.website ? { label: "Website", value: "Visit ›", url: contact.website, publicLink: true } : null,
+    websiteUrl ? { label: "Website", value: "Visit ›", url: websiteUrl, publicLink: true } : null,
   ] as (ContactRow | null)[]).filter((row): row is ContactRow => row != null);
 
   return (
