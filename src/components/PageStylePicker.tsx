@@ -145,6 +145,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   neon: { text: 'services' },
   receipt: { text: 'SERVICES' },
   index: { text: 'SERVICES' },
+  moodboard: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -318,6 +319,15 @@ function MiniProfile({
             <View style={[mini.bar, { backgroundColor: line }]} />
           </>
         );
+      case 'taggedRows':
+        // Moodboard: a tag, the name, the price.
+        return (
+          <View style={mini.menuLine}>
+            <View style={[mini.taggedTag, { borderColor: withAlpha(ink, 0.35) }]} />
+            <View style={[mini.bar, { flex: 1, backgroundColor: line }]} />
+            <View style={[mini.bar, mini.menuPrice, { backgroundColor: line }]} />
+          </View>
+        );
       case 'menu':
         return (
           <View style={mini.menuLine}>
@@ -468,6 +478,13 @@ function MiniProfile({
         );
       case 'tabCaps':
         return <Text style={[mini.tabCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'captionCaps':
+        return (
+          <View style={mini.captionRow}>
+            <Text style={[mini.captionCaps, { color: withAlpha(ink, 0.6) }]}>{heading.text}</Text>
+            <View style={[mini.captionRule, { backgroundColor: line }]} />
+          </View>
+        );
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -643,6 +660,9 @@ function MiniProfile({
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 7, borderWidth: 1, borderColor: accent }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'receipt':
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'print':
+        // Moodboard: the services are hairline rows on the page.
+        return <View key={key} style={[mini.card, mini.cardNone, { borderBottomColor: line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'indexTab':
         return (
           <View key={key}>
@@ -755,6 +775,20 @@ function MiniProfile({
               <Text style={[mini.receiptName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>NAME</Text>
               <View style={[mini.receiptBars, { borderColor: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} />
             </View>
+          </View>
+        ) : style.hero === 'collage' ? (
+          // Moodboard: tilted white prints, one round, the name thin and huge across their foot.
+          <View style={mini.collageHero}>
+            <View style={[mini.collagePrint, { left: 6, top: 6, width: 38, height: 46, transform: [{ rotate: '-4deg' }] }]}>
+              <View style={[mini.collagePhoto, { backgroundColor: photoFill }]} />
+            </View>
+            <View style={[mini.collagePrint, { right: 8, top: 4, width: 34, height: 36, transform: [{ rotate: '3deg' }] }]}>
+              <View style={[mini.collagePhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.7) }]} />
+            </View>
+            <View style={[mini.collageRound, { right: 12, top: 40 }]}>
+              <View style={[mini.collageRoundPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
+            </View>
+            <Text style={[mini.collageName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
           </View>
         ) : style.hero === 'indexCard' ? (
           // Index: a ruled front card on a tinted card behind it.
@@ -1410,6 +1444,16 @@ const mini = StyleSheet.create({
   receiptName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 9, letterSpacing: 2 },
   receiptBars: { width: 36, height: 7, borderLeftWidth: 2, borderRightWidth: 3 },
   tabCaps: { fontFamily: 'Figtree-SemiBold', fontSize: 8, letterSpacing: 1 },
+  captionRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  captionCaps: { fontFamily: 'Jost-Light', fontSize: 6, letterSpacing: 1.6 },
+  captionRule: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
+  taggedTag: { width: 12, height: 6, borderRadius: 999, borderWidth: 0.8 },
+  collageHero: { flex: 1, alignSelf: 'stretch' },
+  collagePrint: { position: 'absolute', backgroundColor: '#FFFFFF', padding: 2, paddingBottom: 6, shadowColor: '#3C2819', shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  collagePhoto: { flex: 1 },
+  collageRound: { position: 'absolute', width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFFFFF', padding: 2 },
+  collageRoundPhoto: { flex: 1, borderRadius: 11 },
+  collageName: { position: 'absolute', left: 6, right: 6, bottom: 2, fontFamily: 'Jost-Light', fontSize: 24, letterSpacing: -0.5 },
   indexTab: { width: 22, height: 5, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   indexHero: { flex: 1, padding: 10, justifyContent: 'center' },
   indexBehind: { position: 'absolute', left: 14, right: 10, top: 12, bottom: 10, borderRadius: 3, transform: [{ rotate: '3deg' }] },

@@ -20,6 +20,7 @@ import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
 import { GlossShine } from "../ProfilePageStyle";
+import { moodboardTag } from "../heroes/MoodboardHero";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 
@@ -303,7 +304,11 @@ export function ProviderPageServices({
   // Storefront: two across, each photo standing in a soft arched frame.
   const serviceArches = pageStyle.serviceLayout === "archTiles";
   const serviceTwoUp = serviceTiles || serviceArches;
-  const serviceNoPhoto = serviceMenu || servicePills;
+  // Moodboard: no photos; a small outlined tag of the service type (LASH,
+  // BROW), the name in a serif and the price in light type, a hairline under.
+  const serviceTagged = pageStyle.serviceLayout === "taggedRows";
+  const serviceTag = serviceTagged ? moodboardTag(selectedServiceType) : "";
+  const serviceNoPhoto = serviceMenu || servicePills || serviceTagged;
   const serviceStacked = serviceTwoUp || servicePhotoCards;
   // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
   const arrowPillButtons = pageStyle.buttonShape === "arrowPill";
@@ -314,6 +319,8 @@ export function ProviderPageServices({
   const glowLine = glowDark ? blend(adaptiveAccentColor, "#FFFFFF", 0.2) : adaptiveAccentColor;
   // Receipt: a rubber stamp, a tilted outline in the accent.
   const stampButtons = pageStyle.buttonShape === "stamp";
+  // Moodboard: a fine outline pill in the ink, thin spaced caps.
+  const captionPillButtons = pageStyle.buttonShape === "captionPill";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
   // The width the cards actually get: inside the list's side padding.
   const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
@@ -564,6 +571,16 @@ export function ProviderPageServices({
                     <View style={[styles.servicePill, { backgroundColor: adaptiveAccentColor }]}>
                       <Text style={[styles.servicePillText, { color: pillInk }]}>{service.name.toUpperCase()}</Text>
                     </View>
+                  ) : serviceTagged ? (
+                    <View style={styles.taggedRow}>
+                      {serviceTag ? (
+                        <View style={[styles.taggedTag, { borderColor: SV.border }]}>
+                          <Text style={[styles.taggedTagText, { color: SV.sub }]} numberOfLines={1}>{serviceTag}</Text>
+                        </View>
+                      ) : null}
+                      <Text style={[styles.taggedName, { color: SV.text }]}>{service.name}</Text>
+                      <Text style={[styles.taggedPrice, { color: SV.text }]}>£{service.price}</Text>
+                    </View>
                   ) : serviceMenu ? (
                     <View style={styles.menuNameRow}>
                       <Text style={[styles.serviceName, styles.menuName, { color: SV.text }, bodyFont]}>{service.name}</Text>
@@ -643,7 +660,7 @@ export function ProviderPageServices({
                     <Text style={[styles.serviceDuration, { color: SV.sub }, bodyFont]}>
                       {service.duration}
                     </Text>
-                    {serviceMenu ? null : (
+                    {serviceMenu || serviceTagged ? null : (
                     <Text style={[styles.servicePrice, { color: SV.text }, bodyFont]}>
                       £{service.price}
                     </Text>
@@ -736,6 +753,7 @@ export function ProviderPageServices({
                             { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 0.8 : 0 },
                           ],
                           stampButtons && [styles.stampButton, { borderColor: fullyBooked ? SV.border : adaptiveAccentColor }],
+                          captionPillButtons && [styles.captionPillButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -757,6 +775,7 @@ export function ProviderPageServices({
                             shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             stampButtons && [styles.stampButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
+                            captionPillButtons && [styles.captionPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                           ]}
                         >
                           {!takingBookings
@@ -1127,6 +1146,13 @@ const styles = StyleSheet.create({
   glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   stampButton: { backgroundColor: "transparent", borderWidth: 2, borderRadius: 4, shadowOpacity: 0, elevation: 0, transform: [{ rotate: "-4deg" }] },
+  captionPillButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 999, shadowOpacity: 0, elevation: 0 },
+  captionPillButtonText: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 3, textTransform: "uppercase" },
+  taggedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  taggedTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  taggedTagText: { fontFamily: "Jost-Light", fontSize: 9, letterSpacing: 2 },
+  taggedName: { flex: 1, fontFamily: "InstrumentSerif-Regular", fontSize: 19, lineHeight: 24 },
+  taggedPrice: { fontFamily: "Jost-Light", fontSize: 15 },
   stampButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between

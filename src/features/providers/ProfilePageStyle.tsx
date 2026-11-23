@@ -86,6 +86,13 @@ export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
     || (style?.cards === "stripes" && !!style.openStrips);
 }
 
+/** True when the style's services sit straight on the page, so the price
+ *  list takes the page's ink: every style whose sections do, and Moodboard,
+ *  whose sections are white prints but whose services are hairline rows. */
+export function servicesSitOnPage(style: PageStyle | undefined): boolean {
+  return sectionsSitOnPage(style) || style?.cards === "print";
+}
+
 /** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
 function sheerBox(sheet: string): { borderColor: string; backgroundColor: string } {
   const ink = sheetInk(sheet);
@@ -585,6 +592,19 @@ export function PageSectionHeading({
           {words.toUpperCase()}
         </Text>
       );
+    case "captionCaps": {
+      // Moodboard: tiny, very widely spaced caps in a quiet ink, like the
+      // captions on its prints, with a hairline running out after them.
+      const line = color ? withAlpha(color, 0.3) : sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <Text style={[headingStyles.captionCaps, { color: color ?? sheetInk(palette.background).sub }]} numberOfLines={1}>
+            {words.toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -873,6 +893,19 @@ function PageSectionSurface({
     );
   }
 
+  if (pageStyle.cards === "print") {
+    // Moodboard: the heading on the page, the section on a white print with
+    // square corners and a soft drop shadow, like the photos on its board.
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View style={[surfaceStyles.solid, surfaceStyles.print, { backgroundColor: palette.cardBackground }]}>
+          {children}
+        </View>
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "pages") {
     // Novel: a square card with two page edges peeking out below and to the
     // right of it, like the closed block of a book.
@@ -1087,6 +1120,17 @@ export function serviceCardSurface(
       return litSurface(colours.card, colours.accent, colours.sheet);
     case "receipt":
       return receiptSurface(colours.card);
+    case "print":
+      // Moodboard: each service a row on the page, a hairline under it.
+      return {
+        ...flat,
+        backgroundColor: "transparent",
+        borderRadius: 0,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: sheetInk(colours.sheet).border,
+        marginBottom: 0,
+        elevation: 0,
+      };
     case "indexTab":
       // Index: each service on its own small card from the file.
       return {
@@ -2061,6 +2105,7 @@ const headingStyles = StyleSheet.create({
   receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
   receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
   tabCaps: { fontFamily: "Figtree-SemiBold", fontSize: 12, letterSpacing: 1.5 },
+  captionCaps: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 4 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
@@ -2123,6 +2168,14 @@ const surfaceStyles = StyleSheet.create({
     overflow: "visible",
   },
   indexMargin: { position: "absolute", left: 20, top: 0, bottom: 0, width: 1.5 },
+  print: {
+    borderRadius: 2,
+    shadowColor: "#3C2819",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
   indexRight: { alignItems: "flex-end", marginBottom: 6 },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },

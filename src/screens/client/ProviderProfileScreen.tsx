@@ -1627,6 +1627,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     [heroPickLimit, workPortfolio],
   );
   const heroPhotoUris = useMemo(() => heroPhotoItems.map((item) => item.image_url), [heroPhotoItems]);
+  const heroPhotoCaptions = useMemo(() => heroPhotoItems.map((item) => item.caption ?? ""), [heroPhotoItems]);
   // How the provider framed each of them in Branding → Your Photos.
   const heroPhotoFrames = useMemo(() => heroPhotoFramesOf(heroPhotoItems), [heroPhotoItems]);
   // A salon/studio on "Always visible" shows its full address in Contact
@@ -4492,6 +4493,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               provider={provider}
               palette={palette}
               heroPhotoUris={heroPhotoUris}
+              heroPhotoCaptions={heroPhotoCaptions}
               heroPhotoFrames={heroPhotoFrames}
               isLinkOnly={isLinkOnly}
               recommendHeart={recommendHeart}

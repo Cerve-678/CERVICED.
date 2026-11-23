@@ -12,7 +12,7 @@ import { veilAccent, veilPageTheme } from "../heroes/SheerHero";
 import {
   customTextStyle,
   onAccentInk,
-  sectionsSitOnPage,
+  servicesSitOnPage,
   serviceCardSurface,
   sheetInk,
 } from "../ProfilePageStyle";
@@ -107,7 +107,7 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   // theme's own text colours follow the card's brightness. SV is what the
   // service list reads; every other style keeps OP.
   const pageInk = sheetInk(OP.bg);
-  const SV = sectionsSitOnPage(pageStyle)
+  const SV = servicesSitOnPage(pageStyle)
     ? { ...OP, text: pageInk.text, sub: pageInk.sub, border: pageInk.border, sep: pageInk.separator }
     : OP;
   const serviceSurfaceStyle = serviceCardSurface(pageStyle, {

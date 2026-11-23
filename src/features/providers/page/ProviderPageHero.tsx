@@ -52,6 +52,8 @@ export interface ProviderPageHeroProps {
   palette: ProviderPagePalette;
   /** The photos the hero shows (Editorial, Snapshot, Hush, Bow). */
   heroPhotoUris: string[];
+  /** Each of those photos' own caption ("" when it has none): Moodboard's prints. */
+  heroPhotoCaptions?: readonly string[];
   /** How the provider framed each of those photos, by URL. Memoized by the caller. */
   heroPhotoFrames: HeroPhotoFrames;
   isLinkOnly: boolean;
@@ -82,6 +84,7 @@ export function ProviderPageHero({
   provider,
   palette,
   heroPhotoUris,
+  heroPhotoCaptions,
   heroPhotoFrames,
   isLinkOnly,
   recommendHeart,
@@ -137,6 +140,7 @@ export function ProviderPageHero({
         heroColour={heroBgColor ?? OP.hero}
         cardColour={OP.card}
         photoUris={heroPhotoUris}
+        photoCaptions={heroPhotoCaptions}
         photoFrames={heroPhotoFrames}
         sheetColour={sheetColour}
         onOpenHeroPhoto={onOpenHeroPhoto}
