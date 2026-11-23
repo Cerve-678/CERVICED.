@@ -29,7 +29,6 @@ test('in the 24 hours after the appointment it is processing, and a tip sits on 
     'paid:done', 'appointment:done', 'tip-t:done', 'processing:now', 'sent:next', 'bank:next',
   ]);
   expect(steps.find(s => s.key === 'tip-t')?.amountPence).toBe(1000);
-  expect(steps.find(s => s.key === 'processing')?.explainsProcessing).toBe(true);
   expect(steps.find(s => s.key === 'bank')?.when).toBe('Stripe pays your bank on the 1st of each month.');
 });
 

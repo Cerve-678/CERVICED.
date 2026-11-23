@@ -35,18 +35,15 @@ export function PayCard({ title, sub, children }: {
 }
 
 /** A small round "i". Tapping it shows or hides `explanation` under `label`. */
-export function InfoLabel({ label, explanation, color, labelStyle, ringColor }: {
-  label: string; explanation: string; color: string; ringColor?: string | undefined;
-  labelStyle?: object | undefined;
-}) {
+export function InfoLabel({ label, explanation, color }: { label: string; explanation: string; color: string }) {
   const [open, setOpen] = useState(false);
   return <View>
     <View style={kit.infoRow}>
-      <Text style={[kit.infoLabel, { color }, labelStyle]}>{label}</Text>
+      <Text style={[kit.infoLabel, { color }]}>{label}</Text>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`What ${label.toLowerCase()} means`}
         accessibilityState={{ expanded: open }} hitSlop={12} activeOpacity={0.7}
         onPress={() => { void Haptics.selectionAsync().catch(() => {}); setOpen(o => !o); }}
-        style={[kit.infoDot, { borderColor: ringColor ?? color }]}>
+        style={[kit.infoDot, { borderColor: color }]}>
         <Text style={[kit.infoDotText, { color }]}>i</Text>
       </TouchableOpacity>
     </View>
@@ -55,8 +52,8 @@ export function InfoLabel({ label, explanation, color, labelStyle, ringColor }: 
 }
 
 /** "Processing" with its "i". */
-export function ProcessingLabel({ color, ringColor, labelStyle }: { color: string; ringColor?: string | undefined; labelStyle?: object | undefined }) {
-  return <InfoLabel label="Processing" explanation={PROCESSING_EXPLAINED} color={color} ringColor={ringColor} labelStyle={labelStyle} />;
+export function ProcessingLabel({ color }: { color: string }) {
+  return <InfoLabel label="Processing" explanation={PROCESSING_EXPLAINED} color={color} />;
 }
 
 /** A status pill. `attention` outlines it in the accent instead of filling it. */
