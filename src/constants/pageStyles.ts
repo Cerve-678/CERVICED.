@@ -60,6 +60,7 @@ export type PageStyleKey =
   | 'neon'
   | 'receipt'
   | 'index'
+  | 'capsule'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -100,6 +101,7 @@ export type PageHeading =
   | 'neonScript' // a lowercase handwritten word in the accent, glowing like a lit tube on a dark page (Neon)
   | 'receiptCaps' // spaced till-roll caps over a dashed rule, like a receipt's headings (Receipt)
   | 'tabCaps'  // small bold caps written on the section's file tab (Index)
+  | 'pillMark' // a small pill in a quiet tone, then a soft lowercase title (Capsule)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -131,7 +133,8 @@ export type PageCards =
   | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
   | 'lit'  // a rounded card outlined in the accent, glowing on a dark page (Neon)
   | 'receipt' // a square slip of paper, no shadow, a fine edge, like a till receipt (Receipt)
-  | 'indexTab'; // an index card with a margin line, a tinted file tab on its top edge naming the section, the tabs staggered down the page (Index)
+  | 'indexTab' // an index card with a margin line, a tinted file tab on its top edge naming the section, the tabs staggered down the page (Index)
+  | 'capsule'; // a soft card in the oat tone with big round corners, no shadow; services as full pills taking turns in a tint of the accent and oat (Capsule)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -219,6 +222,7 @@ export type PageHero =
   | 'neonSign' // a dark wall: the name as a glowing neon script sign, a lit tube under it, what they do in thin caps (Neon)
   | 'receiptHead' // a till receipt with torn edges: ringed logo, the name in spaced caps, area, stars, a barcode and a thank-you (Receipt)
   | 'indexCard' // a pile of index cards: the name on a ruled front card with a margin line, the logo stamped in its corner (Index)
+  | 'tallCapsule' // their chosen photo in a tall capsule; beside it the logo, the name in light lowercase, area and pill chips of what they do, then a full-width Book pill (Capsule)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -335,6 +339,7 @@ export type PhotoLayout =
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
   | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir, Hibiscus)
+  | 'capsules'  // four across as tall capsules at different heights, their feet level, like a skyline (Capsule)
   | 'taped';    // two across as white-bordered prints held on by a strip of tape, tilted by hand (Poster)
 
 export type SectionDivider =
@@ -351,7 +356,8 @@ export type ButtonShape =
   | 'arrowPill' // a filled pill, the word then a small arrow in a circle, like "Order now" (Hibiscus)
   | 'shopBox'   // a small square outline, the word in spaced capitals, like "Shop now" (Storefront)
   | 'glowPill'  // a round outline in the accent, the word in spaced capitals, glowing on a dark page (Neon)
-  | 'stamp';    // a rubber stamp: a tilted outline in the accent, the word in spaced capitals (Receipt)
+  | 'stamp'     // a rubber stamp: a tilted outline in the accent, the word in spaced capitals (Receipt)
+  | 'darkPill'; // a full pill in the page's ink (dark on a pale page, pale on a dark one), the word in lowercase (Capsule)
 
 export interface HeroNameFont {
   fontFamily: string;
@@ -765,6 +771,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'indexCard', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
+  // 2026-11-23: the clean-girl round of the same canvas (owner picked 14
+  // Capsule, 13 Moodboard and 11 Latte).
+  {
+    key: 'capsule', name: 'Capsule', description: 'Pilates-studio calm: your photo in a tall capsule, everything a soft pill in sage and oat',
+    heading: 'pillMark', cards: 'capsule', policies: 'softTiles', logo: 'circle',
+    hero: 'tallCapsule', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'capsules', buttonShape: 'darkPill',
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -788,6 +803,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'echoName': return 1;     // Hibiscus's photo in front of the echoed name
     case 'storefrontBanner': return 1; // Storefront's full-width photo
     case 'filmstripMark': return 2;
+    case 'tallCapsule': return 1;  // Capsule's tall capsule
     default: return 0;
   }
 }
@@ -809,6 +825,7 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'echoName': return 190 / 230;      // Hibiscus's photo
     case 'storefrontBanner': return 390 / 300; // Storefront's full-width photo
     case 'filmstripMark': return 158 / 190;
+    case 'tallCapsule': return 128 / 210;  // Capsule's tall capsule
     case 'pinboardHeader': {
       // Side by side at uneven heights (150, 124, 138); one photo is 156 across.
       if (count <= 1) return 358 / 156;

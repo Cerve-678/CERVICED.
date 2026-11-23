@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **123 files**
 - … +93 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **241 files**
+Curated: [[Availability & Slots]] · **242 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **241 files**
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- … +211 more
+- … +212 more
 
 ## Payments
 Curated: [[Payments]] · **202 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **242 files**
 - … +212 more
 
 ## Auth
-Curated: [[Contexts]] · **249 files**
+Curated: [[Contexts]] · **250 files**
 - `src/contexts/AuthContext.tsx` _(205)_
 - `src/services/database/account.ts` _(152)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **249 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
 - `src/screens/client/CartScreen.tsx` _(16)_
-- … +219 more
+- … +220 more
 
 ## Becca / AI
 Curated: [[Services]] · **66 files**

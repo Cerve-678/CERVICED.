@@ -16,6 +16,7 @@ import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pag
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
 import { NEON_WALL, neonColours } from '../features/providers/heroes/NeonHero';
+import { capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
 
@@ -145,6 +146,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   neon: { text: 'services' },
   receipt: { text: 'SERVICES' },
   index: { text: 'SERVICES' },
+  capsule: { text: 'services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -468,6 +470,13 @@ function MiniProfile({
         );
       case 'tabCaps':
         return <Text style={[mini.tabCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'pillMark':
+        return (
+          <View style={mini.pillMarkRow}>
+            <View style={[mini.pillMark, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+            <Text style={[mini.pillMarkTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -643,6 +652,9 @@ function MiniProfile({
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 7, borderWidth: 1, borderColor: accent }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'receipt':
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'capsule':
+        // Capsule: each service a full pill, taking turns in sage and oat.
+        return <View key={key} style={[mini.card, mini.capsuleCard, { backgroundColor: capsuleTones(accent, sheet)[key % 2] }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'indexTab':
         return (
           <View key={key}>
@@ -754,6 +766,19 @@ function MiniProfile({
               {logo}
               <Text style={[mini.receiptName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>NAME</Text>
               <View style={[mini.receiptBars, { borderColor: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} />
+            </View>
+          </View>
+        ) : style.hero === 'tallCapsule' ? (
+          // Capsule: their photo in a tall capsule, the name in light lowercase and two pill chips beside it.
+          <View style={mini.capsuleHero}>
+            <View style={[mini.capsulePhoto, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+            <View style={mini.capsuleSide}>
+              {logo}
+              <Text style={[mini.capsuleName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
+              <View style={mini.capsuleChips}>
+                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet)[1] }]} />
+              </View>
             </View>
           </View>
         ) : style.hero === 'indexCard' ? (
@@ -1410,6 +1435,16 @@ const mini = StyleSheet.create({
   receiptName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 9, letterSpacing: 2 },
   receiptBars: { width: 36, height: 7, borderLeftWidth: 2, borderRightWidth: 3 },
   tabCaps: { fontFamily: 'Figtree-SemiBold', fontSize: 8, letterSpacing: 1 },
+  pillMarkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  pillMark: { width: 9, height: 4, borderRadius: 999 },
+  pillMarkTitle: { fontFamily: 'Figtree-SemiBold', fontSize: 9 },
+  capsuleCard: { borderRadius: 999 },
+  capsuleHero: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 7, paddingHorizontal: 10, paddingBottom: 8 },
+  capsulePhoto: { width: 28, height: 50, borderRadius: 999 },
+  capsuleSide: { flex: 1, gap: 3, alignItems: 'flex-start' },
+  capsuleName: { fontFamily: 'LeagueSpartan-Light', fontSize: 13 },
+  capsuleChips: { flexDirection: 'row', gap: 3 },
+  capsuleChip: { width: 16, height: 6, borderRadius: 999 },
   indexTab: { width: 22, height: 5, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   indexHero: { flex: 1, padding: 10, justifyContent: 'center' },
   indexBehind: { position: 'absolute', left: 14, right: 10, top: 12, bottom: 10, borderRadius: 3, transform: [{ rotate: '3deg' }] },

@@ -19,7 +19,7 @@ import { menuNumber } from "../../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes";
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
-import { GlossShine } from "../ProfilePageStyle";
+import { capsuleServiceSurface, GlossShine } from "../ProfilePageStyle";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 
@@ -314,6 +314,11 @@ export function ProviderPageServices({
   const glowLine = glowDark ? blend(adaptiveAccentColor, "#FFFFFF", 0.2) : adaptiveAccentColor;
   // Receipt: a rubber stamp, a tilted outline in the accent.
   const stampButtons = pageStyle.buttonShape === "stamp";
+  // Capsule: a full pill in the page's ink, the word in lowercase; each
+  // service a capsule, taking turns in the accent's tint and oat.
+  const darkPillButtons = pageStyle.buttonShape === "darkPill";
+  const darkPillInk = isDarkColor(SV.text) ? "#FAF8F3" : "#26241F";
+  const capsuleServices = pageStyle.cards === "capsule";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
   // The width the cards actually get: inside the list's side padding.
   const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
@@ -465,6 +470,7 @@ export function ProviderPageServices({
               styles.serviceItemCard,
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
+              capsuleServices && capsuleServiceSurface(adaptiveAccentColor, OP.bg, serviceIndex),
               squareCards && styles.squareCard,
               serviceTwoUp && (serviceTileWidth > 0 ? { width: serviceTileWidth } : styles.serviceTile),
             ]}
@@ -736,6 +742,7 @@ export function ProviderPageServices({
                             { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 0.8 : 0 },
                           ],
                           stampButtons && [styles.stampButton, { borderColor: fullyBooked ? SV.border : adaptiveAccentColor }],
+                          darkPillButtons && [styles.darkPillButton, { backgroundColor: fullyBooked ? withAlpha(SV.sub, 0.18) : SV.text }],
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -757,6 +764,7 @@ export function ProviderPageServices({
                             shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             stampButtons && [styles.stampButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
+                            darkPillButtons && !fullyBooked && [styles.darkPillButtonText, { color: darkPillInk }],
                           ]}
                         >
                           {!takingBookings
@@ -766,6 +774,8 @@ export function ProviderPageServices({
                               // Boutique says "Add to basket"; it still opens the booking sheet.
                               : arrowPillButtons || shopBoxButtons
                               ? "Book now"
+                              : darkPillButtons
+                              ? "book"
                               : pageStyle.bookLabel ?? "Book"}
                         </Text>
                         {arrowPillButtons && takingBookings && !fullyBooked ? (
@@ -1127,6 +1137,8 @@ const styles = StyleSheet.create({
   glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   stampButton: { backgroundColor: "transparent", borderWidth: 2, borderRadius: 4, shadowOpacity: 0, elevation: 0, transform: [{ rotate: "-4deg" }] },
+  darkPillButton: { borderRadius: 999, paddingHorizontal: 20, shadowOpacity: 0, elevation: 0 },
+  darkPillButtonText: { fontFamily: "Figtree-SemiBold", fontSize: 13 },
   stampButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
