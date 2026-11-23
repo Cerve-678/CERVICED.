@@ -30,6 +30,7 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
+import { GlowText } from "./heroes/NeonHero";
 import { DashedRule } from "./heroes/ReceiptHero";
 import { indexMargin, indexTints } from "./heroes/IndexHero";
 
@@ -548,22 +549,21 @@ export function PageSectionHeading({
     }
     case "neonScript": {
       // Neon: the title as a lowercase script word in the accent. On a dark
-      // page it's lifted and glows like the sign at the top; on a pale page
-      // it's deepened so it still reads, with no glow.
+      // page it's lifted and glows like the sign at the top (stacked glow,
+      // owner 2026-11-23: "it isn't glowing that much"); on a pale page it's
+      // deepened so it still reads, with no glow.
       const dark = isDarkColor(palette.background);
-      const tube = dark ? blend(accent, "#FFFFFF", 0.35) : blend(accent, "#000000", 0.25);
+      if (dark && !color) {
+        return (
+          <View {...a11y} accessible style={headingStyles.neonWrap}>
+            <GlowText style={headingStyles.neonScript} tube={blend(accent, "#FFFFFF", 0.6)} glow={accent} strength={0.6} numberOfLines={1}>
+              {words.toLowerCase()}
+            </GlowText>
+          </View>
+        );
+      }
       return (
-        <Text
-          {...a11y}
-          style={[
-            headingStyles.neonScript,
-            { color: color ?? tube },
-            dark && { textShadowColor: accent, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
-          ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.6}
-        >
+        <Text {...a11y} style={[headingStyles.neonScript, { color: color ?? blend(accent, "#000000", 0.25) }]} numberOfLines={1}>
           {words.toLowerCase()}
         </Text>
       );
@@ -1050,8 +1050,8 @@ export function litSurface(card: string, accent: string, sheet: string): ViewSty
     borderRadius: 16,
     shadowColor: accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: dark ? 0.75 : 0,
-    shadowRadius: 10,
+    shadowOpacity: dark ? 0.95 : 0,
+    shadowRadius: 14,
     elevation: 0,
     overflow: "visible",
   };
@@ -2057,7 +2057,10 @@ const headingStyles = StyleSheet.create({
   engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
   // Ms Madi draws small for its size, and its loops need the tall line.
-  neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 58, marginBottom: 4 },
+  // Its loops reach outside the letters: a tall line and room either side so
+  // nothing is cut off (owner, 2026-11-23).
+  neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 68, paddingHorizontal: 8, marginBottom: 2, includeFontPadding: false },
+  neonWrap: { alignSelf: "flex-start", marginLeft: -8 },
   receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
   receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
   tabCaps: { fontFamily: "Figtree-SemiBold", fontSize: 12, letterSpacing: 1.5 },

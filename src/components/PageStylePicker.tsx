@@ -15,7 +15,7 @@ import Svg, { Path } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
-import { NEON_WALL, neonColours } from '../features/providers/heroes/NeonHero';
+import { neonColours, neonWallColour } from '../features/providers/heroes/NeonHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
 
@@ -743,7 +743,7 @@ function MiniProfile({
           </View>
         ) : style.hero === 'neonSign' ? (
           // Neon: the name lit up in script on a dark wall, a tube under it.
-          <View style={[mini.neonWall, { backgroundColor: NEON_WALL }]}>
+          <View style={[mini.neonWall, { backgroundColor: neonWallColour(heroColours[0] ?? '#1A1119') }]}>
             <Text style={[mini.neonName, { color: neonColours(accent).tube, textShadowColor: neonColours(accent).glow }]}>Name</Text>
             <View style={[mini.neonTube, { backgroundColor: neonColours(accent).tube }]} />
           </View>

@@ -2,31 +2,81 @@
 // templates" canvas): a dark wall with the name lit up as a neon script sign,
 // a glowing tube under it and what they do in thin spaced caps.
 //
-// The wall is the whole top of the page whatever their colours are, so it
-// reaches up behind the status bar and back button (the hero sits under the
-// profile's 100pt top padding), and heroIsDarkForStyle inks everything round
-// it white. Their colour is the glow.
+// The wall is the whole top of the page, so it reaches up behind the status
+// bar and back button (the hero sits under the profile's 100pt top padding),
+// and heroIsDarkForStyle inks everything round it white. Their accent is the
+// glow. The wall takes their Branding colour, always deepened to night, and
+// the name takes their Business Name Font when they've picked one (owner,
+// 2026-11-23: "allow for background colour change but still dark", "allow
+// for header font change").
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type TextStyle } from "react-native";
 
-import { blend } from "../../../constants/providerThemes";
+import { blend, isDarkColor } from "../../../constants/providerThemes";
 
-/** The wall behind the sign: a near-black plum, the same on every theme. */
-export const NEON_WALL = "#1A1119";
-const BRICK_LINE = "#241A24";
 /** How far the wall reaches up behind the profile's top padding. */
 const WALL_REACH = 140;
+
+/** The wall: their backdrop colour, deepened until it reads as night. */
+export function neonWallColour(heroColour: string): string {
+  return blend(heroColour, "#000000", isDarkColor(heroColour) ? 0.55 : 0.82);
+}
 
 /** The lit tube colour and the glow round it, from their accent. */
 export function neonColours(accent: string): { tube: string; glow: string } {
   return { tube: blend(accent, "#FFFFFF", 0.82), glow: blend(accent, "#FFFFFF", 0.2) };
 }
 
+/**
+ * Text that glows like a lit tube. iOS draws one blurred shadow per Text, too
+ * faint for a sign on its own (owner, 2026-11-23: "it isn't glowing that
+ * much"), so two copies in the glow colour with wide shadows sit behind the
+ * crisp one. Android draws the crisp copy and its own shadow.
+ */
+export function GlowText({
+  children,
+  style,
+  tube,
+  glow,
+  strength = 1,
+  numberOfLines,
+}: {
+  children: string;
+  style: StyleProp<TextStyle>;
+  tube: string;
+  glow: string;
+  /** Scales the halo: 1 for the sign, less for headings. */
+  strength?: number;
+  numberOfLines?: number;
+}) {
+  const layer = (radius: number) => (
+    <Text
+      style={[style, styles.glowLayer, { color: glow, textShadowColor: glow, textShadowRadius: radius * strength }]}
+      numberOfLines={numberOfLines}
+      accessible={false}
+      importantForAccessibility="no"
+    >
+      {children}
+    </Text>
+  );
+  return (
+    <View>
+      {layer(34)}
+      {layer(16)}
+      <Text style={[style, { color: tube, textShadowColor: glow, textShadowRadius: 7 * strength, textShadowOffset: { width: 0, height: 0 } }]} numberOfLines={numberOfLines}>
+        {children}
+      </Text>
+    </View>
+  );
+}
+
 export function NeonHero({
   name,
   kicker,
   accent,
+  heroColour,
+  pickedNameStyle,
   renderLogo,
   tick,
   meta,
@@ -35,29 +85,30 @@ export function NeonHero({
   name: string;
   kicker: string;
   accent: string;
+  /** Their Branding backdrop colour; the wall is it, deepened. */
+  heroColour: string;
+  /** Their Business Name Font at the sign's size, or null for the neon script. */
+  pickedNameStyle: TextStyle | null;
   renderLogo: (size: number) => React.ReactNode;
   tick: React.ReactNode;
   meta: React.ReactNode;
   details: React.ReactNode;
 }) {
   const { tube, glow } = neonColours(accent);
+  const wall = neonWallColour(heroColour);
+  const brick = blend(wall, "#FFFFFF", 0.06);
   return (
     <View style={styles.wrap}>
-      <View style={styles.wall} pointerEvents="none">
+      <View style={[styles.wall, { backgroundColor: wall }]} pointerEvents="none">
         {Array.from({ length: 24 }, (_, row) => (
-          <View key={row} style={styles.brick} />
+          <View key={row} style={[styles.brick, { borderBottomColor: brick }]} />
         ))}
       </View>
       {renderLogo(52)}
       <View accessible accessibilityRole="header" accessibilityLabel={name} style={styles.nameRow}>
-        <Text
-          style={[styles.name, { color: tube, textShadowColor: glow }]}
-          numberOfLines={2}
-          adjustsFontSizeToFit
-          minimumFontScale={0.55}
-        >
+        <GlowText style={[styles.name, pickedNameStyle, styles.nameRoom]} tube={tube} glow={glow} numberOfLines={2}>
           {name}
-        </Text>
+        </GlowText>
         {tick}
       </View>
       <View style={[styles.tube, { backgroundColor: tube, shadowColor: glow }]} />
@@ -68,34 +119,36 @@ export function NeonHero({
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", paddingHorizontal: 22, paddingTop: 14, paddingBottom: 30 },
+  wrap: { alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 30 },
   wall: {
     position: "absolute",
     top: -WALL_REACH,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: NEON_WALL,
     overflow: "hidden",
   },
-  brick: { height: 26, borderBottomWidth: 1, borderBottomColor: BRICK_LINE },
-  nameRow: { alignItems: "center", marginTop: 14, maxWidth: "100%" },
+  brick: { height: 26, borderBottomWidth: 1 },
+  nameRow: { alignItems: "center", marginTop: 10, maxWidth: "100%" },
+  // Ms Madi's loops and tails reach well outside its letters, so the line is
+  // tall and the text has room either side (owner, 2026-11-23: it was cut off).
   name: {
     fontFamily: "MsMadi-Regular",
-    fontSize: 68,
-    lineHeight: 86,
+    fontSize: 62,
+    lineHeight: 96,
     textAlign: "center",
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 16,
   },
+  nameRoom: { paddingHorizontal: 18, paddingVertical: 6, includeFontPadding: false },
+  glowLayer: { position: "absolute", left: 0, right: 0, top: 0, textShadowOffset: { width: 0, height: 0 } },
   tube: {
     width: 130,
-    height: 2,
-    borderRadius: 1,
+    height: 2.5,
+    borderRadius: 2,
     marginTop: 2,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
-    shadowRadius: 6,
+    shadowRadius: 9,
   },
   kicker: {
     color: "#FFFFFF",

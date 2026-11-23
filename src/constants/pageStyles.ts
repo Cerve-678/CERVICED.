@@ -750,7 +750,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'neonScript', cards: 'lit', policies: 'outlined', logo: 'circle',
     hero: 'neonSign', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    roundedPhotos: true, buttonShape: 'glowPill',
+    roundedPhotos: true, buttonShape: 'glowPill', nameFontPickable: true,
   },
   {
     key: 'receipt', name: 'Receipt', description: 'Your page printed as a till receipt: line-item services, a stamp to book and a barcode',
