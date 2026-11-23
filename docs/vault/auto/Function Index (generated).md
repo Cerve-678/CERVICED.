@@ -5,7 +5,7 @@
 
 #generated
 
-**4233 functions** across **621 files**.
+**4235 functions** across **622 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -346,7 +346,8 @@
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
 - `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**
 
-### `src/features/providers/page/` (4)
+### `src/features/providers/page/` (5)
+- `PinnedBarServices.tsx` — **pinnedBarServices** · **PinnedBarServiceText**
 - `ProviderPageHero.tsx` — **ProviderPageHero** · socialButton · StarIcon
 - `providerPagePalette.ts` — **buildProviderPagePalette** · **useProviderPagePalette**
 - `ProviderPageServices.tsx` — dotWindow · **ProviderPageServices** · ServiceDescription

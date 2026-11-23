@@ -334,13 +334,14 @@ describe('the portfolio and pinned bar, as on the profile', () => {
     expect(screen.queryAllByLabelText(/^Portfolio photo/)).toHaveLength(0);
   });
 
-  it('pins Riviera\'s Book bar with their cheapest service by name', () => {
+  it('pins Riviera\'s Book bar starting on their cheapest service, its price and length, without the business name', () => {
     renderPreview('riviera', 'default', {
       about: '',
       categories: ['Lashes'],
       services: [{ name: 'Full set', minutes: 120, price: 65 }, { name: 'Infill', minutes: 45, price: 40.5 }],
     });
-    expect(screen.getByText('Infill · £40.50')).toBeTruthy();
+    expect(screen.getByText('Infill')).toBeTruthy();
+    expect(screen.getByText(/^£40\.50 · /)).toBeTruthy();
     screen.unmount();
     renderPreview('pure');
     expect(screen.queryByText(/^From £/)).toBeNull();

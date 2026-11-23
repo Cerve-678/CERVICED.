@@ -31,6 +31,7 @@ import { formatDurationMinutes } from "../../utils/dateUtils";
 import { formatAddOnExtraTime } from "../bookings/addOnTime";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { PagePattern, SectionDivider } from "./pageParts";
+import { PinnedBarServiceText, pinnedBarServices, type PinnedBarLine } from "./page/PinnedBarServices";
 import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle, heroNameFontStyle, pickedNameFont } from "./ProfileHero";
 import {
   GlossShine,
@@ -331,10 +332,11 @@ export function ProfileStylePreview({
     <ProviderPortfolioSection items={portfolioItems} palette={palette} onOpenImage={noop} interactiveImages={false} />
   );
   // Riviera's pinned Book bar: their cheapest service, as on the profile.
-  const pinnedService = (content?.services ?? []).reduce<PreviewService | null>(
-    (low, service) => (service.price > 0 && (low === null || service.price < low.price) ? service : low),
-    null,
-  );
+  const pinnedLines: PinnedBarLine[] = pinnedBarServices(content?.services ?? []).map((service, index) => ({
+    key: `${index}-${service.name}`,
+    name: service.name,
+    detail: service.minutes > 0 ? `${previewPrice(service.price)} · ${formatDurationMinutes(service.minutes)}` : previewPrice(service.price),
+  }));
   const squareButtons = pageStyle.buttonShape === "square";
 
   return (
@@ -692,11 +694,17 @@ export function ProfileStylePreview({
       {pageStyle.pinnedBookBar ? (
         <View pointerEvents="none" style={[styles.pinnedBar, squareButtons && styles.pinnedBarSquare, { bottom: pinnedBarBottom, backgroundColor: OP.card, borderColor: OP.border }]}>
           <View style={styles.pinnedText}>
-            <Text style={[styles.pinnedName, { color: OP.text }, bodyFont]} numberOfLines={1}>{name}</Text>
-            {pinnedService !== null ? (
-              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>{pinnedService.name} · {previewPrice(pinnedService.price)}</Text>
+            {pinnedLines.length > 0 ? (
+              <PinnedBarServiceText
+                lines={pinnedLines}
+                nameStyle={[styles.pinnedName, { color: OP.text }, bodyFont]}
+                detailStyle={[styles.pinnedPrice, { color: OP.sub }, bodyFont]}
+              />
             ) : (
-              <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
+              <>
+                <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.22) }]} />
+                <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
+              </>
             )}
           </View>
           <View style={[styles.pinnedButton, squareButtons && styles.bookSquare, { backgroundColor: accent }]}>
