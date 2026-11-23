@@ -185,7 +185,7 @@ export type PageHero =
   | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
   | 'labelCard'  // the logo, then the name on a double-ruled label like the page's cards (Apothecary)
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
-  | 'signed'     // a big ringed logo with the whole name signed across its foot
+  | 'signed'     // a ringed logo on the left, the name signed in pen beside it, then area and what they do
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
   | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
@@ -465,7 +465,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
-    key: 'signature', name: 'Signature', description: 'Your name signed in pen across a ringed logo, numbered sections',
+    key: 'signature', name: 'Signature', description: 'Your name signed in pen beside a ringed logo, numbered sections',
     heading: 'indexed', cards: 'topRule', policies: 'boxes', logo: 'accentRing',
     hero: 'signed', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
