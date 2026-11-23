@@ -312,8 +312,6 @@ export function ProviderPageServices({
   const glowPillButtons = pageStyle.buttonShape === "glowPill";
   const glowDark = isDarkColor(OP.bg);
   const glowLine = glowDark ? blend(adaptiveAccentColor, "#FFFFFF", 0.2) : adaptiveAccentColor;
-  // Receipt: a rubber stamp, a tilted outline in the accent.
-  const stampButtons = pageStyle.buttonShape === "stamp";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
   // The width the cards actually get: inside the list's side padding.
   const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
@@ -735,7 +733,6 @@ export function ProviderPageServices({
                             styles.glowPillButton,
                             { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 1 : 0 },
                           ],
-                          stampButtons && [styles.stampButton, { borderColor: fullyBooked ? SV.border : adaptiveAccentColor }],
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -756,7 +753,6 @@ export function ProviderPageServices({
                             arrowPillButtons && !fullyBooked && { color: pillInk },
                             shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
-                            stampButtons && [styles.stampButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
                           ]}
                         >
                           {!takingBookings
@@ -1126,8 +1122,6 @@ const styles = StyleSheet.create({
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 12, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
-  stampButton: { backgroundColor: "transparent", borderWidth: 2, borderRadius: 4, shadowOpacity: 0, elevation: 0, transform: [{ rotate: "-4deg" }] },
-  stampButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
   // the two, wider than the room left beside them, and wrap them one a row.
