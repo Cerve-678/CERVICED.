@@ -160,7 +160,7 @@ export interface BookingSheetResult {
   emergencyRequest?: EmergencyRequest;
 }
 
-interface BookingSheetProps {
+export interface BookingSheetProps {
   isVisible: boolean;
   onClose: () => void;
   mode: 'add' | 'edit';
@@ -210,6 +210,9 @@ interface BookingSheetProps {
    *  it, above the main service's, and both are scheduled together on
    *  submit. Caller adds both as separate cart items. */
   consultationRequired?: BookingSheetService | null;
+  /** The last step's button in mode="add". The app adds to its Cart; the
+   *  website has no cart and goes straight on to paying (src/web). */
+  submitLabel?: string;
   onSubmit: (result: BookingSheetResult) => void;
 }
 
@@ -228,6 +231,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   backgroundColor,
   initial,
   consultationRequired,
+  submitLabel,
   onSubmit,
 }) => {
   const insets = useSafeAreaInsets();
@@ -1300,7 +1304,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       ? stepBlocker
                       : step === 'confirm'
                       ? (mode === 'add'
-                          ? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart')
+                          ? (submitLabel ?? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart'))
                           : 'Save Changes')
                       : 'Continue'}
                   </Text>
@@ -1449,8 +1453,14 @@ const styles = StyleSheet.create({
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
+  // On a computer's browser (the website's /@handle page) the sheet is as wide
+  // as the page under it rather than the whole window. A phone is narrower
+  // than this, so the app is unchanged.
+  sheet: {
+    flex: 1, width: '100%', marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden',
+    ...(Platform.OS === 'web' ? { maxWidth: 480 } : {}),
+  },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',

@@ -5,7 +5,7 @@
 
 #generated
 
-**4277 functions** across **628 files**.
+**4285 functions** across **630 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -657,12 +657,14 @@
 - `validation.ts` — **getPasswordStrength**
 - `withTimeout.ts` — **withTimeout**
 
-### `src/web/` (6)
-- `ProviderWebPage.tsx` — additionalInfo · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openContact · openImages · openReviews · openUrl · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType
+### `src/web/` (8)
+- `ProviderWebPage.tsx` — additionalInfo · changeBooking · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openBookingSheet · openContact · openImages · openReviews · openUrl · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType · submitBookingSheet
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**
 - `WebBlurView.tsx` — **BlurView** · webBackdropFilter
+- `webBooking.ts` — **sheetInitialFrom** · **summarizeWebBooking**
+- `WebCheckoutSheet.tsx` — summary · tokens · **WebCheckoutSheet**
 - `webFonts.ts` — **declareAppFontsForBrowser** · **fontFaceCss** · fontUri
 
 ### `src/web/dev/` (2)
