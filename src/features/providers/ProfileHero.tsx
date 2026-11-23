@@ -350,7 +350,6 @@ function ProfileHeroLayoutBody({
     case "orbitMark":
       return (
         <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
-          <Text style={{ color: heroSub, fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 4, marginBottom: 20 }}>YOUR SPACE TO SHINE</Text>
           <View style={{ width: 236, height: 236, alignItems: "center", justifyContent: "center" }}>
             <View style={{ position: "absolute", width: 226, height: 226, borderRadius: 113, borderWidth: 1, borderColor: withAlpha(heroText, 0.32) }} />
             <View style={{ position: "absolute", width: 184, height: 184, borderRadius: 92, borderWidth: 1, borderColor: withAlpha(heroText, 0.55) }} />
