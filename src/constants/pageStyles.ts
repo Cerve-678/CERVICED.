@@ -57,6 +57,7 @@ export type PageStyleKey =
   | 'orbit'
   | 'typeblock'
   | 'filmstrip'
+  | 'index'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -94,6 +95,7 @@ export type PageHeading =
   | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
+  | 'tabCaps'  // small bold caps written on the section's file tab (Index)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -122,7 +124,8 @@ export type PageCards =
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
-  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
+  | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
+  | 'indexTab'; // an index card with a margin line, a tinted file tab on its top edge naming the section, the tabs staggered down the page (Index)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -207,6 +210,7 @@ export type PageHero =
   | 'orbitMark' // identity held inside offset orbital rings, with the name below
   | 'typeblockMark' // asymmetric typographic block with a vertical accent rail
   | 'filmstripMark' // two chosen images in a numbered film strip above the identity
+  | 'indexCard' // a pile of index cards: the name on a ruled front card with a margin line, the logo stamped in its corner (Index)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -730,6 +734,12 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     divider: 'line',
     custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
+  {
+    key: 'index', name: 'Index', description: 'A little card file: your name on a ruled index card, each section a divider with its own tab',
+    heading: 'tabCaps', cards: 'indexTab', policies: 'definition', logo: 'circle',
+    hero: 'indexCard', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
 

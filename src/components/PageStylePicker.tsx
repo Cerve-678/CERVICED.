@@ -141,6 +141,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   orbit: { text: 'S E R V I C E S' },
   typeblock: { text: 'SERVICES' },
   filmstrip: { lead: '03', text: 'SERVICES' },
+  index: { text: 'SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -453,6 +454,8 @@ function MiniProfile({
         );
       case 'engravedCaps':
         return <Text style={[mini.engravedCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'tabCaps':
+        return <Text style={[mini.tabCaps, { color: ink }]}>{heading.text}</Text>;
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -624,6 +627,13 @@ function MiniProfile({
       }
       case 'grouped':
         return <View key={key} style={[mini.card, mini.groupedCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'indexTab':
+        return (
+          <View key={key}>
+            <View style={[mini.indexTab, { alignSelf: (['flex-start', 'center', 'flex-end'] as const)[key % 3], backgroundColor: blend(accent, cardColour, 0.55) }]} />
+            <View style={[mini.card, { backgroundColor: cardColour, borderRadius: 4 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
+          </View>
+        );
       case 'gridBox':
         return <View key={key} style={[mini.card, mini.gridCard, { backgroundColor: cardColour, borderColor: withAlpha(ink, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'soft':
@@ -713,6 +723,14 @@ function MiniProfile({
                 <View style={[mini.polaroidPrintPhoto, { backgroundColor: photoFill }]} />
                 <View style={mini.tape} />
               </View>
+            </View>
+          </View>
+        ) : style.hero === 'indexCard' ? (
+          // Index: a ruled front card on a tinted card behind it.
+          <View style={mini.indexHero}>
+            <View style={[mini.indexBehind, { backgroundColor: blend(accent, cardColour, 0.55) }]} />
+            <View style={[mini.indexFront, { backgroundColor: cardColour, borderLeftColor: blend(accent, cardColour, 0.35) }]}>
+              <Text style={[mini.indexName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>Your Name</Text>
             </View>
           </View>
         ) : style.hero === 'echoName' ? (
@@ -1350,6 +1368,12 @@ const mini = StyleSheet.create({
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
+  tabCaps: { fontFamily: 'Figtree-SemiBold', fontSize: 8, letterSpacing: 1 },
+  indexTab: { width: 22, height: 5, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  indexHero: { flex: 1, padding: 10, justifyContent: 'center' },
+  indexBehind: { position: 'absolute', left: 14, right: 10, top: 12, bottom: 10, borderRadius: 3, transform: [{ rotate: '3deg' }] },
+  indexFront: { flex: 1, borderRadius: 3, borderLeftWidth: 1.5, paddingLeft: 10, justifyContent: 'center' },
+  indexName: { fontFamily: 'YoungSerif-Regular', fontSize: 12 },
   // Studio's bar, photo and headings.
   studioWrap: { alignSelf: 'stretch', flex: 1, marginHorizontal: 8 },
   studioBar: { height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },

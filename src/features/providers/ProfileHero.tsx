@@ -25,6 +25,7 @@ import type { LogoFraming } from "../../types/database";
 import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroPhoto";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
+import { IndexHero } from "./heroes/IndexHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
@@ -287,6 +288,8 @@ function ProfileHeroLayoutBody({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "indexCard":
+      return <IndexHero name={name} kicker={kickerPhrase(kicker)} location={location} accent={accent} cardColour={cardColour} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
     case "orbitMark":
       return (
         <View style={{ alignItems: "center", paddingHorizontal: 22, paddingTop: 26, paddingBottom: 30 }}>
