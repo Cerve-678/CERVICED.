@@ -59,3 +59,13 @@ describe('sheetInitialFrom', () => {
     });
   });
 });
+
+describe('sheetInitialFrom with an out-of-hours request', () => {
+  it('keeps the acceptance, so Change then Continue is still a request', () => {
+    const emergencyRequest = { reasons: [], acknowledgedAt: '2026-11-23T19:00:00.000Z' };
+    const initial = sheetInitialFrom({
+      selectedAddOns: [], date: '2026-11-25', time: '20:00', notes: '', isDepositOnly: false, emergencyRequest,
+    });
+    expect(initial.emergencyRequest).toBe(emergencyRequest);
+  });
+});

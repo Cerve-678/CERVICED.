@@ -29,9 +29,11 @@ export interface WebBookingSummary {
 }
 
 /** What the booking sheet reopens with after Change: the same add-ons, day,
- * time, notes and deposit choice. The sheet names the day and time
- * selectedDate/selectedTime where its result says date/time. A promo code
- * isn't carried back (the sheet takes none on reopening) and is typed again. */
+ * time, notes, deposit choice and any out-of-hours acceptance for that time
+ * (the sheet seeds the acceptance only from here, so leaving it out would
+ * drop it). The sheet names the day and time selectedDate/selectedTime where
+ * its result says date/time. The sheet never sets a promo code itself, so
+ * there's none to carry. */
 export function sheetInitialFrom(result: BookingSheetResult): NonNullable<BookingSheetProps['initial']> {
   return {
     selectedAddOns: result.selectedAddOns,
@@ -39,6 +41,7 @@ export function sheetInitialFrom(result: BookingSheetResult): NonNullable<Bookin
     selectedTime: result.time,
     notes: result.notes,
     isDepositOnly: result.isDepositOnly,
+    emergencyRequest: result.emergencyRequest,
   };
 }
 
