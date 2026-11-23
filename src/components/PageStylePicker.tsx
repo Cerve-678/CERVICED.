@@ -997,7 +997,8 @@ function MiniProfile({
             </View>
           </View>
         ) : style.hero === 'signed' ? (
-          <View style={mini.stack}>
+          // Signature: the ringed logo on the left, the signed name beside it.
+          <View style={mini.signedRow}>
             {logo}
             <Text style={mini.signedName} numberOfLines={1}>Name</Text>
           </View>
@@ -1494,7 +1495,8 @@ const mini = StyleSheet.create({
   blockName: { fontFamily: 'Anton-Regular', fontSize: 16, color: '#FFFFFF' },
   condensed: { fontFamily: 'Anton-Regular', fontSize: 15 },
   blockCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1.5, borderColor: '#111111' },
-  signedName: { fontFamily: 'MrsSaintDelafield-Regular', fontSize: 22, color: '#FFFFFF', marginTop: -10 },
+  signedRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 },
+  signedName: { flexShrink: 1, fontFamily: 'MrsSaintDelafield-Regular', fontSize: 22, color: '#FFFFFF' },
   quietBand: { alignSelf: 'stretch', backgroundColor: '#FBFCF8', paddingVertical: 6, paddingHorizontal: 10, marginTop: 30 },
   band: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 26, borderTopLeftRadius: 30, borderTopRightRadius: 10 },
 });
