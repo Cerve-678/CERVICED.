@@ -43,7 +43,7 @@ import {
   policiesBringOwnSurface,
   sectionInk,
   customTextStyle,
-  sectionsSitOnPage,
+  servicesSitOnPage,
   serviceCardSurface,
   sheetInk,
   StyledPolicyList,
@@ -51,6 +51,7 @@ import {
   capsuleServiceSurface,
 } from "./ProfilePageStyle";
 import type { HeroPhotoFrames } from "./HeroPhoto";
+import { moodboardTag } from "./heroes/MoodboardHero";
 
 const noop = () => {};
 
@@ -284,7 +285,12 @@ export function ProfileStylePreview({
   const glowBook = pageStyle.buttonShape === "glowPill";
   // Capsule: a full pill in the page's ink, the word in lowercase.
   const darkPillBook = pageStyle.buttonShape === "darkPill";
-  const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
+  // Moodboard: a fine outline pill in the ink, thin spaced caps; services as
+  // tagged rows, the tag from what they do.
+  const captionBook = pageStyle.buttonShape === "captionPill";
+  const tagged = pageStyle.serviceLayout === "taggedRows";
+  const previewTag = moodboardTag(kicker.split("·")[0] ?? "");
+  const serviceInk = surface && servicesSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
   const lines = (colour: string, widths: number[] = [100, 92, 64]) => (
@@ -604,7 +610,7 @@ export function ProfileStylePreview({
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
               <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow]}>
-                {menu ? null : (
+                {menu || tagged ? null : (
                 <View style={[styles.serviceThumb, tiles && styles.tileThumb, photoCards && styles.photoCardThumb, spotlight && styles.spotlightThumb, arches && styles.archThumb, { backgroundColor: withAlpha(accent, arches ? 0.16 : 0.11) }]}>
                   {services[index]?.imageUri && !pageStyle.numberedServices ? (
                     <Image source={{ uri: services[index]!.imageUri! }} style={arches ? styles.archThumbImage : tiles || photoCards || spotlight ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
@@ -624,6 +630,17 @@ export function ProfileStylePreview({
                         </View>
                         <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]}>{previewPrice(services[index].price)}</Text>
                       </View>
+                    ) : tagged ? (
+                      // Moodboard: the tag, the name in a serif, the price in light type.
+                      <View style={styles.menuRow}>
+                        {previewTag ? (
+                          <View style={[styles.taggedTag, { borderColor: withAlpha(serviceInk.text, 0.2) }]}>
+                            <Text style={[styles.taggedTagText, { color: serviceInk.sub }]} numberOfLines={1}>{previewTag}</Text>
+                          </View>
+                        ) : null}
+                        <Text style={[styles.serviceName, styles.menuName, styles.taggedName, { color: serviceInk.text }]} numberOfLines={1}>{services[index].name}</Text>
+                        <Text style={[styles.taggedPrice, { color: serviceInk.text }]}>{previewPrice(services[index].price)}</Text>
+                      </View>
                     ) : menu ? (
                       // Muse: the printed menu line, as on the profile.
                       <View style={styles.menuRow}>
@@ -635,7 +652,7 @@ export function ProfileStylePreview({
                       <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont, spotlight && styles.spotlightName]} numberOfLines={1}>{spotlight ? services[index].name.toUpperCase() : services[index].name}</Text>
                     )}
                     <Text style={[styles.serviceMeta, { color: serviceInk.sub }, bodyFont]} numberOfLines={1}>
-                      {menu
+                      {menu || tagged
                         ? formatDurationMinutes(services[index].minutes)
                         : [formatDurationMinutes(services[index].minutes), previewPrice(services[index].price)].filter(Boolean).join(" · ")}
                     </Text>
@@ -646,8 +663,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], darkPillBook && { backgroundColor: serviceInk.text }, shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? "Book now" : darkPillBook ? "book" : "Book"}</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook || captionBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], captionBook && [styles.bookOutline, { borderColor: serviceInk.text }], darkPillBook && { backgroundColor: serviceInk.text }, shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook || captionBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText, captionBook && styles.bookCaptionText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? "Book now" : darkPillBook ? "book" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
@@ -835,6 +852,11 @@ const styles = StyleSheet.create({
   bookArrowCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.3, alignItems: "center", justifyContent: "center" },
   bookShopBox: { borderWidth: 1, borderRadius: 1 },
   bookDarkPillText: { fontFamily: "Figtree-SemiBold" },
+  bookCaptionText: { fontFamily: "Jost-Light", fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase" },
+  taggedTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
+  taggedTagText: { fontFamily: "Jost-Light", fontSize: 8, letterSpacing: 1.5 },
+  taggedName: { fontFamily: "InstrumentSerif-Regular", fontWeight: "400", fontSize: 15 },
+  taggedPrice: { fontFamily: "Jost-Light", fontSize: 13 },
   bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },

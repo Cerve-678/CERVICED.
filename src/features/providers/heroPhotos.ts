@@ -8,8 +8,9 @@
 // as it shows, picks first, then their newest photos fill any slot left, so a
 // hero is never empty for a provider who has a portfolio at all.
 
-/** The most any hero shows (Snapshot's strip, Hush's boxes); the database keeps no more picks than this. */
-export const HERO_PHOTO_LIMIT = 3;
+/** The most any hero shows (Moodboard's four prints); Branding saves no more
+ *  picks than this. Only the app caps it: is_featured has no limit of its own. */
+export const HERO_PHOTO_LIMIT = 4;
 
 /**
  * The photos for the hero, in the order they show. `items` come newest first
