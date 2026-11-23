@@ -5,7 +5,7 @@
 
 #generated
 
-**4288 functions** across **632 files**.
+**4304 functions** across **634 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -545,7 +545,7 @@
 - `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
 
 ### `src/services/database/` (28)
-- `account.ts` — behind · **cancelAccountDeletionRequest** · **clearUserStorageFolder** · **createSavedCardSetup** · **createSocialProfileIfMissing** · **deleteClientAccountProfile** · **deleteProviderAccountProfile** · fetchSavedCards · **forgetCachedReads** · **forgetSavedCards** · **getCachedSavedCards** · **getClientPointsBalance** · **getClientPointsHistory** · **getCurrentAccountDetailsPending** · **getCurrentAuthUserId** · **getCurrentUserStoredPushToken** · **getOwnProviderIds** · **getSessionUser** · **invalidateOwnProviderIds** · **listSavedCards** · **ownProviderIdExclusion** · **refreshAuthSession** · **removePortfolioStorageObject** · **removeSavedCard** · **resendSignupOtp** · **runDevReset** · **sanitizeIlikeTerm** · **sendPasswordReset** · **setAuthAutoRefresh** · **signInWithAppleIdToken** · **signInWithEmailPassword** · **signInWithGoogleIdToken** · **signOutCurrentSession** · **signUpWithEmail** · **subscribeToAuthStateChanges** · **subscribeToNotificationInserts** · **subscribeToRescheduleRequestChanges** · **subscribeToUserBookingChanges** · summarizeAuthSession · **updateClientProfileFields** · **updateCurrentPassword** · **updatePasswordAndSignOut** · **upsertVerifiedUserProfile** · **verifyRecoveryOtp** · **verifySignupOtp**
+- `account.ts` — behind · **cancelAccountDeletionRequest** · **clearUserStorageFolder** · **createSavedCardSetup** · **createSocialProfileIfMissing** · **deleteClientAccountProfile** · **deleteProviderAccountProfile** · fetchSavedCards · **forgetCachedReads** · **forgetSavedCards** · **getCachedSavedCards** · **getClientPointsBalance** · **getClientPointsHistory** · **getCurrentAccountDetailsPending** · **getCurrentAuthUserId** · **getCurrentUserStoredPushToken** · **getOwnProviderIds** · **getSessionUser** · **getSignedInAccount** · **invalidateOwnProviderIds** · **listSavedCards** · **ownProviderIdExclusion** · **refreshAuthSession** · **removePortfolioStorageObject** · **removeSavedCard** · **resendSignupOtp** · **runDevReset** · **sanitizeIlikeTerm** · **sendEmailSignInCode** · **sendPasswordReset** · **setAuthAutoRefresh** · **signInWithAppleIdToken** · **signInWithEmailPassword** · **signInWithGoogleIdToken** · **signOutCurrentSession** · **signUpWithEmail** · **subscribeToAuthStateChanges** · **subscribeToNotificationInserts** · **subscribeToRescheduleRequestChanges** · **subscribeToUserBookingChanges** · summarizeAuthSession · **updateClientProfileFields** · **updateCurrentPassword** · **updatePasswordAndSignOut** · **upsertVerifiedUserProfile** · **verifyRecoveryOtp** · **verifySignupOtp**
 - `addressRelease.ts` — **getBookingAddressReleasedAt** · **getClientBookingsForAddressShare** · **getMyLastClientAddress** · **getMyProviderFullAddress** · **getProviderAddressPolicy** · **getProviderAddressPolicyByDisplayName** · **getPublicProviderAddress** · **hasMyProviderGoLiveAddress** · **releaseBookingAddress** · **setBookingClientAddress** · **setMyProviderFullAddress**
 - `adminMoney.ts` — **adminAddAccountDetails** · **adminCreateAccount** · **adminDeclineRefundRequest** · **adminOpenBlankAccount** · **adminRetryPayout** · **adminStartBlankProvider** · **applyCancellationRefund** · **assignBankDispute** · **completeMyBlankProviderDetails** · **getAdminBankDisputes** · **getAdminDashboardOverview** · **getAdminMoneyOverview** · **getProviderRefundState** · **getRefundRequestsForBooking** · invokeAdminAccountAction · **isCervicedAdmin** · **listAdminCreatedAccounts** · mapRefundRequest · **passRefundRequestToCerviced** · **requestBookingRefund** · toAccountLogin · toCreateAccountResult
 - `analytics.ts` — **getMyLinkOnlyDashboardExtras** · **getMyProviderDailyStats** · **getMyProviderSaverCount** · **recordProviderStat** · **trackUserInteraction**
@@ -659,11 +659,13 @@
 - `validation.ts` — **getPasswordStrength**
 - `withTimeout.ts` — **withTimeout**
 
-### `src/web/` (8)
+### `src/web/` (10)
 - `ProviderWebPage.tsx` — additionalInfo · changeBooking · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openBookingSheet · openContact · openImages · openReviews · openUrl · pickContact · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType · submitBookingSheet
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**
+- `webAccount.ts` — **cleanSignInCode** · **dobForAccount** · **webAccountState**
+- `WebAccountStep.tsx` — authErrorMessage · button · continueSignedIn · fieldError · link · sendCode · signOut · submitCode · submitDetails · submitEmail · **WebAccountStep**
 - `WebBlurView.tsx` — **BlurView** · webBackdropFilter
 - `webBooking.ts` — **sheetInitialFrom** · **summarizeWebBooking**
 - `WebCheckoutSheet.tsx` — summary · tokens · **WebCheckoutSheet**
