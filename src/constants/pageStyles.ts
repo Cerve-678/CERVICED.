@@ -57,6 +57,7 @@ export type PageStyleKey =
   | 'orbit'
   | 'typeblock'
   | 'filmstrip'
+  | 'neon'
   | 'receipt'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
@@ -95,6 +96,7 @@ export type PageHeading =
   | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
+  | 'neonScript' // a lowercase handwritten word in the accent, glowing like a lit tube on a dark page (Neon)
   | 'receiptCaps' // spaced till-roll caps over a dashed rule, like a receipt's headings (Receipt)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
@@ -125,6 +127,7 @@ export type PageCards =
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
   | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
+  | 'lit'  // a rounded card outlined in the accent, glowing on a dark page (Neon)
   | 'receipt'; // a square slip of paper, no shadow, a fine edge, like a till receipt (Receipt)
 
 /** How the policy rows are drawn. */
@@ -210,6 +213,7 @@ export type PageHero =
   | 'orbitMark' // identity held inside offset orbital rings, with the name below
   | 'typeblockMark' // asymmetric typographic block with a vertical accent rail
   | 'filmstripMark' // two chosen images in a numbered film strip above the identity
+  | 'neonSign' // a dark wall: the name as a glowing neon script sign, a lit tube under it, what they do in thin caps (Neon)
   | 'receiptHead' // a till receipt with torn edges: ringed logo, the name in spaced caps, area, stars, a barcode and a thank-you (Receipt)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -342,6 +346,7 @@ export type ButtonShape =
   | 'outline'   // a round outline in the ink, no fill (Retreat)
   | 'arrowPill' // a filled pill, the word then a small arrow in a circle, like "Order now" (Hibiscus)
   | 'shopBox'   // a small square outline, the word in spaced capitals, like "Shop now" (Storefront)
+  | 'glowPill'  // a round outline in the accent, the word in spaced capitals, glowing on a dark page (Neon)
   | 'stamp';    // a rubber stamp: a tilted outline in the accent, the word in spaced capitals (Receipt)
 
 export interface HeroNameFont {
@@ -737,6 +742,13 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
   },
   {
+    key: 'neon', name: 'Neon', description: 'Your name as a glowing neon sign on a dark wall, lit outlines round your services',
+    heading: 'neonScript', cards: 'lit', policies: 'outlined', logo: 'circle',
+    hero: 'neonSign', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    roundedPhotos: true, buttonShape: 'glowPill',
+  },
+  {
     key: 'receipt', name: 'Receipt', description: 'Your page printed as a till receipt: line-item services, a stamp to book and a barcode',
     heading: 'receiptCaps', cards: 'receipt', policies: 'hairline', logo: 'circle',
     hero: 'receiptHead', aboutInHero: false,
@@ -886,7 +898,7 @@ export const HUSH_TITLES: Record<PageSectionKey, string> = {
   about: 'hello',
   policies: 'a few gentle notes',
   services: 'services',
-  reviews: 'kind words',
+  reviews: 'reviews',
   hours: 'opening hours',
   contact: 'say hello',
   info: 'good to know',

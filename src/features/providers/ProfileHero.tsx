@@ -25,6 +25,7 @@ import type { LogoFraming } from "../../types/database";
 import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroPhoto";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
+import { NeonHero } from "./heroes/NeonHero";
 import { ReceiptHero } from "./heroes/ReceiptHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
@@ -288,6 +289,8 @@ function ProfileHeroLayoutBody({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "neonSign":
+      return <NeonHero name={name} kicker={kicker} accent={accent} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
     case "receiptHead":
       return <ReceiptHero name={name} kicker={kickerPhrase(kicker)} location={location} cardColour={cardColour} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
     case "orbitMark":
@@ -1588,11 +1591,12 @@ export function detailsSitOnCard(pageStyle: PageStyle): boolean {
 }
 
 /**
- * Whether this style lays its own dark layer over the hero (Sheer's veil), so
+ * Whether this style lays its own dark layer over the hero (Sheer's veil, Neon's wall), so
  * the profile and the preview ink the hero white whatever is behind it.
  */
 export function heroIsDarkForStyle(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "veil";
+  // Neon's sign hangs on a dark wall that fills the whole top (NeonHero).
+  return pageStyle.hero === "veil" || pageStyle.hero === "neonSign";
 }
 
 /** The ink for details on that card. */

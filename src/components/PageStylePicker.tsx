@@ -15,6 +15,7 @@ import Svg, { Path } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
+import { NEON_WALL, neonColours } from '../features/providers/heroes/NeonHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
 
@@ -141,6 +142,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   orbit: { text: 'S E R V I C E S' },
   typeblock: { text: 'SERVICES' },
   filmstrip: { lead: '03', text: 'SERVICES' },
+  neon: { text: 'services' },
   receipt: { text: 'SERVICES' },
 };
 
@@ -454,6 +456,8 @@ function MiniProfile({
         );
       case 'engravedCaps':
         return <Text style={[mini.engravedCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'neonScript':
+        return <Text style={[mini.neonScript, { color: isDarkColor(sheet) ? blend(accent, '#FFFFFF', 0.35) : blend(accent, '#000000', 0.25) }]}>{heading.text}</Text>;
       case 'receiptCaps':
         return (
           <View style={{ alignSelf: 'stretch' }}>
@@ -632,6 +636,8 @@ function MiniProfile({
       }
       case 'grouped':
         return <View key={key} style={[mini.card, mini.groupedCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'lit':
+        return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 7, borderWidth: 1, borderColor: accent }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'receipt':
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gridBox':
@@ -724,6 +730,12 @@ function MiniProfile({
                 <View style={mini.tape} />
               </View>
             </View>
+          </View>
+        ) : style.hero === 'neonSign' ? (
+          // Neon: the name lit up in script on a dark wall, a tube under it.
+          <View style={[mini.neonWall, { backgroundColor: NEON_WALL }]}>
+            <Text style={[mini.neonName, { color: neonColours(accent).tube, textShadowColor: neonColours(accent).glow }]}>Name</Text>
+            <View style={[mini.neonTube, { backgroundColor: neonColours(accent).tube }]} />
           </View>
         ) : style.hero === 'receiptHead' ? (
           // Receipt: a white slip with a name in spaced caps and a barcode.
@@ -1369,6 +1381,10 @@ const mini = StyleSheet.create({
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
+  neonScript: { fontFamily: 'MsMadi-Regular', fontSize: 20, lineHeight: 26 },
+  neonWall: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  neonName: { fontFamily: 'MsMadi-Regular', fontSize: 30, lineHeight: 40, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  neonTube: { width: 40, height: 1.5, borderRadius: 1 },
   receiptCaps: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 8, letterSpacing: 1.5 },
   receiptRule: { borderTopWidth: 1, borderStyle: 'dashed', marginTop: 2 },
   receiptHero: { flex: 1, paddingHorizontal: 18, paddingVertical: 7 },

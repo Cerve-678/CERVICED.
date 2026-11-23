@@ -1287,6 +1287,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isOwnProvider,
     viewerChecked,
   });
+  // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
+  // this component is typed by the ProviderProfile route it mostly serves.
+  const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
+  // The owner's logo preview shows the Book buttons as clients see them
+  // (user, 2026-11-22), for looking at only: they don't respond to a tap
+  // (user, 2026-11-23).
+  const showBookButtons = canBookProvider || (asOwnPreview && viewerChecked && providerDbId !== null);
 
   // A provider-only account reaches this screen by scanning someone's QR code.
   // It sees what clients see, but Bookings, Cart and Chat don't exist in the
@@ -1578,7 +1585,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [scrollToSection]);
   // Riviera's pinned Book bar goes once it's tapped: it has done its job of
   // taking them to Services (owner, 2026-11-19). It comes back on the next
-  // provider's page.
+  // provider's page. Its ✕ closes it without going to Services (2026-11-22).
   const [pinnedBookBarDismissed, setPinnedBookBarDismissed] = useState(false);
   useEffect(() => {
     setPinnedBookBarDismissed(false);
@@ -2400,9 +2407,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [provider]);
 
   // Configure the navigation header with your gradient and icons
-  // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
-  // this component is typed by the ProviderProfile route it mostly serves.
-  const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
   React.useLayoutEffect(() => {
     // The owner tapping their logo on My Profile: the page alone, no header
     // and no buttons. They close it by swiping (MyPublicProfile's options).
@@ -3516,7 +3520,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       expandedServiceIds={expandedServices}
       onToggleExpanded={toggleServiceExpanded}
       onOpenImages={openImageViewer}
-      canBook={canBookProvider}
+      canBook={showBookButtons}
+      bookDisplayOnly={asOwnPreview}
       takingBookings={takingBookings}
       serviceFullyBooked={serviceFullyBooked}
       serviceNearTermAvailability={serviceNearTermAvailability}
@@ -3537,12 +3542,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const squareButtons = pageStyle.buttonShape === "square";
 
   // The price list as it sits on the page; "See all" opens the full sheet.
-  // The pinned bar's "From £…": the lowest price on the menu, as the menu shows it.
-  const lowestServicePrice = pageStyle.pinnedBookBar
-    ? Object.values(provider.categories).flat().reduce<string | null>((low, service) => {
+  // The pinned bar's service: the cheapest on the menu, by name and price as
+  // the menu shows them (user, 2026-11-23: a service, not just the business).
+  const pinnedBarService = pageStyle.pinnedBookBar
+    ? Object.values(provider.categories).flat().reduce<ServiceData | null>((low, service) => {
         const value = Number(service.price);
         if (!Number.isFinite(value) || value <= 0) return low;
-        return low === null || value < Number(low) ? String(service.price) : low;
+        return low === null || value < Number(low.price) ? service : low;
       }, null)
     : null;
 
@@ -4398,20 +4404,36 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             jumps to Services and then goes. Not while selecting several (that
             bar takes this spot), and never for a link-only provider (no
             services here). */}
-        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
+        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && showBookButtons && !provider.isLinkOnly && !selectMode && pinnedBarService ? (
           <View style={[styles.pinnedBookBar, squareButtons && styles.pinnedBookBarSquare, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
             <View style={styles.pinnedBookText}>
               <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
-              <Text style={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From £{lowestServicePrice}</Text>
+              <Text style={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>{pinnedBarService.name} · £{pinnedBarService.price}</Text>
             </View>
             <TouchableOpacity
               style={[styles.pinnedBookButton, squareButtons && styles.squareButton, { backgroundColor: adaptiveAccentColor }]}
               onPress={pressPinnedBook}
+              disabled={asOwnPreview}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
             >
               <Text style={[styles.pinnedBookButtonText, squareButtons && styles.squareButtonText]}>Book</Text>
+            </TouchableOpacity>
+            {/* Close it without going to Services (user, 2026-11-22). */}
+            <TouchableOpacity
+              style={styles.pinnedBookClose}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setPinnedBookBarDismissed(true);
+              }}
+              disabled={asOwnPreview}
+              activeOpacity={0.6}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="close" size={18} color={OP.sub} />
             </TouchableOpacity>
           </View>
         ) : null}
@@ -4808,6 +4830,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
   },
   pinnedBookText: { flex: 1, minWidth: 0 },
+  pinnedBookClose: { width: 30, height: 30, marginLeft: -4, alignItems: "center", justifyContent: "center" },
   pinnedBookBarSquare: { borderRadius: 6 },
   squareButton: { borderRadius: 2 },
   squareButtonText: { textTransform: "uppercase", letterSpacing: 1.4 },
