@@ -345,7 +345,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule', 'moodboard', 'latte']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule', 'moodboard']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -414,7 +414,7 @@ describe('which styles show the picked name font', () => {
       'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard',
       'poster', 'hibiscus', 'storefront',
       'orbit', 'typeblock', 'filmstrip',
-      'neon',
+      'neon', 'moodboard',
     ].sort());
   });
 
@@ -590,7 +590,7 @@ describe('Ledger', () => {
 });
 
 describe('the picked name font on styles with their own lettering (owner, 2026-11-19)', () => {
-  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'neon'] as const;
+  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'neon', 'moodboard'] as const;
 
   it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet, Signature and Pinboard', () => {
     for (const key of keys) expect(heroUsesBrandFont(getPageStyle(key))).toBe(true);
@@ -804,7 +804,8 @@ describe('Latte', () => {
       expect(other.heading).not.toBe('pourSerif');
       expect(other.cards).not.toBe('pour');
     }
-    expect(heroPhotoPickLimit(latte)).toBe(1);
+    // Their logo at the top, not a photo (owner, 2026-11-23).
+    expect(heroPhotoPickLimit(latte)).toBe(0);
   });
 
   it('sets each section a step further down the pour than the one drawn before it', () => {

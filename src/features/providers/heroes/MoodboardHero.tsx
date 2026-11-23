@@ -7,6 +7,7 @@
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import type { TextStyle } from "react-native";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 import { HeroPhoto } from "../HeroPhoto";
@@ -23,6 +24,9 @@ const PRINTS = [
 /** A print's white border: 6pt round the photo, 20pt under it for the caption. */
 const PRINT_EDGE = 6;
 const PRINT_FOOT = 20;
+
+/** How far the name's line hangs below the board's foot. */
+const NAME_DROP = 52;
 
 /** The shape (width ÷ height) of the photo inside each print, for Branding's adjust sheet. */
 export function moodboardPhotoAspect(index: number): number {
@@ -64,6 +68,7 @@ export function MoodboardHero({
   accent,
   sheetColour,
   heroText,
+  pickedNameStyle,
   photos,
   captions,
   renderLogo,
@@ -79,6 +84,9 @@ export function MoodboardHero({
   accent: string;
   sheetColour: string;
   heroText: string;
+  /** Their Business Name Font at the name's size, once they pick one other
+   *  than Classic (pickedNameFont); null keeps the thin Jost. */
+  pickedNameStyle: TextStyle | null;
   /** Up to four chosen photos (Branding → Your Photos). */
   photos: readonly string[];
   /** Each photo's own portfolio caption, when it has one. */
@@ -139,7 +147,7 @@ export function MoodboardHero({
           );
         })}
         <View accessible accessibilityRole="header" accessibilityLabel={name} style={styles.nameRow} pointerEvents="none">
-          <Text style={[styles.name, { color: heroText }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+          <Text style={[styles.name, pickedNameStyle, { color: heroText }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
             {big.toLowerCase()}
           </Text>
           {tick}
@@ -173,9 +181,10 @@ function heroSubOn(paper: string): string {
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24, gap: 16 },
-  // The name hangs 30pt below the board's foot (owner, 11-23: "lower the
-  // business name"), so the board keeps that much room under it.
-  board: { height: 300, marginBottom: 22 },
+  // The name hangs below the board's foot (owner, 11-23: "lower the business
+  // name", then "move it down and don't cut it off"), so the board keeps that
+  // much room under it.
+  board: { height: 300, marginBottom: NAME_DROP - 6 },
   print: {
     position: "absolute",
     paddingTop: PRINT_EDGE,
@@ -199,8 +208,12 @@ const styles = StyleSheet.create({
   roundPhoto: { flex: 1, borderRadius: 999, overflow: "hidden" },
   roundLogo: { flex: 1, alignItems: "center", justifyContent: "center" },
   caption: { position: "absolute", left: PRINT_EDGE, right: PRINT_EDGE, bottom: 5, fontFamily: "Jost-Light", fontSize: 8, letterSpacing: 2 },
-  nameRow: { position: "absolute", zIndex: 2, left: 0, right: 0, bottom: -30, flexDirection: "row", alignItems: "flex-end", gap: 6 },
-  name: { flexShrink: 1, fontFamily: "Jost-Light", fontSize: 76, lineHeight: 80, letterSpacing: -2 },
+  // Over the prints: zIndex on iOS, and above their elevation on Android.
+  nameRow: { position: "absolute", zIndex: 2, elevation: 6, left: 0, right: 0, bottom: -NAME_DROP, flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  // A line tall enough for the whole letter, top and tail: at 80 the thin
+  // Jost's ascenders were clipped off on iOS. The small right pad keeps the
+  // last letter whole under the tight spacing.
+  name: { flexShrink: 1, fontFamily: "Jost-Light", fontSize: 76, lineHeight: 100, letterSpacing: -2, paddingRight: 4 },
   under: { flexDirection: "row", alignItems: "center", gap: 10 },
   underText: { flex: 1 },
   line: { fontFamily: "InstrumentSerif-Italic", fontSize: 19, lineHeight: 24 },
