@@ -26,7 +26,10 @@ import {
   showsDividerAbove,
   STRIPE_TINT,
   capsuleServiceSurface,
+  servicesSitOnPage,
 } from '../features/providers/ProfilePageStyle';
+import { moodboardName, moodboardPhotoAspect, moodboardPrint, moodboardTag } from '../features/providers/heroes/MoodboardHero';
+import { heroPhotoSlotAspect } from '../constants/pageStyles';
 import { CAPSULE_OAT, capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { heroIsDarkForStyle, heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
@@ -70,7 +73,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'capsule',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'capsule', 'moodboard',
     ]);
   });
 
@@ -339,7 +342,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule', 'moodboard']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -724,5 +727,59 @@ describe('Capsule', () => {
     expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 1).backgroundColor).toBe(oat);
     expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 2).backgroundColor).toBe(tint);
     expect(serviceCardSurface(capsule, { card: '#FFFFFF', accent: '#A9B49B', sheet: '#FAF8F3' })?.borderRadius).toBe(45);
+  });
+});
+
+describe('Moodboard', () => {
+  const moodboard = getPageStyle('moodboard');
+
+  it('pins the page up as a board, with its own top, headings, cards, service rows and Book shape', () => {
+    expect(moodboard.hero).toBe('collage');
+    expect(moodboard.heading).toBe('captionCaps');
+    expect(moodboard.cards).toBe('print');
+    expect(moodboard.serviceLayout).toBe('taggedRows');
+    expect(moodboard.buttonShape).toBe('captionPill');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'moodboard')) {
+      expect(other.hero).not.toBe('collage');
+      expect(other.heading).not.toBe('captionCaps');
+      expect(other.cards).not.toBe('print');
+      expect(other.serviceLayout).not.toBe('taggedRows');
+      expect(other.buttonShape).not.toBe('captionPill');
+    }
+  });
+
+  it('lets the provider pick all four prints, framed in each print\'s own shape', () => {
+    expect(heroPhotoPickLimit(moodboard)).toBe(4);
+    for (const index of [0, 1, 2, 3]) {
+      expect(heroPhotoSlotAspect('collage', index, 4)).toBeCloseTo(moodboardPhotoAspect(index), 5);
+    }
+    expect(heroPhotoSlotAspect('collage', 3, 4)).toBe(1);
+  });
+
+  it('sets the first word of the name huge and the rest in the italic line, never a lone article', () => {
+    expect(moodboardName('Halo Lash & Brow')).toEqual(['Halo', 'Lash & Brow']);
+    expect(moodboardName('The Lash Lounge')).toEqual(['The Lash', 'Lounge']);
+    expect(moodboardName('Glow')).toEqual(['Glow', '']);
+  });
+
+  it('tags a service with its type in the singular', () => {
+    expect(moodboardTag('LASHES')).toBe('LASH');
+    expect(moodboardTag('Brows')).toBe('BROW');
+    expect(moodboardTag('NAILS')).toBe('NAIL');
+    expect(moodboardTag('HAIR')).toBe('HAIR');
+    expect(moodboardTag('')).toBe('');
+  });
+
+  it('keeps its sections on prints but its services on the page, in the page\'s ink', () => {
+    expect(sectionsSitOnPage(moodboard)).toBe(false);
+    expect(servicesSitOnPage(moodboard)).toBe(true);
+    const row = serviceCardSurface(moodboard, { card: '#FFFFFF', accent: '#C8AE9A', sheet: '#F7F4EF' });
+    expect(row?.backgroundColor).toBe('transparent');
+    expect(row?.borderBottomColor).toBe(sheetInk('#F7F4EF').border);
+  });
+
+  it('prints on white on a pale page and on a warm dark card on a dark one', () => {
+    expect(moodboardPrint('#F7F4EF').paper).toBe('#FFFFFF');
+    expect(isDarkColor(moodboardPrint('#171411').paper)).toBe(true);
   });
 });

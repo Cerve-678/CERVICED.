@@ -86,6 +86,13 @@ export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
     || (style?.cards === "stripes" && !!style.openStrips);
 }
 
+/** True when the style's services sit straight on the page, so the price
+ *  list takes the page's ink: every style whose sections do, and Moodboard,
+ *  whose sections are white prints but whose services are hairline rows. */
+export function servicesSitOnPage(style: PageStyle | undefined): boolean {
+  return sectionsSitOnPage(style) || style?.cards === "print";
+}
+
 /** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
 function sheerBox(sheet: string): { borderColor: string; backgroundColor: string } {
   const ink = sheetInk(sheet);
@@ -567,6 +574,19 @@ export function PageSectionHeading({
         </Text>
       );
     }
+    case "captionCaps": {
+      // Moodboard: tiny, very widely spaced caps in a quiet ink, like the
+      // captions on its prints, with a hairline running out after them.
+      const line = color ? withAlpha(color, 0.3) : sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <Text style={[headingStyles.captionCaps, { color: color ?? sheetInk(palette.background).sub }]} numberOfLines={1}>
+            {words.toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
     case "pillMark": {
       // Capsule: a small pill in one of the two quiet tones, then the title
       // soft and lowercase. The portfolio is "my work", as on the canvas.
@@ -839,6 +859,19 @@ function PageSectionSurface({
     );
   }
 
+  if (pageStyle.cards === "print") {
+    // Moodboard: the heading on the page, the section on a white print with
+    // square corners and a soft drop shadow, like the photos on its board.
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View style={[surfaceStyles.solid, surfaceStyles.print, { backgroundColor: palette.cardBackground }]}>
+          {children}
+        </View>
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "capsule") {
     // Capsule: the heading on the page, the section on a soft card in the
     // oat tone with big round corners and no shadow.
@@ -1078,6 +1111,17 @@ export function serviceCardSurface(
       return litSurface(colours.card, colours.accent, colours.sheet);
     case "capsule":
       return capsuleServiceSurface(colours.accent, colours.sheet, 0);
+    case "print":
+      // Moodboard: each service a row on the page, a hairline under it.
+      return {
+        ...flat,
+        backgroundColor: "transparent",
+        borderRadius: 0,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: sheetInk(colours.sheet).border,
+        marginBottom: 0,
+        elevation: 0,
+      };
     case "none":
     case "open":
       return {
@@ -2041,6 +2085,7 @@ const headingStyles = StyleSheet.create({
   // nothing is cut off (owner, 2026-11-23).
   neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 68, paddingHorizontal: 8, marginBottom: 2, includeFontPadding: false },
   neonWrap: { alignSelf: "flex-start", marginLeft: -8 },
+  captionCaps: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 4 },
   pillMarkRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   pillMark: { width: 18, height: 8, borderRadius: 999 },
   pillMarkTitle: { fontFamily: "Figtree-SemiBold", fontSize: 18, lineHeight: 24 },
@@ -2095,6 +2140,14 @@ const surfaceStyles = StyleSheet.create({
   tabText: { fontFamily: "LilitaOne-Regular", fontSize: 10, lineHeight: 14, letterSpacing: 1.6 },
   tabbedCard: { borderRadius: 0 },
   capsuleCard: { borderRadius: 32 },
+  print: {
+    borderRadius: 2,
+    shadowColor: "#3C2819",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },
   block: { marginBottom: 24 },
