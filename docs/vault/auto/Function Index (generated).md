@@ -5,7 +5,7 @@
 
 #generated
 
-**4253 functions** across **623 files**.
+**4266 functions** across **625 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -54,7 +54,7 @@
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · paydays · ProviderPayoutSummaryCard
-- `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
+- `ProviderProfileQrSheet.tsx` — copyLink · **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chargeableByBooking · chooseInterval · chooseSchedule · date · EmptyState · feesByBooking · feesToCharge · handleRefunded · load · loadMore · money · Notice · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
@@ -308,7 +308,7 @@
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **heroNameFontStyle** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **pickedNameFont** · **pickedNameFontStyle** · pin · **ProfileHeroLayout** · ProfileHeroLayoutBody · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **capsuleServiceSurface** · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **capsuleServiceSurface** · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **LatteBookBar** · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · **pourBandStyle** · **pourPalette** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **usePourPalette** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — aboutBody · lines · noop · previewPrice · **ProfileStylePreview** · zone
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
@@ -332,7 +332,7 @@
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (12)
+### `src/features/providers/heroes/` (13)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `CapsuleHero.tsx` — **CapsuleHero** · **capsuleInk** · **capsuleTones**
@@ -340,6 +340,7 @@
 - `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **ribbonColours** · **stripeColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
+- `LatteHero.tsx` — **latteBand** · **latteGlass** · **LatteHero** · **latteInk** · **latteShade** · **latteStops**
 - `MoodboardHero.tsx` — heroSubOn · **MoodboardHero** · **moodboardName** · **moodboardPhotoAspect** · **moodboardPrint** · **moodboardTag**
 - `NeonHero.tsx` — **GlowText** · layer · **neonColours** · **NeonHero** · **neonWallColour**
 - `NovelHero.tsx` — **NovelHero** · subtitle
@@ -351,7 +352,7 @@
 - `ProviderPageHero.tsx` — **ProviderPageHero** · socialButton · StarIcon
 - `providerPagePalette.ts` — **buildProviderPagePalette** · **useProviderPagePalette**
 - `ProviderPageServices.tsx` — dotWindow · **ProviderPageServices** · ServiceDescription
-- `ProviderPageSheet.tsx` — footer · **ProviderPageSheet**
+- `ProviderPageSheet.tsx` — cheapest · footer · **ProviderPageSheet**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
@@ -582,7 +583,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (68)
+### `src/utils/` (69)
 - `aboutPage.ts` — **openAboutPage**
 - `accountDeletionError.ts` — **accountDeletionError** · list
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
@@ -594,6 +595,7 @@
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**
+- `clipboard.ts` — **copyText**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **hexToHsv** · **hsvToHex** · **paletteFromPixels** · **parseHexInput** · **toArgbHex**
 - `cropRect.ts` — axis · clamp · **clampView** · **fitContain** · **fitCropInside** · **moveCrop** · **moveHandle** · **pinchView** · **toImageCrop** · **visiblePhoto**

@@ -27,7 +27,10 @@ import {
   STRIPE_TINT,
   capsuleServiceSurface,
   servicesSitOnPage,
+  pourPalette,
+  type PageStylePalette,
 } from '../features/providers/ProfilePageStyle';
+import { LATTE_POUR, latteBand, latteGlass, latteInk, latteShade, latteStops } from '../features/providers/heroes/LatteHero';
 import { moodboardName, moodboardPhotoAspect, moodboardPrint, moodboardTag } from '../features/providers/heroes/MoodboardHero';
 import { heroPhotoSlotAspect } from '../constants/pageStyles';
 import { capsuleTones } from '../features/providers/heroes/CapsuleHero';
@@ -73,7 +76,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'capsule', 'moodboard',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'capsule', 'moodboard', 'latte',
     ]);
   });
 
@@ -342,7 +345,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule', 'moodboard']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule', 'moodboard', 'latte']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -781,5 +784,78 @@ describe('Moodboard', () => {
   it('prints on white on a pale page and on a warm dark card on a dark one', () => {
     expect(moodboardPrint('#F7F4EF').paper).toBe('#FFFFFF');
     expect(isDarkColor(moodboardPrint('#171411').paper)).toBe(true);
+  });
+});
+
+describe('Latte', () => {
+  const latte = getPageStyle('latte');
+  const accent = '#B48F72';
+  /** Rough brightness, enough to say which of two bands is deeper. */
+  const lightness = (hex: string) => [1, 3, 5].reduce((sum, i) => sum + parseInt(hex.slice(i, i + 2), 16), 0);
+  /** The order the profile draws its sections in (ProviderPageSheet). */
+  const pageOrder: PageSectionKey[] = ['about', 'policies', 'services', 'policyPages', 'reviews', 'contact', 'hours', 'portfolio', 'info', 'keyInfo', 'faq', 'aftercare', 'custom', 'disclaimer'];
+
+  it('pours the page, with its own top, headings and bands', () => {
+    expect(latte.hero).toBe('pourTop');
+    expect(latte.heading).toBe('pourSerif');
+    expect(latte.cards).toBe('pour');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'latte')) {
+      expect(other.hero).not.toBe('pourTop');
+      expect(other.heading).not.toBe('pourSerif');
+      expect(other.cards).not.toBe('pour');
+    }
+    expect(heroPhotoPickLimit(latte)).toBe(1);
+  });
+
+  it('sets each section a step further down the pour than the one drawn before it', () => {
+    for (let i = 1; i < pageOrder.length; i += 1) {
+      expect(LATTE_POUR[pageOrder[i]!]).toBeGreaterThan(LATTE_POUR[pageOrder[i - 1]!]);
+    }
+    for (const key of Object.keys(LATTE_POUR) as PageSectionKey[]) {
+      expect(LATTE_POUR[key]).toBeGreaterThan(0);
+      expect(LATTE_POUR[key]).toBeLessThan(1);
+    }
+  });
+
+  it('gets deeper down a pale page, milk at the top and espresso at the foot', () => {
+    const bands = pageOrder.map(section => latteBand(accent, '#FBF8F4', section));
+    for (let i = 1; i < bands.length; i += 1) expect(lightness(bands[i]!)).toBeLessThan(lightness(bands[i - 1]!));
+    expect(latteShade(accent, '#FBF8F4', 0)).toBe(latteStops(accent, '#FBF8F4')[0]);
+    expect(isDarkColor(latteShade(accent, '#FBF8F4', 1))).toBe(true);
+    expect(isDarkColor(latteShade(accent, '#FBF8F4', 0))).toBe(false);
+  });
+
+  it('pours the other way on a dark page, espresso at the top', () => {
+    expect(isDarkColor(latteShade(accent, '#141110', 0))).toBe(true);
+    expect(isDarkColor(latteShade(accent, '#141110', 1))).toBe(false);
+    const bands = pageOrder.map(section => latteBand(accent, '#141110', section));
+    for (let i = 1; i < bands.length; i += 1) expect(lightness(bands[i]!)).toBeGreaterThan(lightness(bands[i - 1]!));
+  });
+
+  it('turns the ink light on the deep bands and dark on the pale ones', () => {
+    const sheet: PageStylePalette = {
+      text: '#26201E', sub: '#5E5451', border: '#DDD', separator: '#EEE', background: '#FBF8F4', cardBackground: 'rgba(255,255,255,0.9)',
+      accent, blurTint: 'light', blurIntensity: 25, highlightColors: ['#FFF', '#FFF'], pageStyle: latte,
+    };
+    const about = pourPalette(sheet, 'about');
+    const deep = pourPalette(sheet, 'disclaimer');
+    expect(about.background).toBe(latteBand(accent, '#FBF8F4', 'about'));
+    expect(about.text).toBe(sheetInk(about.background).text);
+    expect(isDarkColor(deep.background)).toBe(true);
+    expect(deep.text).toBe(sheetInk(deep.background).text);
+    expect(isDarkColor(deep.text)).toBe(false);
+    expect(latteInk(deep.background).text).toBe('#FBF6F0');
+    // Worked out from the page itself, so a band's palette gives the same band again.
+    expect(pourPalette(about, 'about').background).toBe(about.background);
+    expect(pourPalette(about, 'reviews').background).toBe(latteBand(accent, '#FBF8F4', 'reviews'));
+    // Every other style keeps its palette as it is.
+    const classic = { ...sheet, pageStyle: getPageStyle('classic') };
+    expect(pourPalette(classic, 'about')).toBe(classic);
+  });
+
+  it('sets the services in soft see-through pills on their band', () => {
+    const surface = serviceCardSurface(latte, { card: '#FFFFFF', accent, sheet: '#FBF8F4' });
+    expect(surface?.backgroundColor).toBe(latteGlass(latteBand(accent, '#FBF8F4', 'services')));
+    expect(surface?.borderRadius).toBe(28);
   });
 });

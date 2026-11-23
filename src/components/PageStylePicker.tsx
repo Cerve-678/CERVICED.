@@ -17,6 +17,7 @@ import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
 import { neonColours, neonWallColour } from '../features/providers/heroes/NeonHero';
 import { capsuleTones } from '../features/providers/heroes/CapsuleHero';
+import { latteInk, latteShade } from '../features/providers/heroes/LatteHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
 
@@ -146,6 +147,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   neon: { text: 'services' },
   capsule: { text: 'services' },
   moodboard: { text: 'THE SERVICES' },
+  latte: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -476,6 +478,8 @@ function MiniProfile({
             <View style={[mini.captionRule, { backgroundColor: line }]} />
           </View>
         );
+      case 'pourSerif':
+        return <Text style={[mini.pourSerif, { color: ink }]}>{heading.text}</Text>;
       case 'pillMark':
         return (
           <View style={mini.pillMarkRow}>
@@ -659,6 +663,11 @@ function MiniProfile({
       case 'print':
         // Moodboard: the services are hairline rows on the page.
         return <View key={key} style={[mini.card, mini.cardNone, { borderBottomColor: line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'pour': {
+        // Latte: each a band a shade deeper than the last, its rounded top over the one above.
+        const band = latteShade(accent, sheet, 0.4 + key * 0.3);
+        return <View key={key} style={[mini.card, mini.pourBand, { backgroundColor: band }]}><View style={[mini.bar, { backgroundColor: withAlpha(latteInk(band).text, 0.3) }]} /></View>;
+      }
       case 'capsule':
         // Capsule: each service a full pill, taking turns in the accent's tint and their card colour.
         return <View key={key} style={[mini.card, mini.capsuleCard, { backgroundColor: capsuleTones(accent, sheet, cardColour)[key % 2] }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
@@ -772,6 +781,12 @@ function MiniProfile({
               <View style={[mini.collageRoundPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
             </View>
             <Text style={[mini.collageName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
+          </View>
+        ) : style.hero === 'pourTop' ? (
+          // Latte: the palest band, a round photo, the name in a big italic serif.
+          <View style={[mini.pourHero, { backgroundColor: latteShade(accent, sheet, 0) }]}>
+            <View style={[mini.pourPhoto, { backgroundColor: latteShade(accent, sheet, 0.45) }]} />
+            <Text style={[mini.pourName, { color: latteInk(latteShade(accent, sheet, 0)).text }]} numberOfLines={1}>name</Text>
           </View>
         ) : style.hero === 'tallCapsule' ? (
           // Capsule: their photo in a tall capsule; beside it the logo with the name to its right, and two pill chips.
@@ -1437,6 +1452,11 @@ const mini = StyleSheet.create({
   collageRound: { position: 'absolute', width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFFFFF', padding: 2 },
   collageRoundPhoto: { flex: 1, borderRadius: 11 },
   collageName: { position: 'absolute', left: 6, right: 6, bottom: 2, fontFamily: 'Jost-Light', fontSize: 24, letterSpacing: -0.5 },
+  pourSerif: { fontFamily: 'InstrumentSerif-Regular', fontSize: 12 },
+  pourBand: { borderRadius: 0, borderTopLeftRadius: 9, borderTopRightRadius: 9, marginHorizontal: -8, paddingHorizontal: 14, marginBottom: -4 },
+  pourHero: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  pourPhoto: { width: 30, height: 30, borderRadius: 15 },
+  pourName: { fontFamily: 'InstrumentSerif-Italic', fontSize: 17 },
   pillMarkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   pillMark: { width: 9, height: 4, borderRadius: 999 },
   pillMarkTitle: { fontFamily: 'Figtree-SemiBold', fontSize: 9 },

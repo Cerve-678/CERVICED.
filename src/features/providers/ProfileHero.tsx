@@ -28,6 +28,7 @@ import { CallingCardHero } from "./heroes/CallingCardHero";
 import { NeonHero } from "./heroes/NeonHero";
 import { CapsuleHero } from "./heroes/CapsuleHero";
 import { MoodboardHero } from "./heroes/MoodboardHero";
+import { LatteHero } from "./heroes/LatteHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
@@ -306,6 +307,21 @@ function ProfileHeroLayoutBody({
           cardColour={cardColour}
           heroText={heroText}
           heroSub={heroSub}
+          photo={photoUris?.[0]}
+          renderLogo={renderLogo}
+          tick={tick}
+          details={details}
+          onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
+        />
+      );
+    case "pourTop":
+      return (
+        <LatteHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
           photo={photoUris?.[0]}
           renderLogo={renderLogo}
           tick={tick}

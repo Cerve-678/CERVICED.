@@ -60,6 +60,7 @@ export type PageStyleKey =
   | 'neon'
   | 'capsule'
   | 'moodboard'
+  | 'latte'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -99,6 +100,7 @@ export type PageHeading =
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
   | 'neonScript' // a lowercase handwritten word in the accent, glowing like a lit tube on a dark page (Neon)
   | 'pillMark' // a small pill in a quiet tone, then a soft lowercase title (Capsule)
+  | 'pourSerif' // a plain serif title on the section's band, in the band's own ink (Latte)
   | 'captionCaps' // tiny, very widely spaced caps in a quiet ink, a hairline running out after them, like a print's caption (Moodboard)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
@@ -131,7 +133,8 @@ export type PageCards =
   | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
   | 'lit'  // a rounded card outlined in the accent, glowing on a dark page (Neon)
   | 'capsule' // a soft card in their card colour with big round corners, no shadow; services as full pills taking turns in a tint of the accent and their card colour (Capsule)
-  | 'print'; // a white print: square corners and a soft drop shadow, like the photos on its board; the services sit on the page between hairlines (Moodboard)
+  | 'print' // a white print: square corners and a soft drop shadow, like the photos on its board; the services sit on the page between hairlines (Moodboard)
+  | 'pour'; // each section on a full-width band a shade deeper than the one above (milk to espresso, the other way on a dark page), its rounded top lapping over the band above, the ink light on the deep ones (Latte)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -219,6 +222,7 @@ export type PageHero =
   | 'neonSign' // a dark wall: the name as a glowing neon script sign, a lit tube under it, what they do in thin caps (Neon)
   | 'tallCapsule' // their chosen photo in a tall capsule; beside it the logo with the name in light lowercase to its right, area and pill chips of what they do; no Book button (Capsule)
   | 'collage' // up to four chosen photos layered at angles as captioned white prints, one round, the name in huge thin lowercase across their foot, an italic line and an outline Book pill under it (Moodboard)
+  | 'pourTop' // the palest band of the pour: a round chosen photo, the name huge in an italic serif, what they do and where in spaced caps (Latte)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -771,6 +775,13 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     serviceLayout: 'taggedRows', photoLayout: 'polaroids', buttonShape: 'captionPill',
   },
+  {
+    key: 'latte', name: 'Latte', description: 'A tonal pour: each section a shade deeper than the last, milk to espresso, soft pill services',
+    heading: 'pourSerif', cards: 'pour', policies: 'gentleNotes', logo: 'circle',
+    hero: 'pourTop', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    roundedPhotos: true,
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -796,6 +807,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'filmstripMark': return 2;
     case 'tallCapsule': return 1;  // Capsule's tall capsule
     case 'collage': return 4;  // Moodboard's four prints
+    case 'pourTop': return 1;  // Latte's round photo
     default: return 0;
   }
 }
@@ -818,6 +830,7 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'storefrontBanner': return 390 / 300; // Storefront's full-width photo
     case 'filmstripMark': return 158 / 190;
     case 'tallCapsule': return 142 / 232;  // Capsule's tall capsule
+    case 'pourTop': return 1;  // Latte's round photo
     // Moodboard's prints, inside their white borders; the fourth is round.
     case 'collage': return index === 3 ? 1 : ([138 / 164, 128 / 124, 108 / 114][index] ?? 1);
     case 'pinboardHeader': {
