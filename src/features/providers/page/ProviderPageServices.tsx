@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import CategoryTabItem from "../../../components/CategoryTabPill";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../../constants/featureFlags";
 import { menuNumber } from "../../../constants/pageStyles";
-import { isDarkColor, withAlpha } from "../../../constants/providerThemes";
+import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes";
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
 import { GlossShine } from "../ProfilePageStyle";
@@ -204,6 +204,9 @@ export interface ProviderPageServicesProps {
   onOpenImages: (images: any[], index: number) => void;
   /** False on the provider's own page and while ownership loads: no booking controls at all. */
   canBook: boolean;
+  /** The owner's logo preview: the Book and waitlist buttons show, but the
+   *  page is only for looking at, so they don't respond (user, 2026-11-23). */
+  bookDisplayOnly?: boolean;
   takingBookings: boolean;
   /** service.dbId → nothing bookable anywhere in the booking window. */
   serviceFullyBooked: Record<string, boolean>;
@@ -248,6 +251,7 @@ export function ProviderPageServices({
   onToggleExpanded,
   onOpenImages,
   canBook,
+  bookDisplayOnly = false,
   takingBookings,
   serviceFullyBooked,
   serviceNearTermAvailability,
@@ -266,6 +270,7 @@ export function ProviderPageServices({
   const {
     pageStyle,
     bodyFont,
+    OP,
     SV,
     adaptiveAccentColor,
     cardBg,
@@ -303,6 +308,12 @@ export function ProviderPageServices({
   // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
   const arrowPillButtons = pageStyle.buttonShape === "arrowPill";
   const shopBoxButtons = pageStyle.buttonShape === "shopBox";
+  // Neon: a round outline in the accent, spaced caps, glowing on a dark page.
+  const glowPillButtons = pageStyle.buttonShape === "glowPill";
+  const glowDark = isDarkColor(OP.bg);
+  const glowLine = glowDark ? blend(adaptiveAccentColor, "#FFFFFF", 0.2) : adaptiveAccentColor;
+  // Receipt: a rubber stamp, a tilted outline in the accent.
+  const stampButtons = pageStyle.buttonShape === "stamp";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
   // The width the cards actually get: inside the list's side padding.
   const cardsWidth = listWidth > 0 ? listWidth - SERVICE_LIST_SIDE_PADDING * 2 : 0;
@@ -706,7 +717,7 @@ export function ProviderPageServices({
 
                     return (
                       <TouchableOpacity
-                        disabled={fullyBooked}
+                        disabled={fullyBooked || bookDisplayOnly}
                         style={[
                           styles.bookButton,
                           squareButtons && styles.squareButton,
@@ -720,6 +731,11 @@ export function ProviderPageServices({
                           outlineButtons && [styles.outlineButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                           arrowPillButtons && styles.arrowPillButton,
                           shopBoxButtons && [styles.shopBoxButton, { borderColor: fullyBooked ? SV.border : SV.text }],
+                          glowPillButtons && [
+                            styles.glowPillButton,
+                            { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 0.8 : 0 },
+                          ],
+                          stampButtons && [styles.stampButton, { borderColor: fullyBooked ? SV.border : adaptiveAccentColor }],
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -739,6 +755,8 @@ export function ProviderPageServices({
                             outlineButtons && !fullyBooked && { color: SV.text },
                             arrowPillButtons && !fullyBooked && { color: pillInk },
                             shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
+                            glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
+                            stampButtons && [styles.stampButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
                           ]}
                         >
                           {!takingBookings
@@ -844,6 +862,7 @@ export function ProviderPageServices({
                         onPress={() => {
                           runAction(() => onJoinWaitlist(service));
                         }}
+                        disabled={bookDisplayOnly}
                         activeOpacity={0.7}
                       >
                         <Text
@@ -1105,6 +1124,10 @@ const styles = StyleSheet.create({
   arrowPillCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.4, alignItems: "center", justifyContent: "center" },
   shopBoxButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 1, shadowOpacity: 0, elevation: 0, paddingHorizontal: 12 },
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
+  glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, elevation: 0 },
+  glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
+  stampButton: { backgroundColor: "transparent", borderWidth: 2, borderRadius: 4, shadowOpacity: 0, elevation: 0, transform: [{ rotate: "-4deg" }] },
+  stampButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
   // the two, wider than the room left beside them, and wrap them one a row.

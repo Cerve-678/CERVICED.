@@ -26,7 +26,7 @@ import {
   STRIPE_TINT,
   indexTabPlace,
 } from '../features/providers/ProfilePageStyle';
-import { heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
+import { heroIsDarkForStyle, heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -54,8 +54,8 @@ describe('page style in the stored theme key', () => {
   });
 
   it('falls back to Classic for a style it does not know', () => {
-    expect(parseThemeKey('app|#F5F1EC|blend|rounded|neon').pageStyle).toBe('classic');
-    expect(getPageStyle('neon').key).toBe('classic');
+    expect(parseThemeKey('app|#F5F1EC|blend|rounded|disco').pageStyle).toBe('classic');
+    expect(getPageStyle('disco').key).toBe('classic');
   });
 });
 
@@ -68,7 +68,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'index',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'receipt', 'index',
     ]);
   });
 
@@ -634,6 +634,61 @@ describe('Poster, Hibiscus and Storefront (owner, 2026-11-19: "create something 
       expect(other.divider).not.toBe('sparkles');
       expect(['arrowPill', 'shopBox']).not.toContain(other.buttonShape);
     }
+  });
+});
+
+describe('Neon', () => {
+  const neon = getPageStyle('neon');
+
+  it('hangs a lit sign on a dark wall, with its own headings, cards and Book button', () => {
+    expect(neon.hero).toBe('neonSign');
+    expect(neon.heading).toBe('neonScript');
+    expect(neon.cards).toBe('lit');
+    expect(neon.buttonShape).toBe('glowPill');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'neon')) {
+      expect(other.hero).not.toBe('neonSign');
+      expect(other.heading).not.toBe('neonScript');
+      expect(other.cards).not.toBe('lit');
+      expect(other.buttonShape).not.toBe('glowPill');
+    }
+  });
+
+  it('inks the top white whatever the theme, because the wall is dark', () => {
+    expect(heroIsDarkForStyle(neon)).toBe(true);
+    expect(heroPhotoPickLimit(neon)).toBe(0);
+  });
+
+  it('glows its cards only on a dark page', () => {
+    const dark = serviceCardSurface(neon, { card: '#1C121B', accent: '#FF4F9A', sheet: '#140D14' });
+    const light = serviceCardSurface(neon, { card: '#FFFFFF', accent: '#FF4F9A', sheet: SHEET_BG });
+    expect(dark?.shadowOpacity).toBeGreaterThan(0);
+    expect(light?.shadowOpacity).toBe(0);
+    expect(light?.borderColor).toBe('#FF4F9A');
+  });
+});
+
+describe('Receipt', () => {
+  const receipt = getPageStyle('receipt');
+
+  it('prints the page as a till receipt, with its own top, headings, slips and stamp', () => {
+    expect(receipt.hero).toBe('receiptHead');
+    expect(receipt.heading).toBe('receiptCaps');
+    expect(receipt.cards).toBe('receipt');
+    expect(receipt.buttonShape).toBe('stamp');
+    expect(receipt.serviceLayout).toBe('menu');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'receipt')) {
+      expect(other.hero).not.toBe('receiptHead');
+      expect(other.heading).not.toBe('receiptCaps');
+      expect(other.cards).not.toBe('receipt');
+      expect(other.buttonShape).not.toBe('stamp');
+    }
+  });
+
+  it('draws its service slips square, flat and finely edged', () => {
+    const surface = serviceCardSurface(receipt, { card: '#FFFFFF', accent: '#C8402F', sheet: SHEET_BG });
+    expect(surface?.borderRadius).toBe(0);
+    expect(surface?.shadowOpacity).toBe(0);
+    expect(surface?.backgroundColor).toBe('#FFFFFF');
   });
 });
 

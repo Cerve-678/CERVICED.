@@ -278,6 +278,10 @@ export function ProfileStylePreview({
   const outlineBook = pageStyle.buttonShape === "outline" || pageStyle.buttonShape === "shopBox";
   const arrowBook = pageStyle.buttonShape === "arrowPill";
   const shopBook = pageStyle.buttonShape === "shopBox";
+  // Neon: a round outline in the accent, spaced caps.
+  const glowBook = pageStyle.buttonShape === "glowPill";
+  // Receipt: a tilted rubber-stamp outline in the accent.
+  const stampBook = pageStyle.buttonShape === "stamp";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -326,9 +330,9 @@ export function ProfileStylePreview({
   const portfolioSection = (
     <ProviderPortfolioSection items={portfolioItems} palette={palette} onOpenImage={noop} interactiveImages={false} />
   );
-  // Riviera's pinned Book bar: their lowest price, as on the profile.
-  const lowestPrice = (content?.services ?? []).reduce<number | null>(
-    (low, service) => (service.price > 0 && (low === null || service.price < low) ? service.price : low),
+  // Riviera's pinned Book bar: their cheapest service, as on the profile.
+  const pinnedService = (content?.services ?? []).reduce<PreviewService | null>(
+    (low, service) => (service.price > 0 && (low === null || service.price < low.price) ? service : low),
     null,
   );
   const squareButtons = pageStyle.buttonShape === "square";
@@ -639,8 +643,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, shopBook && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook || stampBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], stampBook && [styles.bookOutline, styles.bookStamp, { borderColor: accent }], shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink || stampBook ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook || stampBook) && styles.bookShopText]}>{arrowBook || shopBook ? "Book now" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
@@ -689,14 +693,17 @@ export function ProfileStylePreview({
         <View pointerEvents="none" style={[styles.pinnedBar, squareButtons && styles.pinnedBarSquare, { bottom: pinnedBarBottom, backgroundColor: OP.card, borderColor: OP.border }]}>
           <View style={styles.pinnedText}>
             <Text style={[styles.pinnedName, { color: OP.text }, bodyFont]} numberOfLines={1}>{name}</Text>
-            {lowestPrice !== null ? (
-              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From {previewPrice(lowestPrice)}</Text>
+            {pinnedService !== null ? (
+              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>{pinnedService.name} · {previewPrice(pinnedService.price)}</Text>
             ) : (
               <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
             )}
           </View>
           <View style={[styles.pinnedButton, squareButtons && styles.bookSquare, { backgroundColor: accent }]}>
             <Text style={[styles.pinnedButtonText, squareButtons && styles.bookSquareText]}>Book</Text>
+          </View>
+          <View style={styles.pinnedClose}>
+            <Ionicons name="close" size={18} color={OP.sub} />
           </View>
         </View>
       ) : null}
@@ -783,6 +790,7 @@ const styles = StyleSheet.create({
   },
   pinnedBarSquare: { borderRadius: 6 },
   pinnedText: { flex: 1, minWidth: 0 },
+  pinnedClose: { width: 30, height: 30, marginLeft: -4, alignItems: "center", justifyContent: "center" },
   pinnedName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
   pinnedPrice: { fontSize: 12, marginTop: 2 },
   pinnedPriceBar: { width: 60, height: 7, marginTop: 6 },
@@ -817,6 +825,7 @@ const styles = StyleSheet.create({
   bookArrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingRight: 6 },
   bookArrowCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.3, alignItems: "center", justifyContent: "center" },
   bookShopBox: { borderWidth: 1, borderRadius: 1 },
+  bookStamp: { borderWidth: 2, borderRadius: 4, transform: [{ rotate: "-4deg" }] },
   bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },

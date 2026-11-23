@@ -30,6 +30,7 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
+import { DashedRule } from "./heroes/ReceiptHero";
 import { indexMargin, indexTints } from "./heroes/IndexHero";
 
 export interface PageStylePalette {
@@ -131,7 +132,7 @@ const STUDIO_TABS: Record<PageSectionKey, string> = {
   about: "Meet me",
   policies: "Read first",
   services: "Book in",
-  reviews: "Kind words",
+  reviews: "Reviews",
   hours: "Open",
   contact: "Say hi",
   info: "Good to know",
@@ -545,6 +546,38 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "neonScript": {
+      // Neon: the title as a lowercase script word in the accent. On a dark
+      // page it's lifted and glows like the sign at the top; on a pale page
+      // it's deepened so it still reads, with no glow.
+      const dark = isDarkColor(palette.background);
+      const tube = dark ? blend(accent, "#FFFFFF", 0.35) : blend(accent, "#000000", 0.25);
+      return (
+        <Text
+          {...a11y}
+          style={[
+            headingStyles.neonScript,
+            { color: color ?? tube },
+            dark && { textShadowColor: accent, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+          ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
+          {words.toLowerCase()}
+        </Text>
+      );
+    }
+    case "receiptCaps":
+      // Receipt: the title in spaced till-roll caps, a dashed rule under it.
+      return (
+        <View {...a11y} accessible style={headingStyles.receiptWrap}>
+          <Text style={[headingStyles.receiptCaps, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {words.toUpperCase()}
+          </Text>
+          <DashedRule colour={withAlpha(ink, 0.55)} />
+        </View>
+      );
     case "tabCaps":
       // Index: small bold caps, written on the section's file tab.
       return (
@@ -782,7 +815,7 @@ function PageSectionSurface({
     );
   }
 
-  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
+  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block" || pageStyle.cards === "receipt"
     ? 0
     : pageStyle.cards === "clipped" ? 2
     : pageStyle.cards === "raised" ? 3
@@ -913,6 +946,8 @@ function PageSectionSurface({
           pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
           pageStyle.cards === "outlineRound" && [surfaceStyles.outlineRound, { borderColor: outlineInk(palette.cardBackground) }],
+          pageStyle.cards === "lit" && litSurface(palette.cardBackground, palette.accent, palette.background),
+          pageStyle.cards === "receipt" && receiptSurface(palette.cardBackground),
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -1002,6 +1037,38 @@ export function WaveEdge({ color, position, width }: { color: string; position: 
  * Branding → Card Shape still wins on corners: the profile applies its square
  * style after this.
  */
+/** Neon's lit card: rounded, outlined in the accent, and on a dark page
+ *  glowing round its edge like a tube. On a pale page the glow would only
+ *  read as a smudge, so it's the outline alone there. iOS draws the glow;
+ *  Android draws the outline. */
+export function litSurface(card: string, accent: string, sheet: string): ViewStyle {
+  const dark = isDarkColor(sheet);
+  return {
+    backgroundColor: card,
+    borderWidth: 1.5,
+    borderColor: dark ? blend(accent, "#FFFFFF", 0.2) : accent,
+    borderRadius: 16,
+    shadowColor: accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: dark ? 0.75 : 0,
+    shadowRadius: 10,
+    elevation: 0,
+    overflow: "visible",
+  };
+}
+
+/** Receipt's slip: square paper with a fine edge and no shadow. */
+export function receiptSurface(card: string): ViewStyle {
+  return {
+    backgroundColor: card,
+    borderRadius: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: withAlpha(outlineInk(card), 0.18),
+    shadowOpacity: 0,
+    elevation: 0,
+  };
+}
+
 /** Where Index's file tab sits on a section: left, middle, right in turn,
  *  in the order the profile draws its sections, so the tabs step across the
  *  page like the dividers in a card box. */
@@ -1016,6 +1083,10 @@ export function serviceCardSurface(
 ): ViewStyle | null {
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
+    case "lit":
+      return litSurface(colours.card, colours.accent, colours.sheet);
+    case "receipt":
+      return receiptSurface(colours.card);
     case "indexTab":
       // Index: each service on its own small card from the file.
       return {
@@ -1985,6 +2056,10 @@ const headingStyles = StyleSheet.create({
   // Calling Card's engraved caps (Forum), its own face.
   engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
+  // Ms Madi draws small for its size, and its loops need the tall line.
+  neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 58, marginBottom: 4 },
+  receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
+  receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
   tabCaps: { fontFamily: "Figtree-SemiBold", fontSize: 12, letterSpacing: 1.5 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
