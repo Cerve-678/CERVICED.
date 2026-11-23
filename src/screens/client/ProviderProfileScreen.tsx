@@ -1266,6 +1266,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     promotions,
     portfolio,
     portfolioLoading,
+    portfolioError,
+    reloadPortfolio,
     openingHours,
     openingHoursLoading,
     takingBookings,
@@ -1619,6 +1621,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // A profile route can stay mounted while the provider adds photos elsewhere.
+  // Refresh its gallery whenever the viewer returns to it after the first visit.
+  const portfolioFocusedId = useRef<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    if (!providerDbId) return;
+    if (portfolioFocusedId.current === providerDbId) void reloadPortfolio();
+    else portfolioFocusedId.current = providerDbId;
+  }, [providerDbId, reloadPortfolio]));
   // The photos the hero shows: Editorial (1), Snapshot (3) and Hush (3) open
   // on the ones picked in Branding → Your Photos, topped up with the newest.
   // Bow, which has nothing to pick, keeps its newest photo.
@@ -4531,6 +4541,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               workPortfolio={workPortfolio}
               venuePortfolio={venuePortfolio}
               portfolioLoading={portfolioLoading}
+              portfolioError={portfolioError}
+              onRetryPortfolio={reloadPortfolio}
               policyPages={policyPages}
               policyEdges={policyEdges}
               jumpTargets={jumpTargets}
