@@ -58,8 +58,7 @@ export type PageStyleKey =
   | 'typeblock'
   | 'filmstrip'
   | 'neon'
-  | 'receipt'
-  | 'index'
+  | 'capsule'
   | 'moodboard'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
@@ -99,8 +98,7 @@ export type PageHeading =
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
   | 'neonScript' // a lowercase handwritten word in the accent, glowing like a lit tube on a dark page (Neon)
-  | 'receiptCaps' // spaced till-roll caps over a dashed rule, like a receipt's headings (Receipt)
-  | 'tabCaps'  // small bold caps written on the section's file tab (Index)
+  | 'pillMark' // a small pill in a quiet tone, then a soft lowercase title (Capsule)
   | 'captionCaps' // tiny, very widely spaced caps in a quiet ink, a hairline running out after them, like a print's caption (Moodboard)
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
@@ -132,8 +130,7 @@ export type PageCards =
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
   | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
   | 'lit'  // a rounded card outlined in the accent, glowing on a dark page (Neon)
-  | 'receipt' // a square slip of paper, no shadow, a fine edge, like a till receipt (Receipt)
-  | 'indexTab' // an index card with a margin line, a tinted file tab on its top edge naming the section, the tabs staggered down the page (Index)
+  | 'capsule' // a soft card in the oat tone with big round corners, no shadow; services as full pills taking turns in a tint of the accent and oat (Capsule)
   | 'print'; // a white print: square corners and a soft drop shadow, like the photos on its board; the services sit on the page between hairlines (Moodboard)
 
 /** How the policy rows are drawn. */
@@ -220,8 +217,7 @@ export type PageHero =
   | 'typeblockMark' // asymmetric typographic block with a vertical accent rail
   | 'filmstripMark' // two chosen images in a numbered film strip above the identity
   | 'neonSign' // a dark wall: the name as a glowing neon script sign, a lit tube under it, what they do in thin caps (Neon)
-  | 'receiptHead' // a till receipt with torn edges: ringed logo, the name in spaced caps, area, stars, a barcode and a thank-you (Receipt)
-  | 'indexCard' // a pile of index cards: the name on a ruled front card with a margin line, the logo stamped in its corner (Index)
+  | 'tallCapsule' // their chosen photo in a tall capsule; beside it the logo, the name in light lowercase, area and pill chips of what they do, then a full-width Book pill (Capsule)
   | 'collage' // up to four chosen photos layered at angles as captioned white prints, one round, the name in huge thin lowercase across their foot, an italic line and an outline Book pill under it (Moodboard)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -340,6 +336,7 @@ export type PhotoLayout =
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
   | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir, Hibiscus)
+  | 'capsules'  // four across as tall capsules at different heights, their feet level, like a skyline (Capsule)
   | 'taped';    // two across as white-bordered prints held on by a strip of tape, tilted by hand (Poster)
 
 export type SectionDivider =
@@ -356,7 +353,7 @@ export type ButtonShape =
   | 'arrowPill' // a filled pill, the word then a small arrow in a circle, like "Order now" (Hibiscus)
   | 'shopBox'   // a small square outline, the word in spaced capitals, like "Shop now" (Storefront)
   | 'glowPill'  // a round outline in the accent, the word in spaced capitals, glowing on a dark page (Neon)
-  | 'stamp'     // a rubber stamp: a tilted outline in the accent, the word in spaced capitals (Receipt)
+  | 'darkPill' // a full pill in the page's ink (dark on a pale page, pale on a dark one), the word in lowercase (Capsule)
   | 'captionPill'; // a fine outline pill in the ink, the word in thin, very widely spaced capitals (Moodboard)
 
 export interface HeroNameFont {
@@ -756,23 +753,17 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'neonScript', cards: 'lit', policies: 'outlined', logo: 'circle',
     hero: 'neonSign', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    roundedPhotos: true, buttonShape: 'glowPill',
-  },
-  {
-    key: 'receipt', name: 'Receipt', description: 'Your page printed as a till receipt: line-item services, a stamp to book and a barcode',
-    heading: 'receiptCaps', cards: 'receipt', policies: 'hairline', logo: 'circle',
-    hero: 'receiptHead', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    serviceLayout: 'menu', buttonShape: 'stamp',
-  },
-  {
-    key: 'index', name: 'Index', description: 'A little card file: your name on a ruled index card, each section a divider with its own tab',
-    heading: 'tabCaps', cards: 'indexTab', policies: 'definition', logo: 'circle',
-    hero: 'indexCard', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    roundedPhotos: true, buttonShape: 'glowPill', nameFontPickable: true,
   },
   // 2026-11-23: the clean-girl round of the same canvas (owner picked 14
   // Capsule, 13 Moodboard and 11 Latte).
+  {
+    key: 'capsule', name: 'Capsule', description: 'Pilates-studio calm: your photo in a tall capsule, everything a soft pill in sage and oat',
+    heading: 'pillMark', cards: 'capsule', policies: 'softTiles', logo: 'circle',
+    hero: 'tallCapsule', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'capsules', buttonShape: 'darkPill',
+  },
   {
     key: 'moodboard', name: 'Moodboard', description: 'A soft Pinterest board: your photos layered as captioned prints, your name huge and thin across them',
     heading: 'captionCaps', cards: 'print', policies: 'hairline', logo: 'circle',
@@ -803,6 +794,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'echoName': return 1;     // Hibiscus's photo in front of the echoed name
     case 'storefrontBanner': return 1; // Storefront's full-width photo
     case 'filmstripMark': return 2;
+    case 'tallCapsule': return 1;  // Capsule's tall capsule
     case 'collage': return 4;  // Moodboard's four prints
     default: return 0;
   }
@@ -825,6 +817,7 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'echoName': return 190 / 230;      // Hibiscus's photo
     case 'storefrontBanner': return 390 / 300; // Storefront's full-width photo
     case 'filmstripMark': return 158 / 190;
+    case 'tallCapsule': return 128 / 210;  // Capsule's tall capsule
     // Moodboard's prints, inside their white borders; the fourth is round.
     case 'collage': return index === 3 ? 1 : ([138 / 164, 128 / 124, 108 / 114][index] ?? 1);
     case 'pinboardHeader': {

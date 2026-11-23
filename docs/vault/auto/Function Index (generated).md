@@ -5,7 +5,7 @@
 
 #generated
 
-**4241 functions** across **622 files**.
+**4240 functions** across **622 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -308,7 +308,7 @@
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **heroNameFontStyle** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **pickedNameFont** · **pickedNameFontStyle** · pin · **ProfileHeroLayout** · ProfileHeroLayoutBody · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **customTextStyle** · **GlossShine** · HeadingLine · **indexTabPlace** · isCentredHeading · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · raisedEdges · **receiptSurface** · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **capsuleServiceSurface** · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — aboutBody · lines · noop · previewPrice · **ProfileStylePreview** · zone
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
@@ -332,22 +332,22 @@
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (13)
+### `src/features/providers/heroes/` (12)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
+- `CapsuleHero.tsx` — **CapsuleHero** · **capsuleInk** · **capsuleTones**
 - `DemureHeroes.tsx` — **BowHero** · **HushBoxes** · **HushHero** · **LoungeHero** · **SoftFocusHero** · **StripesHero** · **stripesHeroColour**
 - `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **ribbonColours** · **stripeColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
-- `IndexHero.tsx` — **IndexHero** · **indexMargin** · **indexTints**
 - `MoodboardHero.tsx` — heroSubOn · **MoodboardHero** · **moodboardName** · **moodboardPhotoAspect** · **moodboardPrint** · **moodboardTag**
-- `NeonHero.tsx` — **neonColours** · **NeonHero**
+- `NeonHero.tsx` — **GlowText** · layer · **neonColours** · **NeonHero** · **neonWallColour**
 - `NovelHero.tsx` — **NovelHero** · subtitle
-- `ReceiptHero.tsx` — Barcode · **DashedRule** · **ReceiptHero** · **TornEdge** · zigzag
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
 - `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**
 
-### `src/features/providers/page/` (4)
+### `src/features/providers/page/` (5)
+- `PinnedBarServices.tsx` — **pinnedBarServices** · **PinnedBarServiceText**
 - `ProviderPageHero.tsx` — **ProviderPageHero** · socialButton · StarIcon
 - `providerPagePalette.ts` — **buildProviderPagePalette** · **useProviderPagePalette**
 - `ProviderPageServices.tsx` — dotWindow · **ProviderPageServices** · ServiceDescription

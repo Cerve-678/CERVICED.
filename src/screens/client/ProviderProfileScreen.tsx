@@ -115,6 +115,7 @@ import { useProviderProfileData } from "../../features/providers/useProviderProf
 import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
 import { ProviderPageHero } from "../../features/providers/page/ProviderPageHero";
 import { ProviderPageSheet } from "../../features/providers/page/ProviderPageSheet";
+import { PinnedBarServiceText, pinnedBarServices, type PinnedBarLine } from "../../features/providers/page/PinnedBarServices";
 import { ProviderPageServices } from "../../features/providers/page/ProviderPageServices";
 import { revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
 import { heroPhotoPickLimit, type PageSectionKey } from "../../constants/pageStyles";
@@ -3543,15 +3544,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const squareButtons = pageStyle.buttonShape === "square";
 
   // The price list as it sits on the page; "See all" opens the full sheet.
-  // The pinned bar's service: the cheapest on the menu, by name and price as
-  // the menu shows them (user, 2026-11-23: a service, not just the business).
-  const pinnedBarService = pageStyle.pinnedBookBar
-    ? Object.values(provider.categories).flat().reduce<ServiceData | null>((low, service) => {
-        const value = Number(service.price);
-        if (!Number.isFinite(value) || value <= 0) return low;
-        return low === null || value < Number(low.price) ? service : low;
-      }, null)
-    : null;
+  // The pinned bar takes turns through their services, the cheapest first,
+  // by name, price and length as the menu shows them. No business name
+  // (user, 2026-11-23: "shouldn't have business name, and should interchange
+  // with the service recommendations").
+  const pinnedBarLines: PinnedBarLine[] = pageStyle.pinnedBookBar
+    ? pinnedBarServices(Object.values(provider.categories).flat()).map(service => ({
+        key: service.dbId || String(service.id),
+        name: service.name,
+        detail: service.duration ? `£${service.price} · ${service.duration}` : `£${service.price}`,
+      }))
+    : [];
 
   const renderInlineServices = () =>
     renderServiceCategoryBlock(visibleServices, () => {
@@ -4405,11 +4408,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             jumps to Services and then goes. Not while selecting several (that
             bar takes this spot), and never for a link-only provider (no
             services here). */}
-        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && showBookButtons && !provider.isLinkOnly && !selectMode && pinnedBarService ? (
+        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && showBookButtons && !provider.isLinkOnly && !selectMode && pinnedBarLines.length > 0 ? (
           <View style={[styles.pinnedBookBar, squareButtons && styles.pinnedBookBarSquare, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
             <View style={styles.pinnedBookText}>
-              <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
-              <Text style={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>{pinnedBarService.name} · £{pinnedBarService.price}</Text>
+              <PinnedBarServiceText
+                lines={pinnedBarLines}
+                nameStyle={[styles.pinnedBookName, { color: OP.text }, bodyFont]}
+                detailStyle={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]}
+              />
             </View>
             <TouchableOpacity
               style={[styles.pinnedBookButton, squareButtons && styles.squareButton, { backgroundColor: adaptiveAccentColor }]}

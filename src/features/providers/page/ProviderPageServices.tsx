@@ -19,7 +19,7 @@ import { menuNumber } from "../../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes";
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
-import { GlossShine } from "../ProfilePageStyle";
+import { capsuleServiceSurface, GlossShine } from "../ProfilePageStyle";
 import { moodboardTag } from "../heroes/MoodboardHero";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
@@ -317,8 +317,11 @@ export function ProviderPageServices({
   const glowPillButtons = pageStyle.buttonShape === "glowPill";
   const glowDark = isDarkColor(OP.bg);
   const glowLine = glowDark ? blend(adaptiveAccentColor, "#FFFFFF", 0.2) : adaptiveAccentColor;
-  // Receipt: a rubber stamp, a tilted outline in the accent.
-  const stampButtons = pageStyle.buttonShape === "stamp";
+  // Capsule: a full pill in the page's ink, the word in lowercase; each
+  // service a capsule, taking turns in the accent's tint and oat.
+  const darkPillButtons = pageStyle.buttonShape === "darkPill";
+  const darkPillInk = isDarkColor(SV.text) ? "#FAF8F3" : "#26241F";
+  const capsuleServices = pageStyle.cards === "capsule";
   // Moodboard: a fine outline pill in the ink, thin spaced caps.
   const captionPillButtons = pageStyle.buttonShape === "captionPill";
   const pillInk = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1F1214";
@@ -472,6 +475,7 @@ export function ProviderPageServices({
               styles.serviceItemCard,
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
+              capsuleServices && capsuleServiceSurface(adaptiveAccentColor, OP.bg, serviceIndex),
               squareCards && styles.squareCard,
               serviceTwoUp && (serviceTileWidth > 0 ? { width: serviceTileWidth } : styles.serviceTile),
             ]}
@@ -750,9 +754,9 @@ export function ProviderPageServices({
                           shopBoxButtons && [styles.shopBoxButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                           glowPillButtons && [
                             styles.glowPillButton,
-                            { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 0.8 : 0 },
+                            { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 1 : 0 },
                           ],
-                          stampButtons && [styles.stampButton, { borderColor: fullyBooked ? SV.border : adaptiveAccentColor }],
+                          darkPillButtons && [styles.darkPillButton, { backgroundColor: fullyBooked ? withAlpha(SV.sub, 0.18) : SV.text }],
                           captionPillButtons && [styles.captionPillButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                         ]}
                         onPress={() => {
@@ -774,7 +778,7 @@ export function ProviderPageServices({
                             arrowPillButtons && !fullyBooked && { color: pillInk },
                             shopBoxButtons && [styles.shopBoxButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
-                            stampButtons && [styles.stampButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
+                            darkPillButtons && !fullyBooked && [styles.darkPillButtonText, { color: darkPillInk }],
                             captionPillButtons && [styles.captionPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                           ]}
                         >
@@ -785,6 +789,8 @@ export function ProviderPageServices({
                               // Boutique says "Add to basket"; it still opens the booking sheet.
                               : arrowPillButtons || shopBoxButtons
                               ? "Book now"
+                              : darkPillButtons
+                              ? "book"
                               : pageStyle.bookLabel ?? "Book"}
                         </Text>
                         {arrowPillButtons && takingBookings && !fullyBooked ? (
@@ -1143,9 +1149,10 @@ const styles = StyleSheet.create({
   arrowPillCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.4, alignItems: "center", justifyContent: "center" },
   shopBoxButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 1, shadowOpacity: 0, elevation: 0, paddingHorizontal: 12 },
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
-  glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, elevation: 0 },
+  glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 12, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
-  stampButton: { backgroundColor: "transparent", borderWidth: 2, borderRadius: 4, shadowOpacity: 0, elevation: 0, transform: [{ rotate: "-4deg" }] },
+  darkPillButton: { borderRadius: 999, paddingHorizontal: 20, shadowOpacity: 0, elevation: 0 },
+  darkPillButtonText: { fontFamily: "Figtree-SemiBold", fontSize: 13 },
   captionPillButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 999, shadowOpacity: 0, elevation: 0 },
   captionPillButtonText: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 3, textTransform: "uppercase" },
   taggedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -1153,7 +1160,6 @@ const styles = StyleSheet.create({
   taggedTagText: { fontFamily: "Jost-Light", fontSize: 9, letterSpacing: 2 },
   taggedName: { flex: 1, fontFamily: "InstrumentSerif-Regular", fontSize: 19, lineHeight: 24 },
   taggedPrice: { fontFamily: "Jost-Light", fontSize: 15 },
-  stampButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   // Posy: two tiles across, each a column of photo, details and Book.
   // columnGap too: the list's `gap: 15` would otherwise set a 15pt gap between
   // the two, wider than the room left beside them, and wrap them one a row.
