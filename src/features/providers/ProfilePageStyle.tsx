@@ -6,7 +6,7 @@
 // frosted card with its Bakbak title inside — so a provider who never picks a
 // style sees no change.
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,6 +32,7 @@ import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOr
 import { SectionDivider } from "./pageParts";
 import { DashedRule } from "./heroes/ReceiptHero";
 import { indexMargin, indexTints } from "./heroes/IndexHero";
+import { LATTE_OVERLAP, latteBand, latteGlass, latteInk, latteShade } from "./heroes/LatteHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -49,6 +50,43 @@ export interface PageStylePalette {
   squareCards?: boolean;
   /** Branding → Page Style. Missing means Classic. */
   pageStyle?: PageStyle;
+  /** Latte: the page's own colour, kept when `background` is swapped for a
+   *  section's band (pourPalette), so the pour is always worked out from it. */
+  pourSheet?: string;
+}
+
+/** Latte: the palette for one section, its band in place of the page colour
+ *  and the ink that reads on it, so everything in the section (drawn straight
+ *  on the band) turns light on the deep bands. Every other style gets its
+ *  palette back unchanged. */
+export function pourPalette(palette: PageStylePalette, section: PageSectionKey): PageStylePalette {
+  if (palette.pageStyle?.cards !== "pour") return palette;
+  const sheet = palette.pourSheet ?? palette.background;
+  const band = latteBand(palette.accent, sheet, section);
+  const ink = sheetInk(band);
+  return {
+    ...palette,
+    pourSheet: sheet,
+    background: band,
+    text: ink.text,
+    sub: ink.sub,
+    border: ink.border,
+    separator: ink.separator,
+    cardBackground: latteGlass(band),
+  };
+}
+
+/** pourPalette, kept the same object until the palette changes (for the memoized sections). */
+export function usePourPalette(palette: PageStylePalette, section: PageSectionKey): PageStylePalette {
+  return useMemo(() => pourPalette(palette, section), [palette, section]);
+}
+
+/** Latte: a band drawn round a section that brings its own heading (the
+ *  services, the portfolio, the policy pictures), from its pourPalette; null
+ *  on every other style. */
+export function pourBandStyle(palette: PageStylePalette): ViewStyle | null {
+  if (palette.pageStyle?.cards !== "pour") return null;
+  return { ...surfaceStyles.pour, backgroundColor: palette.background };
 }
 
 /** Text and line colours for something drawn straight on the content area
@@ -82,6 +120,8 @@ export function customTextStyle(style: PageStyle | undefined): { fontFamily: str
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
   return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer" || style?.cards === "ruled"
+    // Latte: straight on its band.
+    || style?.cards === "pour"
     // Riviera: content straight on its strip, with no box.
     || (style?.cards === "stripes" && !!style.openStrips);
 }
@@ -585,6 +625,13 @@ export function PageSectionHeading({
           {words.toUpperCase()}
         </Text>
       );
+    case "pourSerif":
+      // Latte: a plain serif title in the band's ink. The portfolio is "My work".
+      return (
+        <Text {...a11y} style={[headingStyles.pourSerif, { color: ink }]} numberOfLines={2}>
+          {section === "portfolio" && !custom ? "My work" : title}
+        </Text>
+      );
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -702,6 +749,20 @@ function PageSectionSurface({
         </HeadingLine>
         {children}
       </BlurView>
+    );
+  }
+
+  if (pageStyle.cards === "pour") {
+    // Latte: the section on its band of the pour, the heading and content
+    // straight on it in the band's ink, its rounded top over the band above.
+    const band = pourPalette(palette, section);
+    return (
+      <View style={[surfaceStyles.pour, { backgroundColor: band.background }, style]}>
+        <HeadingLine headingRight={headingRight}>
+          <PageSectionHeading section={section} palette={band} title={title} />
+        </HeadingLine>
+        {children}
+      </View>
     );
   }
 
@@ -1077,6 +1138,45 @@ export function indexTabPlace(section: PageSectionKey): "flex-start" | "center" 
   return places[(Number.parseInt(SECTION_NUMBERS[section], 10) - 1) % 3]!;
 }
 
+/** Latte's foot: the deepest band of the pour (espresso; milk on a dark
+ *  page), the lowest price and a Book pill in the top band's colour, which
+ *  jumps to Services. It runs down over the sheet's bottom padding. */
+export function LatteBookBar({
+  palette,
+  price,
+  serviceName,
+  onBook,
+}: {
+  palette: PageStylePalette;
+  /** The lowest price on the menu, already formatted ("£22"); none yet says "Book in". */
+  price?: string | undefined;
+  serviceName?: string | undefined;
+  onBook?: (() => void) | undefined;
+}) {
+  const sheet = palette.pourSheet ?? palette.background;
+  const bar = latteShade(palette.accent, sheet, 1);
+  const top = latteShade(palette.accent, sheet, 0);
+  const ink = latteInk(bar);
+  return (
+    <View style={[surfaceStyles.pour, surfaceStyles.pourBar, { backgroundColor: bar }]}>
+      <View style={surfaceStyles.pourBarText}>
+        <Text style={[surfaceStyles.pourBarPrice, { color: ink.text }]} numberOfLines={1}>{price ? `from ${price}` : "Book in"}</Text>
+        {serviceName ? <Text style={[surfaceStyles.pourBarSub, { color: ink.sub }]} numberOfLines={1}>{serviceName}</Text> : null}
+      </View>
+      <TouchableOpacity
+        style={[surfaceStyles.pourBarButton, { backgroundColor: top }]}
+        onPress={onBook}
+        disabled={!onBook}
+        accessibilityRole="button"
+        accessibilityLabel="Book"
+        activeOpacity={0.85}
+      >
+        <Text style={[surfaceStyles.pourBarButtonText, { color: latteInk(top).text }]}>Book</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export function serviceCardSurface(
   style: PageStyle,
   colours: { card: string; accent: string; sheet: string },
@@ -1087,6 +1187,11 @@ export function serviceCardSurface(
       return litSurface(colours.card, colours.accent, colours.sheet);
     case "receipt":
       return receiptSurface(colours.card);
+    case "pour": {
+      // Latte: each service in a soft see-through pill on the services band.
+      const band = latteBand(colours.accent, colours.sheet, "services");
+      return { backgroundColor: latteGlass(band), borderWidth: 0, borderRadius: 28, shadowOpacity: 0, elevation: 0 };
+    }
     case "indexTab":
       // Index: each service on its own small card from the file.
       return {
@@ -2061,6 +2166,7 @@ const headingStyles = StyleSheet.create({
   receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
   receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
   tabCaps: { fontFamily: "Figtree-SemiBold", fontSize: 12, letterSpacing: 1.5 },
+  pourSerif: { fontFamily: "InstrumentSerif-Regular", fontSize: 26, lineHeight: 32, marginBottom: 10 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
@@ -2123,6 +2229,24 @@ const surfaceStyles = StyleSheet.create({
     overflow: "visible",
   },
   indexMargin: { position: "absolute", left: 20, top: 0, bottom: 0, width: 1.5 },
+  // Latte: a full-width band, bled out of the sheet's 20pt side padding, its
+  // rounded top lapping over the band above (which reaches down under it).
+  pour: {
+    marginHorizontal: -20,
+    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: 30 + LATTE_OVERLAP,
+    marginBottom: -LATTE_OVERLAP,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  // Down over the sheet's 130pt bottom padding, so the page ends in espresso.
+  pourBar: { flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 18, paddingBottom: 130 + 18, marginBottom: -130 },
+  pourBarText: { flex: 1 },
+  pourBarPrice: { fontFamily: "InstrumentSerif-Regular", fontSize: 22, lineHeight: 28 },
+  pourBarSub: { fontFamily: "HankenGrotesk-Medium", fontSize: 12 },
+  pourBarButton: { minHeight: 44, borderRadius: 999, paddingHorizontal: 26, alignItems: "center", justifyContent: "center" },
+  pourBarButtonText: { fontFamily: "HankenGrotesk-Medium", fontSize: 14 },
   indexRight: { alignItems: "flex-end", marginBottom: 6 },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },

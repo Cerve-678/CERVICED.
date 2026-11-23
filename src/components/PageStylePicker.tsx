@@ -16,6 +16,7 @@ import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pag
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
 import { NEON_WALL, neonColours } from '../features/providers/heroes/NeonHero';
+import { latteInk, latteShade } from '../features/providers/heroes/LatteHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
 
@@ -145,6 +146,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   neon: { text: 'services' },
   receipt: { text: 'SERVICES' },
   index: { text: 'SERVICES' },
+  latte: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -468,6 +470,8 @@ function MiniProfile({
         );
       case 'tabCaps':
         return <Text style={[mini.tabCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'pourSerif':
+        return <Text style={[mini.pourSerif, { color: ink }]}>{heading.text}</Text>;
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -643,6 +647,11 @@ function MiniProfile({
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 7, borderWidth: 1, borderColor: accent }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'receipt':
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'pour': {
+        // Latte: each a band a shade deeper than the last, its rounded top over the one above.
+        const band = latteShade(accent, sheet, 0.4 + key * 0.3);
+        return <View key={key} style={[mini.card, mini.pourBand, { backgroundColor: band }]}><View style={[mini.bar, { backgroundColor: withAlpha(latteInk(band).text, 0.3) }]} /></View>;
+      }
       case 'indexTab':
         return (
           <View key={key}>
@@ -755,6 +764,12 @@ function MiniProfile({
               <Text style={[mini.receiptName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>NAME</Text>
               <View style={[mini.receiptBars, { borderColor: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} />
             </View>
+          </View>
+        ) : style.hero === 'pourTop' ? (
+          // Latte: the palest band, a round photo, the name in a big italic serif.
+          <View style={[mini.pourHero, { backgroundColor: latteShade(accent, sheet, 0) }]}>
+            <View style={[mini.pourPhoto, { backgroundColor: latteShade(accent, sheet, 0.45) }]} />
+            <Text style={[mini.pourName, { color: latteInk(latteShade(accent, sheet, 0)).text }]} numberOfLines={1}>name</Text>
           </View>
         ) : style.hero === 'indexCard' ? (
           // Index: a ruled front card on a tinted card behind it.
@@ -1410,6 +1425,11 @@ const mini = StyleSheet.create({
   receiptName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 9, letterSpacing: 2 },
   receiptBars: { width: 36, height: 7, borderLeftWidth: 2, borderRightWidth: 3 },
   tabCaps: { fontFamily: 'Figtree-SemiBold', fontSize: 8, letterSpacing: 1 },
+  pourSerif: { fontFamily: 'InstrumentSerif-Regular', fontSize: 12 },
+  pourBand: { borderRadius: 0, borderTopLeftRadius: 9, borderTopRightRadius: 9, marginHorizontal: -8, paddingHorizontal: 14, marginBottom: -4 },
+  pourHero: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  pourPhoto: { width: 30, height: 30, borderRadius: 15 },
+  pourName: { fontFamily: 'InstrumentSerif-Italic', fontSize: 17 },
   indexTab: { width: 22, height: 5, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   indexHero: { flex: 1, padding: 10, justifyContent: 'center' },
   indexBehind: { position: 'absolute', left: 14, right: 10, top: 12, bottom: 10, borderRadius: 3, transform: [{ rotate: '3deg' }] },

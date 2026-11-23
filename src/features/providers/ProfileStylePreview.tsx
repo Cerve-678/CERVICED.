@@ -48,7 +48,11 @@ import {
   sheetInk,
   StyledPolicyList,
   type PageStylePalette,
+  LatteBookBar,
+  pourBandStyle,
+  pourPalette,
 } from "./ProfilePageStyle";
+import { latteShade } from "./heroes/LatteHero";
 import type { HeroPhotoFrames } from "./HeroPhoto";
 
 const noop = () => {};
@@ -241,7 +245,9 @@ export function ProfileStylePreview({
   const squareCards = shape === "square";
 
   // As ProviderProfileScreen works them out.
-  const heroIsDark = heroIsDarkForStyle(pageStyle) || !!backgroundImage || isDarkColor(gradient[0] ?? OP.hero);
+  // Latte's top is the first band of its pour, so its ink follows that band.
+  const pourTop = pageStyle.hero === "pourTop" ? latteShade(accent, OP.bg, 0) : null;
+  const heroIsDark = pourTop ? isDarkColor(pourTop) : heroIsDarkForStyle(pageStyle) || !!backgroundImage || isDarkColor(gradient[0] ?? OP.hero);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
   const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);
@@ -268,6 +274,16 @@ export function ProfileStylePreview({
 
   const page = sheetInk(OP.bg);
   const cardInk = sectionInk(palette);
+  // Latte: each section on its own band of the pour (the same palette on every other style).
+  const pour = pageStyle.cards === "pour";
+  const aboutPalette = pourPalette(palette, "about");
+  const policiesPalette = pourPalette(palette, "policies");
+  const servicesPalette = pourPalette(palette, "services");
+  const policyPagesPalette = pourPalette(palette, "policyPages");
+  const reviewsPalette = pourPalette(palette, "reviews");
+  const cheapest = pour && content?.services?.length
+    ? content.services.reduce((low, service) => (service.price < low.price ? service : low))
+    : null;
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
   const arches = pageStyle.serviceLayout === "archTiles";
   const tiles = pageStyle.serviceLayout === "tiles" || arches;
@@ -283,7 +299,7 @@ export function ProfileStylePreview({
   const glowBook = pageStyle.buttonShape === "glowPill";
   // Receipt: a tilted rubber-stamp outline in the accent.
   const stampBook = pageStyle.buttonShape === "stamp";
-  const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
+  const serviceInk = surface && sectionsSitOnPage(pageStyle) ? (pour ? sheetInk(servicesPalette.background) : page) : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
   const lines = (colour: string, widths: number[] = [100, 92, 64]) => (
@@ -452,7 +468,8 @@ export function ProfileStylePreview({
         <View
           style={[
             styles.sheet,
-            { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
+            // Latte: the sheet is the first band's colour, as on the profile.
+            { backgroundColor: veilTheme ? veilTheme.sheetFill : pour ? aboutPalette.background : OP.bg },
             // As on the profile: over a background photo the sheet is pulled
             // in so the photo shows down its sides.
             backgroundImage || veilTheme ? styles.sheetFloating : null,
@@ -509,8 +526,8 @@ export function ProfileStylePreview({
                 </AccentBandSection>
               ) : !pageStyle.aboutInHero ? (
                 zone("surface", "Sections", (
-                  <PageSection section="about" palette={palette}>
-                    {aboutBody(cardInk.text, cardInk.separator)}
+                  <PageSection section="about" palette={aboutPalette}>
+                    {aboutBody(sectionInk(aboutPalette).text, sectionInk(aboutPalette).separator)}
                   </PageSection>
                 ))
               ) : null}
@@ -519,18 +536,19 @@ export function ProfileStylePreview({
                   <StyledPolicyList rows={PREVIEW_POLICY_ROWS} palette={palette} ink={onAccentInk(accent)} />
                 </AccentBandSection>
               ) : zone("policies", "Policies", (
-                <PageSection section="policies" palette={palette} bare={policiesBringOwnSurface(pageStyle)}>
+                <PageSection section="policies" palette={policiesPalette} bare={policiesBringOwnSurface(pageStyle)}>
                   <StyledPolicyList
                     rows={PREVIEW_POLICY_ROWS}
-                    palette={palette}
-                    ink={policiesBringOwnSurface(pageStyle) ? page : cardInk}
+                    palette={policiesPalette}
+                    ink={policiesBringOwnSurface(pageStyle) ? sheetInk(policiesPalette.background) : sectionInk(policiesPalette)}
                   />
                 </PageSection>
               ))}
             </>
           )}
 
-          {/* Services */}
+          {/* Services (on Latte, all of it on the services band) */}
+          <View style={pourBandStyle(servicesPalette)}>
           {pageStyle.heading === "plain" ? (
             <Text style={[styles.servicesTitle, { color: OP.text }]}>Services</Text>
           ) : zone("headingStyle", "Headings", (
@@ -543,7 +561,7 @@ export function ProfileStylePreview({
                   pageStyle.cards === "stripes" && styles.stripesServicesHeading,
                 ]}
               >
-                <PageSectionHeading section="services" palette={palette} />
+                <PageSectionHeading section="services" palette={servicesPalette} />
               </View>
             </View>
           ))}
@@ -669,24 +687,31 @@ export function ProfileStylePreview({
               ) : null}
             </BlurView>
           ))}</View>)}
+          </View>
 
           {showPolicyPages && policyPlacement === "afterServices" ? (
-            policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
-              <PolicyPagesShowcase urls={pages} edges={edges} look={policyLook} palette={palette} onOpenPage={noop} onOpenAll={noop} />
+            <View style={pourBandStyle(policyPagesPalette)}>
+            {policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
+              <PolicyPagesShowcase urls={pages} edges={edges} look={policyLook} palette={policyPagesPalette} onOpenPage={noop} onOpenAll={noop} />
             ) : policyLook === "thumbs" || policyLook === "button" ? (
-              <PolicyPagesCompact urls={pages} look={policyLook} palette={palette} onOpenPage={noop} onOpenAll={noop} />
+              <PolicyPagesCompact urls={pages} look={policyLook} palette={policyPagesPalette} onOpenPage={noop} onOpenAll={noop} />
             ) : (
-              <PolicyPagesInline urls={pages} edges={edges} look={policyLook} palette={palette} onOpen={noop} />
-            )
+              <PolicyPagesInline urls={pages} edges={edges} look={policyLook} palette={policyPagesPalette} onOpen={noop} />
+            )}
+            </View>
           ) : null}
 
-          <PageSection section="reviews" palette={palette} style={styles.reviews}>
-            {lines(cardInk.separator, [100, 76])}
+          <PageSection section="reviews" palette={reviewsPalette} style={styles.reviews}>
+            {lines(sectionInk(reviewsPalette).separator, [100, 76])}
           </PageSection>
           {children}
           {/* Every other style keeps its portfolio further down the page. */}
           {pageStyle.portfolioFirst && pageStyle.separateAboutAndPolicies ? null : portfolioSection}
           {afterPortfolio}
+          {/* Latte: the page ends on its deepest band, the lowest price and Book. */}
+          {pour ? (
+            <LatteBookBar palette={palette} price={cheapest ? previewPrice(cheapest.price) : undefined} serviceName={cheapest?.name} />
+          ) : null}
         </View>
       </View>
     </ScrollView>

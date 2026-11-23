@@ -8,6 +8,7 @@ import {
 } from "../ProfileHero";
 import { cardInk } from "../heroes/BoutiqueHero";
 import { stripesHeroColour } from "../heroes/DemureHeroes";
+import { latteBand, latteShade } from "../heroes/LatteHero";
 import { veilAccent, veilPageTheme } from "../heroes/SheerHero";
 import {
   customTextStyle,
@@ -107,8 +108,10 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   // theme's own text colours follow the card's brightness. SV is what the
   // service list reads; every other style keeps OP.
   const pageInk = sheetInk(OP.bg);
+  // Latte's services sit on their own band of the pour, in its ink.
+  const serviceInk = pageStyle.cards === "pour" ? sheetInk(latteBand(adaptiveAccentColor, OP.bg, "services")) : pageInk;
   const SV = sectionsSitOnPage(pageStyle)
-    ? { ...OP, text: pageInk.text, sub: pageInk.sub, border: pageInk.border, sep: pageInk.separator }
+    ? { ...OP, text: serviceInk.text, sub: serviceInk.sub, border: serviceInk.border, sep: serviceInk.separator }
     : OP;
   const serviceSurfaceStyle = serviceCardSurface(pageStyle, {
     card: OP.card,
@@ -125,7 +128,10 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   const heroBgColor = provider?.hasCustomGradient
     ? provider?.gradient[0]
     : OP.hero;
-  const heroIsDark =
+  // Latte's top is the palest band of its pour (the deepest on a dark page),
+  // drawn over whatever is behind, so its ink follows that band.
+  const pourTop = pageStyle.hero === "pourTop" ? latteShade(adaptiveAccentColor, OP.bg, 0) : null;
+  const heroIsDark = pourTop ? isDarkColor(pourTop) :
     heroIsDarkForStyle(pageStyle) ||
     !!provider?.backgroundImage ||
     (heroBgColor ? isDarkColor(heroBgColor) : true);

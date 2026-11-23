@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -22,13 +22,17 @@ import {
 } from "../PolicyPages";
 import {
   AccentBandSection,
+  LatteBookBar,
   PageSection,
   PageSectionHeading,
   RuledJumpBar,
   StyledPolicyList,
   onAccentInk,
   policiesBringOwnSurface,
+  pourBandStyle,
   sectionInk,
+  sheetInk,
+  usePourPalette,
 } from "../ProfilePageStyle";
 import {
   ProviderAdditionalInfoSection,
@@ -154,6 +158,18 @@ export function ProviderPageSheet({
   } = palette;
   // Classic's About | Policy switch.
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
+  // Latte: each section on its own band of the pour (the same palette on every other style).
+  const pour = pageStyle.cards === "pour";
+  const aboutPalette = usePourPalette(sectionPalette, "about");
+  const policiesPalette = usePourPalette(sectionPalette, "policies");
+  const servicesPalette = usePourPalette(sectionPalette, "services");
+  const policyPagesPalette = usePourPalette(sectionPalette, "policyPages");
+  // Latte's foot: the lowest price on the menu, for its Book bar.
+  const cheapest = useMemo(() => {
+    if (!pour) return null;
+    const all = Object.values(provider.categories).flat();
+    return all.length ? all.reduce((low, service) => (service.price < low.price ? service : low)) : null;
+  }, [pour, provider.categories]);
 
   const portfolio = (
     <ProviderPortfolioSection
@@ -170,7 +186,8 @@ export function ProviderPageSheet({
     <View
       style={[
         styles.contentSheet,
-        { minHeight, backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
+        // Latte: the sheet is the first band's colour, so its top reads as that band.
+        { minHeight, backgroundColor: veilTheme ? veilTheme.sheetFill : pour ? aboutPalette.background : OP.bg },
         // With a background image, inset the sheet so the photo shows
         // along its sides — the content reads as a card floating over
         // the image rather than covering it edge to edge. A veil page
@@ -469,13 +486,13 @@ export function ProviderPageSheet({
             </View>
           ) : !pageStyle.aboutInHero ? (
             <View ref={aboutCardRef} collapsable={false}>
-              <PageSection section="about" palette={sectionPalette}>
+              <PageSection section="about" palette={aboutPalette}>
                 <ExpandableAboutText
                   text={provider.aboutText}
                   translate
-                  textStyle={[styles.aboutText, { color: sectionInk(sectionPalette).sub }, bodyFont]}
+                  textStyle={[styles.aboutText, { color: sectionInk(aboutPalette).sub }, bodyFont]}
                   linkStyle={styles.moreButton}
-                  linkTextStyle={[styles.moreButtonText, { color: sectionInk(sectionPalette).text }]}
+                  linkTextStyle={[styles.moreButtonText, { color: sectionInk(aboutPalette).text }]}
                   onCollapse={onAboutCollapse}
                 />
               </PageSection>
@@ -505,10 +522,11 @@ export function ProviderPageSheet({
                   );
                 }
                 const bare = policiesBringOwnSurface(pageStyle);
-                const ink = bare ? pageInk : sectionInk(sectionPalette);
+                // Latte's policies sit on their band, in its ink.
+                const ink = bare ? (pour ? sheetInk(policiesPalette.background) : pageInk) : sectionInk(policiesPalette);
                 return (
-                  <PageSection section="policies" palette={sectionPalette} bare={bare}>
-                    <StyledPolicyList rows={rows} palette={sectionPalette} ink={ink} />
+                  <PageSection section="policies" palette={policiesPalette} bare={bare}>
+                    <StyledPolicyList rows={rows} palette={policiesPalette} ink={ink} />
                     {footer(ink)}
                   </PageSection>
                 );
@@ -530,7 +548,7 @@ export function ProviderPageSheet({
           prices live on their own booking page. */}
       {!isLinkOnly && (
       <View
-        style={styles.servicesSection}
+        style={[styles.servicesSection, pourBandStyle(servicesPalette)]}
         ref={servicesSectionRef}
         collapsable={false}
       >
@@ -548,7 +566,7 @@ export function ProviderPageSheet({
               pageStyle.cards === "stripes" && styles.stripesServicesHeading,
             ]}
           >
-            <PageSectionHeading section="services" palette={sectionPalette} />
+            <PageSectionHeading section="services" palette={servicesPalette} />
           </View>
           </>
         )}
@@ -568,13 +586,13 @@ export function ProviderPageSheet({
           them at the top instead. Classic keeps them behind the round
           button. */}
       {pageStyle.key !== "classic" && policyPages.length > 0 && policyPlacement === "afterServices" ? (
-        <View ref={policyPagesRef} collapsable={false}>
+        <View ref={policyPagesRef} collapsable={false} style={pourBandStyle(policyPagesPalette)}>
           {policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
             <PolicyPagesShowcase
               urls={policyPages}
               edges={policyEdges}
               look={policyLook}
-              palette={sectionPalette}
+              palette={policyPagesPalette}
               onOpenPage={onOpenPolicyStory}
               onOpenAll={() => onOpenPolicyImage()}
             />
@@ -582,7 +600,7 @@ export function ProviderPageSheet({
             <PolicyPagesCompact
               urls={policyPages}
               look={policyLook}
-              palette={sectionPalette}
+              palette={policyPagesPalette}
               onOpenPage={onOpenPolicyStory}
               onOpenAll={() => onOpenPolicyImage()}
             />
@@ -591,7 +609,7 @@ export function ProviderPageSheet({
               urls={policyPages}
               edges={policyEdges}
               look={policyLook}
-              palette={sectionPalette}
+              palette={policyPagesPalette}
               onOpen={() => onOpenPolicyImage()}
             />
           )}
@@ -636,6 +654,16 @@ export function ProviderPageSheet({
       />
 
       <ProviderOwnSections sections={provider.ownSections} palette={sectionPalette} providerName={provider.displayName} />
+
+      {/* Latte: the page ends on its deepest band, the lowest price and Book. */}
+      {pour && !isLinkOnly && cheapest ? (
+        <LatteBookBar
+          palette={sectionPalette}
+          price={`£${cheapest.price}`}
+          serviceName={cheapest.name}
+          onBook={() => onScrollToSection(servicesSectionRef.current)}
+        />
+      ) : null}
     </View>
   );
 }
