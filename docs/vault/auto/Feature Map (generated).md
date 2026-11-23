@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **241 files**
 - … +211 more
 
 ## Payments
-Curated: [[Payments]] · **202 files**
+Curated: [[Payments]] · **203 files**
 - `src/screens/client/CartScreen.tsx` _(547)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **202 files**
 - `src/types/booking.ts` _(33)_
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `src/services/database/adminMoney.ts` _(28)_
-- … +172 more
+- … +173 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **417 files**
