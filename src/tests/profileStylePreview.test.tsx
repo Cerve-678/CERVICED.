@@ -6,6 +6,7 @@ import { CUSTOM_LAYOUTS, CUSTOM_PARTS, DEFAULT_CUSTOM_CHOICES, LAYOUT_PARTS, wit
 import { PAGE_STYLES } from '../constants/pageStyles';
 import { encodeThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { ProfileStylePreview } from '../features/providers/ProfileStylePreview';
+import type { DbPortfolioItem } from '../types/database';
 
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 jest.mock('expo-blur', () => {
@@ -326,12 +327,40 @@ describe('the portfolio and pinned bar, as on the profile', () => {
     expect(at('Portfolio')).toBeGreaterThan(at('Reviews'));
   });
 
-  it('shows grey photo shapes in Branding before any photo is uploaded, and none in a full preview', () => {
+  it('shows sample photo shapes when no portfolio is supplied, and none in a full preview', () => {
     renderPreview('posy');
     expect(screen.getAllByLabelText(/^Portfolio photo/).length).toBeGreaterThan(0);
     screen.unmount();
     renderPreview('posy', 'default', undefined, true);
     expect(screen.queryAllByLabelText(/^Portfolio photo/)).toHaveLength(0);
+  });
+
+  it('does not show sample portfolio photos when the provider has no work photos', () => {
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'posy')}
+        gradient={['#4A2C20', '#F5F1EC']} accent="#4A2C1E" backgroundImage={null} brandFont="default"
+        name="Amara Lashes" logoUri={null} logoFraming={null} metaLabels={[]} pillLabels={[]} kicker="LASHES" location="Peckham"
+        portfolio={[]}
+      />,
+    );
+    expect(screen.queryAllByLabelText(/^Portfolio photo/)).toHaveLength(0);
+  });
+
+  it('shows Retreat work photos in its portfolio section', () => {
+    const workPhoto = {
+      id: 'retreat-work-photo', image_url: 'https://example.com/work.jpg', aspect_ratio: 1,
+      caption: 'Finished work',
+    } as DbPortfolioItem;
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'retreat')}
+        gradient={['#4A2C20', '#F5F1EC']} accent="#4A2C1E" backgroundImage={null} brandFont="default"
+        name="Amara Lashes" logoUri={null} logoFraming={null} metaLabels={[]} pillLabels={[]} kicker="LASHES" location="Peckham"
+        portfolio={[workPhoto]}
+      />,
+    );
+    expect(screen.getByLabelText('Finished work')).toBeTruthy();
   });
 
   it('pins Riviera\'s Book bar with their cheapest service by name', () => {

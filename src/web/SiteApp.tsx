@@ -9,6 +9,7 @@ import { VisitorDisplaySettingsProvider } from '../contexts/DisplaySettingsConte
 import { parseSitePath } from './sitePath';
 import { SiteMessagePage } from './SiteMessagePage';
 import { PageStylePreview } from './dev/PageStylePreview';
+import { ProviderWebPage } from './ProviderWebPage';
 import { declareAppFontsForBrowser } from './webFonts';
 
 // Before the first render, so the page's fonts are declared before any text is drawn.
@@ -30,12 +31,7 @@ function SitePage() {
 
   switch (page.kind) {
     case 'provider':
-      return (
-        <SiteMessagePage
-          title="This page is coming soon"
-          body="Provider pages are coming to the website soon."
-        />
-      );
+      return <ProviderWebPage handle={page.handle} />;
     case 'pageStylePreview':
       return <PageStylePreview styleKey={page.styleKey} />;
     case 'notFound':

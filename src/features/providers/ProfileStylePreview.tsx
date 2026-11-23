@@ -127,11 +127,9 @@ export interface ProfileStylePreviewProps {
   /** Info Reg's preview: every category and service and the whole About,
    *  rather than Branding's outline of the first few. */
   full?: boolean;
-  /** Their work photos. Drawn by the profile's own Portfolio section, so each
-   *  style's photo layout looks as it does there: first on the work-first
-   *  styles (Posy, Noir), otherwise after the sections above. With none,
-   *  Branding shows grey shapes so the layout can still be seen; a full
-   *  preview shows none, as the profile. */
+  /** Their work photos. When supplied, an empty list has the same meaning as
+   *  on the public profile: there is no Portfolio section. Omit this prop to
+   *  show sample photo shapes while browsing a style in isolation. */
   portfolio?: readonly DbPortfolioItem[] | undefined;
   /** More of the page after Reviews, before the portfolio (Info Reg adds Contact). */
   children?: React.ReactNode;
@@ -324,7 +322,7 @@ export function ProfileStylePreview({
   const showPolicyPages = pageStyle.key !== "classic" && pages.length > 0;
 
   // The portfolio, in the style's own photo layout and heading.
-  const portfolioItems = portfolio && portfolio.length > 0
+  const portfolioItems = portfolio !== undefined
     ? (portfolio as DbPortfolioItem[])
     : full ? [] : PLACEHOLDER_PORTFOLIO;
   const portfolioSection = (

@@ -117,6 +117,23 @@ describe("useProviderProfileData", () => {
     expect(result.current.viewerChecked).toBe(false);
   });
 
+  it("recovers work photos when an initial portfolio request fails", async () => {
+    (getProviderBySlug as jest.Mock).mockResolvedValue({
+      id: "provider-1", slug: "studio-a", display_name: "Studio A", service_category: "HAIR",
+    });
+    (mapProviderProfileData as jest.Mock).mockReturnValue({ id: "studio-a" });
+    (getProviderPortfolio as jest.Mock)
+      .mockRejectedValueOnce(new Error("temporary network error"))
+      .mockResolvedValueOnce({ work: [{ id: "work-1", image_url: "https://example.com/work.jpg" }], venue: [] });
+
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+    await waitFor(() => expect(result.current.portfolioError).toBe(true));
+
+    await act(async () => { await result.current.reloadPortfolio(); });
+    expect(result.current.portfolioError).toBe(false);
+    expect(result.current.portfolio.work.map(item => item.id)).toEqual(["work-1"]);
+  });
+
   it("paints the lightweight profile before its full catalogue arrives", async () => {
     const fullProfile = deferred<Record<string, unknown>>();
     (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue({

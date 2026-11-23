@@ -43,6 +43,8 @@ export interface ProviderProfileDataState {
    *  row caps and render in two different places on the profile. */
   portfolio: { work: DbPortfolioItem[]; venue: DbPortfolioItem[] };
   portfolioLoading: boolean;
+  portfolioError: boolean;
+  reloadPortfolio: () => Promise<void>;
   openingHours: WeeklyOpeningHoursDay[] | null;
   openingHoursLoading: boolean;
   /** False only once the server says this provider has closed their schedule. */
@@ -97,6 +99,8 @@ export function useProviderProfileData(
     venue: DbPortfolioItem[];
   }>({ work: [], venue: [] });
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [portfolioError, setPortfolioError] = useState(false);
+  const portfolioRequestRef = useRef(0);
   const [openingHours, setOpeningHours] = useState<
     WeeklyOpeningHoursDay[] | null
   >(null);
@@ -109,8 +113,30 @@ export function useProviderProfileData(
   const [viewerChecked, setViewerChecked] = useState(false);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
 
+  const loadPortfolio = useCallback(async (id: string): Promise<void> => {
+    const request = ++portfolioRequestRef.current;
+    setPortfolioLoading(true);
+    setPortfolioError(false);
+    try {
+      const rows = await getProviderPortfolio(id, { includeVenue: true });
+      if (request === portfolioRequestRef.current) setPortfolio(rows);
+    } catch (error: unknown) {
+      if (request === portfolioRequestRef.current) {
+        setPortfolioError(true);
+        logger.warn("Failed to load provider portfolio:", error);
+      }
+    } finally {
+      if (request === portfolioRequestRef.current) setPortfolioLoading(false);
+    }
+  }, []);
+  const reloadPortfolio = useCallback(
+    () => providerDbId ? loadPortfolio(providerDbId) : Promise.resolve(),
+    [providerDbId, loadPortfolio],
+  );
+
   useEffect(() => {
     profileGenerationRef.current += 1;
+    portfolioRequestRef.current += 1;
     let cancelled = false;
     // The first run keeps the first frame's cached copy; a later slug change
     // looks in the cache again.
@@ -130,6 +156,7 @@ export function useProviderProfileData(
     setPromotions([]);
     setPortfolio({ work: [], venue: [] });
     setPortfolioLoading(true);
+    setPortfolioError(false);
     setOpeningHours(null);
     setOpeningHoursLoading(true);
     setTakingBookings(true);
@@ -224,16 +251,7 @@ export function useProviderProfileData(
         // includeVenue: the client profile renders venue/workspace shots
         // inside Additional Information, so it needs both halves — it is one
         // of the two callers getProviderPortfolio's second query exists for.
-        void getProviderPortfolio(data.id, { includeVenue: true })
-          .then((rows) => {
-            if (!cancelled) setPortfolio(rows);
-          })
-          .catch((error: unknown) => {
-            logger.warn("Failed to load provider portfolio:", error);
-          })
-          .finally(() => {
-            if (!cancelled) setPortfolioLoading(false);
-          });
+        void loadPortfolio(data.id);
 
         void AvailabilityService.getWeeklyOpeningHours(data.id)
           .then((hours) => {
@@ -297,8 +315,9 @@ export function useProviderProfileData(
     return () => {
       cancelled = true;
       profileGenerationRef.current += 1;
+      portfolioRequestRef.current += 1;
     };
-  }, [providerSlug]);
+  }, [providerSlug, loadPortfolio]);
 
   const loadAllReviews = useCallback(async (): Promise<void> => {
     if (!providerDbId || reviewsLoadedAll || reviewsLoading) return;
@@ -330,6 +349,8 @@ export function useProviderProfileData(
     promotions,
     portfolio,
     portfolioLoading,
+    portfolioError,
+    reloadPortfolio,
     openingHours,
     openingHoursLoading,
     takingBookings,
