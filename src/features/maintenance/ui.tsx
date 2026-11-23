@@ -76,14 +76,6 @@ export function Pill({ text, tone, P, S }: { text: string; tone: PillTone; P: Ap
   );
 }
 
-export function ProgressBar({ percent, colour, track, height = 5 }: { percent: number; colour: string; track: string; height?: number }) {
-  return (
-    <View style={[ui.bar, { backgroundColor: track, height, borderRadius: height }]}>
-      <View style={{ width: `${Math.max(0, Math.min(100, percent))}%`, height: '100%', borderRadius: height, backgroundColor: colour }} />
-    </View>
-  );
-}
-
 interface ButtonProps {
   label: string;
   onPress: () => void;
@@ -236,7 +228,6 @@ export const ui = StyleSheet.create({
   label: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.6, marginTop: 8, marginBottom: 2 },
   pill: { borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
   pillText: { fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: 1.1 },
-  bar: { width: '100%', overflow: 'hidden' },
   btn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 100, borderWidth: 1.5, paddingVertical: 14, paddingHorizontal: 18 },
   btnText: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 1 },
   btnSmall: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 100, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 12 },
