@@ -38,6 +38,12 @@ const INLINE_PORTFOLIO_LIMIT = 6;
 /** The feature grid (Ledger) holds five: one big, four small. */
 const FEATURE_PHOTO_LIMIT = 5;
 const PORTFOLIO_WALL_LIMIT = 3;
+/** Capsule's skyline: two rows of four capsules. */
+const CAPSULE_PHOTO_LIMIT = 8;
+/** Each capsule's shape (width ÷ height) in turn, so the tops step up and
+ *  down while the feet stay level, as on the canvas (120, 150, 104, 136 tall). */
+const CAPSULE_PHOTO_SHAPES = [0.6, 0.48, 0.7, 0.54] as const;
+const CAPSULE_GAP = 8;
 /** Riviera's prints lean a little each way, as if dropped on a table. */
 const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
 const COLUMN_GAP = 12;
@@ -475,6 +481,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const swipe = palette.pageStyle?.photoLayout === "swipe";
   // Poster: two across as white-bordered prints, each held on by a strip of tape.
   const taped = palette.pageStyle?.photoLayout === "taped";
+  // Capsule: four across as tall capsules at different heights, feet level.
+  const capsules = palette.pageStyle?.photoLayout === "capsules";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
     <TouchableOpacity
       key={item.id}
@@ -509,7 +517,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         ) : (
           <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
         )}
-        {!swipe && items.length > (portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
+        {!swipe && items.length > (portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : capsules ? CAPSULE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
           </TouchableOpacity>
@@ -526,6 +534,22 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
               accessibilityRole="imagebutton"
               accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
               style={[styles.portfolioWallTile, index === 1 && styles.portfolioWallMiddle, { backgroundColor: palette.cardBackground }]}
+            >
+              <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : capsules ? (
+        <View style={styles.capsuleRow}>
+          {items.slice(0, CAPSULE_PHOTO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={[styles.capsuleTile, { width: (screenWidth - 40 - CAPSULE_GAP * 3) / 4, aspectRatio: CAPSULE_PHOTO_SHAPES[index % CAPSULE_PHOTO_SHAPES.length], backgroundColor: palette.separator }]}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
             >
               <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
             </TouchableOpacity>
@@ -834,6 +858,8 @@ const styles = StyleSheet.create({
   },
   polaroidRaised: { marginTop: -6 },
   polaroidPhoto: { width: "100%", aspectRatio: 0.88, overflow: "hidden", backgroundColor: "#EEEEEE" },
+  capsuleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", columnGap: CAPSULE_GAP, rowGap: 10 },
+  capsuleTile: { borderRadius: 999, overflow: "hidden" },
   archGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
   tapedGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 22, paddingTop: 12, paddingBottom: 8, paddingHorizontal: 4 },
   tapedPrint: { width: "46%", padding: 6, paddingBottom: 18, backgroundColor: "#FFFDF9", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },

@@ -13,7 +13,7 @@ import { veilAccent, veilPageTheme } from "../heroes/SheerHero";
 import {
   customTextStyle,
   onAccentInk,
-  sectionsSitOnPage,
+  servicesSitOnPage,
   serviceCardSurface,
   sheetInk,
 } from "../ProfilePageStyle";
@@ -110,7 +110,7 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   const pageInk = sheetInk(OP.bg);
   // Latte's services sit on their own band of the pour, in its ink.
   const serviceInk = pageStyle.cards === "pour" ? sheetInk(latteBand(adaptiveAccentColor, OP.bg, "services")) : pageInk;
-  const SV = sectionsSitOnPage(pageStyle)
+  const SV = servicesSitOnPage(pageStyle)
     ? { ...OP, text: serviceInk.text, sub: serviceInk.sub, border: serviceInk.border, sep: serviceInk.separator }
     : OP;
   const serviceSurfaceStyle = serviceCardSurface(pageStyle, {
@@ -145,7 +145,7 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   // Lounge's sit on a strip of the page colour under its panel, Stripes' on
   // its strip of the accent.
   const sheetColour = veilTheme ? veilTheme.sheetFill : OP.bg;
-  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" || pageStyle.hero === "receiptHead"
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet"
     ? cardInk(OP.card)
     : pageStyle.hero === "stripes"
       ? cardInk(stripesHeroColour(adaptiveAccentColor))

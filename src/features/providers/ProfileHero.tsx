@@ -26,8 +26,8 @@ import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroP
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
 import { NeonHero } from "./heroes/NeonHero";
-import { ReceiptHero } from "./heroes/ReceiptHero";
-import { IndexHero } from "./heroes/IndexHero";
+import { CapsuleHero } from "./heroes/CapsuleHero";
+import { MoodboardHero } from "./heroes/MoodboardHero";
 import { LatteHero } from "./heroes/LatteHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
@@ -197,6 +197,8 @@ export interface ProfileHeroLayoutProps {
   accent: string;
   /** Up to two of their portfolio photos (Editorial's back card, Duet's film strip). */
   photoUris?: readonly string[];
+  /** Each of those photos' own portfolio caption, in the same order ("" when it has none): Moodboard's prints. */
+  photoCaptions?: readonly string[] | undefined;
   /** Their star rating, for Groovy's starburst. Left out when there are no CERVICED reviews. */
   rating?: string | null;
   /** The verified tick beside the name, for the layouts that draw the name themselves. */
@@ -270,6 +272,7 @@ function ProfileHeroLayoutBody({
   about,
   accent,
   photoUris,
+  photoCaptions,
   rating,
   isVerified,
   heroColour,
@@ -292,11 +295,25 @@ function ProfileHeroLayoutBody({
 
   switch (pageStyle.hero) {
     case "neonSign":
-      return <NeonHero name={name} kicker={kicker} accent={accent} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
-    case "receiptHead":
-      return <ReceiptHero name={name} kicker={kickerPhrase(kicker)} location={location} cardColour={cardColour} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
-    case "indexCard":
-      return <IndexHero name={name} kicker={kickerPhrase(kicker)} location={location} accent={accent} cardColour={cardColour} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
+      return <NeonHero name={name} kicker={kicker} accent={accent} heroColour={heroColour} pickedNameStyle={pickedName(62)} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
+    case "tallCapsule":
+      return (
+        <CapsuleHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
+          heroText={heroText}
+          heroSub={heroSub}
+          photo={photoUris?.[0]}
+          renderLogo={renderLogo}
+          tick={tick}
+          details={details}
+          onBookNow={onBookNow}
+          onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
+        />
+      );
     case "pourTop":
       return (
         <LatteHero
@@ -310,6 +327,24 @@ function ProfileHeroLayoutBody({
           tick={tick}
           details={details}
           onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
+        />
+      );
+    case "collage":
+      return (
+        <MoodboardHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
+          heroText={heroText}
+          photos={photoUris ?? []}
+          captions={photoCaptions ?? []}
+          renderLogo={renderLogo}
+          tick={tick}
+          details={details}
+          onBookNow={onBookNow}
+          onOpenPhoto={onOpenHeroPhoto}
         />
       );
     case "orbitMark":
@@ -1606,7 +1641,7 @@ export function heroNameFontStyle(font: HeroNameFont, size: number, pickedFont: 
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
   return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage"
-    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes" || pageStyle.hero === "receiptHead";
+    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes";
 }
 
 /**

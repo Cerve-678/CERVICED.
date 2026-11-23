@@ -17,6 +17,7 @@ import {
 } from '../constants/pageStyles';
 import { encodeThemeKey, isDarkColor, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { stripeColours } from '../features/providers/heroes/demureOrnaments';
+import { neonWallColour } from '../features/providers/heroes/NeonHero';
 import {
   policiesBringOwnSurface,
   sectionsSitOnPage,
@@ -24,11 +25,15 @@ import {
   sheetInk,
   showsDividerAbove,
   STRIPE_TINT,
-  indexTabPlace,
+  capsuleServiceSurface,
+  servicesSitOnPage,
   pourPalette,
   type PageStylePalette,
 } from '../features/providers/ProfilePageStyle';
 import { LATTE_POUR, latteBand, latteGlass, latteInk, latteShade, latteStops } from '../features/providers/heroes/LatteHero';
+import { moodboardName, moodboardPhotoAspect, moodboardPrint, moodboardTag } from '../features/providers/heroes/MoodboardHero';
+import { heroPhotoSlotAspect } from '../constants/pageStyles';
+import { CAPSULE_OAT, capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { heroIsDarkForStyle, heroNameFontStyle, heroUsesBrandFont, kickerPhrase, pickedNameFont } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
@@ -71,7 +76,7 @@ describe('page styles', () => {
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
-      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'receipt', 'index', 'latte',
+      'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'portfolio', 'atelier', 'neon', 'capsule', 'moodboard', 'latte',
     ]);
   });
 
@@ -340,7 +345,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'latte']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat', 'pinboard', 'poster', 'hibiscus', 'storefront', 'filmstrip', 'portfolio', 'capsule', 'moodboard', 'latte']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -409,6 +414,7 @@ describe('which styles show the picked name font', () => {
       'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard',
       'poster', 'hibiscus', 'storefront',
       'orbit', 'typeblock', 'filmstrip',
+      'neon',
     ].sort());
   });
 
@@ -584,7 +590,7 @@ describe('Ledger', () => {
 });
 
 describe('the picked name font on styles with their own lettering (owner, 2026-11-19)', () => {
-  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip'] as const;
+  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'neon'] as const;
 
   it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet, Signature and Pinboard', () => {
     for (const key of keys) expect(heroUsesBrandFont(getPageStyle(key))).toBe(true);
@@ -661,6 +667,18 @@ describe('Neon', () => {
     expect(heroPhotoPickLimit(neon)).toBe(0);
   });
 
+  it('builds the wall from their colour but always keeps it night-dark', () => {
+    for (const colour of ['#FFFFFF', '#F7E1E6', '#AF9197', '#3F1E36', '#FFD700']) {
+      expect(isDarkColor(neonWallColour(colour))).toBe(true);
+    }
+    expect(neonWallColour('#F7E1E6')).not.toBe(neonWallColour('#E5ECF4'));
+  });
+
+  it('lets them letter the sign in their Business Name Font', () => {
+    expect(neon.nameFontPickable).toBe(true);
+    expect(pickedNameFont(neon, 'default')).toBeNull();
+  });
+
   it('glows its cards only on a dark page', () => {
     const dark = serviceCardSurface(neon, { card: '#1C121B', accent: '#FF4F9A', sheet: '#140D14' });
     const light = serviceCardSurface(neon, { card: '#FFFFFF', accent: '#FF4F9A', sheet: SHEET_BG });
@@ -670,50 +688,102 @@ describe('Neon', () => {
   });
 });
 
-describe('Receipt', () => {
-  const receipt = getPageStyle('receipt');
+describe('Capsule', () => {
+  const capsule = getPageStyle('capsule');
 
-  it('prints the page as a till receipt, with its own top, headings, slips and stamp', () => {
-    expect(receipt.hero).toBe('receiptHead');
-    expect(receipt.heading).toBe('receiptCaps');
-    expect(receipt.cards).toBe('receipt');
-    expect(receipt.buttonShape).toBe('stamp');
-    expect(receipt.serviceLayout).toBe('menu');
-    for (const other of PAGE_STYLES.filter(s => s.key !== 'receipt')) {
-      expect(other.hero).not.toBe('receiptHead');
-      expect(other.heading).not.toBe('receiptCaps');
-      expect(other.cards).not.toBe('receipt');
-      expect(other.buttonShape).not.toBe('stamp');
+  it('draws the page in pills, with its own top, headings, cards, photos and Book shape', () => {
+    expect(capsule.hero).toBe('tallCapsule');
+    expect(capsule.heading).toBe('pillMark');
+    expect(capsule.cards).toBe('capsule');
+    expect(capsule.photoLayout).toBe('capsules');
+    expect(capsule.buttonShape).toBe('darkPill');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'capsule')) {
+      expect(other.hero).not.toBe('tallCapsule');
+      expect(other.heading).not.toBe('pillMark');
+      expect(other.cards).not.toBe('capsule');
+      expect(other.photoLayout).not.toBe('capsules');
+      expect(other.buttonShape).not.toBe('darkPill');
     }
   });
 
-  it('draws its service slips square, flat and finely edged', () => {
-    const surface = serviceCardSurface(receipt, { card: '#FFFFFF', accent: '#C8402F', sheet: SHEET_BG });
-    expect(surface?.borderRadius).toBe(0);
-    expect(surface?.shadowOpacity).toBe(0);
-    expect(surface?.backgroundColor).toBe('#FFFFFF');
+  it('lets the provider pick the one photo for its tall capsule', () => {
+    expect(heroPhotoPickLimit(capsule)).toBe(1);
+  });
+
+  it('keeps both tones as light as a pale page and as dark as a dark one, so the ink reads', () => {
+    for (const accent of ['#A9B49B', '#4A2C1E', '#E9799F']) {
+      for (const tone of capsuleTones(accent, '#FAF8F3')) expect(isDarkColor(tone)).toBe(false);
+      for (const tone of capsuleTones(accent, '#141512')) expect(isDarkColor(tone)).toBe(true);
+    }
+  });
+
+  it('pairs a tint of the accent with oat', () => {
+    const [tint, oat] = capsuleTones('#A9B49B', '#FFFFFF');
+    expect(tint).not.toBe(oat);
+    expect(capsuleTones('#E9799F', '#FFFFFF')[1]).toBe(oat);
+    expect(CAPSULE_OAT).toMatch(/^#[0-9A-F]{6}$/);
+  });
+
+  it('gives the services turns in the two tones, each a full pill', () => {
+    const [tint, oat] = capsuleTones('#A9B49B', '#FAF8F3');
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 0).backgroundColor).toBe(tint);
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 1).backgroundColor).toBe(oat);
+    expect(capsuleServiceSurface('#A9B49B', '#FAF8F3', 2).backgroundColor).toBe(tint);
+    expect(serviceCardSurface(capsule, { card: '#FFFFFF', accent: '#A9B49B', sheet: '#FAF8F3' })?.borderRadius).toBe(45);
   });
 });
 
-describe('Index', () => {
-  const index = getPageStyle('index');
+describe('Moodboard', () => {
+  const moodboard = getPageStyle('moodboard');
 
-  it('files the page as index cards, with its own top, tab headings and divider cards', () => {
-    expect(index.hero).toBe('indexCard');
-    expect(index.heading).toBe('tabCaps');
-    expect(index.cards).toBe('indexTab');
-    for (const other of PAGE_STYLES.filter(s => s.key !== 'index')) {
-      expect(other.hero).not.toBe('indexCard');
-      expect(other.heading).not.toBe('tabCaps');
-      expect(other.cards).not.toBe('indexTab');
+  it('pins the page up as a board, with its own top, headings, cards, service rows and Book shape', () => {
+    expect(moodboard.hero).toBe('collage');
+    expect(moodboard.heading).toBe('captionCaps');
+    expect(moodboard.cards).toBe('print');
+    expect(moodboard.serviceLayout).toBe('taggedRows');
+    expect(moodboard.buttonShape).toBe('captionPill');
+    for (const other of PAGE_STYLES.filter(s => s.key !== 'moodboard')) {
+      expect(other.hero).not.toBe('collage');
+      expect(other.heading).not.toBe('captionCaps');
+      expect(other.cards).not.toBe('print');
+      expect(other.serviceLayout).not.toBe('taggedRows');
+      expect(other.buttonShape).not.toBe('captionPill');
     }
   });
 
-  it('steps the tabs left, middle, right in the order the profile draws its sections', () => {
-    expect(indexTabPlace('about')).toBe('flex-start');
-    expect(indexTabPlace('policies')).toBe('center');
-    expect(indexTabPlace('services')).toBe('flex-end');
-    expect(indexTabPlace('policyPages')).toBe('flex-start');
+  it('lets the provider pick all four prints, framed in each print\'s own shape', () => {
+    expect(heroPhotoPickLimit(moodboard)).toBe(4);
+    for (const index of [0, 1, 2, 3]) {
+      expect(heroPhotoSlotAspect('collage', index, 4)).toBeCloseTo(moodboardPhotoAspect(index), 5);
+    }
+    expect(heroPhotoSlotAspect('collage', 3, 4)).toBe(1);
+  });
+
+  it('sets the first word of the name huge and the rest in the italic line, never a lone article', () => {
+    expect(moodboardName('Halo Lash & Brow')).toEqual(['Halo', 'Lash & Brow']);
+    expect(moodboardName('The Lash Lounge')).toEqual(['The Lash', 'Lounge']);
+    expect(moodboardName('Glow')).toEqual(['Glow', '']);
+  });
+
+  it('tags a service with its type in the singular', () => {
+    expect(moodboardTag('LASHES')).toBe('LASH');
+    expect(moodboardTag('Brows')).toBe('BROW');
+    expect(moodboardTag('NAILS')).toBe('NAIL');
+    expect(moodboardTag('HAIR')).toBe('HAIR');
+    expect(moodboardTag('')).toBe('');
+  });
+
+  it('keeps its sections on prints but its services on the page, in the page\'s ink', () => {
+    expect(sectionsSitOnPage(moodboard)).toBe(false);
+    expect(servicesSitOnPage(moodboard)).toBe(true);
+    const row = serviceCardSurface(moodboard, { card: '#FFFFFF', accent: '#C8AE9A', sheet: '#F7F4EF' });
+    expect(row?.backgroundColor).toBe('transparent');
+    expect(row?.borderBottomColor).toBe(sheetInk('#F7F4EF').border);
+  });
+
+  it('prints on white on a pale page and on a warm dark card on a dark one', () => {
+    expect(moodboardPrint('#F7F4EF').paper).toBe('#FFFFFF');
+    expect(isDarkColor(moodboardPrint('#171411').paper)).toBe(true);
   });
 });
 

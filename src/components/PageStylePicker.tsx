@@ -15,7 +15,8 @@ import Svg, { Path } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
-import { NEON_WALL, neonColours } from '../features/providers/heroes/NeonHero';
+import { neonColours, neonWallColour } from '../features/providers/heroes/NeonHero';
+import { capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { latteInk, latteShade } from '../features/providers/heroes/LatteHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
@@ -144,8 +145,8 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   typeblock: { text: 'SERVICES' },
   filmstrip: { lead: '03', text: 'SERVICES' },
   neon: { text: 'services' },
-  receipt: { text: 'SERVICES' },
-  index: { text: 'SERVICES' },
+  capsule: { text: 'services' },
+  moodboard: { text: 'THE SERVICES' },
   latte: { text: 'Services' },
 };
 
@@ -320,6 +321,15 @@ function MiniProfile({
             <View style={[mini.bar, { backgroundColor: line }]} />
           </>
         );
+      case 'taggedRows':
+        // Moodboard: a tag, the name, the price.
+        return (
+          <View style={mini.menuLine}>
+            <View style={[mini.taggedTag, { borderColor: withAlpha(ink, 0.35) }]} />
+            <View style={[mini.bar, { flex: 1, backgroundColor: line }]} />
+            <View style={[mini.bar, mini.menuPrice, { backgroundColor: line }]} />
+          </View>
+        );
       case 'menu':
         return (
           <View style={mini.menuLine}>
@@ -461,17 +471,22 @@ function MiniProfile({
         return <Text style={[mini.engravedCaps, { color: ink }]}>{heading.text}</Text>;
       case 'neonScript':
         return <Text style={[mini.neonScript, { color: isDarkColor(sheet) ? blend(accent, '#FFFFFF', 0.35) : blend(accent, '#000000', 0.25) }]}>{heading.text}</Text>;
-      case 'receiptCaps':
+      case 'captionCaps':
         return (
-          <View style={{ alignSelf: 'stretch' }}>
-            <Text style={[mini.receiptCaps, { color: ink }]}>{heading.text}</Text>
-            <View style={[mini.receiptRule, { borderColor: withAlpha(ink, 0.5) }]} />
+          <View style={mini.captionRow}>
+            <Text style={[mini.captionCaps, { color: withAlpha(ink, 0.6) }]}>{heading.text}</Text>
+            <View style={[mini.captionRule, { backgroundColor: line }]} />
           </View>
         );
-      case 'tabCaps':
-        return <Text style={[mini.tabCaps, { color: ink }]}>{heading.text}</Text>;
       case 'pourSerif':
         return <Text style={[mini.pourSerif, { color: ink }]}>{heading.text}</Text>;
+      case 'pillMark':
+        return (
+          <View style={mini.pillMarkRow}>
+            <View style={[mini.pillMark, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+            <Text style={[mini.pillMarkTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       case 'shopSerif':
         return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       case 'newsRule':
@@ -645,20 +660,17 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.groupedCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'lit':
         return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 7, borderWidth: 1, borderColor: accent }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
-      case 'receipt':
-        return <View key={key} style={[mini.card, { backgroundColor: cardColour, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: withAlpha(ink, 0.2) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'print':
+        // Moodboard: the services are hairline rows on the page.
+        return <View key={key} style={[mini.card, mini.cardNone, { borderBottomColor: line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'pour': {
         // Latte: each a band a shade deeper than the last, its rounded top over the one above.
         const band = latteShade(accent, sheet, 0.4 + key * 0.3);
         return <View key={key} style={[mini.card, mini.pourBand, { backgroundColor: band }]}><View style={[mini.bar, { backgroundColor: withAlpha(latteInk(band).text, 0.3) }]} /></View>;
       }
-      case 'indexTab':
-        return (
-          <View key={key}>
-            <View style={[mini.indexTab, { alignSelf: (['flex-start', 'center', 'flex-end'] as const)[key % 3], backgroundColor: blend(accent, cardColour, 0.55) }]} />
-            <View style={[mini.card, { backgroundColor: cardColour, borderRadius: 4 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
-          </View>
-        );
+      case 'capsule':
+        // Capsule: each service a full pill, taking turns in sage and oat.
+        return <View key={key} style={[mini.card, mini.capsuleCard, { backgroundColor: capsuleTones(accent, sheet)[key % 2] }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gridBox':
         return <View key={key} style={[mini.card, mini.gridCard, { backgroundColor: cardColour, borderColor: withAlpha(ink, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'soft':
@@ -752,18 +764,23 @@ function MiniProfile({
           </View>
         ) : style.hero === 'neonSign' ? (
           // Neon: the name lit up in script on a dark wall, a tube under it.
-          <View style={[mini.neonWall, { backgroundColor: NEON_WALL }]}>
+          <View style={[mini.neonWall, { backgroundColor: neonWallColour(heroColours[0] ?? '#1A1119') }]}>
             <Text style={[mini.neonName, { color: neonColours(accent).tube, textShadowColor: neonColours(accent).glow }]}>Name</Text>
             <View style={[mini.neonTube, { backgroundColor: neonColours(accent).tube }]} />
           </View>
-        ) : style.hero === 'receiptHead' ? (
-          // Receipt: a white slip with a name in spaced caps and a barcode.
-          <View style={mini.receiptHero}>
-            <View style={[mini.receiptSlip, { backgroundColor: cardColour }]}>
-              {logo}
-              <Text style={[mini.receiptName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>NAME</Text>
-              <View style={[mini.receiptBars, { borderColor: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} />
+        ) : style.hero === 'collage' ? (
+          // Moodboard: tilted white prints, one round, the name thin and huge across their foot.
+          <View style={mini.collageHero}>
+            <View style={[mini.collagePrint, { left: 6, top: 6, width: 38, height: 46, transform: [{ rotate: '-4deg' }] }]}>
+              <View style={[mini.collagePhoto, { backgroundColor: photoFill }]} />
             </View>
+            <View style={[mini.collagePrint, { right: 8, top: 4, width: 34, height: 36, transform: [{ rotate: '3deg' }] }]}>
+              <View style={[mini.collagePhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.7) }]} />
+            </View>
+            <View style={[mini.collageRound, { right: 12, top: 40 }]}>
+              <View style={[mini.collageRoundPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
+            </View>
+            <Text style={[mini.collageName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
           </View>
         ) : style.hero === 'pourTop' ? (
           // Latte: the palest band, a round photo, the name in a big italic serif.
@@ -771,12 +788,17 @@ function MiniProfile({
             <View style={[mini.pourPhoto, { backgroundColor: latteShade(accent, sheet, 0.45) }]} />
             <Text style={[mini.pourName, { color: latteInk(latteShade(accent, sheet, 0)).text }]} numberOfLines={1}>name</Text>
           </View>
-        ) : style.hero === 'indexCard' ? (
-          // Index: a ruled front card on a tinted card behind it.
-          <View style={mini.indexHero}>
-            <View style={[mini.indexBehind, { backgroundColor: blend(accent, cardColour, 0.55) }]} />
-            <View style={[mini.indexFront, { backgroundColor: cardColour, borderLeftColor: blend(accent, cardColour, 0.35) }]}>
-              <Text style={[mini.indexName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]}>Your Name</Text>
+        ) : style.hero === 'tallCapsule' ? (
+          // Capsule: their photo in a tall capsule, the name in light lowercase and two pill chips beside it.
+          <View style={mini.capsuleHero}>
+            <View style={[mini.capsulePhoto, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+            <View style={mini.capsuleSide}>
+              {logo}
+              <Text style={[mini.capsuleName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
+              <View style={mini.capsuleChips}>
+                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet)[1] }]} />
+              </View>
             </View>
           </View>
         ) : style.hero === 'echoName' ? (
@@ -1418,23 +1440,31 @@ const mini = StyleSheet.create({
   neonWall: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   neonName: { fontFamily: 'MsMadi-Regular', fontSize: 30, lineHeight: 40, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
   neonTube: { width: 40, height: 1.5, borderRadius: 1 },
-  receiptCaps: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 8, letterSpacing: 1.5 },
-  receiptRule: { borderTopWidth: 1, borderStyle: 'dashed', marginTop: 2 },
-  receiptHero: { flex: 1, paddingHorizontal: 18, paddingVertical: 7 },
-  receiptSlip: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  receiptName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 9, letterSpacing: 2 },
-  receiptBars: { width: 36, height: 7, borderLeftWidth: 2, borderRightWidth: 3 },
-  tabCaps: { fontFamily: 'Figtree-SemiBold', fontSize: 8, letterSpacing: 1 },
+  captionRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  captionCaps: { fontFamily: 'Jost-Light', fontSize: 6, letterSpacing: 1.6 },
+  captionRule: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
+  taggedTag: { width: 12, height: 6, borderRadius: 999, borderWidth: 0.8 },
+  collageHero: { flex: 1, alignSelf: 'stretch' },
+  collagePrint: { position: 'absolute', backgroundColor: '#FFFFFF', padding: 2, paddingBottom: 6, shadowColor: '#3C2819', shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  collagePhoto: { flex: 1 },
+  collageRound: { position: 'absolute', width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFFFFF', padding: 2 },
+  collageRoundPhoto: { flex: 1, borderRadius: 11 },
+  collageName: { position: 'absolute', left: 6, right: 6, bottom: 2, fontFamily: 'Jost-Light', fontSize: 24, letterSpacing: -0.5 },
   pourSerif: { fontFamily: 'InstrumentSerif-Regular', fontSize: 12 },
   pourBand: { borderRadius: 0, borderTopLeftRadius: 9, borderTopRightRadius: 9, marginHorizontal: -8, paddingHorizontal: 14, marginBottom: -4 },
   pourHero: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', gap: 2 },
   pourPhoto: { width: 30, height: 30, borderRadius: 15 },
   pourName: { fontFamily: 'InstrumentSerif-Italic', fontSize: 17 },
-  indexTab: { width: 22, height: 5, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
-  indexHero: { flex: 1, padding: 10, justifyContent: 'center' },
-  indexBehind: { position: 'absolute', left: 14, right: 10, top: 12, bottom: 10, borderRadius: 3, transform: [{ rotate: '3deg' }] },
-  indexFront: { flex: 1, borderRadius: 3, borderLeftWidth: 1.5, paddingLeft: 10, justifyContent: 'center' },
-  indexName: { fontFamily: 'YoungSerif-Regular', fontSize: 12 },
+  pillMarkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  pillMark: { width: 9, height: 4, borderRadius: 999 },
+  pillMarkTitle: { fontFamily: 'Figtree-SemiBold', fontSize: 9 },
+  capsuleCard: { borderRadius: 999 },
+  capsuleHero: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 7, paddingHorizontal: 10, paddingBottom: 8 },
+  capsulePhoto: { width: 28, height: 50, borderRadius: 999 },
+  capsuleSide: { flex: 1, gap: 3, alignItems: 'flex-start' },
+  capsuleName: { fontFamily: 'LeagueSpartan-Light', fontSize: 13 },
+  capsuleChips: { flexDirection: 'row', gap: 3 },
+  capsuleChip: { width: 16, height: 6, borderRadius: 999 },
   // Studio's bar, photo and headings.
   studioWrap: { alignSelf: 'stretch', flex: 1, marginHorizontal: 8 },
   studioBar: { height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },

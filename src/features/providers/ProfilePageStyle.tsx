@@ -30,9 +30,9 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 import { SectionDivider } from "./pageParts";
-import { DashedRule } from "./heroes/ReceiptHero";
-import { indexMargin, indexTints } from "./heroes/IndexHero";
+import { capsuleTones } from "./heroes/CapsuleHero";
 import { LATTE_OVERLAP, latteBand, latteGlass, latteInk, latteShade } from "./heroes/LatteHero";
+import { GlowText } from "./heroes/NeonHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -124,6 +124,13 @@ export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
     || style?.cards === "pour"
     // Riviera: content straight on its strip, with no box.
     || (style?.cards === "stripes" && !!style.openStrips);
+}
+
+/** True when the style's services sit straight on the page, so the price
+ *  list takes the page's ink: every style whose sections do, and Moodboard,
+ *  whose sections are white prints but whose services are hairline rows. */
+export function servicesSitOnPage(style: PageStyle | undefined): boolean {
+  return sectionsSitOnPage(style) || style?.cards === "print";
 }
 
 /** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
@@ -588,43 +595,51 @@ export function PageSectionHeading({
     }
     case "neonScript": {
       // Neon: the title as a lowercase script word in the accent. On a dark
-      // page it's lifted and glows like the sign at the top; on a pale page
-      // it's deepened so it still reads, with no glow.
+      // page it's lifted and glows like the sign at the top (stacked glow,
+      // owner 2026-11-23: "it isn't glowing that much"); on a pale page it's
+      // deepened so it still reads, with no glow.
       const dark = isDarkColor(palette.background);
-      const tube = dark ? blend(accent, "#FFFFFF", 0.35) : blend(accent, "#000000", 0.25);
+      if (dark && !color) {
+        return (
+          <View {...a11y} accessible style={headingStyles.neonWrap}>
+            <GlowText style={headingStyles.neonScript} tube={blend(accent, "#FFFFFF", 0.6)} glow={accent} strength={0.6} numberOfLines={1}>
+              {words.toLowerCase()}
+            </GlowText>
+          </View>
+        );
+      }
       return (
-        <Text
-          {...a11y}
-          style={[
-            headingStyles.neonScript,
-            { color: color ?? tube },
-            dark && { textShadowColor: accent, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
-          ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.6}
-        >
+        <Text {...a11y} style={[headingStyles.neonScript, { color: color ?? blend(accent, "#000000", 0.25) }]} numberOfLines={1}>
           {words.toLowerCase()}
         </Text>
       );
     }
-    case "receiptCaps":
-      // Receipt: the title in spaced till-roll caps, a dashed rule under it.
+    case "captionCaps": {
+      // Moodboard: tiny, very widely spaced caps in a quiet ink, like the
+      // captions on its prints, with a hairline running out after them.
+      const line = color ? withAlpha(color, 0.3) : sheetInk(palette.background).border;
       return (
-        <View {...a11y} accessible style={headingStyles.receiptWrap}>
-          <Text style={[headingStyles.receiptCaps, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <Text style={[headingStyles.captionCaps, { color: color ?? sheetInk(palette.background).sub }]} numberOfLines={1}>
             {words.toUpperCase()}
           </Text>
-          <DashedRule colour={withAlpha(ink, 0.55)} />
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
       );
-    case "tabCaps":
-      // Index: small bold caps, written on the section's file tab.
+    }
+    case "pillMark": {
+      // Capsule: a small pill in one of the two quiet tones, then the title
+      // soft and lowercase. The portfolio is "my work", as on the canvas.
+      const tone = capsuleTones(palette.accent, palette.background)[CAPSULE_MARK_TONE[section]];
       return (
-        <Text {...a11y} style={[headingStyles.tabCaps, { color: ink }]} numberOfLines={1}>
-          {words.toUpperCase()}
-        </Text>
+        <View {...a11y} accessible style={headingStyles.pillMarkRow}>
+          <View style={[headingStyles.pillMark, { backgroundColor: tone }]} />
+          <Text style={[headingStyles.pillMarkTitle, { color: ink }]} numberOfLines={1}>
+            {section === "portfolio" && !custom ? "my work" : words.toLowerCase()}
+          </Text>
+        </View>
       );
+    }
     case "pourSerif":
       // Latte: a plain serif title in the band's ink. The portfolio is "My work".
       return (
@@ -876,7 +891,7 @@ function PageSectionSurface({
     );
   }
 
-  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block" || pageStyle.cards === "receipt"
+  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
     : pageStyle.cards === "clipped" ? 2
     : pageStyle.cards === "raised" ? 3
@@ -905,29 +920,27 @@ function PageSectionSurface({
     );
   }
 
-  if (pageStyle.cards === "indexTab" && !bare) {
-    // Index: a divider card in a card file. Its tab sticks up from the top
-    // edge in a tint of the accent, naming the section, and the tabs step
-    // left, middle, right down the page; a margin line runs down the card.
-    const place = indexTabPlace(section);
-    const tints = indexTints(palette.accent, palette.cardBackground);
-    const tint = place === "flex-start" ? tints[0] : place === "center" ? tints[1] : tints[2];
+  if (pageStyle.cards === "print") {
+    // Moodboard: the heading on the page, the section on a white print with
+    // square corners and a soft drop shadow, like the photos on its board.
     return (
       <View style={[surfaceStyles.block, style]}>
-        <View style={[surfaceStyles.indexTab, { alignSelf: place, backgroundColor: tint }]}>
-          <PageSectionHeading section={section} palette={palette} title={title} color={isDarkColor(tint) ? "#F7F1F3" : "#1F1A1C"} />
+        {heading}
+        <View style={[surfaceStyles.solid, surfaceStyles.print, { backgroundColor: palette.cardBackground }]}>
+          {children}
         </View>
-        <View
-          style={[
-            surfaceStyles.solid,
-            surfaceStyles.indexCard,
-            { backgroundColor: palette.cardBackground },
-            place === "flex-start" && { borderTopLeftRadius: 0 },
-            place === "flex-end" && { borderTopRightRadius: 0 },
-          ]}
-        >
-          <View style={[surfaceStyles.indexMargin, { backgroundColor: indexMargin(palette.accent, palette.cardBackground) }]} pointerEvents="none" />
-          {headingRight ? <View style={surfaceStyles.indexRight}>{headingRight}</View> : null}
+      </View>
+    );
+  }
+
+  if (pageStyle.cards === "capsule") {
+    // Capsule: the heading on the page, the section on a soft card in the
+    // oat tone with big round corners and no shadow.
+    const tone = capsuleTones(palette.accent, palette.background)[1];
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View style={[surfaceStyles.solid, surfaceStyles.capsuleCard, { backgroundColor: tone }, square && surfaceStyles.square]}>
           {children}
         </View>
       </View>
@@ -1008,7 +1021,6 @@ function PageSectionSurface({
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
           pageStyle.cards === "outlineRound" && [surfaceStyles.outlineRound, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "lit" && litSurface(palette.cardBackground, palette.accent, palette.background),
-          pageStyle.cards === "receipt" && receiptSurface(palette.cardBackground),
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -1111,31 +1123,43 @@ export function litSurface(card: string, accent: string, sheet: string): ViewSty
     borderRadius: 16,
     shadowColor: accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: dark ? 0.75 : 0,
-    shadowRadius: 10,
+    shadowOpacity: dark ? 0.95 : 0,
+    shadowRadius: 14,
     elevation: 0,
     overflow: "visible",
   };
 }
 
-/** Receipt's slip: square paper with a fine edge and no shadow. */
-export function receiptSurface(card: string): ViewStyle {
+/** Which of Capsule's two tones each heading's pill mark is in: they take
+ *  turns, sage then oat, in the order the profile draws its sections. */
+const CAPSULE_MARK_TONE: Record<PageSectionKey, 0 | 1> = {
+  about: 0,
+  policies: 1,
+  services: 0,
+  policyPages: 1,
+  reviews: 0,
+  contact: 1,
+  hours: 0,
+  portfolio: 1,
+  info: 0,
+  specialities: 1,
+  keyInfo: 0,
+  faq: 1,
+  aftercare: 0,
+  custom: 1,
+  disclaimer: 0,
+};
+
+/** Capsule's service pill: the whole row a capsule. The services take turns
+ *  in the two tones, so the price list passes each row's place. */
+export function capsuleServiceSurface(accent: string, sheet: string, index: number): ViewStyle {
   return {
-    backgroundColor: card,
-    borderRadius: 0,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha(outlineInk(card), 0.18),
+    backgroundColor: capsuleTones(accent, sheet)[index % 2],
+    borderWidth: 0,
+    borderRadius: 45,
     shadowOpacity: 0,
     elevation: 0,
   };
-}
-
-/** Where Index's file tab sits on a section: left, middle, right in turn,
- *  in the order the profile draws its sections, so the tabs step across the
- *  page like the dividers in a card box. */
-export function indexTabPlace(section: PageSectionKey): "flex-start" | "center" | "flex-end" {
-  const places = ["flex-start", "center", "flex-end"] as const;
-  return places[(Number.parseInt(SECTION_NUMBERS[section], 10) - 1) % 3]!;
 }
 
 /** Latte's foot: the deepest band of the pour (espresso; milk on a dark
@@ -1185,23 +1209,23 @@ export function serviceCardSurface(
   switch (style.cards) {
     case "lit":
       return litSurface(colours.card, colours.accent, colours.sheet);
-    case "receipt":
-      return receiptSurface(colours.card);
     case "pour": {
       // Latte: each service in a soft see-through pill on the services band.
       const band = latteBand(colours.accent, colours.sheet, "services");
       return { backgroundColor: latteGlass(band), borderWidth: 0, borderRadius: 28, shadowOpacity: 0, elevation: 0 };
     }
-    case "indexTab":
-      // Index: each service on its own small card from the file.
+    case "capsule":
+      return capsuleServiceSurface(colours.accent, colours.sheet, 0);
+    case "print":
+      // Moodboard: each service a row on the page, a hairline under it.
       return {
-        backgroundColor: colours.card,
-        borderWidth: 0,
-        borderRadius: 6,
-        shadowColor: "#26201E",
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
+        ...flat,
+        backgroundColor: "transparent",
+        borderRadius: 0,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: sheetInk(colours.sheet).border,
+        marginBottom: 0,
+        elevation: 0,
       };
     case "none":
     case "open":
@@ -2162,11 +2186,15 @@ const headingStyles = StyleSheet.create({
   engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
   // Ms Madi draws small for its size, and its loops need the tall line.
-  neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 58, marginBottom: 4 },
-  receiptWrap: { alignSelf: "stretch", gap: 6, marginBottom: 12 },
-  receiptCaps: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 14, letterSpacing: 3 },
-  tabCaps: { fontFamily: "Figtree-SemiBold", fontSize: 12, letterSpacing: 1.5 },
+  // Its loops reach outside the letters: a tall line and room either side so
+  // nothing is cut off (owner, 2026-11-23).
+  neonScript: { fontFamily: "MsMadi-Regular", fontSize: 44, lineHeight: 68, paddingHorizontal: 8, marginBottom: 2, includeFontPadding: false },
+  neonWrap: { alignSelf: "flex-start", marginLeft: -8 },
+  captionCaps: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 4 },
   pourSerif: { fontFamily: "InstrumentSerif-Regular", fontSize: 26, lineHeight: 32, marginBottom: 10 },
+  pillMarkRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  pillMark: { width: 18, height: 8, borderRadius: 999 },
+  pillMarkTitle: { fontFamily: "Figtree-SemiBold", fontSize: 18, lineHeight: 24 },
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
@@ -2217,18 +2245,7 @@ const surfaceStyles = StyleSheet.create({
   tab: { alignSelf: "flex-start", marginLeft: 22, paddingHorizontal: 16, paddingTop: 7, paddingBottom: 5 },
   tabText: { fontFamily: "LilitaOne-Regular", fontSize: 10, lineHeight: 14, letterSpacing: 1.6 },
   tabbedCard: { borderRadius: 0 },
-  indexTab: { paddingHorizontal: 16, paddingTop: 7, paddingBottom: 5, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
-  indexCard: {
-    borderRadius: 10,
-    paddingLeft: 32,
-    shadowColor: "#26201E",
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-    overflow: "visible",
-  },
-  indexMargin: { position: "absolute", left: 20, top: 0, bottom: 0, width: 1.5 },
+  capsuleCard: { borderRadius: 32 },
   // Latte: a full-width band, bled out of the sheet's 20pt side padding, its
   // rounded top lapping over the band above (which reaches down under it).
   pour: {
@@ -2247,7 +2264,14 @@ const surfaceStyles = StyleSheet.create({
   pourBarSub: { fontFamily: "HankenGrotesk-Medium", fontSize: 12 },
   pourBarButton: { minHeight: 44, borderRadius: 999, paddingHorizontal: 26, alignItems: "center", justifyContent: "center" },
   pourBarButtonText: { fontFamily: "HankenGrotesk-Medium", fontSize: 14 },
-  indexRight: { alignItems: "flex-end", marginBottom: 6 },
+  print: {
+    borderRadius: 2,
+    shadowColor: "#3C2819",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },
   block: { marginBottom: 24 },

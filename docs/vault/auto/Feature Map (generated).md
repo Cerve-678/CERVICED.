@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **123 files**
 - … +93 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **241 files**
+Curated: [[Availability & Slots]] · **240 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **241 files**
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- … +211 more
+- … +210 more
 
 ## Payments
 Curated: [[Payments]] · **202 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **242 files**
 - … +212 more
 
 ## Auth
-Curated: [[Contexts]] · **249 files**
+Curated: [[Contexts]] · **250 files**
 - `src/contexts/AuthContext.tsx` _(205)_
 - `src/services/database/account.ts` _(152)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,10 +309,10 @@ Curated: [[Contexts]] · **249 files**
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/utils/userFacingError.ts` _(17)_
 - `src/screens/client/CartScreen.tsx` _(16)_
-- … +219 more
+- … +220 more
 
 ## Becca / AI
-Curated: [[Services]] · **66 files**
+Curated: [[Services]] · **67 files**
 - `src/screens/shared/BeccaScreen.tsx` _(110)_
 - `src/services/becca/engine.ts` _(61)_
 - `src/services/becca/capabilities/client.ts` _(53)_
@@ -343,10 +343,10 @@ Curated: [[Services]] · **66 files**
 - `src/navigation/provider/tabs/ProviderHomeNavigator.tsx` _(6)_
 - `src/services/becca/capabilities/shared.ts` _(6)_
 - `src/i18n/catalogs/fr.ts` _(5)_
-- … +36 more
+- … +37 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **105 files**
+Curated: [[Payments]] · **106 files**
 - `src/screens/client/CartScreen.tsx` _(493)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **105 files**
 - `src/features/bookings/waitlist.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/constants/feeTerms.ts` _(5)_
-- … +75 more
+- … +76 more
