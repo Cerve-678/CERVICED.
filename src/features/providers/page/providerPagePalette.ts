@@ -139,7 +139,7 @@ export function buildProviderPagePalette(provider: ProviderProfileData | null) {
   // Lounge's sit on a strip of the page colour under its panel, Stripes' on
   // its strip of the accent.
   const sheetColour = veilTheme ? veilTheme.sheetFill : OP.bg;
-  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" || pageStyle.hero === "receiptHead"
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet"
     ? cardInk(OP.card)
     : pageStyle.hero === "stripes"
       ? cardInk(stripesHeroColour(adaptiveAccentColor))

@@ -31,6 +31,7 @@ import { formatDurationMinutes } from "../../utils/dateUtils";
 import { formatAddOnExtraTime } from "../bookings/addOnTime";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { PagePattern, SectionDivider } from "./pageParts";
+import { PinnedBarServiceText, pinnedBarServices, type PinnedBarLine } from "./page/PinnedBarServices";
 import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle, heroNameFontStyle, pickedNameFont } from "./ProfileHero";
 import {
   GlossShine,
@@ -281,8 +282,6 @@ export function ProfileStylePreview({
   const shopBook = pageStyle.buttonShape === "shopBox";
   // Neon: a round outline in the accent, spaced caps.
   const glowBook = pageStyle.buttonShape === "glowPill";
-  // Receipt: a tilted rubber-stamp outline in the accent.
-  const stampBook = pageStyle.buttonShape === "stamp";
   // Capsule: a full pill in the page's ink, the word in lowercase.
   const darkPillBook = pageStyle.buttonShape === "darkPill";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
@@ -334,10 +333,11 @@ export function ProfileStylePreview({
     <ProviderPortfolioSection items={portfolioItems} palette={palette} onOpenImage={noop} interactiveImages={false} />
   );
   // Riviera's pinned Book bar: their cheapest service, as on the profile.
-  const pinnedService = (content?.services ?? []).reduce<PreviewService | null>(
-    (low, service) => (service.price > 0 && (low === null || service.price < low.price) ? service : low),
-    null,
-  );
+  const pinnedLines: PinnedBarLine[] = pinnedBarServices(content?.services ?? []).map((service, index) => ({
+    key: `${index}-${service.name}`,
+    name: service.name,
+    detail: service.minutes > 0 ? `${previewPrice(service.price)} · ${formatDurationMinutes(service.minutes)}` : previewPrice(service.price),
+  }));
   const squareButtons = pageStyle.buttonShape === "square";
 
   return (
@@ -646,8 +646,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook || stampBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], stampBook && [styles.bookOutline, styles.bookStamp, { borderColor: accent }], darkPillBook && { backgroundColor: serviceInk.text }, shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink || stampBook ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook || stampBook) && styles.bookShopText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? "Book now" : darkPillBook ? "book" : "Book"}</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], darkPillBook && { backgroundColor: serviceInk.text }, shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? "Book now" : darkPillBook ? "book" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
@@ -695,11 +695,17 @@ export function ProfileStylePreview({
       {pageStyle.pinnedBookBar ? (
         <View pointerEvents="none" style={[styles.pinnedBar, squareButtons && styles.pinnedBarSquare, { bottom: pinnedBarBottom, backgroundColor: OP.card, borderColor: OP.border }]}>
           <View style={styles.pinnedText}>
-            <Text style={[styles.pinnedName, { color: OP.text }, bodyFont]} numberOfLines={1}>{name}</Text>
-            {pinnedService !== null ? (
-              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>{pinnedService.name} · {previewPrice(pinnedService.price)}</Text>
+            {pinnedLines.length > 0 ? (
+              <PinnedBarServiceText
+                lines={pinnedLines}
+                nameStyle={[styles.pinnedName, { color: OP.text }, bodyFont]}
+                detailStyle={[styles.pinnedPrice, { color: OP.sub }, bodyFont]}
+              />
             ) : (
-              <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
+              <>
+                <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.22) }]} />
+                <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
+              </>
             )}
           </View>
           <View style={[styles.pinnedButton, squareButtons && styles.bookSquare, { backgroundColor: accent }]}>
@@ -829,7 +835,6 @@ const styles = StyleSheet.create({
   bookArrowCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.3, alignItems: "center", justifyContent: "center" },
   bookShopBox: { borderWidth: 1, borderRadius: 1 },
   bookDarkPillText: { fontFamily: "Figtree-SemiBold" },
-  bookStamp: { borderWidth: 2, borderRadius: 4, transform: [{ rotate: "-4deg" }] },
   bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },
