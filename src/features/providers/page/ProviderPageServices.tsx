@@ -204,6 +204,9 @@ export interface ProviderPageServicesProps {
   onOpenImages: (images: any[], index: number) => void;
   /** False on the provider's own page and while ownership loads: no booking controls at all. */
   canBook: boolean;
+  /** The owner's logo preview: the Book and waitlist buttons show, but the
+   *  page is only for looking at, so they don't respond (user, 2026-11-23). */
+  bookDisplayOnly?: boolean;
   takingBookings: boolean;
   /** service.dbId → nothing bookable anywhere in the booking window. */
   serviceFullyBooked: Record<string, boolean>;
@@ -248,6 +251,7 @@ export function ProviderPageServices({
   onToggleExpanded,
   onOpenImages,
   canBook,
+  bookDisplayOnly = false,
   takingBookings,
   serviceFullyBooked,
   serviceNearTermAvailability,
@@ -711,7 +715,7 @@ export function ProviderPageServices({
 
                     return (
                       <TouchableOpacity
-                        disabled={fullyBooked}
+                        disabled={fullyBooked || bookDisplayOnly}
                         style={[
                           styles.bookButton,
                           squareButtons && styles.squareButton,
@@ -854,6 +858,7 @@ export function ProviderPageServices({
                         onPress={() => {
                           runAction(() => onJoinWaitlist(service));
                         }}
+                        disabled={bookDisplayOnly}
                         activeOpacity={0.7}
                       >
                         <Text

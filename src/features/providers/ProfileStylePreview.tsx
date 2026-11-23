@@ -328,9 +328,9 @@ export function ProfileStylePreview({
   const portfolioSection = (
     <ProviderPortfolioSection items={portfolioItems} palette={palette} onOpenImage={noop} interactiveImages={false} />
   );
-  // Riviera's pinned Book bar: their lowest price, as on the profile.
-  const lowestPrice = (content?.services ?? []).reduce<number | null>(
-    (low, service) => (service.price > 0 && (low === null || service.price < low) ? service.price : low),
+  // Riviera's pinned Book bar: their cheapest service, as on the profile.
+  const pinnedService = (content?.services ?? []).reduce<PreviewService | null>(
+    (low, service) => (service.price > 0 && (low === null || service.price < low.price) ? service : low),
     null,
   );
   const squareButtons = pageStyle.buttonShape === "square";
@@ -691,14 +691,17 @@ export function ProfileStylePreview({
         <View pointerEvents="none" style={[styles.pinnedBar, squareButtons && styles.pinnedBarSquare, { bottom: pinnedBarBottom, backgroundColor: OP.card, borderColor: OP.border }]}>
           <View style={styles.pinnedText}>
             <Text style={[styles.pinnedName, { color: OP.text }, bodyFont]} numberOfLines={1}>{name}</Text>
-            {lowestPrice !== null ? (
-              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From {previewPrice(lowestPrice)}</Text>
+            {pinnedService !== null ? (
+              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>{pinnedService.name} · {previewPrice(pinnedService.price)}</Text>
             ) : (
               <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
             )}
           </View>
           <View style={[styles.pinnedButton, squareButtons && styles.bookSquare, { backgroundColor: accent }]}>
             <Text style={[styles.pinnedButtonText, squareButtons && styles.bookSquareText]}>Book</Text>
+          </View>
+          <View style={styles.pinnedClose}>
+            <Ionicons name="close" size={18} color={OP.sub} />
           </View>
         </View>
       ) : null}
@@ -785,6 +788,7 @@ const styles = StyleSheet.create({
   },
   pinnedBarSquare: { borderRadius: 6 },
   pinnedText: { flex: 1, minWidth: 0 },
+  pinnedClose: { width: 30, height: 30, marginLeft: -4, alignItems: "center", justifyContent: "center" },
   pinnedName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
   pinnedPrice: { fontSize: 12, marginTop: 2 },
   pinnedPriceBar: { width: 60, height: 7, marginTop: 6 },
