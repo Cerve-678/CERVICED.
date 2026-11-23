@@ -5,7 +5,7 @@
 
 #generated
 
-**4229 functions** across **621 files**.
+**4232 functions** across **621 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -340,7 +340,7 @@
 - `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **ribbonColours** · **stripeColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
-- `NeonHero.tsx` — **neonColours** · **NeonHero**
+- `NeonHero.tsx` — **GlowText** · layer · **neonColours** · **NeonHero** · **neonWallColour**
 - `NovelHero.tsx` — **NovelHero** · subtitle
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
 - `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**

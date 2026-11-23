@@ -737,7 +737,7 @@ export function ProviderPageServices({
                           shopBoxButtons && [styles.shopBoxButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                           glowPillButtons && [
                             styles.glowPillButton,
-                            { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 0.8 : 0 },
+                            { borderColor: fullyBooked ? SV.border : glowLine, shadowColor: adaptiveAccentColor, shadowOpacity: glowDark && !fullyBooked ? 1 : 0 },
                           ],
                           darkPillButtons && [styles.darkPillButton, { backgroundColor: fullyBooked ? withAlpha(SV.sub, 0.18) : SV.text }],
                         ]}
@@ -1130,7 +1130,7 @@ const styles = StyleSheet.create({
   arrowPillCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.4, alignItems: "center", justifyContent: "center" },
   shopBoxButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 1, shadowOpacity: 0, elevation: 0, paddingHorizontal: 12 },
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
-  glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, elevation: 0 },
+  glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 12, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
   darkPillButton: { borderRadius: 999, paddingHorizontal: 20, shadowOpacity: 0, elevation: 0 },
   darkPillButtonText: { fontFamily: "Figtree-SemiBold", fontSize: 13 },

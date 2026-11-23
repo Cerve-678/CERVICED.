@@ -17,6 +17,7 @@ import {
 } from '../constants/pageStyles';
 import { encodeThemeKey, isDarkColor, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { stripeColours } from '../features/providers/heroes/demureOrnaments';
+import { neonWallColour } from '../features/providers/heroes/NeonHero';
 import {
   policiesBringOwnSurface,
   sectionsSitOnPage,
@@ -407,6 +408,7 @@ describe('which styles show the picked name font', () => {
       'noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard',
       'poster', 'hibiscus', 'storefront',
       'orbit', 'typeblock', 'filmstrip',
+      'neon',
     ].sort());
   });
 
@@ -582,7 +584,7 @@ describe('Ledger', () => {
 });
 
 describe('the picked name font on styles with their own lettering (owner, 2026-11-19)', () => {
-  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip'] as const;
+  const keys = ['noir', 'muse', 'ledger', 'hush', 'quiet', 'signature', 'pinboard', 'poster', 'hibiscus', 'storefront', 'orbit', 'typeblock', 'filmstrip', 'neon'] as const;
 
   it('opens the Business Name Font on Noir, Muse, Ledger, Hush, Quiet, Signature and Pinboard', () => {
     for (const key of keys) expect(heroUsesBrandFont(getPageStyle(key))).toBe(true);
@@ -657,6 +659,18 @@ describe('Neon', () => {
   it('inks the top white whatever the theme, because the wall is dark', () => {
     expect(heroIsDarkForStyle(neon)).toBe(true);
     expect(heroPhotoPickLimit(neon)).toBe(0);
+  });
+
+  it('builds the wall from their colour but always keeps it night-dark', () => {
+    for (const colour of ['#FFFFFF', '#F7E1E6', '#AF9197', '#3F1E36', '#FFD700']) {
+      expect(isDarkColor(neonWallColour(colour))).toBe(true);
+    }
+    expect(neonWallColour('#F7E1E6')).not.toBe(neonWallColour('#E5ECF4'));
+  });
+
+  it('lets them letter the sign in their Business Name Font', () => {
+    expect(neon.nameFontPickable).toBe(true);
+    expect(pickedNameFont(neon, 'default')).toBeNull();
   });
 
   it('glows its cards only on a dark page', () => {

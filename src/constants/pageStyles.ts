@@ -747,7 +747,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'neonScript', cards: 'lit', policies: 'outlined', logo: 'circle',
     hero: 'neonSign', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    roundedPhotos: true, buttonShape: 'glowPill',
+    roundedPhotos: true, buttonShape: 'glowPill', nameFontPickable: true,
   },
   // 2026-11-23: the clean-girl round of the same canvas (owner picked 14
   // Capsule, 13 Moodboard and 11 Latte).

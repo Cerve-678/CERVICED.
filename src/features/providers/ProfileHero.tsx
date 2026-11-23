@@ -290,7 +290,7 @@ function ProfileHeroLayoutBody({
 
   switch (pageStyle.hero) {
     case "neonSign":
-      return <NeonHero name={name} kicker={kicker} accent={accent} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
+      return <NeonHero name={name} kicker={kicker} accent={accent} heroColour={heroColour} pickedNameStyle={pickedName(62)} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
     case "tallCapsule":
       return (
         <CapsuleHero
