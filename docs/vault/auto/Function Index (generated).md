@@ -653,7 +653,8 @@
 - `validation.ts` — **getPasswordStrength**
 - `withTimeout.ts` — **withTimeout**
 
-### `src/web/` (5)
+### `src/web/` (6)
+- `ProviderWebPage.tsx` — heroPhotosForStyle · jumpTo · noop · openContact · openPhoto · openUrl · palette · **ProviderWebPage** · ProviderWebPageContent · renderServices · serviceCountsByType
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**
