@@ -23,8 +23,11 @@ import { BulldogClip, CALLING_CARD_PAPER } from "./heroes/CallingCardHero";
 import {
   PageSection,
   PageSectionHeading,
+  pourBandStyle,
+  pourPalette,
   sectionInk,
   showsDividerAbove,
+  usePourPalette,
   type PageStylePalette,
 } from "./ProfilePageStyle";
 import { plateMarkEdges } from "./heroes/EmbossedHero";
@@ -81,7 +84,7 @@ export const ProviderSpecialitiesSection = React.memo(function ProviderSpecialit
 export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPreviewSection({
   reviews,
   loading,
-  palette,
+  palette: rawPalette,
   onSeeAll,
 }: {
   reviews: ProviderReviewItem[];
@@ -89,6 +92,8 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
   palette: SectionPalette;
   onSeeAll: () => void;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "reviews");
   const ink = sectionInk(palette);
   return (
     <PageSection section="reviews" palette={palette}>
@@ -129,12 +134,14 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
 export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHoursSection({
   openingHours,
   loading = false,
-  palette,
+  palette: rawPalette,
 }: {
   openingHours: WeeklyOpeningHoursDay[] | null;
   loading?: boolean;
   palette: SectionPalette;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "hours");
   if (loading) {
     return (
       <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }, palette.squareCards && styles.square]}>
@@ -172,7 +179,7 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
 
 export const ProviderContactSection = React.memo(function ProviderContactSection({
   contact,
-  palette,
+  palette: rawPalette,
   onOpenLink,
   onOpenPublicLink,
   onGetInTouch,
@@ -193,6 +200,8 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onOpenPublicLink: (url: string) => void;
   onGetInTouch: () => void;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "contact");
   const ink = sectionInk(palette);
   type ContactRow = { label: string; value: string; url: string | null; publicLink: boolean };
   const rows = ([
@@ -247,7 +256,7 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   goodToKnow,
   howToGetThere,
   venueItems,
-  palette,
+  palette: rawPalette,
   onOpenImage,
 }: {
   groups: { label: string; chips: string[] }[];
@@ -259,6 +268,8 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "info");
   const venueImages = useMemo(
     () => venueItems.map(item => ({ uri: item.image_url })),
     [venueItems],
@@ -341,19 +352,22 @@ export const ProviderOwnSections = React.memo(function ProviderOwnSections({
   /** For the "Written by" line under Aftercare and Disclaimer. */
   providerName: string;
 }) {
-  const ink = sectionInk(palette);
   return (
     <>
-      {filledOwnSections(sections).map(kind => kind === "custom" ? (
+      {filledOwnSections(sections).map(kind => {
+        // Latte: each of these on its own band of the pour.
+        const own = pourPalette(palette, kind);
+        const ink = sectionInk(own);
+        return kind === "custom" ? (
         // No ids to key by: the list only changes when the provider saves,
         // and then the whole profile reloads.
         (sections.custom ?? []).map((item, index) => (
-          <PageSection key={`custom-${index}`} section="custom" title={item.title} palette={palette}>
+          <PageSection key={`custom-${index}`} section="custom" title={item.title} palette={own}>
             <Text style={[styles.infoText, { color: ink.text }]}>{item.body}</Text>
           </PageSection>
         ))
       ) : (
-        <PageSection key={kind} section={kind} palette={palette}>
+        <PageSection key={kind} section={kind} palette={own}>
           {kind === "faq" ? (
             (sections.faq ?? []).map((item, index) => (
               <View
@@ -371,7 +385,8 @@ export const ProviderOwnSections = React.memo(function ProviderOwnSections({
             <Text style={[styles.ownByline, { color: ink.sub }]}>{ownSectionByline(kind, providerName)}</Text>
           ) : null}
         </PageSection>
-      ))}
+      );
+      })}
     </>
   );
 });
@@ -394,7 +409,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   loading = false,
   loadError = false,
   onRetry,
-  palette,
+  palette: rawPalette,
   onOpenImage,
   interactiveImages = true,
 }: {
@@ -406,6 +421,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   onOpenImage: (images: { uri: string }[], index: number) => void;
   interactiveImages?: boolean;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "portfolio");
   const [showAll, setShowAll] = useState(false);
   // Measured per render rather than captured at module load, so the two-column
   // maths stays right after a rotation or in split-screen.
@@ -504,7 +521,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   };
 
   return (
-    <View style={styles.portfolioSection}>
+    <View style={[styles.portfolioSection, pourBandStyle(palette)]}>
       {divider ? <SectionDivider divider={divider} accent={palette.accent} /> : null}
       <View style={styles.portfolioHeading}>
         {/* Classic's Portfolio title has always sat on the page in Bakbak, not

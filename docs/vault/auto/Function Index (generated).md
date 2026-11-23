@@ -308,7 +308,7 @@
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **heroNameFontStyle** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **pickedNameFont** · **pickedNameFontStyle** · pin · **ProfileHeroLayout** · ProfileHeroLayoutBody · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **capsuleServiceSurface** · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **capsuleServiceSurface** · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **LatteBookBar** · **litSurface** · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · **pourBandStyle** · **pourPalette** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **servicesSitOnPage** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **usePourPalette** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — aboutBody · lines · noop · previewPrice · **ProfileStylePreview** · zone
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
@@ -332,7 +332,7 @@
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (12)
+### `src/features/providers/heroes/` (13)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `CapsuleHero.tsx` — **CapsuleHero** · **capsuleInk** · **capsuleTones**
@@ -340,6 +340,7 @@
 - `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **ribbonColours** · **stripeColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
+- `LatteHero.tsx` — **latteBand** · **latteGlass** · **LatteHero** · **latteInk** · **latteShade** · **latteStops**
 - `MoodboardHero.tsx` — heroSubOn · **MoodboardHero** · **moodboardName** · **moodboardPhotoAspect** · **moodboardPrint** · **moodboardTag**
 - `NeonHero.tsx` — **GlowText** · layer · **neonColours** · **NeonHero** · **neonWallColour**
 - `NovelHero.tsx` — **NovelHero** · subtitle
@@ -351,7 +352,7 @@
 - `ProviderPageHero.tsx` — **ProviderPageHero** · socialButton · StarIcon
 - `providerPagePalette.ts` — **buildProviderPagePalette** · **useProviderPagePalette**
 - `ProviderPageServices.tsx` — dotWindow · **ProviderPageServices** · ServiceDescription
-- `ProviderPageSheet.tsx` — footer · **ProviderPageSheet**
+- `ProviderPageSheet.tsx` — cheapest · footer · **ProviderPageSheet**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
