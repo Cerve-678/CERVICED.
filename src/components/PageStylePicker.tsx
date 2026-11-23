@@ -483,7 +483,7 @@ function MiniProfile({
       case 'pillMark':
         return (
           <View style={mini.pillMarkRow}>
-            <View style={[mini.pillMark, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+            <View style={[mini.pillMark, { backgroundColor: capsuleTones(accent, sheet, cardColour)[0] }]} />
             <Text style={[mini.pillMarkTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
@@ -669,8 +669,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.pourBand, { backgroundColor: band }]}><View style={[mini.bar, { backgroundColor: withAlpha(latteInk(band).text, 0.3) }]} /></View>;
       }
       case 'capsule':
-        // Capsule: each service a full pill, taking turns in sage and oat.
-        return <View key={key} style={[mini.card, mini.capsuleCard, { backgroundColor: capsuleTones(accent, sheet)[key % 2] }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+        // Capsule: each service a full pill, taking turns in the accent's tint and their card colour.
+        return <View key={key} style={[mini.card, mini.capsuleCard, { backgroundColor: capsuleTones(accent, sheet, cardColour)[key % 2] }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gridBox':
         return <View key={key} style={[mini.card, mini.gridCard, { backgroundColor: cardColour, borderColor: withAlpha(ink, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'soft':
@@ -789,15 +789,17 @@ function MiniProfile({
             <Text style={[mini.pourName, { color: latteInk(latteShade(accent, sheet, 0)).text }]} numberOfLines={1}>name</Text>
           </View>
         ) : style.hero === 'tallCapsule' ? (
-          // Capsule: their photo in a tall capsule, the name in light lowercase and two pill chips beside it.
+          // Capsule: their photo in a tall capsule; beside it the logo with the name to its right, and two pill chips.
           <View style={mini.capsuleHero}>
-            <View style={[mini.capsulePhoto, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
+            <View style={[mini.capsulePhoto, { backgroundColor: capsuleTones(accent, sheet, cardColour)[0] }]} />
             <View style={mini.capsuleSide}>
-              {logo}
-              <Text style={[mini.capsuleName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
+              <View style={mini.capsuleNameRow}>
+                {logo}
+                <Text style={[mini.capsuleName, { color: isDarkColor(heroColours[0]) ? '#F7F1F3' : '#26201E' }]} numberOfLines={1}>name</Text>
+              </View>
               <View style={mini.capsuleChips}>
-                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet)[0] }]} />
-                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet)[1] }]} />
+                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet, cardColour)[0] }]} />
+                <View style={[mini.capsuleChip, { backgroundColor: capsuleTones(accent, sheet, cardColour)[1] }]} />
               </View>
             </View>
           </View>
@@ -1461,8 +1463,9 @@ const mini = StyleSheet.create({
   pillMarkTitle: { fontFamily: 'Figtree-SemiBold', fontSize: 9 },
   capsuleCard: { borderRadius: 999 },
   capsuleHero: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 7, paddingHorizontal: 10, paddingBottom: 8 },
-  capsulePhoto: { width: 28, height: 50, borderRadius: 999 },
+  capsulePhoto: { width: 31, height: 54, borderRadius: 999 },
   capsuleSide: { flex: 1, gap: 3, alignItems: 'flex-start' },
+  capsuleNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   capsuleName: { fontFamily: 'LeagueSpartan-Light', fontSize: 13 },
   capsuleChips: { flexDirection: 'row', gap: 3 },
   capsuleChip: { width: 16, height: 6, borderRadius: 999 },

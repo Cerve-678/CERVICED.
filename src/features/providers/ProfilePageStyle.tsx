@@ -630,7 +630,7 @@ export function PageSectionHeading({
     case "pillMark": {
       // Capsule: a small pill in one of the two quiet tones, then the title
       // soft and lowercase. The portfolio is "my work", as on the canvas.
-      const tone = capsuleTones(palette.accent, palette.background)[CAPSULE_MARK_TONE[section]];
+      const tone = capsuleTones(palette.accent, palette.background, palette.cardBackground)[CAPSULE_MARK_TONE[section]];
       return (
         <View {...a11y} accessible style={headingStyles.pillMarkRow}>
           <View style={[headingStyles.pillMark, { backgroundColor: tone }]} />
@@ -934,13 +934,12 @@ function PageSectionSurface({
   }
 
   if (pageStyle.cards === "capsule") {
-    // Capsule: the heading on the page, the section on a soft card in the
-    // oat tone with big round corners and no shadow.
-    const tone = capsuleTones(palette.accent, palette.background)[1];
+    // Capsule: the heading on the page, the section on a soft card in their
+    // chosen card colour with big round corners and no shadow.
     return (
       <View style={[surfaceStyles.block, style]}>
         {heading}
-        <View style={[surfaceStyles.solid, surfaceStyles.capsuleCard, { backgroundColor: tone }, square && surfaceStyles.square]}>
+        <View style={[surfaceStyles.solid, surfaceStyles.capsuleCard, { backgroundColor: palette.cardBackground }, square && surfaceStyles.square]}>
           {children}
         </View>
       </View>
@@ -1131,7 +1130,7 @@ export function litSurface(card: string, accent: string, sheet: string): ViewSty
 }
 
 /** Which of Capsule's two tones each heading's pill mark is in: they take
- *  turns, sage then oat, in the order the profile draws its sections. */
+ *  turns, accent tint then card colour, in the order the profile draws its sections. */
 const CAPSULE_MARK_TONE: Record<PageSectionKey, 0 | 1> = {
   about: 0,
   policies: 1,
@@ -1152,9 +1151,9 @@ const CAPSULE_MARK_TONE: Record<PageSectionKey, 0 | 1> = {
 
 /** Capsule's service pill: the whole row a capsule. The services take turns
  *  in the two tones, so the price list passes each row's place. */
-export function capsuleServiceSurface(accent: string, sheet: string, index: number): ViewStyle {
+export function capsuleServiceSurface(accent: string, sheet: string, card: string, index: number): ViewStyle {
   return {
-    backgroundColor: capsuleTones(accent, sheet)[index % 2],
+    backgroundColor: capsuleTones(accent, sheet, card)[index % 2],
     borderWidth: 0,
     borderRadius: 45,
     shadowOpacity: 0,
@@ -1215,7 +1214,7 @@ export function serviceCardSurface(
       return { backgroundColor: latteGlass(band), borderWidth: 0, borderRadius: 28, shadowOpacity: 0, elevation: 0 };
     }
     case "capsule":
-      return capsuleServiceSurface(colours.accent, colours.sheet, 0);
+      return capsuleServiceSurface(colours.accent, colours.sheet, colours.card, 0);
     case "print":
       // Moodboard: each service a row on the page, a hairline under it.
       return {
