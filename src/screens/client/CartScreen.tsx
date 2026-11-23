@@ -335,6 +335,14 @@ interface PaymentModalProps {
    *  or has failed. While it is, leaving the Cart must not cancel the checkout:
    *  the card may already be approved (CartScreen abandonOutstandingCheckout). */
   onPaymentInFlight?: (inFlight: boolean) => void;
+  /** Which opening of this sheet is current. The Cart moves it on when the
+   *  client leaves (which closes the sheet) and each time it opens the sheet,
+   *  so a payment still going through can tell it has been left behind. */
+  getSheetOpenId?: () => number;
+  /** A payment the client had left failed, and its checkout is cancelled.
+   *  message is what went wrong, or null when there's nothing to tell them
+   *  (it never reached Stripe, or they cancelled it themselves). */
+  onPaymentFailedAway?: (checkoutBatchId: string, message: string | null) => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -659,6 +667,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentPending,
     onCheckoutPaid,
     onPaymentInFlight,
+    getSheetOpenId,
+    onPaymentFailedAway,
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
@@ -812,7 +822,37 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       setPayError(null);
 
       let paymentStarted = false;
+      let handedToStripe = false;
       let createdIntentId: string | undefined;
+      const openId = getSheetOpenId?.();
+      // A failure nobody can see: the client left the Cart while the payment
+      // was going through, which closed this sheet (and may have opened a new
+      // one since). Nothing else would cancel the checkout until its hold ran
+      // out, and the database counts the client's own hold as busy, so paying
+      // again would be told the time is taken. Cancel it as × does (the server
+      // cancels the checkout too) and say so. Doesn't touch the Cart's current
+      // checkout, which may be a newer one. False while this attempt's sheet
+      // is still up: the error is shown in it.
+      const releaseIfSheetLeft = async (message: string | null): Promise<boolean> => {
+        if (getSheetOpenId?.() === openId) return false;
+        const intentId = createdIntentId;
+        if (intentId && openIntentRef.current === intentId) openIntentRef.current = null;
+        if (intentId && checkoutBatchId) {
+          try { await cancelPaymentIntent(checkoutBatchId, intentId); }
+          catch (err) {
+            logger.error('[checkout] could not cancel a failed payment after the Cart was left', err);
+            // 409: the card was approved after all, and the server finishes it.
+            if ((err as { context?: { status?: number } } | null)?.context?.status === 409) {
+              onPaymentPending?.('unknown');
+              return true;
+            }
+            // Anything else: Stripe did refuse it, so nothing was charged, and
+            // the hold runs out on its own.
+          }
+        }
+        if (checkoutBatchId) onPaymentFailedAway?.(checkoutBatchId, message);
+        return true;
+      };
       try {
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
@@ -829,6 +869,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         const { clientSecret, paymentIntentId, paypalAvailable } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
         openIntentRef.current = paymentIntentId;
+        // Left while the payment was being set up: the Cart has already
+        // cancelled the checkout, so don't hand the card to Stripe for it.
+        if (await releaseIfSheetLeft(null)) return;
         if (method === 'paypal' && !paypalAvailable) {
           // The server decides; nothing is authorised, so card still works.
           setPayError('PayPal isn\'t available for this booking. Please pay by card.');
@@ -838,6 +881,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
         // From here the card can be approved at any moment, so leaving the
         // Cart must not cancel the checkout (cleared in finally).
+        handedToStripe = true;
         onPaymentInFlight?.(true);
         if (method === 'wallet') {
           // The wallet sheet shows the amount it's given, so give it the
@@ -847,6 +891,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             // Nothing has been authorised yet — keep the checkout and let
             // them try again rather than releasing the hold over a blip.
             logger.error(`[${timestamp()}] could not read the payment amount`, retrieveError);
+            if (await releaseIfSheetLeft('We couldn\'t start Apple Pay or Google Pay.')) return;
             setPayError('We couldn\'t start Apple Pay or Google Pay. Please try again.');
             return;
           }
@@ -884,11 +929,15 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (confirmError) {
           // Nothing was authorised, so the intent can be retried as-is.
           // Leave the sheet open rather than throwing the checkout away.
+          // Card errors (declines, wrong CVC, failed bank check) are written
+          // by Stripe for the cardholder; anything else is ours to word.
+          const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
+          const cardMessage = isCardError ? (confirmError.localizedMessage || confirmError.message) : '';
           if (confirmError.code !== 'Canceled') {
             logger.error(`[${timestamp()}] payment confirmation failed`, confirmError);
-            // Card errors (declines, wrong CVC, failed bank check) are written
-            // by Stripe for the cardholder; anything else is ours to word.
-            const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
+          }
+          if (await releaseIfSheetLeft(confirmError.code === 'Canceled' ? null : cardMessage)) return;
+          if (confirmError.code !== 'Canceled') {
             setPayError(isCardError
               ? (confirmError.localizedMessage || confirmError.message)
               : method === 'paypal'
@@ -937,6 +986,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           onPaymentPending?.('unknown');
           return;
         }
+        // onClose below would clear whatever checkout the Cart has now.
+        if (await releaseIfSheetLeft(handedToStripe ? '' : null)) return;
         if (createdIntentId && checkoutBatchId) {
           try { await cancelPaymentIntent(checkoutBatchId, createdIntentId); }
           catch { onPaymentPending?.('unknown'); return; }
@@ -949,7 +1000,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setConfirming(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, onPaymentInFlight, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, onPaymentInFlight, getSheetOpenId, onPaymentFailedAway, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
@@ -2116,6 +2167,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // fail. Abandoning is therefore skipped while this is set.
   const isClaimingRef = useRef(false);
   const paymentInFlightRef = useRef(false);
+  // Moved on each time the client leaves the Cart and each time the payment
+  // sheet opens (StripePaymentModal getSheetOpenId). Set here, in the same
+  // tick as the leave, so a payment can't slip past it.
+  const paymentSheetOpenIdRef = useRef(0);
 
   /**
    * Give back the slots this checkout is holding.
@@ -2170,6 +2225,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       // problem as the success modal above, and leaving it up over another
       // screen would let the client pay for a hold that no longer exists.
       setShowPaymentModal(false);
+      paymentSheetOpenIdRef.current += 1;
       abandonOutstandingCheckout();
     });
     return unsubscribe;
@@ -4501,6 +4557,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       // "booking actually inserted" that the claim RPC's
                       // insert-time-only conflict check leaves open for
                       // the whole payment-sheet interaction.
+                      //
+                      // Not while the last payment is still going through (the
+                      // client left the Cart mid-payment and came back): its
+                      // held times would make this one say they're taken.
+                      if (paymentInFlightRef.current) {
+                        setShowBookingSummaryModal(false);
+                        showAlert('Your last payment is still going through', "We'll let you know as soon as it's settled. Please don't pay again in the meantime.");
+                        return;
+                      }
                       setIsReservingSlots(true);
                       try {
                         if (USE_STRIPE_PAYMENTS) {
@@ -4591,6 +4656,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           setHoldBatchId(batchId);
                         }
                         setShowBookingSummaryModal(false);
+                        paymentSheetOpenIdRef.current += 1;
                         setShowPaymentModal(true);
                       } catch (err) {
                         logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
@@ -4821,6 +4887,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
                 onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}
                 onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}
+                getSheetOpenId={() => paymentSheetOpenIdRef.current}
+                onPaymentFailedAway={(checkoutBatchId, message) => {
+                  // Forget it only if it's still the Cart's checkout; the
+                  // client may have started a new one since.
+                  if (serverCheckoutBatchIdRef.current === checkoutBatchId) {
+                    serverCheckoutBatchIdRef.current = null;
+                    setServerCheckoutBatchId(null);
+                  }
+                  // Shown over whichever screen they're on now: no
+                  // notification is sent for a payment that never went through.
+                  if (message === null) return;
+                  showAlert("Payment didn't go through", [message, "You haven't been charged, and your cart is still here if you'd like to try again."].filter(Boolean).join(' '));
+                }}
                 onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
