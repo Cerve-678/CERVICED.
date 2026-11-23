@@ -21,6 +21,10 @@ type Props = {
   providerName: string;
   /** Clients can't open a profile that isn't live, so don't promise they can. */
   isLive: boolean;
+  /** "owner": the provider's own code, to print or keep by the chair (My
+   *  Profile). "visitor": someone passing on a provider's page from their
+   *  profile, so the words are about that provider, not "your". */
+  viewer?: "owner" | "visitor";
   accentColor: string;
   backgroundColor: string;
   textColor: string;
@@ -29,12 +33,14 @@ type Props = {
   onClose: () => void;
 };
 
-/** Provider-owned, print-friendly QR for their public in-app profile. */
+/** A provider's page as a print-friendly QR with its link, to copy or share.
+ *  The provider's own (My Profile), or a client passing it on (their profile). */
 export function ProviderProfileQrSheet({
   visible,
   providerSlug,
   providerName,
   isLive,
+  viewer = "owner",
   accentColor,
   backgroundColor,
   textColor,
@@ -94,13 +100,15 @@ export function ProviderProfileQrSheet({
           <View style={[styles.icon, { backgroundColor: `${accentColor}1F` }]}>
             <Ionicons name="qr-code-outline" size={23} color={accentColor} />
           </View>
-          <Text style={[styles.title, { color: textColor }]}>
-            Your profile QR
+          <Text style={[styles.title, { color: textColor }]} numberOfLines={1}>
+            {viewer === "visitor" ? "Share this page" : "Your profile QR"}
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
-            {isLive
-              ? `Anyone can scan this with their phone camera to open your page.`
-              : "This code starts working once your profile is live."}
+            {viewer === "visitor"
+              ? `Scan this with a phone camera to open ${providerName}'s page.`
+              : isLive
+                ? `Anyone can scan this with their phone camera to open your page.`
+                : "This code starts working once your profile is live."}
           </Text>
           <View
             style={styles.qrFrame}
@@ -118,9 +126,11 @@ export function ProviderProfileQrSheet({
               {printedLink}
             </Text>
           </View>
-          <Text style={[styles.hint, { color: subtextColor }]}>
-            Keep it by your chair, on a card, or at your front desk.
-          </Text>
+          {viewer === "owner" ? (
+            <Text style={[styles.hint, { color: subtextColor }]}>
+              Keep it by your chair, on a card, or at your front desk.
+            </Text>
+          ) : null}
           <TouchableOpacity
             style={[styles.linkRow, { borderColor }]}
             onPress={() => void copyLink()}
@@ -137,7 +147,7 @@ export function ProviderProfileQrSheet({
             activeOpacity={0.85}
           >
             <Ionicons name="share-outline" size={18} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
-            <Text style={[styles.shareText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>SHARE PROFILE LINK</Text>
+            <Text style={[styles.shareText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{viewer === "visitor" ? "SHARE LINK" : "SHARE PROFILE LINK"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.closeButton}

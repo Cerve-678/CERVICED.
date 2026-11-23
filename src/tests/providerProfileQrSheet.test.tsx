@@ -9,9 +9,10 @@ jest.mock('react-native-qrcode-svg', () => () => null);
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../utils/clipboard', () => ({ copyText: jest.fn() }));
 
-function renderSheet() {
+function renderSheet(viewer: 'owner' | 'visitor' = 'owner') {
   return render(
     <ProviderProfileQrSheet
+      viewer={viewer}
       visible
       providerSlug="amara-lashes"
       providerName="Amara Lashes"
@@ -61,5 +62,14 @@ describe('profile QR sheet: copy link', () => {
 
     expect(Share.share).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://www.cerviced.co/@amara-lashes' }));
     expect(screen.queryByText('COPIED')).toBeNull();
+  });
+
+  it('speaks about the provider, not "your", when a client opens it from their profile', () => {
+    renderSheet('visitor');
+    expect(screen.getByText('Share this page')).toBeTruthy();
+    expect(screen.getByText("Scan this with a phone camera to open Amara Lashes's page.")).toBeTruthy();
+    expect(screen.getByText('cerviced.co/@amara-lashes')).toBeTruthy();
+    expect(screen.queryByText('Your profile QR')).toBeNull();
+    expect(screen.queryByText(/by your chair/)).toBeNull();
   });
 });

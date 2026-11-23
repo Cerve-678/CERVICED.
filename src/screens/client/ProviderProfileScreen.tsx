@@ -20,7 +20,6 @@ import {
   useWindowDimensions,
   Alert,
   Animated,
-  Share,
   Linking,
   Modal,
   Pressable,
@@ -125,6 +124,7 @@ import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibil
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
 import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
+import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -2129,31 +2129,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     showAlert,
   ]);
 
-  // Share handler with native share options
-  const handleShare = useCallback(async () => {
+  // Share (header): the provider's page as a QR with its link, to copy or
+  // pass on. It used to share a placeholder URL that went nowhere.
+  const [qrSheetVisible, setQrSheetVisible] = useState(false);
+  const handleShare = useCallback(() => {
     if (!provider) return;
-    try {
-      const shareOptions = {
-        message: `Check out @${provider.providerName} - ${provider.providerService} services in ${provider.location}. Rated ${provider.rating}/5 stars!`,
-        title: `${provider.providerName} - ${provider.providerService}`,
-        url: `https://app.yourapp.com/provider/${provider.id}`, // Replace with your app URL
-      };
-
-      const result = await Share.share(shareOptions);
-
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          logger.log("Shared via:", result.activityType);
-        } else {
-          logger.log("Shared successfully");
-        }
-      } else if (result.action === Share.dismissedAction) {
-        logger.log("Share dismissed");
-      }
-    } catch (error) {
-      logger.error("Error sharing:", error);
-      Alert.alert("Error", "Unable to share at this time.");
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setQrSheetVisible(true);
   }, [provider]);
 
   const closeWaitlistModal = useCallback(() => {
@@ -3722,6 +3704,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             not the OS Alert. */}
         <DialogHost />
         {beforeYouBookSheet}
+
+        {provider ? (
+          <ProviderProfileQrSheet
+            visible={qrSheetVisible}
+            providerSlug={provider.id}
+            providerName={provider.displayName}
+            // Only live providers open here for clients (getProviderBySlug filters has_gone_live).
+            isLive
+            viewer={isOwnProvider ? "owner" : "visitor"}
+            accentColor={adaptiveAccentColor}
+            backgroundColor={OP.surface}
+            textColor={OP.text}
+            subtextColor={OP.sub}
+            borderColor={OP.border}
+            onClose={() => setQrSheetVisible(false)}
+          />
+        ) : null}
 
         {/* Communication options — what "Get In Touch" opens on your own
             profile, where in-app chat isn't possible. Themed with this
