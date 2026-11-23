@@ -843,7 +843,12 @@ const styles = StyleSheet.create({
   polaroidPhoto: { width: "100%", aspectRatio: 0.88, overflow: "hidden", backgroundColor: "#EEEEEE" },
   capsuleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", columnGap: CAPSULE_GAP, rowGap: 10 },
   capsuleTile: { borderRadius: 999, overflow: "hidden" },
-  archGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
+  // Retreat and Storefront: three arched photos to a row. alignItems must not
+  // be the default stretch: on a phone (Yoga) a stretched tile takes its
+  // height from the row, which starts at 0, instead of from its aspectRatio,
+  // so every photo drew 0pt tall and the portfolio vanished. The browser
+  // sizes it either way, which is why it only showed on the device.
+  archGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", rowGap: 10 },
   tapedGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 22, paddingTop: 12, paddingBottom: 8, paddingHorizontal: 4 },
   tapedPrint: { width: "46%", padding: 6, paddingBottom: 18, backgroundColor: "#FFFDF9", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
   tapedLower: { marginTop: 14 },
