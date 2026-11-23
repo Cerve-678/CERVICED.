@@ -1061,28 +1061,32 @@ function ProfileHeroLayoutBody({
     }
 
     case "signed": {
-      // Signature: a big logo in an accent ring, the whole name signed across
-      // its foot in a pen signature, the words round it in Gloock. Every line
-      // is in full ink: the pale accent and the faded sub colour read too faint
+      // Signature: the logo in an accent ring on the left; beside it the
+      // name signed in pen, then where and what they do in Gloock (owner,
+      // 2026-11-23: logo left, name right, no WELCOME TO). Every line is in
+      // full ink: the pale accent and the faded sub colour read too faint
       // under a fine pen script (owner, 2026-11-15).
       const pen = heroIsDark ? "#FFFFFF" : blend(accent, "#000000", 0.5);
       return (
-        <View style={[layout.infoCenter, layout.textFirst]}>
-          <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
-          <View style={layout.signedLogo}>{renderLogo(148)}</View>
-          <View style={layout.signedNameRow} pointerEvents="none" accessible accessibilityRole="header" accessibilityLabel={name}>
-            <Text
-              style={[layout.signedName, pickedName(40), { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.45}
-            >
-              {name}
-            </Text>
-            {tick}
+        <View style={[layout.signedWrap, layout.textFirst]}>
+          <View style={layout.signedRow}>
+            {renderLogo(104)}
+            <View style={layout.signedSide}>
+              <View style={layout.signedNameRow} pointerEvents="none" accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text
+                  style={[layout.signedName, pickedName(34), { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
+                  {name}
+                </Text>
+                {tick}
+              </View>
+              {location ? <Text style={[layout.signedLocated, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+              {kicker ? <Text style={[layout.signedKicker, { color: heroText }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+            </View>
           </View>
-          {location ? <Text style={[layout.signedLocated, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
-          {kicker ? <Text style={[layout.signedKicker, { color: heroText }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
           <View style={layout.signedDetails}>{details}</View>
         </View>
       );
@@ -1940,13 +1944,16 @@ const layout = StyleSheet.create({
   blockTag: { borderWidth: 2, paddingHorizontal: 10, paddingVertical: 5 },
   blockTagText: { fontSize: 10.5, fontWeight: "800", letterSpacing: 1.2 },
   // Signature
-  signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 13, letterSpacing: 4, marginBottom: 14 },
-  signedLogo: { marginBottom: -20 },
-  signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -50, alignSelf: "stretch", justifyContent: "center" },
-  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 82, lineHeight: 120, flexShrink: 1, textAlign: "center" },
-  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 14, letterSpacing: 3, marginTop: 2, textAlign: "center" },
-  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 12.5, letterSpacing: 2, marginTop: 6, textAlign: "center" },
-  signedDetails: { alignItems: "center", marginTop: 14 },
+  signedWrap: { marginBottom: 30, paddingHorizontal: 20 },
+  signedRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  signedSide: { flex: 1 },
+  // Mrs Saint Delafield's swashes reach well above and below its letters, so
+  // the line is tall and pulled in a little top and bottom.
+  signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginVertical: -10 },
+  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 54, lineHeight: 78, flexShrink: 1 },
+  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 13, letterSpacing: 3, marginTop: 4 },
+  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 12, letterSpacing: 2, marginTop: 5 },
+  signedDetails: { alignItems: "center", marginTop: 18 },
   // Quiet: the band is paper, so its ink is fixed.
   quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
   quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },

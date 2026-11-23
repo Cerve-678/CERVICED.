@@ -9,9 +9,10 @@ jest.mock('react-native-qrcode-svg', () => () => null);
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../utils/clipboard', () => ({ copyText: jest.fn() }));
 
-function renderSheet() {
+function renderSheet(viewer: 'owner' | 'visitor' = 'owner') {
   return render(
     <ProviderProfileQrSheet
+      viewer={viewer}
       visible
       providerSlug="amara-lashes"
       providerName="Amara Lashes"
@@ -32,17 +33,22 @@ describe('profile QR sheet: copy link', () => {
     jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
   });
 
-  it('shows the page link and copies it, then says it was copied', async () => {
+  it('prints the page link on the QR card, so a screenshot or print says where it goes', () => {
+    renderSheet();
+    expect(screen.getByText('cerviced.co/@amara-lashes')).toBeTruthy();
+    expect(screen.getByLabelText("QR code for Amara Lashes's CERVICED profile, cerviced.co/@amara-lashes")).toBeTruthy();
+  });
+
+  it('copies the full page link, then says it was copied', async () => {
     (copyText as jest.Mock).mockResolvedValue(true);
     renderSheet();
-    expect(screen.getByText('www.cerviced.co/@amara-lashes')).toBeTruthy();
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Copy link, www.cerviced.co/@amara-lashes'));
+      fireEvent.press(screen.getByLabelText('Copy link'));
     });
 
     expect(copyText).toHaveBeenCalledWith('https://www.cerviced.co/@amara-lashes');
-    expect(screen.getByText('Copied')).toBeTruthy();
+    expect(screen.getByText('COPIED')).toBeTruthy();
     expect(Share.share).not.toHaveBeenCalled();
   });
 
@@ -51,10 +57,19 @@ describe('profile QR sheet: copy link', () => {
     renderSheet();
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Copy link, www.cerviced.co/@amara-lashes'));
+      fireEvent.press(screen.getByLabelText('Copy link'));
     });
 
     expect(Share.share).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://www.cerviced.co/@amara-lashes' }));
-    expect(screen.queryByText('Copied')).toBeNull();
+    expect(screen.queryByText('COPIED')).toBeNull();
+  });
+
+  it('speaks about the provider, not "your", when a client opens it from their profile', () => {
+    renderSheet('visitor');
+    expect(screen.getByText('Share this page')).toBeTruthy();
+    expect(screen.getByText("Scan this with a phone camera to open Amara Lashes's page.")).toBeTruthy();
+    expect(screen.getByText('cerviced.co/@amara-lashes')).toBeTruthy();
+    expect(screen.queryByText('Your profile QR')).toBeNull();
+    expect(screen.queryByText(/by your chair/)).toBeNull();
   });
 });

@@ -214,9 +214,9 @@ describe('the 2026-11-15 templates', () => {
     expect(screen.getByText('THE SERVICES')).toBeTruthy();
   });
 
-  it('signs the whole name across Signature\'s logo', () => {
+  it('signs the whole name beside Signature\'s logo, with no WELCOME TO', () => {
     renderPreview('signature');
-    expect(screen.getByText('WELCOME TO')).toBeTruthy();
+    expect(screen.queryByText('WELCOME TO')).toBeNull();
     expect(screen.getByLabelText('Amara Lashes')).toBeTruthy();
     expect(screen.getByText('The Services')).toBeTruthy();
     expect(screen.getByText('03')).toBeTruthy();
