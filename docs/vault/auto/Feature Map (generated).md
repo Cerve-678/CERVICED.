@@ -126,7 +126,7 @@ Curated: [[Booking Flow]] · **416 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(143)_
 - `src/services/database/edgeFunctions.ts` _(143)_
 - `src/services/AvailabilityService.ts` _(141)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(136)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(135)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/services/becca/engine.ts` _(130)_
 - `supabase/phase1_schema.sql` _(125)_
@@ -147,7 +147,7 @@ Curated: [[Notifications]] · **214 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(364)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/database/notifications.ts` _(118)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(105)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(103)_
 - `supabase/notification_recipient_role.sql` _(91)_
 - `supabase/provider_reminder_jobs.sql` _(86)_
 - `src/screens/provider/ProviderPromotionsScreen.tsx` _(74)_
@@ -211,14 +211,14 @@ Curated: [[Provider Onboarding & Go-Live]] · **107 files**
 
 ## Waitlist
 Curated: [[Booking Flow]] · **85 files**
-- `src/screens/client/ProviderProfileScreen.tsx` _(208)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(206)_
 - `src/screens/client/BookingsScreen.tsx` _(169)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(81)_
 - `supabase/waitlist_holds.sql` _(75)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_
 - `src/services/database/waitlist.ts` _(55)_
 - `src/services/becca/capabilities/client.ts` _(52)_
-- `src/features/providers/page/ProviderPageServices.tsx` _(38)_
+- `src/features/providers/page/ProviderPageServices.tsx` _(39)_
 - `src/screens/provider/ProviderAutomationsScreen.tsx` _(37)_
 - `src/services/becca/capabilities/provider.ts` _(35)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(35)_

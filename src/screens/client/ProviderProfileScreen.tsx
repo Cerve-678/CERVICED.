@@ -1291,8 +1291,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // this component is typed by the ProviderProfile route it mostly serves.
   const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
   // The owner's logo preview shows the Book buttons as clients see them
-  // (user, 2026-11-22). A tap still goes through handleBook, which stops
-  // them booking themselves.
+  // (user, 2026-11-22), for looking at only: they don't respond to a tap
+  // (user, 2026-11-23).
   const showBookButtons = canBookProvider || (asOwnPreview && viewerChecked && providerDbId !== null);
 
   // A provider-only account reaches this screen by scanning someone's QR code.
@@ -3485,12 +3485,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   const openBookings = () => navigation.navigate("Bookings" as never);
   const openWaitlistJoin = (service: ServiceData) => {
-    // The owner's logo preview shows the waitlist button too; same stop as handleBook.
-    if (isOwnProvider) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      showAlert("That's your profile", "You can't join your own waitlist.", "center");
-      return;
-    }
     setWaitlistNotes("");
     setWaitlistModal({ visible: true, service });
   };
@@ -3527,6 +3521,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       onToggleExpanded={toggleServiceExpanded}
       onOpenImages={openImageViewer}
       canBook={showBookButtons}
+      bookDisplayOnly={asOwnPreview}
       takingBookings={takingBookings}
       serviceFullyBooked={serviceFullyBooked}
       serviceNearTermAvailability={serviceNearTermAvailability}
@@ -4417,6 +4412,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <TouchableOpacity
               style={[styles.pinnedBookButton, squareButtons && styles.squareButton, { backgroundColor: adaptiveAccentColor }]}
               onPress={pressPinnedBook}
+              disabled={asOwnPreview}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
