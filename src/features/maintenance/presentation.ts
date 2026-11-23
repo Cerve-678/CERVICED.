@@ -8,10 +8,6 @@
 // server-side by process_maintenance_reminders(), which applies the same
 // "already booked" rule (see supabase/migrations/20261018180000_beauty_maintenance.sql).
 
-import {
-  getMaintenanceServiceType,
-  type MaintenanceSearchCategory,
-} from '../../constants/maintenanceServiceTypes';
 import type { MaintenanceItem } from '../../types/maintenance';
 import { dateToYMD, toLocalDate } from '../../utils/dateUtils';
 
@@ -122,7 +118,8 @@ export interface MaintenanceGroups {
   next: PresentedItem | null;
 }
 
-function byDue(a: PresentedItem, b: PresentedItem): number {
+/** Soonest due first; undated last; ties by title. */
+export function byDue(a: PresentedItem, b: PresentedItem): number {
   const ad = a.item.dueOn ?? '9999-12-31';
   const bd = b.item.dueOn ?? '9999-12-31';
   return ad < bd ? -1 : ad > bd ? 1 : a.item.title.localeCompare(b.item.title);
@@ -278,11 +275,4 @@ export function rhythmLineFor(item: MaintenanceItem): RhythmLine {
     default:
       return null;
   }
-}
-
-/** Which filter chip an item sits under. Take-downs are hair; events and
- *  untyped reminders sit under "Other" (null). */
-export function categoryOf(item: MaintenanceItem): MaintenanceSearchCategory | null {
-  if (item.kind === 'takedown') return 'HAIR';
-  return getMaintenanceServiceType(item.typeKey)?.searchCategory ?? null;
 }

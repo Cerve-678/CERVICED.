@@ -130,7 +130,7 @@ const STUDIO_TABS: Record<PageSectionKey, string> = {
   about: "Meet me",
   policies: "Read first",
   services: "Book in",
-  reviews: "Kind words",
+  reviews: "Reviews",
   hours: "Open",
   contact: "Say hi",
   info: "Good to know",
