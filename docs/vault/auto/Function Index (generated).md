@@ -5,7 +5,7 @@
 
 #generated
 
-**4253 functions** across **623 files**.
+**4255 functions** across **624 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -54,7 +54,7 @@
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · paydays · ProviderPayoutSummaryCard
-- `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
+- `ProviderProfileQrSheet.tsx` — copyLink · **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chargeableByBooking · chooseInterval · chooseSchedule · date · EmptyState · feesByBooking · feesToCharge · handleRefunded · load · loadMore · money · Notice · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
@@ -582,7 +582,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (68)
+### `src/utils/` (69)
 - `aboutPage.ts` — **openAboutPage**
 - `accountDeletionError.ts` — **accountDeletionError** · list
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
@@ -594,6 +594,7 @@
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**
+- `clipboard.ts` — **copyText**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **hexToHsv** · **hsvToHex** · **paletteFromPixels** · **parseHexInput** · **toArgbHex**
 - `cropRect.ts` — axis · clamp · **clampView** · **fitContain** · **fitCropInside** · **moveCrop** · **moveHandle** · **pinchView** · **toImageCrop** · **visiblePhoto**

@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -11,6 +11,7 @@ import {
 import QRCode from "react-native-qrcode-svg";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { copyText } from "../utils/clipboard";
 import { providerWebPageUrl } from "../utils/providerProfileLink";
 import { isDarkColor } from '../constants/providerThemes';
 
@@ -50,6 +51,28 @@ export function ProviderProfileQrSheet({
       url: pageUrl,
     });
   }, [pageUrl, providerName]);
+
+  // Copy link: the row shows "Copied" for a moment, then the link again. A
+  // build without the clipboard module opens the share sheet instead, which
+  // has its own Copy.
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+  }, []);
+  useEffect(() => {
+    if (!visible) setCopied(false);
+  }, [visible]);
+  const copyLink = useCallback(async () => {
+    if (!(await copyText(pageUrl))) {
+      await share();
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+  }, [pageUrl, share]);
 
   return (
     <Modal
@@ -92,6 +115,21 @@ export function ProviderProfileQrSheet({
           <Text style={[styles.hint, { color: subtextColor }]}>
             Keep it by your chair, on a card, or at your front desk.
           </Text>
+          <TouchableOpacity
+            style={[styles.linkRow, { borderColor }]}
+            onPress={() => void copyLink()}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={copied ? "Link copied" : `Copy link, ${pageUrl.replace(/^https:\/\//, "")}`}
+          >
+            <Text style={[styles.linkText, { color: textColor }]} numberOfLines={1}>
+              {copied ? "Copied" : pageUrl.replace(/^https:\/\//, "")}
+            </Text>
+            <View style={styles.linkAction}>
+              <Ionicons name={copied ? "checkmark" : "copy-outline"} size={16} color={accentColor} />
+              <Text style={[styles.linkActionText, { color: accentColor }]}>{copied ? "DONE" : "COPY LINK"}</Text>
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.shareButton, { backgroundColor: accentColor }]}
             onPress={() => void share()}
@@ -165,6 +203,25 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
   },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "stretch",
+    gap: 10,
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    marginTop: 18,
+  },
+  linkText: {
+    flex: 1,
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  linkAction: { flexDirection: "row", alignItems: "center", gap: 5 },
+  linkActionText: { fontFamily: "BakbakOne-Regular", fontSize: 12, letterSpacing: 0.5 },
   shareButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -173,7 +230,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     minHeight: 50,
     borderRadius: 15,
-    marginTop: 22,
+    marginTop: 12,
   },
   shareText: {
     color: "#FFFFFF",
