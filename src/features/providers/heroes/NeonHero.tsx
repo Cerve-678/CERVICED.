@@ -18,6 +18,11 @@ import { blend, isDarkColor } from "../../../constants/providerThemes";
 /** How far the wall reaches up behind the profile's top padding. */
 const WALL_REACH = 140;
 
+/** How far the wall runs on down behind the page sheet, so the dark fills the
+ *  gaps at the sheet's rounded top corners (36pt) instead of the page colour
+ *  showing through them (owner, 11-23). The sheet draws over the rest. */
+const WALL_TAIL = 40;
+
 /** The wall: their backdrop colour, deepened until it reads as night. */
 export function neonWallColour(heroColour: string): string {
   return blend(heroColour, "#000000", isDarkColor(heroColour) ? 0.55 : 0.82);
@@ -125,7 +130,7 @@ const styles = StyleSheet.create({
     top: -WALL_REACH,
     left: 0,
     right: 0,
-    bottom: 0,
+    bottom: -WALL_TAIL,
     overflow: "hidden",
   },
   brick: { height: 26, borderBottomWidth: 1 },

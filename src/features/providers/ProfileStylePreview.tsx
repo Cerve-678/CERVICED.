@@ -621,7 +621,7 @@ export function ProfileStylePreview({
               key={index}
               intensity={surface ? 0 : blurIntensity}
               tint={blurTint}
-              style={[styles.serviceCard, { backgroundColor: cardBg, borderColor: OP.border }, surface, pageStyle.cards === "capsule" && capsuleServiceSurface(accent, OP.bg, index), squareCards && styles.square, tiles && styles.tile]}
+              style={[styles.serviceCard, { backgroundColor: cardBg, borderColor: OP.border }, surface, pageStyle.cards === "capsule" && capsuleServiceSurface(accent, OP.bg, OP.card, index), squareCards && styles.square, tiles && styles.tile]}
             >
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}

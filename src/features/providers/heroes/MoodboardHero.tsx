@@ -173,7 +173,9 @@ function heroSubOn(paper: string): string {
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24, gap: 16 },
-  board: { height: 300 },
+  // The name hangs 30pt below the board's foot (owner, 11-23: "lower the
+  // business name"), so the board keeps that much room under it.
+  board: { height: 300, marginBottom: 22 },
   print: {
     position: "absolute",
     paddingTop: PRINT_EDGE,
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
   roundPhoto: { flex: 1, borderRadius: 999, overflow: "hidden" },
   roundLogo: { flex: 1, alignItems: "center", justifyContent: "center" },
   caption: { position: "absolute", left: PRINT_EDGE, right: PRINT_EDGE, bottom: 5, fontFamily: "Jost-Light", fontSize: 8, letterSpacing: 2 },
-  nameRow: { position: "absolute", zIndex: 2, left: 0, right: 0, bottom: -8, flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  nameRow: { position: "absolute", zIndex: 2, left: 0, right: 0, bottom: -30, flexDirection: "row", alignItems: "flex-end", gap: 6 },
   name: { flexShrink: 1, fontFamily: "Jost-Light", fontSize: 76, lineHeight: 80, letterSpacing: -2 },
   under: { flexDirection: "row", alignItems: "center", gap: 10 },
   underText: { flex: 1 },
