@@ -3,15 +3,15 @@
 // a band one shade deeper than the one above, milk → oat → latte → mocha →
 // espresso down the page, each band's rounded top lapping over the one above,
 // the ink turning light on the deep ones. A dark page pours the other way,
-// espresso at the top. This top is the first, palest band: a round photo, the
-// name huge in an italic serif, what they do and where in spaced caps.
+// espresso at the top. This top is the first, palest band: their logo, the
+// name huge in an italic serif, what they do and where in spaced caps. It was
+// a round chosen photo until the owner asked for the logo (2026-11-23).
 
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import type { PageSectionKey } from "../../../constants/pageStyles";
 import { blend, isDarkColor } from "../../../constants/providerThemes";
-import { HeroPhoto } from "../HeroPhoto";
 
 /** The five shades of the pour, top of the page first, from the accent. On a
  *  dark page they run the other way: espresso at the top, milk at the foot. */
@@ -84,11 +84,9 @@ export function LatteHero({
   location,
   accent,
   sheetColour,
-  photo,
   renderLogo,
   tick,
   details,
-  onOpenPhoto,
 }: {
   name: string;
   /** What they do, "LASHES · BROWS". */
@@ -96,12 +94,9 @@ export function LatteHero({
   location: string;
   accent: string;
   sheetColour: string;
-  /** Their chosen photo (Branding → Your Photos); none yet puts the logo in the circle. */
-  photo: string | undefined;
   renderLogo: (size: number) => React.ReactNode;
   tick: React.ReactNode;
   details: React.ReactNode;
-  onOpenPhoto?: (() => void) | undefined;
 }) {
   const band = latteShade(accent, sheetColour, 0);
   const ink = latteInk(band);
@@ -109,20 +104,7 @@ export function LatteHero({
   return (
     <View style={styles.wrap}>
       <View style={[styles.band, { backgroundColor: band }]} pointerEvents="none" />
-      {photo ? (
-        <TouchableOpacity
-          style={[styles.photo, { backgroundColor: latteShade(accent, sheetColour, 0.4) }]}
-          disabled={!onOpenPhoto}
-          onPress={onOpenPhoto}
-          accessibilityRole={onOpenPhoto ? "imagebutton" : undefined}
-          accessibilityLabel={`${name} featured work`}
-          activeOpacity={0.88}
-        >
-          <HeroPhoto uri={photo} />
-        </TouchableOpacity>
-      ) : (
-        renderLogo(118)
-      )}
+      {renderLogo(118)}
       <View accessible accessibilityRole="header" accessibilityLabel={name} style={styles.nameRow}>
         <Text style={[styles.name, { color: ink.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55}>
           {name}
@@ -139,7 +121,6 @@ const styles = StyleSheet.create({
   wrap: { alignItems: "center", paddingHorizontal: 24, paddingTop: 14, paddingBottom: 34, gap: 8 },
   // Up behind the top padding, and down behind the sheet's rounded corners.
   band: { position: "absolute", top: -BAND_REACH, left: 0, right: 0, bottom: -BAND_UNDER },
-  photo: { width: 118, height: 118, borderRadius: 59, overflow: "hidden" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "100%", marginTop: 4 },
   name: { flexShrink: 1, fontFamily: "InstrumentSerif-Italic", fontSize: 52, lineHeight: 58, textAlign: "center" },
   caps: { fontFamily: "HankenGrotesk-Medium", fontSize: 12, letterSpacing: 3, textAlign: "center" },

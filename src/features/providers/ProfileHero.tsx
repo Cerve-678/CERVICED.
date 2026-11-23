@@ -282,7 +282,7 @@ function ProfileHeroLayoutBody({
   onOpenHeroPhoto,
   pickedNameFont = null,
 }: ProfileHeroLayoutProps) {
-  // Quiet, Signature, Hush and Pinboard draw the name themselves: in the picked font,
+  // Quiet, Signature, Hush, Pinboard, Neon and Moodboard draw the name themselves: in the picked font,
   // when there is one, at the size that top draws it.
   const pickedName = (size: number): TextStyle | null => (pickedNameFont ? pickedNameFontStyle(pickedNameFont, size) : null);
   const shadow = heroIsDark ? layout.shadow : null;
@@ -322,11 +322,9 @@ function ProfileHeroLayoutBody({
           location={location}
           accent={accent}
           sheetColour={sheetColour ?? cardColour}
-          photo={photoUris?.[0]}
           renderLogo={renderLogo}
           tick={tick}
           details={details}
-          onOpenPhoto={onOpenHeroPhoto ? () => onOpenHeroPhoto(0) : undefined}
         />
       );
     case "collage":
@@ -338,6 +336,7 @@ function ProfileHeroLayoutBody({
           accent={accent}
           sheetColour={sheetColour ?? cardColour}
           heroText={heroText}
+          pickedNameStyle={pickedName(76)}
           photos={photoUris ?? []}
           captions={photoCaptions ?? []}
           renderLogo={renderLogo}
