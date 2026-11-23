@@ -5,7 +5,7 @@
 
 #generated
 
-**4242 functions** across **622 files**.
+**4253 functions** across **623 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -652,7 +652,8 @@
 - `validation.ts` — **getPasswordStrength**
 - `withTimeout.ts` — **withTimeout**
 
-### `src/web/` (5)
+### `src/web/` (6)
+- `ProviderWebPage.tsx` — heroPhotosForStyle · jumpTo · noop · openContact · openPhoto · openUrl · palette · **ProviderWebPage** · ProviderWebPageContent · renderServices · serviceCountsByType
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**
