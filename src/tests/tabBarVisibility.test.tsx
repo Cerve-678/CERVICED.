@@ -77,6 +77,14 @@ describe("screens that never show the bar", () => {
     expect(stackHidesTabBar("MyServices", ["MyServicesMain", "Branding", "PolicyEditor"])).toBe(true);
     expect(stackHidesTabBar("MyServices", ["MyServicesMain"])).toBe(false);
   });
+
+  it("hides it on the client's chat that Get In Touch opens from a provider's profile, in any tab", () => {
+    for (const tab of ["Home", "Explore", "Becca", "Cart"]) {
+      expect(stackHidesTabBar(tab, [`${tab}Main`, "ProviderProfile", "ProviderChat"])).toBe(true);
+      // The profile itself keeps it.
+      expect(stackHidesTabBar(tab, [`${tab}Main`, "ProviderProfile"])).toBe(false);
+    }
+  });
 });
 
 // The same reading IslandPillTabBar does, against a real tab + stack, so a
