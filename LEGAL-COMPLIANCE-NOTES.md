@@ -1134,4 +1134,20 @@ say so. Built on `feat/directory-listings-in-search` (PR #123).
   often their face. That's a bigger step than a handle and an area.
 - ~~**Contact addresses disagree.**~~ Resolved: the Privacy Policy moved to
   cerviced.co/legal, which no longer names privacy@cerviced.app.
+- **New notice wording (2026-11-24).** The product owner reworded the listing
+  page notice and added "We list beauty businesses so beauty lovers can find
+  them in one place. Press Nudge if you want them on the app." Every point
+  from Client Terms §6 is kept (not partnered, not bookable in the app, their
+  page isn't run by CERVICED, may be out of date, claim or email to correct or
+  remove). For the 146 listings with no booking link, "You book on their own
+  page" is replaced by "To book, get in touch with them on Instagram". Text:
+  `listingNotice()` in `src/features/providers/directoryListings.ts`.
+- **Join nudges on listings (2026-11-24).** A signed-in client can nudge a
+  listing to join. It's stored as the client's id, the business and the day
+  (`provider_stat_viewers`, the same record a link-only provider's nudge uses),
+  and the team messages nudged businesses on Instagram by hand. That's new
+  personal data: which client wants which business. The Privacy Policy on
+  cerviced.co doesn't mention it yet. The owner sees only a count when
+  claiming, never who. The client is told "We'll let them know", so the team
+  has to actually message nudged businesses for that to stay true.
 - **Not lawyer-reviewed**, like the rest of the Terms and Privacy text (§19).

@@ -1,9 +1,13 @@
 import { cityFilterKeys, matchesCityFilter } from '../utils/providerCity';
 import {
   filtersAllowDirectoryListings,
+  listingCategoryLabel,
   listingInitial,
   listingInstagramUrl,
   listingLink,
+  listingNotice,
+  listingNudgeLine,
+  listingServiceKind,
 } from '../features/providers/directoryListings';
 
 describe('listingInitial', () => {
@@ -81,5 +85,66 @@ describe('listingInstagramUrl', () => {
   it('refuses anything that is not a handle', () => {
     expect(listingInstagramUrl('a/b')).toBeNull();
     expect(listingInstagramUrl(null)).toBeNull();
+  });
+});
+
+describe('listingCategoryLabel', () => {
+  it('writes categories the way the app does elsewhere', () => {
+    expect(listingCategoryLabel('MUA')).toBe('Makeup');
+    expect(listingCategoryLabel('HAIR')).toBe('Hair');
+    expect(listingCategoryLabel('BROWS')).toBe('Brows');
+  });
+
+  it('keeps a category the app does not know', () => {
+    expect(listingCategoryLabel('PIERCING')).toBe('PIERCING');
+  });
+});
+
+describe('listingServiceKind', () => {
+  it('shows what they do when it adds something', () => {
+    expect(listingServiceKind('Wigs', 'HAIR')).toBe('Wigs');
+    expect(listingServiceKind('  Makeup artist ', 'MUA')).toBe('Makeup artist');
+  });
+
+  it('hides it when it only repeats the category', () => {
+    expect(listingServiceKind('Lashes', 'LASHES')).toBeNull();
+    expect(listingServiceKind('makeup', 'MUA')).toBeNull();
+    expect(listingServiceKind('', 'HAIR')).toBeNull();
+    expect(listingServiceKind(null, 'HAIR')).toBeNull();
+  });
+});
+
+describe('listingNotice', () => {
+  // Legal-adjacent (Client Terms §6): every point must survive any rewording.
+  const points = [
+    "hasn't joined or partnered with CERVICED",
+    "you can't book it in the app",
+    'may be out of date',
+    'claim it below',
+    'support@cerviced.co',
+    'corrected or removed',
+    'Press Nudge',
+  ];
+
+  it.each([true, false])('keeps every point (has a link: %s)', hasLink => {
+    for (const point of points) expect(listingNotice(hasLink)).toContain(point);
+  });
+
+  it("says CERVICED doesn't run their page only when there is one", () => {
+    expect(listingNotice(true)).toContain("You book on their own page, which CERVICED doesn't run.");
+    expect(listingNotice(false)).not.toContain('their own page');
+    expect(listingNotice(false)).toContain('get in touch with them on Instagram');
+  });
+});
+
+describe('listingNudgeLine', () => {
+  it('counts the people who nudged', () => {
+    expect(listingNudgeLine(1)).toBe('1 beauty lover has nudged you to join CERVICED.');
+    expect(listingNudgeLine(12)).toBe('12 beauty lovers have nudged you to join CERVICED.');
+  });
+
+  it('says nothing with no nudges', () => {
+    expect(listingNudgeLine(0)).toBeNull();
+    expect(listingNudgeLine(Number.NaN)).toBeNull();
   });
 });

@@ -12,6 +12,8 @@ export interface DirectoryListingDetail {
   aboutText: string | null;
   instagram: string | null;
   website: string | null;
+  /** What the import says they do ("Wigs"), or null. */
+  customServiceType: string | null;
 }
 
 /** The listing page's data for one listing, or null if there's no active
@@ -28,5 +30,6 @@ export async function getDirectoryListingDetail(id: string): Promise<DirectoryLi
     aboutText: row.about_text,
     instagram: row.instagram,
     website: row.website,
+    customServiceType: row.custom_service_type,
   };
 }

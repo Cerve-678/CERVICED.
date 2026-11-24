@@ -19,6 +19,7 @@ import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
 import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import AdminCreatedAccountsScreen from '../../../screens/shared/AdminCreatedAccountsScreen';
+import AdminListingNudgesScreen from '../../../screens/shared/AdminListingNudgesScreen';
 import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
@@ -130,6 +131,11 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="AdminCreatedAccounts"
         component={AdminCreatedAccountsScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminListingNudges"
+        component={AdminListingNudgesScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen

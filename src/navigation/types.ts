@@ -207,6 +207,8 @@ export type ProfileStackParamList = {
   AdminCreateAccount: { addDetailsForUserId?: string } | undefined;
   /** Admin accounts only: every account opened from Create an account. */
   AdminCreatedAccounts: undefined;
+  /** Admin accounts only: "Not on CERVICED yet" listings clients nudged to join. */
+  AdminListingNudges: undefined;
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
@@ -427,6 +429,8 @@ export type ProviderAccountStackParamList = {
   AdminCreateAccount: { addDetailsForUserId?: string } | undefined;
   /** Admin accounts only: every account opened from Create an account. */
   AdminCreatedAccounts: undefined;
+  /** Admin accounts only: "Not on CERVICED yet" listings clients nudged to join. */
+  AdminListingNudges: undefined;
   DevSettings: undefined;
 };
 

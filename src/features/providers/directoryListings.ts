@@ -1,5 +1,6 @@
 import { normalizeExternalBookingUrl } from './externalBookingLink';
 import { filtersAllowLinkOnly, type LinkOnlyFilterInput } from './linkOnlySearch';
+import { ALL_SERVICE_TYPE_OPTS } from '../business-details/options';
 
 /**
  * Directory listings: businesses imported from public directories that
@@ -69,4 +70,47 @@ export function listingInstagramUrl(handle: string | null | undefined): string |
   const clean = handle?.trim().replace(/^@+/, '');
   if (!clean || !/^[a-z0-9._]+$/i.test(clean)) return null;
   return `https://instagram.com/${clean}`;
+}
+
+/** A listing's category as the app writes it elsewhere ("MUA" → "Makeup"),
+ *  or the raw value for one the app doesn't know. */
+export function listingCategoryLabel(category: string): string {
+  return ALL_SERVICE_TYPE_OPTS.find(opt => opt.value === category)?.label ?? category;
+}
+
+/** What the business says it does ("Wigs"), from the import's service type,
+ *  or null when it only repeats the category ("Lashes" on a LASHES listing). */
+export function listingServiceKind(customServiceType: string | null | undefined, category: string): string | null {
+  const kind = customServiceType?.trim();
+  if (!kind) return null;
+  const same = (a: string) => a.toLowerCase() === kind.toLowerCase();
+  return same(category) || same(listingCategoryLabel(category)) ? null : kind;
+}
+
+/**
+ * The notice on a listing's page. Legal-adjacent: it mirrors Client Terms §6
+ * on cerviced.co/legal (not partnered, not bookable in the app, their booking
+ * page isn't run by CERVICED, details may be out of date, claim or email to
+ * correct or remove). Wording is the product owner's (2026-11-24); see
+ * LEGAL-COMPLIANCE-NOTES §29 before changing it.
+ */
+export function listingNotice(hasLink: boolean): string {
+  return [
+    "This business hasn't joined or partnered with CERVICED, so you can't book it in the app.",
+    hasLink
+      ? "You book on their own page, which CERVICED doesn't run."
+      : 'To book, get in touch with them on Instagram.',
+    'Details come from public directories and may be out of date.',
+    "If it's your business, claim it below, or email support@cerviced.co to have it corrected or removed.",
+    'We list beauty businesses so beauty lovers can find them in one place.',
+    'Press Nudge if you want them on the app.',
+  ].join(' ');
+}
+
+/** The line an owner sees on the claim screen, or null with no nudges yet. */
+export function listingNudgeLine(people: number): string | null {
+  if (!Number.isFinite(people) || people < 1) return null;
+  return people === 1
+    ? '1 beauty lover has nudged you to join CERVICED.'
+    : `${Math.floor(people)} beauty lovers have nudged you to join CERVICED.`;
 }

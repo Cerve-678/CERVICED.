@@ -25,6 +25,8 @@ export {
   sendPasswordReset,
   verifyRecoveryOtp,
   verifySignupOtp,
+  sendEmailSignInCode,
+  getSignedInAccount,
   resendSignupOtp,
   updateCurrentPassword,
   updatePasswordAndSignOut,
@@ -519,9 +521,12 @@ export {
   getMyProviderDailyStats,
   getMyLinkOnlyDashboardExtras,
   getMyProviderSaverCount,
+  getListingNudgeCount,
+  getAdminListingNudges,
 } from "./database/analytics";
 export type {
   LinkOnlyDashboardExtras,
+  AdminListingNudge,
 } from "./database/analytics";
 export {
   getUserProfileById,
