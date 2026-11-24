@@ -5,7 +5,7 @@
 
 #generated
 
-**4374 functions** across **643 files**.
+**4375 functions** across **644 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -596,7 +596,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (69)
+### `src/utils/` (70)
 - `aboutPage.ts` — **openAboutPage**
 - `accountDeletionError.ts` — **accountDeletionError** · list
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
@@ -662,6 +662,7 @@
 - `stripeConnectReturn.ts` — **parseStripeConnectReturn**
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
 - `textAppearanceStore.ts` — **getTextAppearance** · **setTextAppearance** · **subscribeTextAppearance**
+- `textInputSuggestions.ts` — **suggestionProps**
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
 - `userFacingError.ts` — **toUserMessage** · **toUserMessageAllowingDbGuard**
 - `validation.ts` — **getPasswordStrength**

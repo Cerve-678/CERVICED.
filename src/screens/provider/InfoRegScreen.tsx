@@ -708,7 +708,6 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               onSubmitEditing={submitOther}
               returnKeyType="done"
               autoCapitalize="none"
-              autoCorrect={false}
               autoFocus
             />
           </View>
@@ -1694,7 +1693,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" autoCorrect={false} onFocus={() => handleInputFocus('trendInput')} />
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
