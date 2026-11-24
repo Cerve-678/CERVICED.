@@ -222,8 +222,8 @@ export interface ProviderPageServicesProps {
   onEditAddOns: (service: ServiceData) => void;
   /** service.dbId → the viewer's place on that service's waitlist. */
   waitlistPlaces: Record<string, MyWaitlistPlace>;
-  /** A held waitlist slot is paid for from Bookings. */
-  onOpenHeldPlace: () => void;
+  /** A held waitlist slot opens its ticket in Bookings, where it's paid for. */
+  onOpenHeldPlace: (place: MyWaitlistPlace) => void;
   onLeaveWaitlist: (place: MyWaitlistPlace) => void;
   onJoinWaitlist: (service: ServiceData) => void;
 }
@@ -804,19 +804,19 @@ export function ProviderPageServices({
 
                   {(() => {
                     const wEntry = waitlistPlaces[service.dbId];
-                    // Held: the slot is theirs for WAITLIST_HOLD_MINUTES; it's paid for
-                    // from Bookings, so the chip goes there. No ✕ while held:
-                    // they pass on it from Bookings instead.
+                    // Held: the slot is theirs for WAITLIST_HOLD_MINUTES. The chip
+                    // opens its ticket in Bookings, where it's paid for. No ✕
+                    // while held: they pass on it from the ticket instead.
                     if (wEntry?.status === "notified") {
                       return (
                         <TouchableOpacity
                           style={[styles.waitlistChip, { borderColor: adaptiveAccentColor, backgroundColor: adaptiveAccentColor }]}
                           onPress={() => {
-                            runAction(onOpenHeldPlace);
+                            runAction(() => onOpenHeldPlace(wEntry));
                           }}
                           activeOpacity={0.8}
                           accessibilityRole="button"
-                          accessibilityLabel="A slot is held for you. Open Bookings to confirm and pay."
+                          accessibilityLabel="A slot is held for you. Open it to confirm and pay."
                         >
                           <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
                           <Ionicons name="chevron-forward" size={11} color="#fff" />
@@ -895,8 +895,9 @@ export function ProviderPageServices({
                             styles.waitlistJoinText,
                             { color: adaptiveAccentColor },
                           ]}
+                          numberOfLines={1}
                         >
-                          Waitlist
+                          Join waitlist
                         </Text>
                       </TouchableOpacity>
                     );
