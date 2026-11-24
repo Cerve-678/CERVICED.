@@ -10,6 +10,7 @@
 import { buildCheckoutIntentItem } from '../features/cart/checkoutIntent';
 import type { SettledCheckout } from '../features/cart/checkoutOutcome';
 import type { CheckoutFee, CheckoutHoldPlan, CheckoutIntentItem } from '../services/databaseService';
+import { payButtonLabel } from '../features/cart/requestHolds';
 import { resolveDepositMode } from '../utils/depositPolicy';
 import type { WebBookingChoice } from './webBooking';
 
@@ -72,9 +73,9 @@ export function sheetAmountPence(plan: CheckoutHoldPlan, amountDue: number): num
   return Math.round(amountDue * 100);
 }
 
-/** A request (a time outside the provider's usual rules) is held on the card
- *  until they accept; anything else is a booking. A booking from a provider
- *  who doesn't accept automatically is a request too. */
+/** A request is held on the card until the provider accepts: a booking with
+ *  a provider who accepts by hand, or a time outside their usual rules.
+ *  Anything else is booked straight away. */
 export function isRequestCheckout(plan: CheckoutHoldPlan | null): boolean {
   return plan !== null && plan.requestCount > 0;
 }
@@ -85,6 +86,16 @@ export function dueNowLine(plan: CheckoutHoldPlan | null, amountDue: number, isD
     return { label: 'Held on your card', amount: plan.heldPence / 100 };
   }
   return { label: isDeposit ? 'Deposit due now' : 'Due now', amount: plan ? plan.chargeNowPence / 100 : amountDue };
+}
+
+/** The pay button. A request (a provider who accepts by hand, or a time
+ *  outside their hours) only holds the money, and a bare "Hold £X" didn't
+ *  read as the button that sends it. */
+export function webPayButtonLabel(plan: CheckoutHoldPlan, amountDue: number): string {
+  if (isRequestCheckout(plan) && plan.chargeNowPence <= 0) {
+    return `Send request · hold £${(plan.heldPence / 100).toFixed(2)}`;
+  }
+  return payButtonLabel(plan, amountDue);
 }
 
 /** The Booked screen's line about money. */

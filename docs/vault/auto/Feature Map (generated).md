@@ -87,7 +87,7 @@ Curated: [[Payments]] · **210 files**
 - `src/components/MultiBookingSheet.tsx` _(99)_
 - `src/features/bookings/receipt.ts` _(98)_
 - `src/services/database/checkout.ts` _(95)_
-- `src/web/WebPaymentStep.tsx` _(89)_
+- `src/web/WebPaymentStep.tsx` _(91)_
 - `src/features/bookings/paymentPresentation.ts` _(85)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(73)_
 - `src/services/database/edgeFunctions.ts` _(61)_
@@ -348,7 +348,7 @@ Curated: [[Services]] · **67 files**
 ## Cart & checkout
 Curated: [[Payments]] · **119 files**
 - `src/screens/client/CartScreen.tsx` _(434)_
-- `src/web/WebPaymentStep.tsx` _(83)_
+- `src/web/WebPaymentStep.tsx` _(84)_
 - `src/features/cart/StripePaymentSheet.tsx` _(79)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(67)_
@@ -357,7 +357,7 @@ Curated: [[Payments]] · **119 files**
 - `src/contexts/CartContext.tsx` _(41)_
 - `src/components/BookingSheet.tsx` _(37)_
 - `src/services/AvailabilityService.ts` _(33)_
-- `src/web/webCheckout.ts` _(28)_
+- `src/web/webCheckout.ts` _(31)_
 - `src/services/becca/capabilities/client.ts` _(26)_
 - `src/services/database/checkout.ts` _(23)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_

@@ -33,7 +33,7 @@ import {
 import { settledFromCaptureStatus, waitForCheckoutOutcome } from '../features/cart/checkoutOutcome';
 import type { CheckoutWaitResult } from '../features/cart/checkoutOutcome';
 import { describeReserveFailure } from '../features/cart/presentation';
-import { holdPlanNote, payButtonLabel } from '../features/cart/requestHolds';
+import { holdPlanNote } from '../features/cart/requestHolds';
 import {
   acceptCheckoutFees,
   cancelCheckout,
@@ -60,6 +60,7 @@ import {
   sheetAmountPence,
   unsettledMessage,
   webCheckoutItem,
+  webPayButtonLabel,
 } from './webCheckout';
 import { getWebStripe } from './webStripe';
 
@@ -232,6 +233,7 @@ export function WebPaymentStep({
         onAccent={onAccent}
         checkout={phase.checkout}
         isDeposit={choice.result.isDepositOnly}
+        providerName={providerName}
         onIntent={intentId => {
           if (heldRef.current) heldRef.current.intentId = intentId;
         }}
@@ -307,6 +309,7 @@ interface PayPhaseProps {
   onAccent: string;
   checkout: PreparedCheckout;
   isDeposit: boolean;
+  providerName: string;
   onIntent: (intentId: string) => void;
   onInFlight: (inFlight: boolean) => void;
   onExpired: () => void;
@@ -316,7 +319,7 @@ interface PayPhaseProps {
 
 /** The held time: fees to agree to, then Stripe's form. */
 function PayPhase({
-  tokens, accentColor, onAccent, checkout, isDeposit, onIntent, onInFlight, onExpired, onFailed, onSettled,
+  tokens, accentColor, onAccent, checkout, isDeposit, providerName, onIntent, onInFlight, onExpired, onFailed, onSettled,
 }: PayPhaseProps) {
   const [fees, setFees] = useState<CheckoutFee[] | null>(null);
   const [plan, setPlan] = useState<CheckoutHoldPlan | null>(null);
@@ -406,8 +409,12 @@ function PayPhase({
     <View style={styles.section}>
       <View style={[styles.card, styles.holdRow, { backgroundColor: tokens.surface }]}>
         <View style={styles.flex}>
-          <Text style={[styles.label, { color: tokens.sub }]}>HELD FOR YOU</Text>
-          <Text style={[styles.body, { color: tokens.sub }]}>Pay before the timer ends.</Text>
+          <Text style={[styles.label, { color: tokens.sub }]}>HELD WHILE YOU PAY</Text>
+          <Text style={[styles.body, { color: tokens.sub }]}>
+            {isRequestCheckout(plan)
+              ? `This is only your time to send it. ${providerName} accepts each booking by hand and replies after that.`
+              : 'Pay before the timer ends.'}
+          </Text>
         </View>
         <WaitlistHoldCountdown
           expiresAt={checkout.expiresAt}
@@ -596,8 +603,14 @@ function PayForm({
         <PaymentElement
           options={{ layout: 'tabs', wallets: { applePay: 'auto', googlePay: 'auto', link: 'never' } }}
           onReady={() => setReady(true)}
+          onLoadError={({ error }) => {
+            // Without this the form just never appears and Pay stays grey.
+            logger.error('[WebPaymentStep] Stripe’s card form failed to load:', error);
+            setPayError('We couldn’t load the card form. Refresh the page and try again.');
+          }}
         />
       </View>
+      {!ready && !payError ? <Text style={[styles.small, { color: tokens.sub }]}>Loading the card form…</Text> : null}
       {payError ? <Text style={styles.error} accessibilityLiveRegion="polite">{payError}</Text> : null}
       {!canPay ? <Text style={[styles.small, { color: tokens.sub }]}>Tick the boxes above to pay.</Text> : null}
       <TouchableOpacity
@@ -609,7 +622,7 @@ function PayForm({
       >
         {paying
           ? <ActivityIndicator color={onAccent} />
-          : <Text style={[styles.buttonText, { color: onAccent }]}>{payButtonLabel(plan, checkout.amountDue)}</Text>}
+          : <Text style={[styles.buttonText, { color: onAccent }]}>{webPayButtonLabel(plan, checkout.amountDue)}</Text>}
       </TouchableOpacity>
       {confirming ? (
         <Text style={[styles.small, { color: tokens.sub }]}>Confirming your payment. Please keep this page open.</Text>

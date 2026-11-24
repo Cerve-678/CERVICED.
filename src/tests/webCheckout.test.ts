@@ -6,6 +6,7 @@ import {
   depositIsNonRefundable,
   dueNowLine,
   feeGroups,
+  webPayButtonLabel,
   isRequestCheckout,
   serviceNeedsSafetyAck,
   sheetAmountPence,
@@ -157,5 +158,13 @@ describe('request or booking', () => {
     expect(dueNowLine(request, 45, false)).toEqual({ label: 'Held on your card', amount: 45 });
     expect(dueNowLine(plan(), 11.99, true)).toEqual({ label: 'Deposit due now', amount: 11.99 });
     expect(dueNowLine(null, 30, false)).toEqual({ label: 'Due now', amount: 30 });
+  });
+});
+
+describe('webPayButtonLabel', () => {
+  it('says a request is sent, with the money only held', () => {
+    expect(webPayButtonLabel(plan({ chargeNowPence: 0, heldPence: 6865, requestCount: 1 }), 68.65))
+      .toBe('Send request · hold £68.65');
+    expect(webPayButtonLabel(plan(), 11.99)).toBe('Pay £11.99');
   });
 });
