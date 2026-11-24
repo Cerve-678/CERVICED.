@@ -284,7 +284,7 @@ function ProviderWebPageContent({
       onEditAddOns={noop}
       waitlistPlaces={{}}
       onOpenHeldPlace={noop}
-      onLeaveWaitlist={noop}
+      onOpenWaitlistPlace={noop}
       onJoinWaitlist={noop}
     />
   );
