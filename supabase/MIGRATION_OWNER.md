@@ -62,6 +62,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261124150000 | `waitlist_offer_outside_hours` | **APPLIED 2026-11-24** on the user's pick ("Ask, then allow"), via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124140000`, no unapplied migration above it on any open PR. md5 guard on live `provider_offer_waitlist_slot(uuid,date,time)` matched (`64e2e2a1…`). Forced-rollback dry run first, signed in as a live provider with a temporary waitlist entry: 5:30pm on a day closing at 6pm refused without the switch ("outside the provider's working hours"), held (`on_hold`) with it, bypass back to off, old 3-argument function gone, live unchanged afterwards. Verified live: version recorded (live max); `provider_offer_waitlist_slot(uuid,date,time,boolean)` md5 `0dc93fe0…`, EXECUTE for authenticated + service_role only, same as before. Replaces the 3-argument function with one taking `p_outside_hours boolean DEFAULT FALSE`, so older app builds behave as before. |
 
+### Applied 2026-11-24 (a provider can offer a waitlist client a time outside their hours)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124150000 | `waitlist_offer_outside_hours` | **APPLIED 2026-11-24** on the user's pick ("Ask, then allow"). Lock `(none)`, live max `20261124140000`, no unapplied migration above it on any open PR. md5 guard on live `provider_offer_waitlist_slot(uuid,date,time)` (`64e2e2a1…`). Forced-rollback dry run first, as a real provider with a temporary waitlist entry: 30 min before close a 2 hr+ service was refused without the switch ("outside the provider's working hours") and held (`on_hold`) with it; the bypass read `off` afterwards; the 3-argument version was gone; nothing kept (no "Dry Run" entry, hold or notification afterwards). **Note:** the version was already recorded live when the apply step ran (the guard then failed harmlessly because the old function was gone); the live definition matches this file, the row is this file's own insert, and no dry-run rows were left behind — how it got applied before the apply step wasn't pinned down. Verified live: new `provider_offer_waitlist_slot(uuid,date,time,boolean)` md5 `0dc93fe0…`, execute for authenticated + service_role only. |
+
 ### Applied 2026-11-24 (the "slot opened" notification leads with the time)
 
 | Recorded version | Name | Verified live |
