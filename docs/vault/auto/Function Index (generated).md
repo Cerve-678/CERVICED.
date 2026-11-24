@@ -5,7 +5,7 @@
 
 #generated
 
-**4399 functions** across **648 files**.
+**4401 functions** across **648 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -678,7 +678,7 @@
 - `WebAccountStep.tsx` — authErrorMessage · button · continueSignedIn · fieldError · link · sendCode · signOut · submitCode · submitDetails · submitEmail · **WebAccountStep**
 - `WebBlurView.tsx` — **BlurView** · webBackdropFilter
 - `webBooking.ts` — **sheetInitialFrom** · **summarizeWebBooking**
-- `webCheckout.ts` — **bookedMoneyLine** · **depositIsNonRefundable** · **feeGroups** · **serviceNeedsSafetyAck** · **sheetAmountPence** · **unsettledMessage** · **webCheckoutItem**
+- `webCheckout.ts` — **bookedMoneyLine** · **depositIsNonRefundable** · **dueNowLine** · **feeGroups** · **isRequestCheckout** · **serviceNeedsSafetyAck** · **sheetAmountPence** · **unsettledMessage** · **webCheckoutItem**
 - `WebCheckoutSheet.tsx` — summary · tokens · **WebCheckoutSheet**
 - `webFonts.ts` — **declareAppFontsForBrowser** · **fontFaceCss** · fontUri
 - `WebPaymentStep.tsx` — backToReview · button · groups · holdTime · markInFlight · pay · PayForm · PayPhase · release · setInFlight · settle · stripePromise · termsToggle · tick · **WebPaymentStep**

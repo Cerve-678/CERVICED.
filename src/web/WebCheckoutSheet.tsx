@@ -24,14 +24,15 @@ interface WebCheckoutSheetProps {
   onClose: () => void;
   /** The card is being confirmed: no closing or changing until it's settled. */
   locked?: boolean;
-  /** It's booked, so the booking can't be changed from here any more. */
-  booked?: boolean;
+  /** Set once it has gone through ("Booked" / "Request sent"): the title, and
+   *  the booking can't be changed from here any more. */
+  doneTitle?: string | null;
   /** The current checkout step, drawn under the booking. */
   children?: (tokens: ProviderThemeTokens) => React.ReactNode;
 }
 
 export function WebCheckoutSheet({
-  choice, providerName, accentColor, backgroundColor, onChange, onClose, locked = false, booked = false, children,
+  choice, providerName, accentColor, backgroundColor, onChange, onClose, locked = false, doneTitle = null, children,
 }: WebCheckoutSheetProps) {
   const tokens = useMemo(
     () => buildThemeTokens(backgroundColor, backgroundColor, accentColor, backgroundColor),
@@ -48,7 +49,7 @@ export function WebCheckoutSheet({
           <View style={[styles.sheet, { backgroundColor }]}>
             <View style={[styles.header, { borderBottomColor: tokens.border }]}>
               <View style={styles.headerText}>
-                <Text style={[styles.title, { color: tokens.text }]}>{booked ? 'Booked' : 'Your booking'}</Text>
+                <Text style={[styles.title, { color: tokens.text }]}>{doneTitle ?? 'Your booking'}</Text>
                 <Text style={[styles.subtitle, { color: tokens.sub }]}>{providerName}</Text>
               </View>
               <TouchableOpacity
@@ -72,7 +73,7 @@ export function WebCheckoutSheet({
                     <Text key={addOn.id} style={[styles.detail, { color: tokens.sub }]}>+ {addOn.name}</Text>
                   ))}
                 </View>
-                {!booked && !locked ? (
+                {doneTitle === null && !locked ? (
                   <TouchableOpacity onPress={onChange} accessibilityRole="button" hitSlop={8} activeOpacity={0.6}>
                     <Text style={[styles.changeText, { color: accentColor }]}>Change</Text>
                   </TouchableOpacity>

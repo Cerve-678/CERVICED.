@@ -236,17 +236,17 @@ function ProviderWebPageContent({
   const [bookingAccount, setBookingAccount] = useState<WebBookingAccount | null>(null);
   // The card is being confirmed (no closing or changing), and once it's booked.
   const [checkoutLocked, setCheckoutLocked] = useState(false);
-  const [booked, setBooked] = useState(false);
+  const [doneTitle, setDoneTitle] = useState<string | null>(null);
   const closeCheckout = useCallback(() => {
     setChoice(null);
-    setBooked(false);
+    setDoneTitle(null);
   }, []);
   const openBookingSheet = useCallback((service: ProviderProfileService) => {
     setSheetInitial(undefined);
     setSheetService(service);
   }, []);
   const submitBookingSheet = useCallback((result: BookingSheetResult) => {
-    setBooked(false);
+    setDoneTitle(null);
     if (sheetService) setChoice({ service: sheetService, result });
     setSheetService(null);
   }, [sheetService]);
@@ -422,7 +422,7 @@ function ProviderWebPageContent({
             onChange={changeBooking}
             onClose={closeCheckout}
             locked={checkoutLocked}
-            booked={booked}
+            doneTitle={doneTitle}
           >
             {tokens => (
               <>
@@ -440,7 +440,7 @@ function ProviderWebPageContent({
                     choice={choice}
                     account={bookingAccount}
                     onLockChange={setCheckoutLocked}
-                    onBookedChange={setBooked}
+                    onDone={setDoneTitle}
                     onPickAgain={changeBooking}
                   />
                 ) : null}

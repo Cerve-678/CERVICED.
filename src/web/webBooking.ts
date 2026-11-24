@@ -35,8 +35,8 @@ export interface WebBookingSummary {
  * time, notes, deposit choice and any out-of-hours acceptance for that time
  * (the sheet seeds the acceptance only from here, so leaving it out would
  * drop it). The sheet names the day and time selectedDate/selectedTime where
- * its result says date/time. The sheet never sets a promo code itself, so
- * there's none to carry. */
+ * its result says date/time. The sheet can't be reopened with a promo code, so
+ * after Change the client enters it again. */
 export function sheetInitialFrom(result: BookingSheetResult): NonNullable<BookingSheetProps['initial']> {
   return {
     selectedAddOns: result.selectedAddOns,

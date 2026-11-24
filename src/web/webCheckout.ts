@@ -35,6 +35,9 @@ export function webCheckoutItem(args: {
     // from the address.
     mobileAddress: args.mobileAddress !== null ? { address: args.mobileAddress, area: null } : null,
     emergency: Boolean(result.emergencyRequest),
+    // The code the sheet's summary already took off. prepare_checkout
+    // re-validates it and works the discount out itself.
+    promoCode: result.promoCode ?? null,
   });
 }
 
@@ -67,6 +70,21 @@ export function sheetAmountPence(plan: CheckoutHoldPlan, amountDue: number): num
   if (plan.chargeNowPence > 0) return plan.chargeNowPence;
   if (plan.heldPence > 0) return plan.heldPence;
   return Math.round(amountDue * 100);
+}
+
+/** A request (a time outside the provider's usual rules) is held on the card
+ *  until they accept; anything else is a booking. A booking from a provider
+ *  who doesn't accept automatically is a request too. */
+export function isRequestCheckout(plan: CheckoutHoldPlan | null): boolean {
+  return plan !== null && plan.requestCount > 0;
+}
+
+/** The amount line above Stripe's form: taken now, or only held for a request. */
+export function dueNowLine(plan: CheckoutHoldPlan | null, amountDue: number, isDeposit: boolean): { label: string; amount: number } {
+  if (plan && plan.chargeNowPence <= 0 && plan.heldPence > 0) {
+    return { label: 'Held on your card', amount: plan.heldPence / 100 };
+  }
+  return { label: isDeposit ? 'Deposit due now' : 'Due now', amount: plan ? plan.chargeNowPence / 100 : amountDue };
 }
 
 /** The Booked screen's line about money. */

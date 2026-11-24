@@ -4,7 +4,9 @@ import type { WebBookingChoice } from '../web/webBooking';
 import {
   bookedMoneyLine,
   depositIsNonRefundable,
+  dueNowLine,
   feeGroups,
+  isRequestCheckout,
   serviceNeedsSafetyAck,
   sheetAmountPence,
   unsettledMessage,
@@ -66,6 +68,15 @@ describe('webCheckoutItem', () => {
       add_on_ids: ['7'], use_deposit: true, notes: 'First time', safety_ack: true, policy_accepted: true,
       policy_snapshot: { depositMode: 'deposit_required', depositAmount: '20' },
     });
+  });
+
+  it('sends the promo code the booking sheet applied, so the server charges the discounted price', () => {
+    const item = webCheckoutItem({
+      providerId: 'p', agreed: true, mobileAddress: null,
+      choice: { ...choice, result: { ...choice.result, promoCode: 'WINTER10' } },
+    });
+    expect(item.promo_code).toBe('WINTER10');
+    expect(webCheckoutItem({ providerId: 'p', agreed: true, mobileAddress: null, choice })).not.toHaveProperty('promo_code');
   });
 
   it('adds a mobile provider’s address and an out-of-hours request', () => {
@@ -130,5 +141,21 @@ describe('unsettledMessage', () => {
     const unknown = unsettledMessage('unknown');
     expect(unknown.canPickAgain).toBe(false);
     expect(unknown.body).toContain('don’t pay again');
+  });
+});
+
+describe('request or booking', () => {
+  const request = plan({ chargeNowPence: 0, heldPence: 4500, requestCount: 1 });
+
+  it('calls it a request only when the card is held for one', () => {
+    expect(isRequestCheckout(request)).toBe(true);
+    expect(isRequestCheckout(plan())).toBe(false);
+    expect(isRequestCheckout(null)).toBe(false);
+  });
+
+  it('says a request’s money is held, not due', () => {
+    expect(dueNowLine(request, 45, false)).toEqual({ label: 'Held on your card', amount: 45 });
+    expect(dueNowLine(plan(), 11.99, true)).toEqual({ label: 'Deposit due now', amount: 11.99 });
+    expect(dueNowLine(null, 30, false)).toEqual({ label: 'Due now', amount: 30 });
   });
 });

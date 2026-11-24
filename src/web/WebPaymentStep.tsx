@@ -53,6 +53,8 @@ import type { WebBookingChoice } from './webBooking';
 import {
   bookedMoneyLine,
   depositIsNonRefundable,
+  dueNowLine,
+  isRequestCheckout,
   feeGroups,
   serviceNeedsSafetyAck,
   sheetAmountPence,
@@ -78,15 +80,16 @@ interface WebPaymentStepProps {
   account: WebBookingAccount;
   /** True while the sheet mustn't be closed or changed (the card is being confirmed). */
   onLockChange: (locked: boolean) => void;
-  /** True once it's booked, so the booking above can't be changed any more. */
-  onBookedChange: (booked: boolean) => void;
+  /** The sheet's title once it has gone through ("Booked" / "Request sent"),
+   *  so the booking above can't be changed any more. */
+  onDone: (title: string) => void;
   /** Back to the booking sheet, to pick another time. */
   onPickAgain: () => void;
 }
 
 export function WebPaymentStep({
   tokens, accentColor, providerId, providerName, isMobileProvider, choice, account,
-  onLockChange, onBookedChange, onPickAgain,
+  onLockChange, onDone, onPickAgain,
 }: WebPaymentStepProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'review' });
   const [agreed, setAgreed] = useState(false);
@@ -104,8 +107,10 @@ export function WebPaymentStep({
 
   const release = useCallback(() => {
     const held = heldRef.current;
-    heldRef.current = null;
+    // While paying, keep it: the payment's own outcome decides what happens,
+    // and a failure releases it then.
     if (!held || inFlightRef.current) return;
+    heldRef.current = null;
     // Best effort: expire_cart_holds frees it after 5 minutes regardless.
     const cancelIntent = held.intentId
       ? cancelPaymentIntent(held.batchId, held.intentId).catch((err: unknown) => logger.error('[WebPaymentStep] cancelling the open payment failed:', err))
@@ -171,11 +176,11 @@ export function WebPaymentStep({
     heldRef.current = null;
     if (outcome === 'succeeded') {
       setPhase({ kind: 'booked', plan, amountDue });
-      onBookedChange(true);
+      onDone(isRequestCheckout(plan) ? 'Request sent' : 'Booked');
     } else {
       setPhase({ kind: 'unsettled', outcome });
     }
-  }, [onBookedChange]);
+  }, [onDone]);
 
   const button = (label: string, onPress: () => void, disabled = false) => (
     <TouchableOpacity
@@ -190,12 +195,13 @@ export function WebPaymentStep({
   );
 
   if (phase.kind === 'booked') {
+    const request = isRequestCheckout(phase.plan);
     return (
       <View style={[styles.card, styles.section, { backgroundColor: tokens.surface }]}>
-        <Text style={[styles.bigTitle, { color: tokens.text }]}>Booked</Text>
+        <Text style={[styles.bigTitle, { color: tokens.text }]}>{request ? 'Request sent' : 'Booked'}</Text>
         <Text style={[styles.body, { color: tokens.text }]}>{bookedMoneyLine(phase.plan, phase.amountDue)}</Text>
         <Text style={[styles.body, { color: tokens.sub }]}>
-          {providerName} will confirm your booking. We’ve emailed the details to {account.email}.
+          {request ? `${providerName} will accept or decline it. ` : ''}We’ve emailed the details to {account.email}.
         </Text>
         <View style={[styles.appBox, { borderColor: tokens.border }]}>
           <Text style={[styles.strong, { color: tokens.text }]}>Manage it in the CERVICED app</Text>
@@ -343,6 +349,7 @@ function PayPhase({
   const hasFees = (fees?.length ?? 0) > 0;
   const feesAgreed = (groups.visit.length === 0 || agreedToFees) && (groups.lateCancel.length === 0 || agreedToLateCancel);
   const heldNote = holdPlanNote(plan);
+  const due = dueNowLine(plan, checkout.amountDue, isDeposit);
 
   const stripePromise = useMemo(() => getWebStripe(), []);
   const elementsOptions = useMemo<StripeElementsOptions | null>(() => {
@@ -411,8 +418,8 @@ function PayPhase({
       </View>
 
       <View style={[styles.card, styles.totalRow, { backgroundColor: tokens.surface }]}>
-        <Text style={[styles.strong, { color: tokens.text }]}>{isDeposit ? 'Deposit due now' : 'Due now'}</Text>
-        <Text style={[styles.strong, { color: tokens.text }]}>£{checkout.amountDue.toFixed(2)}</Text>
+        <Text style={[styles.strong, { color: tokens.text }]}>{due.label}</Text>
+        <Text style={[styles.strong, { color: tokens.text }]}>£{due.amount.toFixed(2)}</Text>
       </View>
       {heldNote ? <Text style={[styles.small, { color: tokens.sub }]}>{heldNote}</Text> : null}
 
@@ -503,6 +510,10 @@ function PayForm({
     payingRef.current = true;
     setPaying(true);
     setPayError(null);
+    // In flight from the first tap: the timer running out or the client
+    // leaving mustn't let the time go while Apple Pay is open or the payment
+    // is being set up. Every way out below clears it.
+    onInFlight(true);
     const batchId = checkout.checkoutBatchId;
     let approved = false;
     try {
@@ -525,7 +536,6 @@ function PayForm({
       const { clientSecret, paymentIntentId } = await createPaymentIntent(batchId);
       onIntent(paymentIntentId);
       // From here the card can be approved at any moment.
-      onInFlight(true);
       const { error: confirmError } = await stripe.confirmPayment({
         elements,
         clientSecret,
@@ -568,6 +578,8 @@ function PayForm({
         onSettled('unknown', plan, checkout.amountDue);
         return;
       }
+      // Not paying any more, so going back can let the time and payment go.
+      onInFlight(false);
       onFailed(err instanceof PaymentRequestError ? err.message : GENERIC_FAILURE);
     } finally {
       onInFlight(false);
