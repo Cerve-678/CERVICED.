@@ -46,6 +46,7 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { placeInLineLabel, holdEndLabel, nextWaitingFor, firstNameOf, waitlistDatesLabel, isOutsideHoursRefusal } from '../../features/bookings/waitlist';
 import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
 import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
+import { useAppDialog } from '../../components/AppDialog';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -343,6 +344,7 @@ function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
 export default function ProviderBookingHistoryScreen({ navigation, route }: any) {
   const { isDarkMode: dark } = useTheme();
   const P = dark ? DARK : LIGHT;
+  const { showConfirm, showAlert, DialogHost } = useAppDialog();
 
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -662,30 +664,54 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   // The provider picks a time for a waiting client. It's offered as a
   // 10-minute hold the client confirms and pays for (decided 2026-11-10),
   // never booked in with nothing paid.
-  const handleConfirmInvite = useCallback(async (outsideHours = false) => {
+  const handleConfirmInvite = useCallback(async () => {
     if (!inviteModal.entry || !inviteDate || !inviteTime) return;
     setInviting(true);
     const entry = inviteModal.entry;
+    const bookingDate = dateToYMD(inviteDate);
     const bookingTime = `${String(inviteTime.getHours()).padStart(2, '0')}:${String(inviteTime.getMinutes()).padStart(2, '0')}`;
-    try {
-      await providerOfferWaitlistSlot(entry.id, dateToYMD(inviteDate), bookingTime, outsideHours);
+    const offered = async () => {
       setInviteModal({ visible: false, entry: null });
       setInviteDate(null);
       setInviteTime(null);
       await fetchWaitlist();
+    };
+    try {
+      await providerOfferWaitlistSlot(entry.id, bookingDate, bookingTime);
+      await offered();
     } catch (err: unknown) {
-      if (!outsideHours && isOutsideHoursRefusal(err)) {
+      if (isOutsideHoursRefusal(err)) {
         // Their own diary, their call: the same as booking someone in by
-        // hand. Asked first, then sent again with the override.
+        // hand. Asked in the app's own dialog, which can't show over this
+        // Modal, so the invite closes first (its date and time are kept) and
+        // Cancel brings it back.
         const who = firstNameOf(entry.user_name_snapshot) ?? 'them';
-        Alert.alert(
-          'Outside your hours',
-          `${formatShortDate(dateToYMD(inviteDate))} at ${formatTime12(bookingTime)} runs outside your working hours. Offer it to ${who} anyway?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Offer anyway', onPress: () => { void handleConfirmInviteRef.current(true); } },
-          ],
-        );
+        setInviteModal({ visible: false, entry: null });
+        setTimeout(() => {
+          showConfirm(
+            'Outside your hours',
+            `${formatShortDate(bookingDate)} at ${formatTime12(bookingTime)} runs outside your working hours. Offer it to ${who} anyway?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => setInviteModal({ visible: true, entry }) },
+              {
+                text: 'Offer anyway',
+                onPress: () => {
+                  void (async () => {
+                    try {
+                      await providerOfferWaitlistSlot(entry.id, bookingDate, bookingTime, true);
+                      await offered();
+                    } catch (retryErr: unknown) {
+                      showAlert(
+                        "Couldn't hold that time",
+                        toUserMessageAllowingDbGuard(retryErr, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlotOutsideHours'),
+                      );
+                    }
+                  })();
+                },
+              },
+            ],
+          );
+        }, 350);
       } else {
         // The database says why (taken, inside your notice, a day off);
         // anything technical becomes the fallback.
@@ -696,9 +722,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
       }
     }
     setInviting(false);
-  }, [inviteModal.entry, inviteDate, inviteTime, fetchWaitlist]);
-  const handleConfirmInviteRef = useRef(handleConfirmInvite);
-  handleConfirmInviteRef.current = handleConfirmInvite;
+  }, [inviteModal.entry, inviteDate, inviteTime, fetchWaitlist, showConfirm, showAlert]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1101,6 +1125,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
         </Modal>
 
       </SafeAreaView>
+      <DialogHost />
     </View>
   );
 }
