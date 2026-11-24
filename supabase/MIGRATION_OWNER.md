@@ -53,14 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  cerviced-df (feat/listing-page-nudge: 20261124130000_listing_nudges, written, NOT applied)
+OWNER:  (none)
 ```
 
-### Pending 2026-11-24 (clients nudge "Not on CERVICED yet" listings to join)
+### Applied 2026-11-24 (clients nudge "Not on CERVICED yet" listings to join)
 
 | Recorded version | Name | Verified live |
 |---|---|---|
-| 20261124130000 | `listing_nudges` | **NOT APPLIED.** Waiting for the user's go-ahead. Live max at writing `20261123220000`; no unapplied migration above it on any open PR. Redefines `record_provider_stat` from live with an md5 guard (`33e29c0b…`) so 'join_nudge' also counts for an active directory listing; adds `listing_nudge_count` (anon + authenticated) and `admin_listing_nudges` (admins). |
+| 20261124130000 | `listing_nudges` | **APPLIED 2026-11-24** on the user's go-ahead ("yes"), via the Supabase MCP `execute_sql`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261123220000`, no unapplied migration above it on any open PR (re-checked at apply time). Forced-rollback dry run first: two nudges by one client on one day counted 1, a `profile_view` on a listing still refused. Verified live: version recorded (live max); new `record_provider_stat` md5 `915b37df…` with the listing rule; anon + authenticated execute `listing_nudge_count`, authenticated only on `admin_listing_nudges` and `record_provider_stat`; the 9 existing link-only join nudges untouched. PR #736. Redefines `record_provider_stat` from live with an md5 guard (`33e29c0b…`) so 'join_nudge' also counts for an active directory listing; adds `listing_nudge_count` (anon + authenticated) and `admin_listing_nudges` (admins). |
 
 ### Applied 2026-11-23 (signed-out visitors read a provider's written terms)
 
