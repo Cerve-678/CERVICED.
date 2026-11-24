@@ -8,9 +8,10 @@
 //   2. The static pages in waitlist/ (Home, About, Legal) are copied in as
 //      they are, so their addresses and animations don't change.
 //
-// The Supabase URL and publishable anon key come from eas.json's production
-// profile, the same public values every app build ships, so Vercel needs no
-// environment variables of its own.
+// The Supabase URL, publishable anon key and Stripe publishable key come from
+// eas.json's production profile, the same public values every app build
+// ships, so Vercel needs no environment variables of its own and the website
+// is always in the same Stripe mode (test or live) as the app.
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,6 +24,7 @@ const production = JSON.parse(readFileSync('eas.json', 'utf8')).build.production
 const publicEnv = {
   EXPO_PUBLIC_SUPABASE_URL: production.EXPO_PUBLIC_SUPABASE_URL,
   EXPO_PUBLIC_SUPABASE_ANON_KEY: production.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: production.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
 };
 for (const [name, value] of Object.entries(publicEnv)) {
   if (!value) throw new Error(`eas.json build.production.env.${name} is missing`);

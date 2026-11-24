@@ -2,15 +2,18 @@
  * Booking from a provider's web page (/@handle).
  *
  * The page opens the app's own BookingSheet, then a short web checkout in
- * place of the app's Cart: review, email code, payment, booked. One service
+ * place of the app's Cart: email code (WebAccountStep), then the policies
+ * tick, payment and Booked (WebPaymentStep). One service
  * per booking, as in the app (MULTI_SERVICE_BOOKING_ENABLED is off there too).
  */
 import type { BookingSheetProps, BookingSheetResult } from '../components/BookingSheet';
 import type { ProviderProfileService } from '../features/providers/profileTypes';
 import { formatLongDateNoYear, formatTime12Safe } from '../utils/dateUtils';
 
-/** The Book buttons show only in local development until payment is built,
- * so nobody on cerviced.co reaches a booking they can't finish. */
+/** The Book buttons show only in local development. Payment works now, but
+ * Stripe is still in test mode, so switching this on for cerviced.co would
+ * let real visitors make real bookings paid with test cards. It goes on with
+ * the switch to live mode (docs/PAYMENTS_AND_LOGIC.md). */
 export const WEB_BOOKING_ENABLED = __DEV__;
 
 /** What the client picked in the booking sheet. */

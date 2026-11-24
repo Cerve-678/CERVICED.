@@ -22,12 +22,16 @@ interface WebCheckoutSheetProps {
   backgroundColor: string;
   onChange: () => void;
   onClose: () => void;
+  /** The card is being confirmed: no closing or changing until it's settled. */
+  locked?: boolean;
+  /** It's booked, so the booking can't be changed from here any more. */
+  booked?: boolean;
   /** The current checkout step, drawn under the booking. */
   children?: (tokens: ProviderThemeTokens) => React.ReactNode;
 }
 
 export function WebCheckoutSheet({
-  choice, providerName, accentColor, backgroundColor, onChange, onClose, children,
+  choice, providerName, accentColor, backgroundColor, onChange, onClose, locked = false, booked = false, children,
 }: WebCheckoutSheetProps) {
   const tokens = useMemo(
     () => buildThemeTokens(backgroundColor, backgroundColor, accentColor, backgroundColor),
@@ -38,18 +42,19 @@ export function WebCheckoutSheet({
   const onAccent = isDarkColor(accentColor) ? '#fff' : '#1B2740';
 
   return (
-    <Modal visible={summary !== null} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={summary !== null} animationType="slide" transparent onRequestClose={locked ? undefined : onClose}>
       <View style={styles.overlay}>
         {summary ? (
           <View style={[styles.sheet, { backgroundColor }]}>
             <View style={[styles.header, { borderBottomColor: tokens.border }]}>
               <View style={styles.headerText}>
-                <Text style={[styles.title, { color: tokens.text }]}>Your booking</Text>
+                <Text style={[styles.title, { color: tokens.text }]}>{booked ? 'Booked' : 'Your booking'}</Text>
                 <Text style={[styles.subtitle, { color: tokens.sub }]}>{providerName}</Text>
               </View>
               <TouchableOpacity
                 onPress={onClose}
-                style={[styles.close, { backgroundColor: accentColor }]}
+                disabled={locked}
+                style={[styles.close, { backgroundColor: accentColor }, locked && styles.dim]}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
                 activeOpacity={0.8}
@@ -67,9 +72,11 @@ export function WebCheckoutSheet({
                     <Text key={addOn.id} style={[styles.detail, { color: tokens.sub }]}>+ {addOn.name}</Text>
                   ))}
                 </View>
-                <TouchableOpacity onPress={onChange} accessibilityRole="button" hitSlop={8} activeOpacity={0.6}>
-                  <Text style={[styles.changeText, { color: accentColor }]}>Change</Text>
-                </TouchableOpacity>
+                {!booked && !locked ? (
+                  <TouchableOpacity onPress={onChange} accessibilityRole="button" hitSlop={8} activeOpacity={0.6}>
+                    <Text style={[styles.changeText, { color: accentColor }]}>Change</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
               {children?.(tokens)}
             </ScrollView>
@@ -95,6 +102,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13 },
   close: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   closeText: { fontSize: 15, fontWeight: '700' },
+  dim: { opacity: 0.4 },
   body: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
   card: { borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   cardText: { flex: 1, gap: 3 },

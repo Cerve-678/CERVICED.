@@ -49,6 +49,7 @@ import type { WebBookingChoice } from './webBooking';
 import { WebAccountStep } from './WebAccountStep';
 import type { WebBookingAccount } from './WebAccountStep';
 import { WebCheckoutSheet } from './WebCheckoutSheet';
+import { WebPaymentStep } from './WebPaymentStep';
 
 const PAGE_WIDTH = 480;
 const TOP_BAR_HEIGHT = 54;
@@ -233,11 +234,19 @@ function ProviderWebPageContent({
   const [choice, setChoice] = useState<WebBookingChoice | null>(null);
   // Who is booking, once signed in with an email code and their details saved.
   const [bookingAccount, setBookingAccount] = useState<WebBookingAccount | null>(null);
+  // The card is being confirmed (no closing or changing), and once it's booked.
+  const [checkoutLocked, setCheckoutLocked] = useState(false);
+  const [booked, setBooked] = useState(false);
+  const closeCheckout = useCallback(() => {
+    setChoice(null);
+    setBooked(false);
+  }, []);
   const openBookingSheet = useCallback((service: ProviderProfileService) => {
     setSheetInitial(undefined);
     setSheetService(service);
   }, []);
   const submitBookingSheet = useCallback((result: BookingSheetResult) => {
+    setBooked(false);
     if (sheetService) setChoice({ service: sheetService, result });
     setSheetService(null);
   }, [sheetService]);
@@ -411,10 +420,31 @@ function ProviderWebPageContent({
             accentColor={adaptiveAccentColor}
             backgroundColor={OP.card}
             onChange={changeBooking}
-            onClose={() => setChoice(null)}
+            onClose={closeCheckout}
+            locked={checkoutLocked}
+            booked={booked}
           >
             {tokens => (
-              <WebAccountStep tokens={tokens} accentColor={adaptiveAccentColor} onReadyChange={setBookingAccount} />
+              <>
+                {/* Not while paying: signing out would drop the payment's result. */}
+                <View pointerEvents={checkoutLocked ? 'none' : 'auto'}>
+                  <WebAccountStep tokens={tokens} accentColor={adaptiveAccentColor} onReadyChange={setBookingAccount} />
+                </View>
+                {bookingAccount && choice ? (
+                  <WebPaymentStep
+                    tokens={tokens}
+                    accentColor={adaptiveAccentColor}
+                    providerId={providerDbId}
+                    providerName={provider.displayName || provider.providerName}
+                    isMobileProvider={provider.businessType === 'mobile'}
+                    choice={choice}
+                    account={bookingAccount}
+                    onLockChange={setCheckoutLocked}
+                    onBookedChange={setBooked}
+                    onPickAgain={changeBooking}
+                  />
+                ) : null}
+              </>
             )}
           </WebCheckoutSheet>
         </>
