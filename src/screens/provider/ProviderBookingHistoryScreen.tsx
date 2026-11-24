@@ -43,7 +43,7 @@ import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { placeInLineLabel, holdEndLabel, nextWaitingFor, firstNameOf, waitlistDatesLabel, isOutsideHoursRefusal } from '../../features/bookings/waitlist';
+import { placeInLineLabel, holdEndLabel, nextWaitingFor, firstNameOf, waitlistDatesLabel, isOutsideHoursRefusal, providerOfferRefusalMessage } from '../../features/bookings/waitlist';
 import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
 import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
 import { useAppDialog } from '../../components/AppDialog';
@@ -703,7 +703,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                     } catch (retryErr: unknown) {
                       showAlert(
                         "Couldn't hold that time",
-                        toUserMessageAllowingDbGuard(retryErr, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlotOutsideHours'),
+                        providerOfferRefusalMessage(retryErr, toUserMessageAllowingDbGuard(retryErr, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlotOutsideHours')),
                       );
                     }
                   })();
@@ -717,7 +717,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
         // anything technical becomes the fallback.
         Alert.alert(
           "Couldn't hold that time",
-          toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot'),
+          providerOfferRefusalMessage(err, toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot')),
         );
       }
     }

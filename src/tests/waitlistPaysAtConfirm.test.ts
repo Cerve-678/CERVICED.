@@ -11,6 +11,7 @@ import {
   nextWaitingFor,
   firstNameOf,
   isOutsideHoursRefusal,
+  providerOfferRefusalMessage,
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
 import type { MyWaitlistPlace, RebookableService } from '../services/databaseService';
@@ -261,5 +262,14 @@ describe('a provider offering a time outside their hours', () => {
     expect(isOutsideHoursRefusal({ code: 'P0001', message: 'Provider is unavailable on this date' })).toBe(false);
     expect(isOutsideHoursRefusal({ code: '42501', message: "outside the provider's working hours" })).toBe(false);
     expect(isOutsideHoursRefusal(null)).toBe(false);
+  });
+});
+
+describe("a provider's offer that clashes with their own booking", () => {
+  it('says so in their words, and leaves every other refusal as it was', () => {
+    expect(providerOfferRefusalMessage({ code: 'P0001', message: 'That time is no longer available' }, 'x'))
+      .toBe('You already have a booking at that time. Pick another time.');
+    expect(providerOfferRefusalMessage({ code: 'P0001', message: 'Provider is unavailable on this date' }, 'fallback')).toBe('fallback');
+    expect(providerOfferRefusalMessage(null, 'fallback')).toBe('fallback');
   });
 });
