@@ -65,7 +65,7 @@ Curated: [[Availability & Slots]] · **245 files**
 - `src/components/BookingSheet.tsx` _(35)_
 - `src/screens/client/BookingsScreen.tsx` _(34)_
 - `supabase/add_providers_availability_rpc.sql` _(31)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(29)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(30)_
 - `src/components/MultiBookingSheet.tsx` _(28)_
 - `src/types/database.ts` _(28)_
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
@@ -213,7 +213,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **108 files**
 Curated: [[Booking Flow]] · **89 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(205)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(81)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(91)_
 - `supabase/waitlist_holds.sql` _(75)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_
 - `src/services/database/waitlist.ts` _(55)_
@@ -227,8 +227,8 @@ Curated: [[Booking Flow]] · **89 files**
 - `src/screens/client/CartScreen.tsx` _(28)_
 - `src/features/bookings/WaitlistTicket.tsx` _(25)_
 - `src/features/bookings/WaitlistPaySheet.tsx` _(24)_
+- `src/features/bookings/waitlist.ts` _(20)_
 - `supabase/waitlist_schema.sql` _(20)_
-- `src/features/bookings/waitlist.ts` _(19)_
 - `supabase/booking_flow_fixes.sql` _(19)_
 - `src/services/databaseService.ts` _(18)_
 - `src/contexts/CartContext.tsx` _(17)_
