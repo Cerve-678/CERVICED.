@@ -238,10 +238,16 @@ const PUSH_TITLE_OVERRIDES: Record<string, string> = {
  * again", their monthly release, promotions and announcements. Tapping the
  * bell for one provider is a yes for that provider, so these push even when
  * "Offers & Promotions" (off by default) is off; turning the bell off is how
- * to stop them (it deletes the follow). Saving a provider is just a list and
- * sends nothing.
+ * to stop them (it deletes the follow).
  */
 const BELL_COVERED_TYPES = new Set(['announcement', 'promotion']);
+
+/**
+ * Sent only to people who saved the provider or have their bell on, so they
+ * push like the bell does, even with "Offers & Promotions" off: "Sasha is back
+ * from holiday" (process_schedule_reopen_alerts, 20261124200000).
+ */
+const CHOSEN_PROVIDER_KINDS = new Set(['schedule_reopened']);
 
 /** True when this notification may be pushed to this user. */
 function pushAllowedByPrefs(
@@ -339,8 +345,9 @@ serve(async (req) => {
     // written and untouched — only the push is suppressed.
     // Only looked up for the two types the bell can override, so every other
     // push keeps its single round trip.
-    let belled = false;
-    if (BELL_COVERED_TYPES.has(payload.record.type) && payload.record.provider_id) {
+    const kind = payload.record.metadata?.['kind'];
+    let belled = typeof kind === 'string' && CHOSEN_PROVIDER_KINDS.has(kind);
+    if (!belled && BELL_COVERED_TYPES.has(payload.record.type) && payload.record.provider_id) {
       const { data: follow } = await supabase
         .from('provider_follows')
         .select('id')

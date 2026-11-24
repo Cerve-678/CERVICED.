@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/back-from-closure-alert (20261124200000 schedule_reopen_alerts), until applied
 ```
+
+### Pending 2026-11-24 (tell savers and bell followers when a closed schedule opens again)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124200000 | `schedule_reopen_alerts` | **NOT APPLIED.** Written above live max `20261124150000` (cerviced-9b's, applied 11-24); no unapplied migration above it on any open PR. md5 guard on live `reopen_my_schedule` (`93ab36d9…`). Reopen now ends the closure (`reopens_on` = today) instead of deleting it; new `process_schedule_reopen_alerts` cron every 15 min, 08:00–20:59 UK; clears closures already ended at apply time (Rose Haus, ended before 11-24) so nobody gets late news. Forced-rollback dry run pending (MCP `execute_sql` declined; user to paste it). |
 
 ### Applied 2026-11-24 (the "slot opened" notification leads with the time)
 
