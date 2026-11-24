@@ -1151,3 +1151,39 @@ say so. Built on `feat/directory-listings-in-search` (PR #123).
   claiming, never who. The client is told "We'll let them know", so the team
   has to actually message nudged businesses for that to stay true.
 - **Not lawyer-reviewed**, like the rest of the Terms and Privacy text (§19).
+
+## 30. Paying for a booking on the website (2026-11-24)
+
+**What it is:** a client without the app can book and pay on a provider's
+page at cerviced.co/@handle: email-code sign-in (a real CERVICED account),
+the Cart's single policies tick, the late/no-show and late cancellation fee
+ticks, then Stripe card or Apple Pay, and a Booked screen pointing to the app
+(`src/web/WebPaymentStep.tsx`, branch `feat/web-pay`). The Book buttons stay
+switched off on cerviced.co until Stripe goes live, so none of this is live.
+Flagged by the legal-flagger review; nothing below is resolved.
+
+**Gaps to raise before switching it on:**
+- **Distance-selling information (Consumer Contracts Regulations 2013).**
+  A website sale is a distance contract, and a mobile visit may be
+  off-premises. The web checkout shows no 14-day cancellation right or the
+  request to start the service within it, and the provider's cancellation
+  policy and the Terms are linked, not shown, at the tick. Same open
+  question as the app (above), made live for the first time here. Solicitor.
+- **Confirmation on a durable medium.** The booking confirmation email
+  carries the reference, services and total, but not the cancellation policy,
+  the Terms or any cooling-off notice. Solicitor.
+- **Web-only clients can't cancel.** The Booked screen sends them to the app
+  ("coming soon") to change or cancel, and there's no web way to do either, so
+  until the app is out a web client has no self-serve cancellation or
+  cooling-off route. User decides (web cancel, email route, or wait for the app).
+- **The tick is still placeholder copy.** It's the Cart's wording, marked
+  TODO(copy) there; the web reuses it for real payments. User, then solicitor.
+- **Cookies.** The legal page says the website sets no cookies; Stripe.js on
+  the checkout sets fraud-prevention cookies. Whether "strictly necessary"
+  covers them, and whether Stripe is named as a processor, is open. Solicitor.
+- **Health-adjacent data and the mobile address** are collected from an
+  account made minutes earlier, with no wording on why or who sees them (same
+  gap as §2 for the app). User and solicitor.
+- **Age.** The web asks for a date of birth (16+, like the app) only when the
+  account has none. Neither the web nor `prepare_checkout` checks a service's
+  `min_age` (also true of the app). Solicitor, then user.
