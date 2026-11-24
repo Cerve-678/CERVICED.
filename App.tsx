@@ -15,13 +15,7 @@ import React, { useEffect, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
-import { Lobster_400Regular } from '@expo-google-fonts/lobster';
-import { DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
-import { Bungee_400Regular } from '@expo-google-fonts/bungee';
-import { Righteous_400Regular } from '@expo-google-fonts/righteous';
-import { Sniglet_800ExtraBold } from '@expo-google-fonts/sniglet';
-import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2';
-import { VarelaRound_400Regular } from '@expo-google-fonts/varela-round';
+import { APP_FONTS } from './src/constants/appFonts';
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { FontProvider } from './src/contexts/FontContext';
@@ -29,7 +23,7 @@ import { CartProvider } from './src/contexts/CartContext';
 import { BookingProvider } from './src/contexts/BookingContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { RegistrationProvider } from './src/contexts/RegistrationContext';
-import { ThemeProvider } from './src/contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { DisplaySettingsProvider } from './src/contexts/DisplaySettingsContext';
 import {
   StatusBarTintProvider,
@@ -136,7 +130,11 @@ function AppContent() {
 }
 
 // The frosted strip is painted for pale screens, where it keeps the dark status
-// bar icons legible over content scrolling under them.
+// bar icons legible over content scrolling under them. In dark mode it is
+// tinted dark with light icons, for the same reason the other way round.
+//
+// This is only the default. A screen that renders its own
+// <FocusAwareStatusBar> overrides the icon colour while it's the one showing.
 //
 // A screen whose top edge is dark (a provider's Black profile hero) gets no
 // strip at all, only light icons. Tinting the strip dark instead looks right
@@ -146,29 +144,19 @@ function AppContent() {
 // to notice.
 function StatusBarBlur() {
   const isDarkTopArea = useStatusBarTint();
+  const { isDarkMode } = useTheme();
   return (
     <>
-      <StatusBar style={isDarkTopArea ? 'light' : 'dark'} />
+      <StatusBar style={isDarkTopArea || isDarkMode ? 'light' : 'dark'} />
       {!isDarkTopArea && (
-        <BlurView intensity={20} tint="light" style={styles.statusBarBlur} />
+        <BlurView intensity={20} tint={isDarkMode ? 'dark' : 'light'} style={styles.statusBarBlur} />
       )}
     </>
   );
 }
 
 export default Sentry.wrap(function App() {
-  const [fontsLoaded, fontError] = useFonts({
-    'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
-    'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),
-    Lobster_400Regular,
-    DancingScript_700Bold,
-    Bungee_400Regular,
-    Righteous_400Regular,
-    Sniglet_800ExtraBold,
-    Baloo2_700Bold,
-    VarelaRound_400Regular,
-  });
+  const [fontsLoaded, fontError] = useFonts(APP_FONTS);
 
   const appIsReady = fontsLoaded || !!fontError;
 

@@ -69,7 +69,7 @@ serve(async (req) => {
       .from('bookings')
       .select(
         'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
-        'provider_address_snapshot, client_address, booking_date, booking_time, provider_id, ' +
+        'client_address, booking_date, booking_time, provider_id, ' +
         'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status',
       )
       .eq('id', bookingId)
@@ -87,15 +87,27 @@ serve(async (req) => {
     // and the itemised services need the add-on snapshots written alongside
     // the booking (claim_cart_booking_slots sets the money and the status in
     // the same UPDATE that queues this email, so both are final by now).
-    const [{ data: provider }, { data: addOns, error: addOnsError }] = await Promise.all([
+    // The provider's venue goes through booking_released_venue(), which returns
+    // it only once the provider's release setting allows (the same check the
+    // app's client_bookings view makes). An email can't be unsent, so it
+    // must never carry an address the client couldn't see in the app yet.
+    const [
+      { data: provider },
+      { data: addOns, error: addOnsError },
+      { data: venueRows, error: venueError },
+    ] = await Promise.all([
       supabase.from('providers').select('business_type').eq('id', booking.provider_id).maybeSingle(),
       supabase.from('booking_add_ons').select('name_snapshot, price_snapshot').eq('booking_id', booking.id).limit(50),
+      supabase.rpc('booking_released_venue', { p_booking_id: booking.id }),
     ]);
     if (addOnsError) throw addOnsError;
+    if (venueError) throw venueError;
 
     const isMobile = provider?.business_type === 'mobile';
-    const location = (isMobile ? booking.client_address : booking.provider_address_snapshot)
-      || 'Address shared on confirmation';
+    const releasedAddress: string | null =
+      (Array.isArray(venueRows) ? venueRows[0]?.address : null) ?? null;
+    const location = (isMobile ? booking.client_address : releasedAddress)
+      || 'Shared before your appointment';
 
     // Raw — the template escapes its own HTML and leaves the subject as plain
     // text, so a service called "Gel manicure & art" no longer reaches the

@@ -79,7 +79,7 @@ describe('seenVersionFor', () => {
   });
 });
 
-describe('the three tours', () => {
+describe('the tours', () => {
   it('keeps a stable key per tour', () => {
     // These are persisted in users.seen_tours and in the device cache —
     // renaming one makes every account look unseen and replays it for
@@ -88,6 +88,12 @@ describe('the three tours', () => {
       CLIENT_HOME: 'client_home',
       CLIENT_EXPLORE: 'client_explore',
       PROVIDER_HOME: 'provider_home',
+      PROVIDER_INFO_PACKS: 'provider_info_packs',
+      PROVIDER_FORMS: 'provider_forms',
+      CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
+      PROVIDER_SERVICE_PACK_TIP: 'provider_service_pack_tip',
+      PROVIDER_POLICIES_PACK_TIP: 'provider_policies_pack_tip',
+      PROVIDER_MY_PROFILE: 'provider_my_profile',
     });
   });
 

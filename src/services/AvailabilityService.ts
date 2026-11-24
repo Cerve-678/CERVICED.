@@ -21,6 +21,7 @@ import type { BookingConflictResult } from '../types/booking';
 import { logger } from '../utils/logger';
 import { bookableDayCount, isBeyondHorizon, type BookingHorizonSettings } from '../utils/bookingHorizon';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
+import { formatLatestStart, latestStartMinutes, startsTooLate } from '../utils/latestStart';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -586,6 +587,19 @@ const fetchBufferByServiceId = async (
   return map;
 };
 
+// Each service's latest start in minutes (null = none). Same cached rows as
+// fetchBufferByServiceId, so asking for both costs one query, not two.
+const fetchLatestStartByServiceId = async (
+  serviceIds: (string | null | undefined)[],
+): Promise<Map<string, number | null>> => {
+  const distinct = Array.from(new Set(serviceIds.filter((id): id is string => !!id)));
+  const map = new Map<string, number | null>();
+  if (distinct.length === 0) return map;
+  const data = await getAvailabilityServiceBufferRows(distinct);
+  for (const row of data) map.set(row.id, latestStartMinutes(row.latest_start_time));
+  return map;
+};
+
 // Resolve a provider identifier to its UUID. Callers may pass either the
 // real provider UUID (used as-is, no lookup) or a display name (looked up
 // by exact case-insensitive match) — every entry point below accepts both,
@@ -750,13 +764,14 @@ async function findBackToBackSlotsForDate(
   // services — the existing bookings' padding is baked into their spans.
   const busySpans = await fetchBusySpans(providerId, date, date);
 
-  const bufferByServiceId = await fetchBufferByServiceId(
-    services.map(s => s.serviceId),
-    bufferMins
-  );
+  const [bufferByServiceId, latestByServiceId] = await Promise.all([
+    fetchBufferByServiceId(services.map(s => s.serviceId), bufferMins),
+    fetchLatestStartByServiceId(services.map(s => s.serviceId)),
+  ]);
 
   const chainDurations = services.map(s => (s.duration ? parseDurationToMinutes(s.duration) : 60));
   const chainBuffers = services.map(s => bufferByServiceId.get(s.serviceId) ?? { before: 0, after: bufferMins });
+  const chainLatest = services.map(s => latestByServiceId.get(s.serviceId) ?? null);
 
   for (const window of windows) {
     const windowEnd = parse24HTimeToMinutes(window.end_time);
@@ -772,6 +787,10 @@ async function findBackToBackSlotsForDate(
         const start = i === 0 ? cursor : cursor + chainBuffers[i - 1]!.after + chainBuffers[i]!.before;
         const end = start + chainDurations[i]!;
         if (end > windowEnd) { fits = false; break; }
+        // Each service in the chain answers to its own latest start, so a
+        // colour that must start by 2pm can't be pushed past it by the
+        // service booked before it.
+        if (startsTooLate(start, chainLatest[i]!)) { fits = false; break; }
         chain.push({ start, end });
         cursor = end;
       }
@@ -840,7 +859,11 @@ export const AvailabilityService = {
     try {
       const settings = (await getAvailabilityProviderCore(providerId)).settings;
       return settings
-        ? { booking_window_days: settings.booking_window_days, schedule_release_day: settings.schedule_release_day }
+        ? {
+            booking_window_days: settings.booking_window_days,
+            schedule_release_day: settings.schedule_release_day,
+            schedule_release_time: settings.schedule_release_time,
+          }
         : null;
     } catch (error) {
       logger.error('Error reading booking horizon:', error);
@@ -963,6 +986,9 @@ export const AvailabilityService = {
       const step = [15, 30, 60].includes(intervalMins) ? intervalMins : 60;
       const bufferMins = settings?.buffer_mins ?? 0;
       const newBuffer = bufferFromRow(bundle.serviceBuffer, bufferMins);
+      // The service's own latest start. A hard stop like the trigger's: a
+      // later start is never offered, not even as a request.
+      const latestStart = latestStartMinutes(bundle.serviceBuffer?.latest_start_time);
 
       // Enforce minimum notice — a slot starting sooner than this from now
       // isn't offered at all (matches the server-side enforce_booking_bookability
@@ -986,6 +1012,7 @@ export const AvailabilityService = {
       // ordinary, unconditional slot.
       const candidates = new Map<number, EmergencyReason[]>();
       const offer = (startMins: number, reasons: EmergencyReason[]) => {
+        if (startsTooLate(startMins, latestStart)) return;
         // Later callers never widen an existing entry: normal working hours
         // are generated first and must stay unconditional even where the
         // out-of-hours pass would also reach them.
@@ -1226,6 +1253,16 @@ export const AvailabilityService = {
         const noticeConflict = await checkNoticeWindow(providerId, date, time, policy.shortNotice);
         if (noticeConflict) return noticeConflict;
 
+        // The service's own latest start — no opt-in waives it, so it's
+        // checked whatever kind of booking this is. Same words as the
+        // trigger, which would refuse it at the hold anyway.
+        if (serviceId && startsTooLate(newStartMinutes, latestStartMinutes(bundle.serviceBuffer?.latest_start_time))) {
+          return {
+            hasConflict: true,
+            message: `This service has to start by ${formatLatestStart(bundle.serviceBuffer?.latest_start_time)}.`,
+          };
+        }
+
         // Check the slot falls within the provider's working hours
         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
         const windows = resolveWorkingWindows(
@@ -1296,6 +1333,11 @@ export const AvailabilityService = {
       serviceId?: string | undefined;
       /** See isSlotAvailable — set from CartItem.emergencyRequest. */
       isEmergencyRequest?: boolean | undefined;
+      /** A waitlist slot already held for this client (CartItem.waitlistHold).
+       *  Its own hold makes the slot read as taken, so the "is it free" check
+       *  is skipped; prepare_checkout confirms the hold is theirs. The clash
+       *  checks against the client's diary and the rest of the cart still run. */
+      heldForClient?: boolean | undefined;
     }[]
   ): Promise<BookingConflictResult> {
     const conflicts: BookingConflictResult['conflicts'] = [];
@@ -1361,7 +1403,7 @@ export const AvailabilityService = {
     // time, turns an N-item cart's checkout check from N sequential round
     // trips into one wave of N — the difference is most visible on a
     // multi-service, same-provider booking.
-    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId));
+    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId) && !b.heldForClient);
     const slotChecks = await Promise.all(
       nonStaleBookings.map(booking =>
         this.isSlotAvailable(
@@ -1384,9 +1426,9 @@ export const AvailabilityService = {
       if (staleItemIds.has(booking.cartItemId)) continue;
 
       // Check against existing bookings in storage
-      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId)!;
+      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId);
 
-      if (existingConflict.hasConflict) {
+      if (existingConflict?.hasConflict) {
         conflicts.push({
           cartItemId: booking.cartItemId,
           message: existingConflict.message || 'Time slot is no longer available',
@@ -1606,10 +1648,11 @@ export const AvailabilityService = {
       const durationMinutes = serviceDuration ? parseDurationToMinutes(serviceDuration) : 60;
 
       // Only the new service's own buffer — existing spans arrive padded.
-      const bufferByServiceId = await fetchBufferByServiceId(
-        serviceId ? [serviceId] : [],
-        bufferMins
-      );
+      const [bufferByServiceId, latestByServiceId] = await Promise.all([
+        fetchBufferByServiceId(serviceId ? [serviceId] : [], bufferMins),
+        fetchLatestStartByServiceId(serviceId ? [serviceId] : []),
+      ]);
+      const latestStart = serviceId ? latestByServiceId.get(serviceId) ?? null : null;
       const newBuffer = serviceId
         ? bufferByServiceId.get(serviceId) ?? { before: 0, after: bufferMins }
         : { before: 0, after: bufferMins };
@@ -1630,6 +1673,7 @@ export const AvailabilityService = {
         const daySlots = windows.flatMap(window =>
           generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
             .filter(t => parseTimeToMinutes(t) + durationMinutes <= parse24HTimeToMinutes(window.end_time))
+            .filter(t => !startsTooLate(parseTimeToMinutes(t), latestStart))
             .filter(t => slotStartMs(dateStr, parseTimeToMinutes(t)) >= earliestStart),
         );
         if (daySlots.length === 0) continue;

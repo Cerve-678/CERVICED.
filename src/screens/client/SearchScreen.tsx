@@ -1,4 +1,4 @@
-import { SKIN_TONES, matchesSkinTone } from '../../constants/skinTones';
+import { SKIN_TONES } from '../../constants/skinTones';
 // SearchScreen.tsx
 import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect, useEffect } from 'react';
 import {
@@ -10,7 +10,6 @@ import {
   Pressable,
   FlatList,
   Modal,
-  StatusBar,
   RefreshControl,
   Animated,
   ListRenderItem,
@@ -20,8 +19,12 @@ import {
   useWindowDimensions,
   ViewStyle,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { CircleStack } from '../../components/CircleStack';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +36,7 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/provider
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
 import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, getDirectoryListings, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
-import type { DirectoryListingRow, ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
+import type { DirectoryListingRow, FacetService, ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
 import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
@@ -45,16 +48,27 @@ import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
-import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
-import { citiesInLocation, filtersAllowDirectoryListings } from '../../features/providers/directoryListings';
+import { filtersAllowDirectoryListings } from '../../features/providers/directoryListings';
 import { ListingInitialBadge } from '../../components/ListingInitialBadge';
+import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { cityFilterKeys, matchesCityFilter } from '../../utils/providerCity';
+import SearchGuideSheet, { AVAILABILITY_INFO } from '../../features/providers/SearchGuideSheet';
 import {
   resolveProviderPriceRange,
   priceRangeMatchesBucket,
   priceSortKey,
+  type PriceRange,
 } from '../../utils/providerPriceMatch';
+import {
+  candidateServices,
+  hasServiceCriteria,
+  priceRangeAcrossServices,
+  serviceMatchesCriteria,
+  serviceRange,
+  type ServiceFilterCriteria,
+} from '../../utils/serviceFilterMatch';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -87,6 +101,7 @@ interface ProviderCardData {
   // until real data is available.
   priceRange: { min: number; max: number } | null;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  priceBands: string[];
   businessType: BusinessType | null;
   specialties: string[];
   // null = not yet resolved (or unknown) — see providersWithAvailability.
@@ -96,10 +111,11 @@ interface ProviderCardData {
   // computed distance, which stays available for the Distance filter/sort
   // via latitude/longitude above but is no longer displayed per-card.
   location: string;
-  // Service-coverage cities (providers.service_locations) — what the City
-  // filter matches against. Distinct from `location` above, which is a
-  // single display string, not a list of covered cities.
-  serviceLocations: string[];
+  // What the City filter matches against, built once per provider by
+  // cityFilterKeys (src/utils/providerCity.ts): the InfoReg location
+  // (location_text, never the 'London' display fallback above), the town it
+  // sits in, and the places in service_locations ("Areas you cover").
+  cityKeys: ReadonlySet<string>;
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
@@ -121,11 +137,13 @@ interface FilterOptions {
   // all) — providers whose availability hasn't resolved yet are never
   // filtered out, same not-excluded-when-unknown rule Distance follows.
   availableOnly?: boolean;
-  // Matches against a provider's service_locations array (see
-  // src/constants/ukCities.ts) — a provider covering ANY selected city is a
+  // Matches where a provider is based (InfoReg's "Where you're based",
+  // location_text), read up to its town, plus the places in
+  // service_locations (a mobile provider's "Areas you cover") — see
+  // matchesCityFilter in src/utils/providerCity.ts. A provider matching ANY selected place is a
   // match (OR, not AND), independent of the GPS-based Distance filter above.
-  // CityMultiSelect is the shared picker (also used by signup's "Where You
-  // Work") so this stays a multi-select, not the single-city pill it used to be.
+  // CityMultiSelect is the picker, so this stays a multi-select, not the
+  // single-city pill it used to be.
   city?: string[];
   // Matches against the provider-level providers.hair_types_catered, folded
   // into the same batched getProvidersAvailability() RPC call as the
@@ -219,6 +237,12 @@ const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows
 // filter tested providers.price_tier, which is NULL for every provider in
 // production, so every price bucket matched nobody.
 const KM_TO_MILES = 0.621371;
+/** How many of a provider's specialities a result card underlines. */
+const SEARCH_CARD_MAX_SPECIALITIES = 4;
+// Rows are revealed in batches as the client nears the end, with a spinner
+// underneath while more are still to come.
+const SEARCH_INITIAL_ROWS = 10;
+const SEARCH_ROW_BATCH = 10;
 
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
@@ -284,22 +308,9 @@ const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 
-// ── Availability colour/label — real status from get_providers_availability,
-// resolved asynchronously per-card (see providersWithAvailability). null
-// (not yet resolved, or no data) renders no badge at all rather than
-// guessing — this used to be hardcoded to 'Slots Available' on every card.
-// 'none' is deliberately absent from this map (not just an unused key): the
-// RPC collapses two different causes into it — a provider who's genuinely
-// fully booked this week, AND a provider who has never published a schedule
-// at all (has_any_open_day is false either way, see get_providers_availability).
-// A "Fully Booked" badge is a false claim for the second case, so neither
-// case gets a badge — the card falls through to availInfo === null below,
-// same as an unresolved/no-data card. Filtering (availability === 'available'
-// || 'limited') already excludes both correctly; this only affects the badge. ──
-const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: string; color: string }>> = {
-  available: { label: 'Slots Available', color: '#4CAF50' },
-  limited:   { label: 'Slots Limited',   color: '#FF9500' },
-};
+// Availability badge labels/colours live in SearchGuideSheet, which explains them.
+
+
 
 // ── Directory listings — businesses not on CERVICED yet. They have no
 // rating, prices, availability or coordinates, so those fields stay empty
@@ -312,7 +323,7 @@ function mapListingToCardData(l: DirectoryListingRow): ProviderCardData {
     service: l.service_category,
     logo: l.logo_url ? { uri: l.logo_url } : null,
     location: l.location_text ?? '',
-    serviceLocations: citiesInLocation(l.location_text),
+    cityKeys: cityFilterKeys(l.location_text, []),
     latitude: null,
     longitude: null,
     distanceMiles: null,
@@ -323,6 +334,7 @@ function mapListingToCardData(l: DirectoryListingRow): ProviderCardData {
     estimatedWait: '',
     priceRange: null,
     priceTier: null,
+    priceBands: [],
     businessType: null,
     specialties: [],
     availability: null,
@@ -371,6 +383,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, dar
           ) : (
             <ListingInitialBadge name={provider.name} dark={dark} fontSize={44} style={styles.cardImage} />
           )}
+          <CircleStack providerId={provider.providerId} providerName={provider.name} style={styles.cardCircle} />
         </View>
 
         {/* Info column */}
@@ -500,7 +513,10 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
         accessibilityRole="button"
         accessibilityLabel={`${service.name} with ${service.providerName}`}
       >
-        <Text style={[styles.serviceEyebrow, { color: P.sub }]}>SERVICE</Text>
+        <View style={styles.serviceEyebrowRow}>
+          <Text style={[styles.serviceEyebrow, { color: P.sub }]}>SERVICE</Text>
+          <CircleStack providerId={service.providerId} providerName={service.providerName} />
+        </View>
         <View style={styles.serviceCardTop}>
           <Image
             source={thumb ? { uri: thumb } : require('../../../assets/icon.png')}
@@ -542,12 +558,11 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
           accessibilityRole="button"
           accessibilityLabel={`View ${service.providerName}`}
         >
-          <Image
-            source={service.providerLogoUrl ? { uri: service.providerLogoUrl } : require('../../../assets/icon.png')}
-            style={styles.serviceCardLogo}
-            contentFit="cover"
-            transition={0}
-          />
+          {service.providerLogoUrl ? (
+            <ProviderLogoCircle providerId={service.providerId} uri={service.providerLogoUrl} style={styles.serviceCardLogo} />
+          ) : (
+            <Image source={require('../../../assets/icon.png')} style={styles.serviceCardLogo} contentFit="cover" transition={0} />
+          )}
           <Text style={[styles.serviceCardProviderName, { color: P.text }]} numberOfLines={1}>
             {service.providerName}
             {!service.isLinkOnly && rating ? (
@@ -629,6 +644,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // The header filters button opens this single sheet — no more per-pill
   // popovers anchored under an always-visible row.
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [guideVisible, setGuideVisible] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     sortBy: 'recommended',
     serviceType: 'all',
@@ -714,7 +730,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       service: p.service_category,
       logo: p.logo_url ? { uri: p.logo_url } : require('../../../assets/icon.png'),
       location: p.location_text ?? 'London',
-      serviceLocations: p.service_locations ?? [],
+      cityKeys: cityFilterKeys(p.location_text, p.service_locations),
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
       distanceMiles: null,
@@ -727,6 +743,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       // the Price filter's tier-bucket sort/comparison, not for display.
       priceRange: null,
       priceTier: p.price_tier,
+      priceBands: p.price_bands ?? [],
       businessType: p.business_type,
       // Real provider/service specialities arrive in the batched facets read
       // below. Keep this empty until then rather than showing category-based
@@ -756,18 +773,23 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (tab) setSelectedFilter(tab);
   }, [route?.params?.category]);
 
-  // Resolve location once on mount, through the same resolver Home uses.
+  // Resolve location through the same resolver Home uses.
   // Search previously had GPS or nothing, so refusing the permission disabled
   // distance filtering here while Home was happily sorting by the client's
   // saved city — the same app state, two different answers, on adjacent tabs.
-  React.useEffect(() => {
+  // Re-run on focus, so a place just picked on Home's Near You applies here
+  // too, and when the account's Your area changes, which the resolver falls
+  // back to when nothing was picked on this phone.
+  const accountArea = user?.clientArea ?? null;
+  useFocusEffect(useCallback(() => {
     let cancelled = false;
     (async () => {
-      const location = await resolveClientLocation();
+      const location = await resolveClientLocation({ accountArea });
       if (cancelled) return;
       if (!location.coords) {
         // Distance controls are disabled with an explanation rather than
         // pretending to apply a filter that cannot be calculated.
+        setUserCoords(null);
         setLocationState('unavailable');
         return;
       }
@@ -775,7 +797,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       setLocationState('available');
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [accountArea]));
 
   // Debounced server search — fires when query or category changes. Also
   // covers the initial mount fetch (no query yet) — selectedFilter is
@@ -936,8 +958,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   // "Price on request" fallback with real data (or nothing, while
   // unresolved/absent) on the card.
   const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
-  const [skinTonesByProviderId, setSkinTonesByProviderId] = useState<Map<string, Set<string>>>(new Map());
-  const [audiencesByProviderId, setAudiencesByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // One row per active service — price, audience and skin tone are judged
+  // against a single service, never against a provider's whole menu at once.
+  const [servicesByProviderId, setServicesByProviderId] = useState<Map<string, FacetService[]>>(new Map());
   // Speciality haystack per provider (business specialities + service tags +
   // service names) — the Speciality filter matches its chosen labels against
   // this, fuzzily. Comes off the same getProviderServiceFacets call as the maps
@@ -945,6 +968,8 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [specialityTextByProviderId, setSpecialityTextByProviderId] = useState<Map<string, Set<string>>>(new Map());
   // specialityText minus service names — what the filter may offer as options.
   const [specialityLabelsByProviderId, setSpecialityLabelsByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // Business specialities only — what each card underlines.
+  const [specialitiesByProviderId, setSpecialitiesByProviderId] = useState<Map<string, string[]>>(new Map());
   // Whether the facets query has answered for the CURRENT result set. Keeps
   // the audience filter's "don't claim a match until the lookup has answered"
   // rule meaningful now that the match set is derived rather than fetched —
@@ -961,10 +986,10 @@ export default function SearchScreen({ navigation, route }: Props) {
     const ids = providerData.map(p => p.providerId);
     if (ids.length === 0) {
       setPriceRangeByProviderId(new Map());
-      setAudiencesByProviderId(new Map());
-      setSkinTonesByProviderId(new Map());
+      setServicesByProviderId(new Map());
       setSpecialityTextByProviderId(new Map());
       setSpecialityLabelsByProviderId(new Map());
+      setSpecialitiesByProviderId(new Map());
       setFacetsLoaded(true);
       setPriceRangeLoading(false);
       return;
@@ -976,18 +1001,18 @@ export default function SearchScreen({ navigation, route }: Props) {
       .then(facets => {
         if (cancelled) return;
         setPriceRangeByProviderId(facets.priceRanges);
-        setAudiencesByProviderId(facets.audiences);
-        setSkinTonesByProviderId(facets.skinTones ?? new Map());
+        setServicesByProviderId(facets.services ?? new Map());
         setSpecialityTextByProviderId(facets.specialityText ?? new Map());
         setSpecialityLabelsByProviderId(facets.specialityLabels ?? new Map());
+        setSpecialitiesByProviderId(facets.specialities ?? new Map());
       })
       .catch(() => {
         if (cancelled) return;
         setPriceRangeByProviderId(new Map());
-        setAudiencesByProviderId(new Map());
-      setSkinTonesByProviderId(new Map());
-      setSpecialityTextByProviderId(new Map());
-      setSpecialityLabelsByProviderId(new Map());
+        setServicesByProviderId(new Map());
+        setSpecialityTextByProviderId(new Map());
+        setSpecialityLabelsByProviderId(new Map());
+        setSpecialitiesByProviderId(new Map());
       })
       .finally(() => {
         if (cancelled) return;
@@ -1005,33 +1030,74 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
-  // Provider-defined specialities and service tags are already in the facets
-  // request used by the filter. Reuse that response rather than making every
-  // card fetch its own profile data. A small cap keeps the two-column cards
-  // readable while still showing the provider's actual specialties.
+  // The provider's chosen specialities are already in the facets request used
+  // by the filter. Reuse that response rather than making every card fetch its
+  // own profile data. Only their business specialities are underlined, never
+  // service tags (product owner, 2026-11-03), and at most four of them.
   const providersWithSpecialties = useMemo(() => (
     providersWithPriceRange.map(provider => ({
       ...provider,
-      specialties: [...(specialityLabelsByProviderId.get(provider.providerId) ?? [])].slice(0, 4),
+      specialties: (specialitiesByProviderId.get(provider.providerId) ?? []).slice(0, SEARCH_CARD_MAX_SPECIALITIES),
     }))
-  ), [providersWithPriceRange, specialityLabelsByProviderId]);
+  ), [providersWithPriceRange, specialitiesByProviderId]);
 
-  // Audience matches, derived from the tags already fetched above rather than
-  // re-queried. Toggling this filter used to cost a round trip each time even
-  // though the answer was a re-read of the same services rows; now it is a
-  // pure narrowing of data the screen already holds. null = filter off, which
-  // the filter step below treats as "don't narrow" (distinct from an empty
-  // set, which means "nobody matches").
-  const audienceMatchIds = useMemo(() => {
-    const audience = activeFilters.audience;
-    if (!audience) return null;
-    if (!facetsLoaded) return null;
-    const matches = new Set<string>();
-    for (const [providerId, tags] of audiencesByProviderId) {
-      if (tags.has(audience)) matches.add(providerId);
+  // Price, audience and skin tone, judged together on ONE service at a time
+  // (src/utils/serviceFilterMatch.ts). Each used to be answered per provider
+  // on its own, so a £20 men's trim and a £120 women's braid together passed
+  // "<£30 + Women". With a typed query only the services that matched it count,
+  // so "braids" + "<£30" means cheap braids, not a cheap anything.
+  const serviceCriteria = useMemo<ServiceFilterCriteria>(() => ({
+    priceBucket: activeFilters.priceRange,
+    audience: activeFilters.audience,
+    skinTone: activeFilters.skinTone,
+  }), [activeFilters.priceRange, activeFilters.audience, activeFilters.skinTone]);
+
+  // The search's own matched service ids per provider, from the ranked results.
+  const queryMatchedServiceIds = useMemo(() => {
+    const byProvider = new Map<string, Set<string>>();
+    for (const s of serviceResults) {
+      const set = byProvider.get(s.providerId) ?? new Set<string>();
+      set.add(s.serviceId);
+      byProvider.set(s.providerId, set);
     }
-    return matches;
-  }, [audiencesByProviderId, facetsLoaded, activeFilters.audience]);
+    return byProvider;
+  }, [serviceResults]);
+
+  // Per provider: whether any candidate service passes every service-level
+  // filter, and the £ range of those that do (what the price sort reads, so
+  // "low to high" orders by what the client was actually shown a match for).
+  // null = no service-level filter on, or the facets haven't answered yet —
+  // filteredProviders tells those apart, same "don't claim a match before the
+  // lookup lands" rule as hair type.
+  const serviceMatchByProviderId = useMemo(() => {
+    if (!hasServiceCriteria(serviceCriteria) || !facetsLoaded) return null;
+    const out = new Map<string, PriceRange | null>();
+    for (const p of providerData) {
+      const services = servicesByProviderId.get(p.providerId) ?? [];
+      if (services.length === 0) {
+        // No service rows at all: only a price-only filter can still be
+        // answered, from the provider's self-described tier.
+        const tierRange = resolveProviderPriceRange(null, p.priceTier, p.priceBands);
+        if (!serviceCriteria.audience && !serviceCriteria.skinTone && serviceCriteria.priceBucket
+          && priceRangeMatchesBucket(tierRange, serviceCriteria.priceBucket)) {
+          out.set(p.providerId, tierRange);
+        }
+        continue;
+      }
+      const passing = candidateServices(services, queryMatchedServiceIds.get(p.providerId))
+        .filter(service => serviceMatchesCriteria(service, serviceCriteria));
+      if (passing.length > 0) out.set(p.providerId, priceRangeAcrossServices(passing));
+    }
+    return out;
+  }, [serviceCriteria, facetsLoaded, providerData, servicesByProviderId, queryMatchedServiceIds]);
+
+  const serviceFacetById = useMemo(() => {
+    const byId = new Map<string, FacetService>();
+    for (const services of servicesByProviderId.values()) {
+      for (const service of services) byId.set(service.id, service);
+    }
+    return byId;
+  }, [servicesByProviderId]);
 
   // Speciality matches, derived from the same facet data. null = filter off
   // (don't narrow); a Set (possibly empty) once the facets have answered. Same
@@ -1112,16 +1178,13 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.rating && activeFilters.rating > 0) {
       list = list.filter(p => p.rating >= activeFilters.rating!);
     }
-    if (activeFilters.priceRange) {
+    if (hasServiceCriteria(serviceCriteria)) {
       // Same "don't answer until the batched lookup has" rule Available Now
       // follows below. Real prices arrive after the cards do, and judging a
       // provider before theirs land rejects every one of them — the client
       // would watch a full grid blink to "No providers found" and back.
-      if (priceRangeLoading) return [];
-      const bucket = activeFilters.priceRange;
-      list = list.filter(p =>
-        priceRangeMatchesBucket(resolveProviderPriceRange(p.priceRange, p.priceTier), bucket),
-      );
+      if (!serviceMatchByProviderId) return [];
+      list = list.filter(p => serviceMatchByProviderId.has(p.providerId));
     }
     if (activeFilters.availableOnly) {
       // Don't claim a provider is bookable until the batched availability
@@ -1139,23 +1202,13 @@ export default function SearchScreen({ navigation, route }: Props) {
       list = list.filter(p => p.distanceMiles != null && p.distanceMiles <= activeFilters.distance!);
     }
     if (activeFilters.city?.length) {
-      list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
-    }
-    if (activeFilters.skinTone) {
-      if (!facetsLoaded) return [];
-      list = list.filter(p => matchesSkinTone([...skinTonesByProviderId.get(p.providerId) ?? []], activeFilters.skinTone!));
+      list = list.filter(p => matchesCityFilter(activeFilters.city!, p.cityKeys));
     }
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule
       // as Available Now above — hairTypeMatchIds is null while unresolved.
       if (!hairTypeMatchIds) return [];
       list = list.filter(p => hairTypeMatchIds.has(p.providerId));
-    }
-    if (activeFilters.audience) {
-      // null here means the facets query hasn't answered for this result set
-      // yet — same rule as hairType above, don't claim matches prematurely.
-      if (!audienceMatchIds) return [];
-      list = list.filter(p => audienceMatchIds.has(p.providerId));
     }
     if (activeFilters.specialty?.length) {
       // Same "don't claim a match until the batched facets have answered" rule
@@ -1184,7 +1237,10 @@ export default function SearchScreen({ navigation, route }: Props) {
       const keyed: { p: ProviderCardData; key: number }[] = [];
       const unpriced: ProviderCardData[] = [];
       for (const p of list) {
-        const key = priceSortKey(resolveProviderPriceRange(p.priceRange, p.priceTier), direction);
+        // With a price/audience/skin-tone filter on, sort by the services that
+        // matched it rather than the whole menu.
+        const matched = serviceMatchByProviderId?.get(p.providerId);
+        const key = priceSortKey(matched ?? resolveProviderPriceRange(p.priceRange, p.priceTier, p.priceBands), direction);
         if (key == null) unpriced.push(p);
         else keyed.push({ p, key });
       }
@@ -1198,10 +1254,10 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (!filtersAllowDirectoryListings(activeFilters)) return list;
     const cities = activeFilters.city ?? [];
     const listings = cities.length
-      ? listingData.filter(p => cities.some(c => p.serviceLocations.includes(c)))
+      ? listingData.filter(p => matchesCityFilter(cities, p.cityKeys))
       : listingData;
     return listings.length ? [...list, ...listings] : list;
-  }, [providersWithSpecialties, listingData, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
+  }, [providersWithSpecialties, listingData, activeFilters, availabilityLoading, serviceCriteria, serviceMatchByProviderId, hairTypeMatchIds, specialityMatchIds]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
@@ -1355,13 +1411,35 @@ export default function SearchScreen({ navigation, route }: Props) {
     });
   }, [navigation]);
 
-  // Services only from providers still in the grid, so the filter sheet
-  // (rating, distance, city…) narrows both lists the same way.
+  // Service cards obey the filters too: only from providers still in the grid
+  // (rating, distance, city…), each card itself passing price/audience/skin
+  // tone, and ordered by the chosen sort rather than search rank. Before, a
+  // "braids" search with "<£30" still showed the £90 braids, in rank order.
   const visibleServices = useMemo(() => {
     if (serviceResults.length === 0) return serviceResults;
-    const shownProviderIds = new Set(filteredProviders.map(p => p.providerId));
-    return serviceResults.filter(s => shownProviderIds.has(s.providerId));
-  }, [serviceResults, filteredProviders]);
+    const providerOrder = new Map(filteredProviders.map((p, i) => [p.providerId, i]));
+    const filtering = hasServiceCriteria(serviceCriteria);
+    const list = serviceResults.filter(s => {
+      if (!providerOrder.has(s.providerId)) return false;
+      if (!filtering) return true;
+      const facet = serviceFacetById.get(s.serviceId);
+      return !!facet && serviceMatchesCriteria(facet, serviceCriteria);
+    });
+    const sortBy = activeFilters.sortBy;
+    if (sortBy === 'price-low' || sortBy === 'price-high') {
+      // Unpriced services keep their order at the end, same as providers.
+      const keyOf = (s: ServiceSearchResult) => priceSortKey(serviceRange(s), sortBy);
+      const priced = list.filter(s => keyOf(s) != null);
+      const unpriced = list.filter(s => keyOf(s) == null);
+      priced.sort((a, b) => (sortBy === 'price-low' ? keyOf(a)! - keyOf(b)! : keyOf(b)! - keyOf(a)!));
+      return [...priced, ...unpriced];
+    }
+    if (sortBy === 'rating' || sortBy === 'distance') {
+      // Follow the provider grid's order, which already applied that sort.
+      return [...list].sort((a, b) => providerOrder.get(a.providerId)! - providerOrder.get(b.providerId)!);
+    }
+    return list;
+  }, [serviceResults, filteredProviders, serviceCriteria, serviceFacetById, activeFilters.sortBy]);
 
   // The provider strip on a service card opens the profile itself, not the
   // booking sheet the rest of the card opens.
@@ -1404,6 +1482,21 @@ export default function SearchScreen({ navigation, route }: Props) {
     })),
     [providersLoading, filteredProviders, visibleServices, gridColumns],
   );
+
+  // A new search or refresh starts back at the first batch.
+  const [visibleRowCount, setVisibleRowCount] = useState(SEARCH_INITIAL_ROWS);
+  useEffect(() => {
+    if (providersLoading) setVisibleRowCount(SEARCH_INITIAL_ROWS);
+  }, [providersLoading]);
+  const visibleRows = useMemo(
+    () => resultRows.slice(0, visibleRowCount),
+    [resultRows, visibleRowCount],
+  );
+  const hasMoreRows = visibleRowCount < resultRows.length;
+  const handleEndReached = useCallback(() => {
+    if (!hasMoreRows) return;
+    setVisibleRowCount(count => count + SEARCH_ROW_BATCH);
+  }, [hasMoreRows]);
 
   const renderRow: ListRenderItem<SearchResultRow<ProviderCardData, ServiceSearchResult>> = useCallback(({ item }) => {
     if (item.kind === 'service') {
@@ -1538,6 +1631,19 @@ export default function SearchScreen({ navigation, route }: Props) {
       headerTintColor: P.accentText,
       headerBackButtonDisplayMode: 'minimal',
       headerRight: () => (
+        <View style={styles.headerRightRow}>
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => {
+            if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setGuideVisible(true);
+          }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel="What things mean"
+        >
+          <Ionicons name="information-circle-outline" size={20} color={P.sub} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.filterBtn}
           onPress={() => {
@@ -1553,6 +1659,7 @@ export default function SearchScreen({ navigation, route }: Props) {
             </View>
           )}
         </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
@@ -1582,7 +1689,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* ── Search bar — filled card style, matching ExploreScreen's search bar. ── */}
       <View style={[styles.searchWrap, { backgroundColor: P.bg }]}>
@@ -1653,6 +1760,13 @@ export default function SearchScreen({ navigation, route }: Props) {
           </ScrollView>
         </View>
       )}
+
+      <SearchGuideSheet
+        visible={guideVisible}
+        onClose={() => setGuideVisible(false)}
+        P={P}
+        bottomInset={bottomInset}
+      />
 
       {/* ── Filter sheet — opened from the header filters icon. All six
           groups in one scrollable sheet rather than a panel per pill. ── */}
@@ -1979,10 +2093,19 @@ export default function SearchScreen({ navigation, route }: Props) {
           the bookmarked-providers grid, with full-width service cards
           scattered between the rows ── */}
       <FlatList
-        data={resultRows}
+        data={visibleRows}
         renderItem={renderRow}
         keyExtractor={item => item.key}
         ListHeaderComponent={renderHeader}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          hasMoreRows ? (
+            <View style={styles.loadMoreFooter}>
+              <ActivityIndicator color={P.accent} />
+            </View>
+          ) : undefined
+        }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -1998,7 +2121,7 @@ export default function SearchScreen({ navigation, route }: Props) {
           <View style={styles.emptyWrap}>
             {providersLoading
               || (activeFilters.availableOnly && availabilityLoading)
-              || (!!activeFilters.priceRange && priceRangeLoading) ? (
+              || (hasServiceCriteria(serviceCriteria) && !serviceMatchByProviderId) ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
                 <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
@@ -2042,6 +2165,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  loadMoreFooter: { paddingVertical: 16, alignItems: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { fontSize: 14, fontFamily: 'Jura-VariableFont_wght' },
 
@@ -2095,6 +2219,7 @@ const styles = StyleSheet.create({
   },
 
   // Header filters button — bare icon, matches OffersScreen's headerRight.
+  headerRightRow: { flexDirection: 'row', alignItems: 'center' },
   filterBtn: {
     width: 34,
     height: 34,
@@ -2430,6 +2555,13 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
     width: '100%',
+  },
+  cardCircle: { position: 'absolute', top: 7, right: 7 },
+  serviceEyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 20,
   },
   cardImage: {
     width: '100%',

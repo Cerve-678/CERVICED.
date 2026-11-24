@@ -1,6 +1,7 @@
 // src/screens/ReactivateAccountScreen.tsx
 import React from 'react';
-import { ActivityIndicator, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,7 +45,7 @@ export default function ReactivateAccountScreen() {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={t.statusBar} />
+        <FocusAwareStatusBar barStyle={t.statusBar} />
 
         <View style={styles.content}>
           <Text style={[styles.title, { color: P.text }]}>Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}.</Text>

@@ -25,7 +25,7 @@ The broader catalog also identified three authorization defects in user-facing R
 | `get_provider_busy_spans` | `anon`, `authenticated` | Intentionally public, read-only availability data for a publicly live provider. |
 | `append_saved_portfolio_item` / `remove_saved_portfolio_item` | `authenticated` | Client-owned save list; function verifies its supplied user ID equals `auth.uid()`. |
 | `attach_info_pack_to_booking` | `authenticated` | Provider action; function verifies ownership of both booking provider and pack. |
-| `get_client_beauty_profile_for_provider` | `authenticated` | Sensitive profile fields limited to a provider with a booking relationship. |
+| `get_client_beauty_profile_for_booking` | `authenticated` | Sensitive profile fields, only for the provider on that booking, and only the fields the booked service's category gets (safety fields always). Replaced `get_client_beauty_profile_for_provider` in 20261108190000. |
 | `get_promotion_audience` | `authenticated` | Client audience IDs limited to the owning provider. |
 | `update_conversation_last_message` | `authenticated` | Chat preview/unread update limited to the actual client/provider sender. |
 

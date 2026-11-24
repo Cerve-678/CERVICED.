@@ -12,9 +12,13 @@
 // honest about not understanding rather than confidently doing the wrong
 // thing, and it's the exact seam a model later improves.
 
-import type { ConfirmedBooking } from "../../types/booking";
+import { BookingStatus, type ConfirmedBooking } from "../../types/booking";
+import type { AddToCartParams } from "../../contexts/CartContext";
 import type {
+  AnswerLayout,
+  BeccaAnswer,
   BeccaHat,
+  Capability,
   CapabilityContext,
   CapabilityResult,
   ChatMessage,
@@ -30,16 +34,22 @@ import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
-import { capabilitiesFor, fitsSetup, getCapability, toToolSchema } from "./registry";
-import { askChip, chip, navChip } from "./capabilities/shared";
+import { capabilitiesFor, fitsSetup, getCapability, thinkingFor, toToolSchema } from "./registry";
+import { smallTalkReply } from "./smallTalk";
+import { askChip, chip, dayLabel, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
+import { providerDestination } from "./providerNavigation";
 
 export interface EngineInput {
   message: string;
   hat: BeccaHat;
   bookings: ConfirmedBooking[];
+  /** Client hat: CartContext's addToCart. See CapabilityContext.addToCart. */
+  addToCart?: (item: AddToCartParams) => void;
   userId?: string;
+  /** Client hat: Account → Your area (users.client_area). See CapabilityContext.clientArea. */
+  clientArea?: string | null;
   /** Injected so date logic is deterministic and testable. */
   now?: Date;
   /**
@@ -64,6 +74,12 @@ export interface EngineInput {
    * or invalid. See aiInterpreter.ts for the safety boundary.
    */
   interpreter?: BeccaAIInterpreter;
+  /**
+   * Called once, with the chosen capability's loading steps, after the
+   * message is understood and before the capability runs. Not called for
+   * small talk, fallbacks or ambiguity — nothing is being fetched for those.
+   */
+  onProgress?: (steps: string[]) => void;
 }
 
 /**
@@ -135,12 +151,14 @@ function setPendingAction(
   userId?: string,
 ): void {
   pendingActions.clear();
-  pendingActions.set(action.id, {
-    action,
-    at: Date.now(),
-    hat,
-    ...(userId ? { userId } : {}),
-  });
+  const entry = { at: Date.now(), hat, ...(userId ? { userId } : {}) };
+  pendingActions.set(action.id, { ...entry, action });
+  // The alternative is registered as its own action under its own id, so its
+  // button round-trips exactly like the main one.
+  if (action.alternative) {
+    const { id, confirmLabel, run } = action.alternative;
+    pendingActions.set(id, { ...entry, action: { id, describe: action.describe, confirmLabel, run } });
+  }
 }
 
 /** Prefix that marks a message as a confirmation, not natural language. */
@@ -148,6 +166,12 @@ const CONFIRM_PREFIX = "__becca_confirm__:";
 
 export function confirmToken(id: string): string {
   return `${CONFIRM_PREFIX}${id}`;
+}
+
+/** A confirm token is an internal instruction, never something to show the
+ *  person as their own message — the chip they tapped says it in words. */
+export function isConfirmToken(message: string): boolean {
+  return message.startsWith(CONFIRM_PREFIX);
 }
 
 /** Backing out — of a pending write, or of the conversation generally. */
@@ -363,6 +387,25 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     );
   }
 
+  if (hat === "provider" && /^(?:how (?:do|can) i |where (?:do|can) i )(?:change|edit|set|find|update) (?:this|that|it)[?!.]*$/i.test(message.trim())) {
+    const previous = conversation?.lastCapabilityId;
+    const topic = previous === "pv.app_navigation" ? conversation?.lastNavigationAsk
+      : previous === "pv.hours" || previous === "pv.timeoff" || previous === "pv.today" ? "schedule"
+      : previous === "pv.capacity" ? "booking rules"
+      : undefined;
+    const destination = topic ? providerDestination(topic) : undefined;
+    if (destination) {
+      const linkOnly = isLinkOnlyTurn(hat);
+      const screen = linkOnly && destination.fullBookingOnly ? "schedule" : destination.screen;
+      return message_({
+        content: linkOnly && destination.fullBookingOnly
+          ? `That setting is managed on your own booking site. You can edit the opening hours shown on your CERVICED profile here.`
+          : `Go to **${destination.path}**. ${destination.detail}`,
+        suggestions: [navChip("change-setting", linkOnly && destination.fullBookingOnly ? "Open Opening Hours" : `Open ${destination.title}`, screen)],
+      }, hat);
+    }
+  }
+
   // A short social turn should feel like a conversation, not an intent that
   // failed to parse. Keep this deliberately narrow: "hi, can you find nails?"
   // is a real request and must continue through the capability matcher.
@@ -450,6 +493,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     ...(conversation?.lastCapabilityId
       ? { lastCapabilityId: conversation.lastCapabilityId }
       : {}),
+    ...(conversation?.lastNavigationAsk ? { lastNavigationAsk: conversation.lastNavigationAsk } : {}),
     ...(conversation?.lastProviders
       ? { lastProviders: conversation.lastProviders }
       : {}),
@@ -557,7 +601,11 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const missing = (capability.needs ?? []).find(
     (n) => n.required && entities[n.kind as keyof EntityBag] == null,
   );
-  if (missing) return buildMissingEntityReply(missing.kind, hat);
+  if (missing) return buildMissingEntityReply(missing.kind, hat, message, bookings);
+
+  // Understood and about to run: say what Becca is actually doing now, in
+  // place of the screen's generic "reading your message".
+  input.onProgress?.(thinkingFor(capability, { entities, message: ask }));
 
   // Client hat only: a provider's own habits as a client say nothing useful
   // about their business questions. Resolved once here rather than per
@@ -578,7 +626,9 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     verbatimMessage: message,
     bookings,
     now,
+    ...(hat === "client" && input.addToCart ? { addToCart: input.addToCart } : {}),
     ...(userId ? { userId } : {}),
+    ...(hat === "client" && input.clientArea ? { clientArea: input.clientArea } : {}),
     ...(personal ? { personal } : {}),
   };
 
@@ -614,6 +664,15 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
           data: { message: confirmToken(action.id) },
           display: "action",
         },
+        ...(action.alternative
+          ? [{
+            id: `confirm-${action.alternative.id}`,
+            text: action.alternative.confirmLabel,
+            action: "message" as const,
+            data: { message: confirmToken(action.alternative.id) },
+            display: "action" as const,
+          }]
+          : []),
         {
           id: `cancel-${action.id}`,
           text: "Not now",
@@ -628,7 +687,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // Medium confidence: state the assumption rather than let it pass silently.
   const assumption =
     understanding.confidence === "medium"
-      ? result.assumption ?? buildAssumption(entities, result.text, fromMessage)
+      ? result.assumption ?? buildAssumption(entities, result.text, fromMessage, capability)
       : undefined;
 
   // Every reply ends with somewhere to go next. Capabilities that supply
@@ -707,6 +766,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     hat,
     entities,
     lastCapabilityId: capability.id,
+    ...(capability.id === "pv.app_navigation" ? { lastNavigationAsk: ask } : {}),
     ...(entities.booking ? { lastBooking: entities.booking } : conversation?.lastBooking ? { lastBooking: conversation.lastBooking } : {}),
     // A turn that shows no providers must NOT erase the list the user is
     // still looking at: "find nails" -> "any free Saturday?" -> "none" ->
@@ -733,10 +793,38 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       suggestions,
       ...(result.providers ? { providerRecommendations: result.providers } : {}),
       ...(result.inspiration ? { inspiration: result.inspiration } : {}),
+      ...answerFrom(result),
+      understood: { capabilityId: capability.id },
     },
     hat,
     undefined,
   );
+}
+
+/**
+ * The reply's shape, from what the capability returned. A single fact leads
+ * big; a run of two or more steps was a real search, so the steps lead and
+ * fold away; anything else with a card is a quick look-up, card first.
+ */
+export function chooseLayout(result: CapabilityResult): AnswerLayout | null {
+  if (!result.headline && !result.card) return null;
+  if (result.layout) return result.layout;
+  if (result.headline) return "headline";
+  if (!result.card) return null;
+  return (result.work?.length ?? 0) >= 2 ? "stepsThenCard" : "cardFirst";
+}
+
+function answerFrom(result: CapabilityResult): { answer?: BeccaAnswer } {
+  const layout = chooseLayout(result);
+  if (!layout) return {};
+  return {
+    answer: {
+      layout,
+      ...(result.headline ? { headline: result.headline } : {}),
+      ...(result.card ? { card: result.card } : {}),
+      ...(result.work?.length ? { work: result.work } : {}),
+    },
+  };
 }
 
 /**
@@ -1088,75 +1176,20 @@ function isSafeLeadIn(value: string): boolean {
 }
 
 /**
- * Handles complete, non-task social turns before intent matching.
- *
- * The registry's help capability intentionally recognises "hi" as a useful
- * first touch, but its full feature list is an awkward answer to a simple
- * greeting. Likewise, a "thanks" used to land in the generic uncertainty
- * fallback. These are response-quality cases, not capabilities: no data is
- * read and no app action is implied.
+ * Handles complete, non-task social turns before intent matching — see
+ * smallTalk.ts for what counts. The registry's help capability recognises
+ * "hi" too, but its full feature list is an awkward answer to a greeting.
  */
 function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
-  const plain = message
-    .trim()
-    .toLowerCase()
-    .replace(/’/g, "'")
-    .replace(/[!?.]+$/g, "")
-    .replace(/\s+/g, " ");
-
-  if (/^(?:hi|hello|hey|hiya|morning|good morning|afternoon|good afternoon|evening|good evening|becca)$/.test(plain)) {
-    return message_(
-      {
-        content:
-          hat === "provider"
-            ? "Hi — I’m here to help you stay on top of your business. What would you like to check?"
-            : "Hi — what would you like help with today?",
-        suggestions: defaultStarters(hat),
-      },
-      hat,
-    );
-  }
-
-  // Identity questions are just as common as a greeting, particularly in a
-  // new chat. Keep this before intent matching: neither answer needs account
-  // data, and "what's your name?" should not fall through to uncertainty.
-  if (/^(?:what(?:'s| is) (?:your|ur) n(?:ame|sme)|who are you|what are you|are you becca|is your name becca|tell me your name|your name)$/.test(plain)) {
-    return message_(
-      {
-        content:
-          hat === "provider"
-            ? "I’m Becca, CERVICED’s business assistant. I can help with your diary, clients and business setup."
-            : "I’m Becca, CERVICED’s beauty and booking assistant. I can help you find providers and stay on top of your bookings.",
-        suggestions: defaultStarters(hat),
-      },
-      hat,
-    );
-  }
-
-  if (/^(?:thanks|thank you|cheers|ta|perfect|great thanks)$/.test(plain)) {
-    return message_(
-      {
-        content:
-          hat === "provider"
-            ? "You’re welcome. I’m here whenever you need a hand with the business."
-            : "You’re welcome. I’m here whenever you need a hand.",
-        suggestions: defaultFollowUps(hat),
-      },
-      hat,
-    );
-  }
-
-  if (/^(?:bye|goodbye|see you|see ya|that'?s all)$/.test(plain)) {
-    return message_(
-      {
-        content: "Speak soon — I’ll be right here when you need me.",
-        suggestions: defaultStarters(hat),
-      },
-      hat,
-    );
-  }
-
-  return null;
+  const reply = smallTalkReply(message, hat);
+  if (!reply) return null;
+  return message_(
+    {
+      content: reply.content,
+      suggestions: reply.chips === "starters" ? defaultStarters(hat) : defaultFollowUps(hat),
+    },
+    hat,
+  );
 }
 
 /**
@@ -1171,9 +1204,12 @@ async function runPendingAction(
   userId?: string,
 ): Promise<ChatMessage> {
   const entry = pendingActions.get(id);
-  // Deleted before the expiry check as well as before running: an expired
+  // Cleared before the expiry check as well as before running: an expired
   // entry is dead either way, and leaving it would let a second tap retry it.
-  pendingActions.delete(id);
+  // Everything goes, not just this id — only one write is ever pending (see
+  // setPendingAction), so the rest is this one's alternative, which must not
+  // run as well.
+  pendingActions.clear();
 
   if (!entry) {
     return message_({
@@ -1198,8 +1234,10 @@ async function runPendingAction(
   }
 
   try {
-    const confirmation = await entry.action.run();
-    return message_({ content: confirmation });
+    const done = await entry.action.run();
+    return typeof done === "string"
+      ? message_({ content: done }, hat)
+      : message_({ content: done.text, suggestions: done.suggestions }, hat);
   } catch {
     return message_({
       content: "That didn't go through — something went wrong on my end. Try again?",
@@ -1297,10 +1335,16 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
     .slice(0, 3);
 
   if (options.length === 0) {
+    const strengths = linkOnly
+      ? "your messages, your updates and your profile"
+      : hat === "provider"
+        ? "your day, your clients and how the business is doing"
+        : "your bookings, finding someone, and booking your last appointment again";
     return message_({
       content:
-        "I’m not sure what you mean yet — could you tell me a little more?",
+        `I’m not perfect yet, so I didn’t catch that one. I can help with ${strengths} — could you try asking another way?`,
       suggestions: defaultStarters(hat),
+      understood: { capabilityId: null },
     }, hat, { title: "Let’s find the right thing" });
   }
 
@@ -1310,10 +1354,37 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
       ...options.map((c, i) => askChip(`alt-${i}`, c.describe, c.describe)),
       askChip("help", "Something else", "What can you do?"),
     ],
+    understood: { capabilityId: null },
   }, hat, { title: "Let’s narrow it down" });
 }
 
-function buildMissingEntityReply(kind: string, hat: BeccaHat): ChatMessage {
+function buildMissingEntityReply(
+  kind: string,
+  hat: BeccaHat,
+  message: string,
+  bookings: ConfirmedBooking[],
+): ChatMessage {
+  // Understood, but not which appointment. Each card re-asks the same
+  // question with that exact booking attached (selectedBookingId), so it
+  // lands on the same capability — "I didn't catch that" would be untrue.
+  if (kind === "booking") {
+    const upcoming = bookings
+      .filter((b) => b.status === BookingStatus.UPCOMING)
+      .sort((a, b) => `${a.bookingDate} ${a.bookingTime}`.localeCompare(`${b.bookingDate} ${b.bookingTime}`))
+      .slice(0, 4);
+    if (upcoming.length === 0) {
+      return message_({
+        content: "You haven't got any upcoming appointments for me to look at.",
+        suggestions: defaultStarters(hat),
+      }, hat, { title: "No upcoming appointments" });
+    }
+    return message_({
+      content: "Which appointment do you mean?",
+      suggestions: upcoming.map((b) =>
+        askChip(`pick-${b.id}`, `${b.serviceName} · ${dayLabel(b.bookingDate)}`, message, { bookingId: b.id }),
+      ),
+    }, hat, { title: "Choose an appointment" });
+  }
   if (kind === "service") {
     return message_({
       content: "What are you after?",
@@ -1344,12 +1415,19 @@ function buildAssumption(
   entities: EntityBag,
   answer: string,
   resolvedFromMessage: EntityBag,
+  capability: Capability,
 ): string | undefined {
   // Only entities CARRIED from an earlier turn are assumptions. Something the
   // user just typed is not an interpretation Becca made — saying "assuming
   // you meant today" back at someone who wrote "today" reads as not listening.
+  // And only ones this capability reads: "assuming you meant nails" on a
+  // booking-prep answer that never looked at the service is noise. A booking
+  // is the exception — it's only carried on an explicit "that booking"
+  // follow-up, and several booking answers read it without declaring it.
+  const uses = new Set<string>((capability.needs ?? []).map((need) => need.kind));
+  uses.add("booking");
   const carried = <K extends keyof EntityBag>(k: K) =>
-    entities[k] != null && resolvedFromMessage[k] == null;
+    uses.has(k) && entities[k] != null && resolvedFromMessage[k] == null;
 
   const parts: string[] = [];
   if (carried("booking")) parts.push(entities.booking!.label);
@@ -1436,7 +1514,17 @@ function message_(
   // cannot make another provider's card or portfolio appear in this hat.
   const { providerRecommendations, inspiration, ...rest } = parts;
   const safeParts = hat === "provider"
-    ? rest
+    ? {
+      ...rest,
+      ...(rest.answer?.card?.rows
+        ? {
+          answer: {
+            ...rest.answer,
+            card: { ...rest.answer.card, rows: rest.answer.card.rows.map(({ provider: _p, ...row }) => row) },
+          },
+        }
+        : {}),
+    }
     : {
       ...rest,
       ...(providerRecommendations ? { providerRecommendations } : {}),

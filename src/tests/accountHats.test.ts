@@ -51,7 +51,14 @@ describe('account hats', () => {
       owned: { client: true, provider: true },
       active: 'client',
       canSwitch: true,
+      clientHatKnown: true,
     });
+  });
+
+  it('tells "no client hat" apart from "not read yet"', () => {
+    expect(getAccountHatState('provider', false, 'provider').clientHatKnown).toBe(true);
+    expect(getAccountHatState('provider', undefined, 'provider').clientHatKnown).toBe(false);
+    expect(getAccountHatState('user', undefined, 'client').clientHatKnown).toBe(true);
   });
 
   it('never exposes an active hat that is not owned', () => {
@@ -64,6 +71,7 @@ describe('account hats', () => {
       owned: { client: false, provider: false },
       active: 'client',
       canSwitch: false,
+      clientHatKnown: false,
     });
   });
 });

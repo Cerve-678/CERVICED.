@@ -1,4 +1,3 @@
-import { UK_CITIES } from '../../constants/ukCities';
 import { normalizeExternalBookingUrl } from './externalBookingLink';
 import { filtersAllowLinkOnly, type LinkOnlyFilterInput } from './linkOnlySearch';
 
@@ -19,19 +18,6 @@ export function listingInitial(name: string): string {
   return first ? first.toUpperCase() : '?';
 }
 
-/**
- * The cities from the Search City filter that a listing's area text names,
- * so "Lewisham, South London" matches the London filter. Listings have no
- * service-coverage list of their own, only the area text they were imported
- * with.
- */
-export function citiesInLocation(locationText: string | null | undefined): string[] {
-  if (!locationText) return [];
-  return UK_CITIES.filter(city =>
-    new RegExp(`\\b${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(locationText),
-  );
-}
-
 export interface DirectoryListingFilterInput extends LinkOnlyFilterInput {
   specialty?: string[];
   distance?: number;
@@ -41,7 +27,7 @@ export interface DirectoryListingFilterInput extends LinkOnlyFilterInput {
  * Whether listings can show under the current Search filters. They match
  * the same filters a link-only provider can (category, area), minus the two
  * they have no data for: specialities and distance (no coordinates). City is
- * matched card by card, against citiesInLocation.
+ * matched card by card, against each listing's area text.
  */
 export function filtersAllowDirectoryListings(filters: DirectoryListingFilterInput): boolean {
   return (

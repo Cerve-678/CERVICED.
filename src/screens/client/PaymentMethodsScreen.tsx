@@ -5,12 +5,12 @@ import {
   Dimensions,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -18,7 +18,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { Ionicons } from '@expo/vector-icons';
 import Icon from '../../components/IconLibrary';
 import { useAppDialog } from '../../components/AppDialog';
-import { createSavedCardSetup, listSavedCards, removeSavedCard } from '../../services/databaseService';
+import { createSavedCardSetup, forgetSavedCards, listSavedCards, removeSavedCard } from '../../services/databaseService';
 import {
   SavedCard,
   savedCardBadge,
@@ -75,7 +75,7 @@ export default function PaymentMethodsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
@@ -171,6 +171,8 @@ function SavedCardsSection() {
         throw new Error(presentError.message || 'Could not save that card.');
       }
       showToast('Card saved', 'success');
+      // A read already in flight predates this card.
+      forgetSavedCards();
       await load();
     } catch (error) {
       logger.error('[PaymentMethods] could not add a card', error);

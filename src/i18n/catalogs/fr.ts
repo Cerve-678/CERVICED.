@@ -59,11 +59,16 @@ export const fr: Catalog = {
   'profile.card.points.sub': 'Vos récompenses',
 
   'profile.section.account': 'Gestion du compte',
+  'profile.forYou.activity.title': "Centre d'activité",
+  'profile.forYou.activity.sub': 'Remboursements, reports et tout ce que vous avez à faire',
+  'profile.forYou.activity.count': '{count} à faire',
+  'profile.forYou.activity.todo': 'Quelque chose vous attend',
   'profile.forYou.messages.title': 'Messages',
   'profile.forYou.messages.sub': 'Discussions avec vos professionnels',
   'profile.account.account.title': 'Compte',
   'profile.account.account.sub': 'Nom, téléphone, date de naissance',
   'profile.forYou.beauty.title': 'Profil beauté',
+  'profile.forYou.beauty.todo': 'Il reste quelque chose à compléter',
   'profile.account.password.title': 'Changer le mot de passe',
   'profile.account.password.sub': 'Mettre à jour les identifiants',
   'profile.account.payment.title': 'Moyens de paiement',
@@ -95,7 +100,7 @@ export const fr: Catalog = {
 
   'profile.section.appInfo': "Infos de l'app et mentions légales",
   'profile.appInfo.about.title': 'À propos de Cerviced',
-  'profile.appInfo.about.sub': 'Mission, version',
+  'profile.appInfo.about.sub': 'Qui nous sommes et ce que nous construisons',
   'profile.appInfo.report.title': 'Signaler un problème',
   'profile.appInfo.report.sub': 'Bugs, commentaires',
 
@@ -129,8 +134,8 @@ export const fr: Catalog = {
   'providerAccount.businessProfile.sub': 'Profil, informations et communications',
 
   'providerAccount.section.myBusiness': 'MON ENTREPRISE',
-  'providerAccount.myBusiness.schedule.title': 'Horaires',
-  'providerAccount.myBusiness.schedule.sub': 'Définissez vos heures et bloquez des dates',
+  'providerAccount.myBusiness.payouts.title': 'Versements',
+  'providerAccount.myBusiness.payouts.sub': 'Vos paiements et dates de versement',
   'providerAccount.myBusiness.inbox.title': 'Boîte de réception',
   'providerAccount.myBusiness.inbox.sub': 'Demandes et messages des clients',
   'providerAccount.myBusiness.history.title': 'Historique des réservations',
@@ -161,10 +166,12 @@ export const fr: Catalog = {
   'providerAccount.forClients.switch.sub': 'Parcourez Cerviced en tant que client',
   'providerAccount.forClients.create.title': 'Créer un compte client',
   'providerAccount.forClients.create.sub': 'Configurez votre profil client pour explorer',
+  'providerAccount.forClients.checking.title': 'Mode client',
+  'providerAccount.forClients.checking.sub': 'Vérification de votre compte…',
 
   'providerAccount.section.appInfo': "INFOS DE L'APP ET MENTIONS LÉGALES",
   'providerAccount.appInfo.about.title': 'À propos de Cerviced',
-  'providerAccount.appInfo.about.sub': 'Mission, version',
+  'providerAccount.appInfo.about.sub': 'Qui nous sommes et ce que nous construisons',
   'providerAccount.appInfo.report.title': 'Signaler un problème',
   'providerAccount.appInfo.report.sub': 'Bugs, commentaires',
 

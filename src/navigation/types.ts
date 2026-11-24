@@ -3,6 +3,7 @@ import { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/n
 import { StackScreenProps } from "@react-navigation/stack";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { ProviderReschedulePolicy } from '../services/databaseService';
 
 // ============================================================================
 // STACK PARAM LISTS
@@ -48,13 +49,15 @@ export type HomeStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
-  DevSettings: undefined;
   Offers: undefined;
 };
 
@@ -71,7 +74,6 @@ export type ExploreStackParamList = {
   Search: { initialQuery?: string; category?: string; morph?: boolean };
   BookmarkedProviders: undefined;
   CartMain: undefined;
-  DevSettings: undefined;
 };
 
 // Becca Stack
@@ -95,11 +97,13 @@ export type BeccaStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
-  DevSettings: undefined;
 };
 
 // Provider Becca Stack — the isolated Becca tab used in PROVIDER mode. It
@@ -110,7 +114,6 @@ export type ProviderBeccaStackParamList = {
   BeccaMain: { conversationId?: string };
   Notifications: undefined;
   BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
-  DevSettings: undefined;
   // Becca's OWN copies of the provider screens her chips route to.
   //
   // Deliberately duplicated from ProviderHome/Profile/MyServices rather than
@@ -133,9 +136,15 @@ export type ProviderBeccaStackParamList = {
   };
   Promotions: undefined;
   InfoPacks: undefined;
+  ProviderIntakeForm:
+    | { bookingId: string; clientUserId: string; serviceName: string; formId?: string }
+    | { openTerms: true }
+    | undefined;
   Analytics: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Automations: undefined;
+  Payments: undefined;
+  Policies: undefined;
 };
 
 // Cart Stack
@@ -158,11 +167,13 @@ export type CartStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
-  DevSettings: undefined;
 };
 
 // Profile Stack
@@ -176,6 +187,9 @@ export type ProfileStackParamList = {
   /** `openMaintenance` lands on the Maintenance view (a maintenance push or
    *  in-app notification); `focusItemId` scrolls to that item. */
   BeautyProfile: { openMaintenance?: boolean; focusItemId?: string } | undefined;
+  /** Your circle: find people, follow requests, followers/following and the
+   *  sharing switches. Reached from Beauty Profile. */
+  Circle: undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;
@@ -183,11 +197,16 @@ export type ProfileStackParamList = {
   HelpCentre: undefined;
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
-  Terms: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminDashboard: undefined;
+  /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
+  /** Admin accounts only: open a ready-to-use account with no emails, or
+   *  (addDetailsForUserId) give a blank provider account its owner's details. */
+  AdminCreateAccount: { addDetailsForUserId?: string } | undefined;
+  /** Admin accounts only: every account opened from Create an account. */
+  AdminCreatedAccounts: undefined;
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
@@ -207,8 +226,11 @@ export type ProfileStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
@@ -225,10 +247,13 @@ export type ProviderHomeStackParamList = {
   // viewMode: lets a caller (the daily-recap notification) open the calendar
   // straight into the list view rather than whichever mode was last used.
   ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
+  AccountHolderDetails: { addDetailsForCurrentUser: true };
   // Link-only providers (booking_mode 'external') start this stack here
   // instead of the booking calendar — see ProviderTabNavigator.
   LinkOnlyHomeMain: undefined;
   LinkOnlyAnalytics: undefined;
+  // What taking bookings through CERVICED would add (link-only providers).
+  FullCervicedFeatures: undefined;
   // The provider Becca stack, pushed from the link-only Home (link-only
   // providers have no Becca tab).
   BeccaStack: NavigatorScreenParams<ProviderBeccaStackParamList> | undefined;
@@ -243,6 +268,7 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
+  Automations: undefined;
   // Pushed from the link-only Dashboard's Profile strength rows (Instagram,
   // accessibility, payment methods), same reasoning as EditProfile above.
   BusinessInfo: undefined;
@@ -275,12 +301,15 @@ export type ProviderHomeStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
-  DevSettings: undefined;
 };
 
 // Provider Services Stack (profile preview + edit via InfoRegScreen)
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
+  // Tapping the logo on My Profile: their own profile, as clients see it.
+  /** asPreview: the owner tapping their logo — no header, no buttons. */
+  MyPublicProfile: { providerId: string; asPreview?: boolean };
+  AccountHolderDetails: { addDetailsForCurrentUser: true };
   EditProfile: { transferProviderId?: string } | undefined;
   // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
   // builder opens with the profile editor beneath it instead of at a bare tab
@@ -296,6 +325,8 @@ export type ProviderServicesStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
+  // My Profile → Recent activity → See all opens History → All.
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   // Pushed from the Clientele screen's Message button, for the same reason
   // ProviderSchedule is registered here — a cross-tab navigate would land the
   // conversation at a bare tab root and its back button would fire an
@@ -318,18 +349,24 @@ export type ProviderServicesStackParamList = {
   Policies: undefined;
   Payments: undefined;
   Branding: undefined;
+  // Pushed from the Profile Health checklist's automations step.
+  Automations: undefined;
   // Pushed from the dashboard's saved-by-clients tile, same reasoning.
   Analytics: undefined;
   AddBooking: undefined;
-  DevSettings: undefined;
 };
 
 // Provider Account Stack (settings for provider users)
 export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
+  // What taking bookings through CERVICED would add (link-only providers).
+  FullCervicedFeatures: undefined;
   // Link-only providers' Profile tab root: their public profile + edit rows.
   // Their own public profile, exactly as clients see it.
-  MyPublicProfile: { providerId: string };
+  /** asPreview: the owner tapping their logo — no header, no buttons. */
+  MyPublicProfile: { providerId: string; asPreview?: boolean };
+  // Another provider's public profile, opened by scanning their QR code.
+  PublicProviderProfile: { providerId: string; source?: string };
   EditProfile: { transferProviderId?: string } | undefined;
   NotificationSettings: undefined;
   Achievements: undefined;
@@ -380,11 +417,16 @@ export type ProviderAccountStackParamList = {
   // both hats reach the same single setting.
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
-  Terms: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminDashboard: undefined;
+  /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
+  /** Admin accounts only: open a ready-to-use account with no emails, or
+   *  (addDetailsForUserId) give a blank provider account its owner's details. */
+  AdminCreateAccount: { addDetailsForUserId?: string } | undefined;
+  /** Admin accounts only: every account opened from Create an account. */
+  AdminCreatedAccounts: undefined;
   DevSettings: undefined;
 };
 
@@ -403,7 +445,8 @@ export type ProviderTabParamList = {
 export type LinkOnlyPortfolioStackParamList = {
   LinkOnlyPortfolioMain: undefined;
   /** Their own profile, as clients see it (ProviderProfileScreen). */
-  MyPublicProfile: { providerId: string };
+  /** asPreview: the owner tapping their logo — no header, no buttons. */
+  MyPublicProfile: { providerId: string; asPreview?: boolean };
 };
 
 export type LinkOnlyMessagesStackParamList = {

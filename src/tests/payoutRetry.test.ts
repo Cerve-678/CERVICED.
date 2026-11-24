@@ -44,5 +44,30 @@ describe('summarizeMoneyAttention', () => {
       { title: 'Needs you: Amy, Lash lift with Lash Lab', amount: '£50.00' },
       { title: 'With the provider: Client, booking with their provider', amount: '£35.00' },
     ]);
+    expect(lines.unsentRefunds).toEqual([]);
+  });
+
+  it('lists cancelled bookings whose refund never went out, and says when it needs a person', () => {
+    const lines = summarizeMoneyAttention({
+      failed: [], owed: [], refunds: [],
+      unsent_refunds: [
+        { booking_id: 'b1', cause: 'provider_cancelled', client_name: 'Amy', provider_name: 'Lash Lab', service_name: 'Lash lift', amount_pence: 6340, attempts: 2 },
+        { booking_id: 'b2', cause: 'client_cancelled', client_name: null, provider_name: null, service_name: null, amount_pence: 2500, attempts: 5 },
+        { booking_id: 'b3', cause: 'request_expired', client_name: 'Jo', provider_name: 'Brow Bar', service_name: 'Brows', amount_pence: 1999, attempts: 1 },
+      ],
+    });
+    expect(lines.unsentRefunds).toEqual([
+      { title: 'Amy, Lash lift with Lash Lab: the provider cancelled, refund never went out (sent again 2 times so far)', amount: '£63.40' },
+      { title: 'Client, booking with their provider: they cancelled, refund never went out (sent again 5 times, needs you)', amount: '£25.00' },
+      { title: 'Jo, Brows with Brow Bar: the request expired, refund never went out (sent again 1 time so far)', amount: '£19.99' },
+    ]);
+    expect(summarizeMoneyAttention({
+      failed: [], owed: [], refunds: [],
+      unsent_refunds: [{ booking_id: 'b4', cause: 'offer_declined', client_name: 'Sam', provider_name: 'Nail Studio', service_name: 'Gel', amount_pence: 3200, attempts: 1 }],
+    }).unsentRefunds[0]!.title).toBe('Sam, Gel with Nail Studio: they declined the new time, refund never went out (sent again 1 time so far)');
+    expect(summarizeMoneyAttention({
+      failed: [], owed: [], refunds: [],
+      unsent_refunds: [{ booking_id: 'b5', cause: 'other_automatic', client_name: 'Kim', provider_name: 'Spa', service_name: 'Facial', amount_pence: 5000, attempts: 0 }],
+    }).unsentRefunds[0]!.title).toBe('Kim, Facial with Spa: cancelled automatically, refund never went out (not sent again automatically, needs you)');
   });
 });

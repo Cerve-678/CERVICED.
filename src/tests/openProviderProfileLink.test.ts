@@ -62,12 +62,19 @@ describe("openProviderProfileLink", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("reports a provider-only account instead of doing nothing", async () => {
+  it("opens the same profile in the Profile tab on a provider-only account", async () => {
     mode.mockResolvedValue("provider");
     await expect(openProviderProfileLink("glo-installs")).resolves.toBe(
-      "no_client_hat",
+      "opened",
     );
-    expect(navigate).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith("MainTabs", {
+      screen: "Profile",
+      params: {
+        screen: "PublicProviderProfile",
+        initial: false,
+        params: { providerId: "glo-installs", source: "profile_qr" },
+      },
+    });
   });
 
   it("reports a failed lookup rather than swallowing it", async () => {

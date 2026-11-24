@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
-import type { BusinessType } from '../../types/database';
+import type { BusinessType, LogoCardSlot, LogoFraming } from '../../types/database';
 import {
   View,
   Text,
@@ -18,7 +18,6 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
 
 // NAVIGATION IMPORTS - CORRECTED PATH
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,24 +31,36 @@ import { useAuth } from '../../contexts/AuthContext';
 import userLearningService from '../../services/userLearningService';
 import { HairTypeSelector } from '../../components/HairTypeSelector';
 import { ProviderCard } from '../../features/home/ProviderCard';
+import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
+import { useRevealTogether } from '../../features/home/useRevealTogether';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
-import { resolveClientLocation } from '../../services/clientLocationService';
+import { resolveClientLocation, savePhoneLocationChoice } from '../../services/clientLocationService';
+import { geocodeUkPlace } from '../../services/ukGeocode';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
-import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
+import { getOwnProviderIds, getProviders, getActivePromotions, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
-import { getDistanceKm } from '../../utils/distance';
+import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
+import { shuffle, shuffleWithDifferentFirst } from '../../utils/shuffle';
+import { keepShownOrder } from '../../utils/keepShownOrder';
+import { withTimeout } from '../../utils/withTimeout';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { useCircleMoment } from '../../features/social/useCircleMoment';
+import { RecommendHomeCard } from '../../features/social/RecommendHomeCard';
+import { WhereIGoIntroSheet } from '../../features/social/WhereIGoIntroSheet';
+import { semanticColors } from '../../features/maintenance/ui';
 import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import type { PortfolioItem, ServiceCategory } from '../../types/providers';
+import { toPickList } from '../../features/beauty-profile/pickList';
 
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
@@ -85,6 +96,7 @@ interface Offer {
   validUntil: string;
   providerName: string;
   logo: any;
+  logoFraming: LogoFraming | null;
   service?: string;
 }
 
@@ -95,6 +107,7 @@ interface Provider {
   name: string;
   service: string;
   logo: any;
+  logoFraming: LogoFraming | null;
   rating: number;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
   businessType: BusinessType | null;
@@ -107,6 +120,16 @@ interface Provider {
 // the browse catalogue is appended after that initial paint instead of making
 // the first request fetch every provider in one large response.
 const HOME_INITIAL_PROVIDER_LIMIT = 40;
+// What Home waits for before showing its sections, all together. Each read
+// used to paint as it landed, so sections appeared one above another and the
+// page jumped five or six times on the way in, which looked like Home
+// reloading. Near You and the Men's/Kids rails sit further down and keep their
+// own timing.
+const HOME_REVEAL_PARTS = ['providers', 'bookmarks', 'serviceOrder', 'recommended', 'rails', 'availability'] as const;
+type HomeRevealPart = typeof HOME_REVEAL_PARTS[number];
+// Longest Home holds its skeleton for that. On a slow connection it shows
+// what it has by then and the rest arrives as before.
+const HOME_REVEAL_MAX_WAIT_MS = 1500;
 const HOME_REMAINING_PROVIDER_LIMIT = 160;
 
 const ProviderRail = React.memo(function ProviderRail({
@@ -115,12 +138,15 @@ const ProviderRail = React.memo(function ProviderRail({
   onProviderPress,
   cardStyle,
   blurStyle,
+  logoSlot,
 }: {
   providers: Provider[];
   keyPrefix: string;
   onProviderPress: (provider: Provider) => void;
   cardStyle: any;
   blurStyle: any;
+  /** Which of the provider's framed card shapes these cards are. */
+  logoSlot: LogoCardSlot;
 }) {
   return (
     <FlatList
@@ -133,6 +159,7 @@ const ProviderRail = React.memo(function ProviderRail({
           onPress={() => onProviderPress(item)}
           style={cardStyle}
           blurStyle={blurStyle}
+          logoSlot={logoSlot}
         />
       )}
       showsHorizontalScrollIndicator={false}
@@ -145,6 +172,16 @@ const ProviderRail = React.memo(function ProviderRail({
   );
 });
 
+const DEFAULT_NEARBY_RADIUS_MILES = 10;
+
+// Long enough for a pushed screen's slide-in to cover Home before Trending
+// gets its new order.
+const TRENDING_RESHUFFLE_AFTER_LEAVE_MS = 600;
+
+// Longest Recommended waits for its personalised order before showing the
+// plain one. Ranking is a local read, normally done well inside this.
+const RECOMMENDED_RANK_WAIT_MS = 400;
+
 const RoundProviderRail = React.memo(function RoundProviderRail({
   providers,
   keyPrefix,
@@ -152,6 +189,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
   surface,
   border,
   text,
+  sub,
 }: {
   providers: Provider[];
   keyPrefix: string;
@@ -159,6 +197,8 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
   surface: string;
   border: string;
   text: string;
+  /** Pass to show each provider's distance under their name. */
+  sub?: string;
 }) {
   return (
     <FlatList
@@ -174,9 +214,12 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
           <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
-            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
+            {item.logo?.uri ? <LogoCircle uri={item.logo.uri} framing={item.logoFraming} style={styles.roundCardImage} /> : null}
           </View>
           <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
+          {sub && item.distanceKm != null ? (
+            <Text style={[styles.roundCardDistance, { color: sub }]} numberOfLines={1}>{formatMiles(item.distanceKm)}</Text>
+          ) : null}
         </TouchableOpacity>
       )}
     />
@@ -185,7 +228,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { palette: P } = useTheme();
+  const { palette: P, isDarkMode } = useTheme();
   // Measured per render, not read once inside the memo: the coach-mark tour
   // spotlights the floating tab bar by absolute coordinates, so a stale screen
   // size puts the highlight in the wrong place.
@@ -294,18 +337,17 @@ export default function HomeScreen() {
     [liveProviders, ownProviderIds],
   );
   const [providersLoading, setProvidersLoading] = useState(true);
+  const { ready: homeReady, markDone: markHomePart } = useRevealTogether<HomeRevealPart>(HOME_REVEAL_PARTS, HOME_REVEAL_MAX_WAIT_MS);
 
-  // Device location, for the "Near You" section — null until permission is
-  // granted and a fix is obtained, OR until the user manually picks a city
-  // (see manualLocationLabel below). If GPS is denied, the fallback is a
-  // region the user actually chose (e.g. "Manchester, UK"), never the
-  // unsorted full provider list — that city gets geocoded once via the same
-  // Location.geocodeAsync used for provider registration, and the result is
-  // set here just as if it were a real GPS fix, so every downstream
-  // distance/sort/elastic-radius calculation stays exactly the same either way.
+  // Where "Near You" measures from: a place picked on this phone, the
+  // account's Your area, the device's position, or a town, in the order
+  // planClientLocation sets. Null until one of those is known. A chosen place
+  // is geocoded and set here just like a GPS fix, so every downstream
+  // distance/sort/radius step is the same.
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  // Set once the user has manually chosen a city (as opposed to GPS) — drives
-  // the "· LONDON" label suffix and lets LocationModal show the current pick.
+  // Set when Near You measures from a chosen place (picked here, or Your
+  // area) rather than GPS — drives the "· HAGGERSTON" label suffix and lets
+  // LocationModal show the current pick.
   const [manualLocationLabel, setManualLocationLabel] = useState<string | null>(null);
   // The device gave a position, but too vague a one to call it "where you are"
   // — on iOS this is Precise Location switched off, which still reports as
@@ -313,7 +355,26 @@ export default function HomeScreen() {
   // available, they just shouldn't be presented as exact.
   const [locationIsCoarse, setLocationIsCoarse] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [locationRadius, setLocationRadius] = useState(10);
+  // The Recommend card / Show where I go intro, once Home is clear.
+  const circleMomentsActive = isFocused && !showTour && !showLocationModal;
+  const circleMoment = useCircleMoment(user?.id ?? null, bookings, circleMomentsActive);
+  const recommendProviderId = circleMoment.moment?.kind === 'recommend' ? circleMoment.moment.providerId : null;
+  const openRecommendProvider = useCallback(() => {
+    if (!recommendProviderId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    navigation.navigate('ProviderProfile', { providerId: recommendProviderId, source: 'home' });
+  }, [navigation, recommendProviderId]);
+  // Miles. Saved, so the client's choice survives a restart.
+  const [locationRadius, setLocationRadius] = useState(DEFAULT_NEARBY_RADIUS_MILES);
+  useEffect(() => {
+    storage.getItem<number>(STORAGE_KEYS.NEAR_YOU_RADIUS)
+      .then(saved => { if (typeof saved === 'number' && saved > 0) setLocationRadius(saved); })
+      .catch(() => {});
+  }, []);
+  const handleRadiusChange = useCallback((miles: number) => {
+    setLocationRadius(miles);
+    storage.setItem(STORAGE_KEYS.NEAR_YOU_RADIUS, miles).catch(() => {});
+  }, []);
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedHairType, setSelectedHairType] = useState<any>(null);
@@ -322,7 +383,7 @@ export default function HomeScreen() {
   const [viewAllServices, setViewAllServices] = useState(false);
   const [viewAllMaleServices, setViewAllMaleServices] = useState(false);
   const [viewAllKidsServices, setViewAllKidsServices] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount('client');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     sortBy: 'recommended',
@@ -342,6 +403,7 @@ export default function HomeScreen() {
       validUntil: p.valid_until,
       providerName: p.providers?.display_name ?? 'Provider',
       logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+      logoFraming: p.providers?.logo_framing ?? null,
       ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
     })),
   [rawPromotions]);
@@ -362,25 +424,6 @@ export default function HomeScreen() {
     return Array.from(uniqueProviders.values());
   }, [bookings, liveProviders]);
 
-  // Load unread notification count — reads the same Supabase notifications
-  // table NotificationsScreen shows, so the bell badge always matches what's
-  // actually in the list it opens (previously read from a local-only
-  // AsyncStorage store that screen never wrote to or read from).
-  const loadUnreadCount = useCallback(async () => {
-    try {
-      const unread = await getUnreadNotificationCount('client');
-      setUnreadCount(unread);
-    } catch (error) {
-      logger.error('Failed to load unread count:', error);
-    }
-  }, []);
-
-  // Refresh count when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadUnreadCount();
-    }, [loadUnreadCount])
-  );
 
   const [services, setServices] = useState(['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS']);
 
@@ -398,11 +441,38 @@ export default function HomeScreen() {
     kidsProviders: [] as Provider[],
   });
 
+  // False until Recommended has its ranked order for the loaded providers;
+  // the section shows its skeleton until then (see the provider-data effect).
+  const [recommendedReady, setRecommendedReady] = useState(false);
+  const recommendedPending = providersLoading || (liveProviders.length > 0 && !recommendedReady);
+
   // Phase 5.4 — new home sections
   const [newProviders,    setNewProviders]    = useState<Provider[]>([]);
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
+  // Refresh the order of these three browse rails after leaving Home. Doing
+  // it after the next screen slides over Home avoids cards jumping on return.
+  const trendingReshuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (trendingReshuffleTimer.current) {
+        clearTimeout(trendingReshuffleTimer.current);
+        trendingReshuffleTimer.current = null;
+      }
+      return () => {
+        trendingReshuffleTimer.current = setTimeout(() => {
+          trendingReshuffleTimer.current = null;
+          setTrending(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+          setNewProviders(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+          setTopRated(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+        }, TRENDING_RESHUFFLE_AFTER_LEAVE_MS);
+      };
+    }, []),
+  );
+  useEffect(() => () => {
+    if (trendingReshuffleTimer.current) clearTimeout(trendingReshuffleTimer.current);
+  }, []);
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityInfo>>(new Map());
 
   // Per-service audience refinement (services.audience) for the Male/Kids
@@ -419,15 +489,15 @@ export default function HomeScreen() {
 
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
-    loadBookmarks();
+    loadBookmarks().catch(() => {}).finally(() => markHomePart('bookmarks'));
 
     // Inject beauty profile so provider scoring uses static preferences from day one
     if (user) {
       const u = user as any;
       userLearningService.setUserProfile({
         serviceInterests:    u.serviceInterests    || [],
-        hairType:            u.hairType            || '',
-        styleVibe:           u.styleVibe           || '',
+        hairType:            toPickList(u.hairType),
+        styleVibe:           toPickList(u.styleVibe),
         treatmentHistory:    u.treatmentHistory    || [],
         maintenanceFrequency: u.maintenanceFrequency || '',
       });
@@ -442,7 +512,8 @@ export default function HomeScreen() {
       .then(ordered => setServices(ordered))
       .catch(() => {
         // Silent failure — keeps default service order
-      });
+      })
+      .finally(() => markHomePart('serviceOrder'));
 
     const mapDbProvider = (p: PublicProviderSummary): Provider => ({
       id: p.id,
@@ -450,6 +521,7 @@ export default function HomeScreen() {
       name: p.display_name,
       service: p.service_category,
       logo: p.logo_url ? { uri: p.logo_url } : null,
+      logoFraming: p.logo_framing ?? null,
       rating: (p as any).rating ?? 0,
       priceTier: (p as any).price_tier ?? null,
       businessType: (p as any).business_type ?? null,
@@ -483,69 +555,72 @@ export default function HomeScreen() {
         providerReviewCount: p.review_count,
         kind: 'service' as const,
         serviceId: s.id,
-        ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+        ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
       };
     };
 
     // These lower-priority rails used to begin in the same tick as the main
     // provider list. On a constrained/slow Supabase API that made Home issue
-    // 7+ independent queries before it had painted a single useful card.
-    // Start only after the main list has arrived and the navigation animation
-    // has settled; a client can browse immediately, while the extra rails
-    // progressively fill in behind it.
-    let secondaryRailsTimer: ReturnType<typeof setTimeout> | null = null;
+    // 7+ independent queries at once. They still start only after the main
+    // list has arrived, but straight away now: they used to wait a further
+    // 750 ms so the main list could paint first, and then landed as a second
+    // wave that pushed the page down. Home now shows everything together
+    // (HOME_REVEAL_PARTS), so that wait only lengthened the skeleton.
+    // Set by this effect's cleanup, so late rail results from a previous run
+    // don't land after a newer one.
+    let railsCancelled = false;
     const loadSecondaryRails = (hasMoreProviders: boolean) => {
-      // getProviders() has just resolved and committed its cards. This delay
-      // gives React Native a frame to render them before lower-priority work
-      // starts, without relying on deprecated InteractionManager scheduling.
-      secondaryRailsTimer = setTimeout(() => {
-        if (locationRunCancelled) return;
-        void (async () => {
-          // The primary rail is already visible. Extend it in the background
-          // rather than holding the first Home render behind the full 200-row
-          // provider response.
-          if (hasMoreProviders) {
-            getProviders(undefined, HOME_REMAINING_PROVIDER_LIMIT, HOME_INITIAL_PROVIDER_LIMIT)
-              .then(data => {
-                if (locationRunCancelled) return;
-                setLiveProviders(current => {
-                  const seen = new Set(current.map(provider => provider.id));
-                  return [...current, ...data.map(mapDbProvider).filter(provider => !seen.has(provider.id))];
-                });
-              })
-              .catch(() => {});
-          }
+      if (railsCancelled) return;
+      void (async () => {
+        // The primary rail is already visible. Extend it in the background
+        // rather than holding the first Home render behind the full 200-row
+        // provider response.
+        if (hasMoreProviders) {
+          getProviders(undefined, HOME_REMAINING_PROVIDER_LIMIT, HOME_INITIAL_PROVIDER_LIMIT)
+            .then(data => {
+              if (railsCancelled) return;
+              setLiveProviders(current => {
+                const seen = new Set(current.map(provider => provider.id));
+                return [...current, ...data.map(mapDbProvider).filter(provider => !seen.has(provider.id))];
+              });
+            })
+            .catch(() => {});
+        }
 
-          if (OFFERS_ENABLED) {
-            getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
-          }
+        if (OFFERS_ENABLED) {
+          getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
+        }
 
-          // Provider-based secondary rails first. They do not compete with
-          // the primary list, and keeping this group separate from service
-          // discovery avoids another burst of joined services queries.
-          await Promise.allSettled([
-            getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-            getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
-            getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
-          ]);
-          if (locationRunCancelled) return;
+        // Provider-based secondary rails first. They do not compete with
+        // the primary list, and keeping this group separate from service
+        // discovery avoids another burst of joined services queries.
+        await Promise.allSettled([
+          getNewProviders(15).then(data => setNewProviders(shuffle(data.map(mapDbProvider)))),
+          getTopRatedProviders(15).then(data => setTopRated(shuffle(data.map(mapDbProvider)))),
+          // Trending is ranked by 7-day bookings, which barely moves between
+          // visits — so the same provider always led the rail. Shuffle the
+          // trending set on each Home load so a client sees a different one
+          // first; every card shown is still genuinely trending.
+          getTrendingProviders(15).then(data => setTrending(shuffle(data.map(mapDbProvider)))),
+        ]);
+        if (railsCancelled) return;
+        markHomePart('rails');
 
-          // Service-audience rails are optional enrichment. They come last
-          // because neither is required for the Home screen to be useful.
-          await Promise.allSettled([
-            getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
-            getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
-            ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
-              getDiscoverServices(undefined, 15, 'men').then(data =>
-                setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-              ),
-              getDiscoverServices(undefined, 15, 'kids').then(data =>
-                setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-              ),
-            ] : []),
-          ]);
-        })();
-      }, 750);
+        // Service-audience rails are optional enrichment. They come last
+        // because neither is required for the Home screen to be useful.
+        await Promise.allSettled([
+          getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
+          getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
+          ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
+            getDiscoverServices(undefined, 15, 'men').then(data =>
+              setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+            ),
+            getDiscoverServices(undefined, 15, 'kids').then(data =>
+              setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+            ),
+          ] : []),
+        ]);
+      })();
     };
 
     // Fetch live providers — shows empty state if DB has no data.
@@ -557,48 +632,59 @@ export default function HomeScreen() {
       .then(data => {
         setLiveProviders(data.map(mapDbProvider));
         hasMoreProviders = data.length === HOME_INITIAL_PROVIDER_LIMIT;
+        if (data.length === 0) {
+          // Nothing to rank or check availability for.
+          markHomePart('recommended');
+          markHomePart('availability');
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        markHomePart('recommended');
+        markHomePart('availability');
+      })
       .finally(() => {
         setProvidersLoading(false);
+        markHomePart('providers');
         loadSecondaryRails(hasMoreProviders);
       });
     getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
 
-    // Ask for location once on mount — same permission string already
-    // declared in app.json ("...show nearby beauty service providers").
-    // If GPS is denied/unavailable, fall back to a previously-picked city
-    // (never to the unsorted full provider list) — and if the user has never
-    // picked one either, Near You prompts them to instead of guessing.
-    // Guarded because this effect can run more than once: `user` is an object,
-    // and any of AuthContext's setUser calls hands back a fresh identity even
-    // when nothing about the person changed. Two overlapping runs each resolve
-    // location independently, and whichever finishes LAST wins — so a slow GPS
-    // fix from run one could land after run two's saved-city fallback and
-    // replace a precise position with a city centroid, or the reverse. Either
-    // way Near You visibly re-sorts under the client for no reason they can
-    // see. Same sequence-guard shape as the calendar's week paging.
-    let locationRunCancelled = false;
-    (async () => {
-      const location = await resolveClientLocation();
-      if (locationRunCancelled || !location.coords) return;
-      setUserCoords(location.coords);
-      // Only a city centroid gets labelled — that label is the whole reason
-      // the client can tell "distances from the middle of Manchester" from
-      // "distances from where you are".
-      setManualLocationLabel(location.source === 'saved-city' ? location.cityLabel : null);
-      setLocationIsCoarse(location.isCoarse);
-    })();
-
     return () => {
-      locationRunCancelled = true;
-      if (secondaryRailsTimer) clearTimeout(secondaryRailsTimer);
+      railsCancelled = true;
     };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself
     // re-ran this whole block, GPS prompt and every provider list included,
     // every time anything handed back a new user object.
-  }, [loadBookmarks, user?.id]);
+  }, [loadBookmarks, user?.id, markHomePart]);
+
+  // Where Near You measures from (resolveClientLocation): a place picked on
+  // this phone, then the account's "Your area", then the device, then a town
+  // — see planClientLocation for the exact order. Re-run when Your area
+  // changes in Account, so a client with nothing picked on this phone follows
+  // the new value without restarting the app.
+  // Guarded because two overlapping runs each resolve independently, and
+  // whichever finishes LAST wins — so a slow GPS fix from run one could land
+  // after run two's answer and replace it. Either way Near You visibly
+  // re-sorts under the client for no reason they can see. Same
+  // sequence-guard shape as the calendar's week paging.
+  const accountArea = user?.clientArea ?? null;
+  useEffect(() => {
+    let locationRunCancelled = false;
+    (async () => {
+      const location = await resolveClientLocation({ accountArea });
+      if (locationRunCancelled) return;
+      // Set even when null: a re-run after Your area was cleared must not
+      // leave Near You measuring from the old one.
+      setUserCoords(location.coords);
+      // Only a chosen place gets labelled — that label is the whole reason
+      // the client can tell "distances from Haggerston" from "distances from
+      // where you are".
+      setManualLocationLabel(location.source === 'gps' ? null : location.placeLabel);
+      setLocationIsCoarse(location.isCoarse);
+    })();
+    return () => { locationRunCancelled = true; };
+  }, [user?.id, accountArea]);
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
@@ -611,11 +697,21 @@ export default function HomeScreen() {
         const yourProviderIds = new Set(bookmarkedProviders.map(p => p.id));
         const defaultRecommended = recommendationCandidates.filter(p => !yourProviderIds.has(p.id));
 
-        // Render browse sections immediately; personalisation must not hold
-        // every category behind its storage/initialisation work.
-        setProvidersData({
+        // Category rails fill straight away. Recommended is set once, after
+        // ranking: it used to show a plain order and swap in the personalised
+        // one a moment later, again every time more providers loaded, so it
+        // visibly reshuffled two or three times after first paint. Until it's
+        // ranked it keeps its skeleton (recommendedReady). Ranking reads one
+        // local store, warmed when Home mounts; if that's ever stuck, the
+        // plain order is used after RECOMMENDED_RANK_WAIT_MS.
+        setProvidersData(previous => ({
+          ...previous,
           yourProviders: bookmarkedProviders.length > 0 ? bookmarkedProviders : [],
-          recommended: defaultRecommended,
+          // Bookmarking or un-bookmarking moves a provider out of or back into
+          // Recommended now, not after ranking.
+          recommended: previous.recommended.length > 0
+            ? keepShownOrder(previous.recommended, defaultRecommended)
+            : previous.recommended,
           hairProviders: liveProviders.filter(p => p.service === 'HAIR'),
           nailProviders: liveProviders.filter(p => p.service === 'NAILS'),
           lashProviders: liveProviders.filter(p => p.service === 'LASHES'),
@@ -628,15 +724,31 @@ export default function HomeScreen() {
           maleProviders: liveProviders.filter(p => p.service === 'MALE' || maleServiceProviderIds.has(p.id)),
           // Kids providers — same widening via audience='kids'.
           kidsProviders: liveProviders.filter(p => p.service === 'KIDS' || kidsServiceProviderIds.has(p.id)),
-        });
+        }));
 
-        const personalizedRecommended = await userLearningService.getPersonalizedProviders(recommendationCandidates);
+        let ranked = defaultRecommended;
+        try {
+          const personalized = await withTimeout(
+            userLearningService.getPersonalizedProviders(recommendationCandidates),
+            RECOMMENDED_RANK_WAIT_MS,
+            'Recommended ranking',
+          );
+          const personalizedFiltered = personalized.filter(p => !yourProviderIds.has(p.id));
+          if (personalizedFiltered.length > 0) ranked = personalizedFiltered;
+        } catch (error) {
+          logger.error('Failed to personalise recommended providers:', error);
+        }
         if (cancelled) return;
-        const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
         setProvidersData(previous => ({
           ...previous,
-          recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
+          // Cards already on screen stay where they are; providers that load
+          // later are added after them.
+          recommended: keepShownOrder(previous.recommended, ranked),
         }));
+        if (liveProviders.length > 0) {
+          setRecommendedReady(true);
+          markHomePart('recommended');
+        }
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
         // Raw window is wider than the 15 we display, since repeat views of
@@ -658,7 +770,7 @@ export default function HomeScreen() {
 
     updateProviderData();
     return () => { cancelled = true; };
-  }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
+  }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds, markHomePart]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
   // One batched, server-side slot calculation for Home. It uses the exact
   // schedule, notice, duration, buffer and live-booking rules used by Search.
@@ -668,57 +780,64 @@ export default function HomeScreen() {
     let cancelled = false;
     getProvidersAvailability(slugs)
       .then(result => { if (!cancelled) setAvailabilityBySlug(result); })
-      .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); });
+      .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); })
+      .finally(() => markHomePart('availability'));
     return () => { cancelled = true; };
-  }, [liveProviders]);
+  }, [liveProviders, markHomePart]);
 
   const availableThisWeekProviders = useMemo(
     () => liveProviders.filter(provider => availabilityBySlug.get(provider.slug)?.availableThisWeek),
     [liveProviders, availabilityBySlug],
   );
 
-  // "Near You" — nearest-first, not "every active provider" in arbitrary DB
-  // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
-  // too-small radius rather than showing a near-empty list): try a tight
-  // 50km cut first, but if too few providers fall inside it — a sparse
-  // market, or a big chunk of the DB missing lat/lng — fall back to the
-  // nearest 15 regardless of the cutoff instead of an almost-empty row.
-  // With no location fix at all, falls back to the plain (unsorted) list.
-  const NEARBY_RADIUS_KM = 50;
-  const MIN_NEARBY_RESULTS = 5;
+  // "Near You" — nearest-first, and only providers inside the radius the
+  // client chose. It used to fall back to the nearest 15 at any distance
+  // whenever fewer than 5 were within 50km, which put providers across
+  // London (or in another country, when a geocode went wrong) under
+  // "Near you". An empty row now says so and offers a wider radius instead.
+  // With no location fix at all, the section prompts for one.
   const nearbyProviders = useMemo(() => {
-    if (!userCoords) return recommendationCandidates;
-
-    const withDistance = recommendationCandidates
+    if (!userCoords) return [];
+    const radiusKm = locationRadius * KM_PER_MILE;
+    return recommendationCandidates
       .filter(p => p.latitude != null && p.longitude != null)
       .map(p => ({
         ...p,
         distanceKm: getDistanceKm(userCoords.latitude, userCoords.longitude, p.latitude!, p.longitude!),
       }))
+      .filter(p => p.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
+  }, [recommendationCandidates, userCoords, locationRadius]);
 
-    const withinRadius = withDistance.filter(p => p.distanceKm <= NEARBY_RADIUS_KM);
-    return withinRadius.length >= MIN_NEARBY_RESULTS ? withinRadius : withDistance;
-  }, [recommendationCandidates, userCoords]);
-
-  // User picked a city from LocationModal (either the first-run prompt, or
-  // reopening it later to change area) — geocode it once and feed it into
-  // userCoords exactly like a real GPS fix, so nearbyProviders above needs no
-  // separate code path for "GPS" vs "manually chosen region."
-  const handleSelectRegion = useCallback(async (city: string) => {
+  // The client picked a place in LocationModal, or chose "Use my location"
+  // (null). Either is saved on this phone only — never written to the
+  // account's Your area — and resolveClientLocation reads it back on every
+  // tab, so Search and Becca measure from the same spot.
+  const handleSelectPlace = useCallback(async (place: string | null) => {
     try {
-      const [match] = await Location.geocodeAsync(city);
-      if (match) {
-        setUserCoords({ latitude: match.latitude, longitude: match.longitude });
-        setManualLocationLabel(city);
-        // A hand-picked city supersedes whatever the device said, coarse or not.
-        setLocationIsCoarse(false);
-        await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, city);
+      if (place === null) {
+        await savePhoneLocationChoice(null);
+        const location = await resolveClientLocation({ accountArea });
+        setUserCoords(location.coords);
+        setManualLocationLabel(location.source === 'gps' ? null : location.placeLabel);
+        setLocationIsCoarse(location.isCoarse);
+        return;
       }
-    } catch {
-      // Silent failure — keeps whatever location state existed before
+      const coords = await geocodeUkPlace(place);
+      if (!coords) {
+        logger.error('HomeScreen: picked place could not be found', place);
+        return;
+      }
+      setUserCoords(coords);
+      setManualLocationLabel(place);
+      // A hand-picked place supersedes whatever the device said, coarse or not.
+      setLocationIsCoarse(false);
+      await savePhoneLocationChoice(place);
+    } catch (error) {
+      // Keeps whatever location state existed before.
+      logger.error('HomeScreen: could not change location', error);
     }
-  }, []);
+  }, [accountArea]);
 
   const allCategorizedProviders = useMemo(() => {
     if (!viewAllProviders) return {};
@@ -1050,7 +1169,7 @@ export default function HomeScreen() {
               provider={provider}
               onPress={() => navigateToProvider(provider)}
               style={styles.brandCard}
-              blurStyle={styles.brandCardBlur}
+              blurStyle={styles.brandCardBlur} logoSlot="small"
             />
           ))}
         </ScrollView>
@@ -1118,7 +1237,7 @@ export default function HomeScreen() {
           ))}
         </View>
       ) : (
-        <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+        <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
       )}
 
       {/* Actual matching service listings (services.audience =
@@ -1194,7 +1313,7 @@ export default function HomeScreen() {
               <BellIcon size={18} color={P.sub} />
               {unreadCount > 0 && (
                 <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                  <Text style={styles.notificationBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -1209,9 +1328,25 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* After a recent visit that wasn't rated: ask to Recommend (circleMoments.ts). */}
+        {!selectedService && circleMoment.moment?.kind === 'recommend' && (
+          <RecommendHomeCard
+            providerName={circleMoment.moment.providerName}
+            providerLogoUri={circleMoment.moment.providerLogoUri}
+            bookingDate={circleMoment.moment.bookingDate}
+            busy={circleMoment.busy}
+            error={circleMoment.error}
+            onRecommend={circleMoment.recommend}
+            onBookAgain={openRecommendProvider}
+            onClose={circleMoment.closeRecommend}
+            P={P}
+            errorColour={semanticColors(isDarkMode).bad}
+          />
+        )}
+
         {/* § config-driven — see src/config/homeSections.ts (id: 'your-providers') */}
         {/* Your Providers Section - Only show if there are bookmarked providers */}
-        {!selectedService && providersData.yourProviders.length > 0 && (
+        {!selectedService && homeReady && providersData.yourProviders.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
@@ -1220,7 +1355,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ProviderRail providers={providersData.yourProviders.slice(0, 15)} keyPrefix="your" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+            <ProviderRail providers={providersData.yourProviders.slice(0, 15)} keyPrefix="your" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
           </View>
         )}
 
@@ -1601,6 +1736,10 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            ) : !homeReady ? (
+              // Held with the rest, so the pills don't reorder once the
+              // client's own order loads.
+              <SkeletonSection cardWidth={86} cardHeight={Platform.OS === 'android' ? 30 : 34} borderRadius={14} count={5} />
             ) : (
               <ScrollView
                 horizontal
@@ -1659,7 +1798,7 @@ export default function HomeScreen() {
                 bookmarked), matching the empty-state guard every sibling
                 section below already has. Without this it rendered a header
                 + empty scroller that looked broken. */}
-            {(providersLoading || providersData.recommended.length > 0) && (
+            {(!homeReady || recommendedPending || providersData.recommended.length > 0) && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>RECOMMENDED FOR YOU</Text>
@@ -1674,7 +1813,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {providersLoading ? (
+              {!homeReady || recommendedPending ? (
                 <SkeletonSection cardWidth={176} cardHeight={64} borderRadius={16} />
               ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>
@@ -1690,47 +1829,47 @@ export default function HomeScreen() {
                   ))}
                 </View>
               ) : (
-                <ProviderRail providers={recommendedProvidersList} keyPrefix="recommended" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+                <ProviderRail providers={recommendedProvidersList} keyPrefix="recommended" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
               )}
             </View>
             )}
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
             {/* TRENDING THIS WEEK */}
-            {trending.length > 0 && (
+            {homeReady && trending.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
                 </View>
-                <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
+                <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} logoSlot="large" />
               </View>
             )}
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'new-providers') */}
             {/* NEW ON CERVICED */}
-            {newProviders.length > 0 && (
+            {homeReady && newProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
                 </View>
-                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+                <RoundProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
             )}
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'top-rated') */}
             {/* TOP RATED */}
-            {topRated.length > 0 && (
+            {homeReady && topRated.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
                 </View>
-                <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
+                <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} logoSlot="large" />
               </View>
             )}
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'recently-viewed') */}
             {/* RECENTLY VIEWED */}
-            {recentlyViewed.length > 0 && (
+            {homeReady && recentlyViewed.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
@@ -1740,12 +1879,12 @@ export default function HomeScreen() {
             )}
 
             {/* AVAILABLE THIS WEEK — directly under Recently viewed */}
-            {availableThisWeekProviders.length > 0 && (
+            {homeReady && availableThisWeekProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>AVAILABLE THIS WEEK</Text>
                 </View>
-                <ProviderRail providers={availableThisWeekProviders.slice(0, 15)} keyPrefix="available" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+                <ProviderRail providers={availableThisWeekProviders.slice(0, 15)} keyPrefix="available" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
               </View>
             )}
 
@@ -1764,7 +1903,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {providersLoading ? (
+              {!homeReady || providersLoading ? (
                 <SkeletonSection cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
               ) : viewAllProviders ? (
                 <View>
@@ -1786,7 +1925,7 @@ export default function HomeScreen() {
                               provider={provider}
                               onPress={() => navigateToProvider(provider)}
                               style={styles.providerCard}
-                              blurStyle={styles.providerBlur}
+                              blurStyle={styles.providerBlur} logoSlot="large"
                             />
                           ))}
                         </ScrollView>
@@ -1811,7 +1950,7 @@ export default function HomeScreen() {
                             provider={provider}
                             onPress={() => navigateToProvider(provider)}
                             style={styles.providerCard}
-                            blurStyle={styles.providerBlur}
+                            blurStyle={styles.providerBlur} logoSlot="large"
                           />
                         ))}
                       </ScrollView>
@@ -1833,7 +1972,7 @@ export default function HomeScreen() {
                             provider={provider}
                             onPress={() => navigateToProvider(provider)}
                             style={styles.providerCard}
-                            blurStyle={styles.providerBlur}
+                            blurStyle={styles.providerBlur} logoSlot="large"
                           />
                         ))}
                       </ScrollView>
@@ -1843,11 +1982,10 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* Near You Section — sorted by real distance once we have a
-                location fix, from GPS or a manually-chosen city. Never
-                falls back to the plain unsorted "every provider" list —
-                with no location at all yet, it prompts the user to pick a
-                city (LocationModal) instead. */}
+            {/* Near You Section — providers inside the chosen radius,
+                nearest first, measured from a picked area or the device.
+                With no location at all yet, it prompts the client to pick
+                an area (LocationModal) instead. */}
             <View style={styles.section}>
               <TouchableOpacity
                 style={styles.sectionHeader}
@@ -1882,18 +2020,32 @@ export default function HomeScreen() {
                     Enable location or choose your area to see providers near you
                   </Text>
                 </TouchableOpacity>
+              ) : nearbyProviders.length === 0 ? (
+                <TouchableOpacity
+                  style={[styles.nearYouPrompt, { backgroundColor: P.surface, borderColor: P.border }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowLocationModal(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.nearYouPromptText, { color: P.sub }]}>
+                    No providers within {locationRadius} {locationRadius === 1 ? 'mile' : 'miles'}
+                    {manualLocationLabel ? ` of ${manualLocationLabel.split(',')[0]}` : ' of you'} yet. Tap to search a wider radius.
+                  </Text>
+                </TouchableOpacity>
               ) : (
-                <RoundProviderRail providers={nearbyProviders.slice(0, 15)} keyPrefix="near" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
+                <RoundProviderRail providers={nearbyProviders.slice(0, 15)} keyPrefix="near" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} sub={P.sub} />
               )}
             </View>
 
             <LocationModal
               visible={showLocationModal}
               onClose={() => setShowLocationModal(false)}
-              selectedLocation={manualLocationLabel ?? ''}
+              selectedPlace={manualLocationLabel}
               selectedRadius={locationRadius}
-              onLocationChange={handleSelectRegion}
-              onRadiusChange={setLocationRadius}
+              onPlaceChange={handleSelectPlace}
+              onRadiusChange={handleRadiusChange}
             />
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'male-services').
@@ -1929,7 +2081,7 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} contentFit="cover" transition={0} /> : <View style={styles.offerLogo} />}
+                      {offer.logo?.uri ? <LogoCircle uri={offer.logo.uri} framing={offer.logoFraming} style={styles.offerLogo} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything
@@ -1980,6 +2132,17 @@ export default function HomeScreen() {
       </ScrollView>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
+      {/* The one-time Show where I go intro; the Recommend card sits in the feed. */}
+      <WhereIGoIntroSheet
+        visible={circleMoment.moment?.kind === 'notice' && circleMomentsActive}
+        busy={circleMoment.busy}
+        error={circleMoment.error}
+        onGotIt={() => circleMoment.finishIntro(false)}
+        onTurnOff={() => circleMoment.finishIntro(true)}
+        onClose={circleMoment.closeIntro}
+        P={P}
+        errorColour={semanticColors(isDarkMode).bad}
+      />
     </View>
   );
 }
@@ -2044,12 +2207,13 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -11,
+    right: -10,
     backgroundColor: '#FF1744',
-    borderRadius: 10.5,
-    minWidth: 21,
-    height: 21,
+    borderRadius: 11,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 2,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -2311,6 +2475,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     fontWeight: '600',
+  },
+  roundCardDistance: {
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'center',
   },
   nearYouPrompt: {
     borderRadius: 16,

@@ -7,7 +7,6 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   StyleSheet,
   Modal,
   TextInput,
@@ -20,8 +19,10 @@ import {
   Platform,
   Appearance,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
@@ -34,18 +35,23 @@ import { useBooking, AppointmentData , BookingError } from '../../contexts/Booki
 import { BookingService, DepositPolicy } from '../../services/bookingService';
 import { AvailabilityService, type BackToBackSlot } from '../../services/AvailabilityService';
 import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../../services/stripeService';
+import { settledFromCaptureStatus, waitForCheckoutOutcome, type CheckoutWaitResult } from '../../features/cart/checkoutOutcome';
 import {
   getProviderCheckoutMetadata,
   ProviderDepositPolicy,
   validatePromoCode,
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
-  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards } from '../../services/databaseService';
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards, getCheckoutOutcome,
+  getCheckoutHoldPlan, type CheckoutHoldPlan } from '../../services/databaseService';
+import { checkoutSuccessMessage, holdPlanNote, payButtonLabel } from '../../features/cart/requestHolds';
+import { RequestHoldChecks } from '../../features/cart/RequestHoldChecks';
 import {
   savedCardBrandName, savedCardExpiryLabel, savedCardExpiryState, type SavedCard,
 } from '../../features/payments/savedCards';
 import {
   FEE_CONSENT_LINE,
+  LATE_CANCEL_CONSENT_LINE,
   FEE_TERMS_BODY,
   FEE_TERMS_HEADING,
   FEE_TERMS_SHA256,
@@ -57,6 +63,8 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBeforeYouBook } from '../../features/bookings/BeforeYouBookSheet';
+import { accountStillLoading } from '../../features/bookings/beforeYouBook';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -70,15 +78,22 @@ import { env } from '../../utils/env';
 import { toArgbHex } from '../../utils/color';
 import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
-import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
+import { resolveDepositMode } from '../../utils/depositPolicy';
+import { CART_ISSUE, describeReserveFailure, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { openLegalPage } from '../../utils/legalPage';
+import { durationWithAddOns } from '../../features/bookings/addOnTime';
+import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
+import { holdSecondsLeft } from '../../features/bookings/waitlist';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
 // wallet payments still require a development build.
 const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
+// The Cart warms the saved-card list; a list this recent isn't read again.
+const SAVED_CARDS_FRESH_MS = 60_000;
 
 // Expo SDK 57 ships a compatible Stripe module in Expo Go, so use the real
 // module in both Expo Go and custom native builds.
@@ -310,7 +325,16 @@ interface PaymentModalProps {
   // on the booking stays null, same as before either modal existed.
   onPaymentSuccess: (paymentMethod: string, paymentIntentId?: string) => Promise<void>;
   onPaymentComplete: () => void;
-  onPaymentPending?: () => void;
+  /** The card was approved but the checkout didn't simply book: refunded or
+   *  not charged (the time had gone), or still unsettled after waiting. */
+  onPaymentPending?: (outcome: Exclude<CheckoutWaitResult, 'succeeded'>) => void;
+  /** The checkout went through: which one, and how much of it is only held
+   *  on the card for requests (null if that couldn't be read). */
+  onCheckoutPaid?: (checkoutBatchId: string, plan: CheckoutHoldPlan | null) => void;
+  /** True from the moment the payment is handed to Stripe until it's settled
+   *  or has failed. While it is, leaving the Cart must not cancel the checkout:
+   *  the card may already be approved (CartScreen abandonOutstandingCheckout). */
+  onPaymentInFlight?: (inFlight: boolean) => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -633,6 +657,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentSuccess,
     onPaymentComplete,
     onPaymentPending,
+    onCheckoutPaid,
+    onPaymentInFlight,
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
@@ -640,6 +666,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     const bottomInset = useSystemBottomInset();
     const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
+    // The card is approved and the app is waiting for the server to settle it.
+    const [confirming, setConfirming] = useState(false);
     const processingRef = useRef(false);
     const [cardComplete, setCardComplete] = useState(false);
     const [walletSupported, setWalletSupported] = useState(false);
@@ -660,23 +688,37 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     // The client's saved cards (Payment Methods), so they can pay with one in
     // a tap. 'new' = type a card into the CardForm. Expired cards are left
     // out: Stripe would only decline them. A failed load just shows the form.
+    // The Cart screen starts the read, so the list is usually already here;
+    // it is shown at once and checked again in the background.
+    const { user } = useAuth();
+    const userId = user?.id ?? null;
     const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
     const [selectedCard, setSelectedCard] = useState<string>('new');
+    // Once the client taps a row, a background refresh keeps their pick.
+    const pickedCardRef = useRef(false);
     useEffect(() => {
       if (!isVisible) return;
       let cancelled = false;
-      setSavedCards([]);
+      pickedCardRef.current = false;
+      const showCards = (cards: SavedCard[]) => {
+        const usable = cards.filter(card => savedCardExpiryState(card) !== 'expired');
+        setSavedCards(usable);
+        setSelectedCard(current => {
+          if (current !== 'new' && usable.some(card => card.id === current)) return current;
+          if (current === 'new' && pickedCardRef.current) return current;
+          return usable[0]?.id ?? 'new';
+        });
+      };
       setSelectedCard('new');
-      listSavedCards()
+      showCards((userId && getCachedSavedCards(userId)) || []);
+      listSavedCards({ maxAgeMs: SAVED_CARDS_FRESH_MS })
         .then(cards => {
-          if (cancelled) return;
-          const usable = cards.filter(card => savedCardExpiryState(card) !== 'expired');
-          setSavedCards(usable);
-          if (usable[0]) setSelectedCard(usable[0].id);
+          if (cancelled || processingRef.current) return;
+          showCards(cards);
         })
         .catch(err => logger.error('[checkout] could not load saved cards', err));
       return () => { cancelled = true; };
-    }, [isVisible]);
+    }, [isVisible, userId]);
     const payingWithSavedCard = selectedCard !== 'new';
 
     // Apple Pay / Google Pay need a development build (env.isExpoGo).
@@ -701,18 +743,21 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       Appearance.setColorScheme(isDarkMode ? 'dark' : 'light');
       return () => Appearance.setColorScheme('unspecified');
     }, [isVisible, isDarkMode]);
-    // Late/no-show fees the client must agree to before their card is saved
-    // for them. null = still loading; [] = this checkout has none.
+    // Late/no-show and late cancellation fees the client must agree to before
+    // their card is saved for them. null = still loading; [] = this checkout
+    // has none. Each kind has its own tick box (user choice 2026-11-13).
     const [fees, setFees] = useState<CheckoutFee[] | null>(null);
     const [feesError, setFeesError] = useState(false);
     const [agreedToFees, setAgreedToFees] = useState(false);
+    const [agreedToLateCancel, setAgreedToLateCancel] = useState(false);
     const [feesAttempt, setFeesAttempt] = useState(0);
     const [showFeeTerms, setShowFeeTerms] = useState(false);
+    const [showLateCancelTerms, setShowLateCancelTerms] = useState(false);
 
     useEffect(() => {
       if (!isVisible || !checkoutBatchId) return;
       let cancelled = false;
-      setFees(null); setFeesError(false); setAgreedToFees(false);
+      setFees(null); setFeesError(false); setAgreedToFees(false); setAgreedToLateCancel(false);
       getCheckoutFees(checkoutBatchId)
         .then(rows => { if (!cancelled) setFees(rows); })
         .catch(err => {
@@ -722,13 +767,38 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       return () => { cancelled = true; };
     }, [isVisible, checkoutBatchId, feesAttempt]);
 
+    // How much is charged now and how much only held for requests (each
+    // charged only if accepted). null while loading or if it couldn't be
+    // read: the sheet then shows the plain total, and the server still
+    // holds the requests.
+    const [holdPlan, setHoldPlan] = useState<CheckoutHoldPlan | null>(null);
+    useEffect(() => {
+      if (!isVisible || !checkoutBatchId) return;
+      let cancelled = false;
+      setHoldPlan(null);
+      getCheckoutHoldPlan(checkoutBatchId)
+        .then(plan => { if (!cancelled) setHoldPlan(plan); })
+        .catch(err => logger.error('[checkout] could not load the request hold plan', err));
+      return () => { cancelled = true; };
+    }, [isVisible, checkoutBatchId]);
+    const heldNote = holdPlanNote(holdPlan);
+
     const hasFees = (fees?.length ?? 0) > 0;
-    const canPay = fees !== null && (!hasFees || agreedToFees);
-    // Same rules as create-payment-intent: a late/no-show fee is charged later
+    const visitFees = useMemo(
+      () => (fees ?? []).filter(fee => fee.lateFeePence != null || fee.noShowFeePence != null),
+      [fees],
+    );
+    const lateCancelFees = useMemo(() => (fees ?? []).filter(fee => fee.lateCancelFeePence != null), [fees]);
+    const canPay = fees !== null
+      && (visitFees.length === 0 || agreedToFees)
+      && (lateCancelFees.length === 0 || agreedToLateCancel);
+    // Same rules as create-payment-intent: a late/no-show or late cancellation fee is charged later
     // to a saved card, so those checkouts are card-only, and so is a total
-    // over PAYPAL_MAX_CHECKOUT_TOTAL. Hidden in Expo Go, which can't return
+    // over PAYPAL_MAX_CHECKOUT_TOTAL, and so is a checkout with a request
+    // (its hold is placed on a card). Hidden in Expo Go, which can't return
     // from PayPal's page.
-    const paypalShown = fees !== null && !hasFees && totalAmount <= PAYPAL_MAX_CHECKOUT_TOTAL && !env.isExpoGo;
+    const paypalShown = fees !== null && !hasFees && holdPlan !== null && holdPlan.requestCount === 0
+      && totalAmount <= PAYPAL_MAX_CHECKOUT_TOTAL && !env.isExpoGo;
 
     const handlePayment = useCallback(async (method: 'card' | 'wallet' | 'paypal') => {
       const timestamp = () => new Date().toISOString().split('T')[1];
@@ -766,6 +836,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         }
 
         let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
+        // From here the card can be approved at any moment, so leaving the
+        // Cart must not cancel the checkout (cleared in finally).
+        onPaymentInFlight?.(true);
         if (method === 'wallet') {
           // The wallet sheet shows the amount it's given, so give it the
           // server-priced intent's amount rather than the cart's own sum.
@@ -827,7 +900,31 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
         paymentStarted = true;
-        await capturePaymentIntent(checkoutBatchId, paymentIntentId);
+        // The card is approved, so this checkout is never cancelled from here:
+        // the server settles it. If its answer doesn't come back, ask again
+        // for a short while instead of guessing (the database may just be
+        // busy); after that the server finishes it on its own and notifies.
+        let outcome: CheckoutWaitResult | null = null;
+        try {
+          outcome = settledFromCaptureStatus(await capturePaymentIntent(checkoutBatchId, paymentIntentId));
+        } catch (captureError) {
+          logger.error(`[${timestamp()}] payment confirmation didn't answer`, captureError);
+        }
+        if (!outcome) {
+          setConfirming(true);
+          const batchId = checkoutBatchId;
+          outcome = await waitForCheckoutOutcome({
+            capture: () => capturePaymentIntent(batchId, paymentIntentId),
+            readBatch: () => getCheckoutOutcome(batchId),
+            sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
+            onError: err => logger.error('[checkout] still confirming the payment', err),
+          });
+        }
+        if (outcome !== 'succeeded') {
+          onPaymentPending?.(outcome);
+          return;
+        }
+        onCheckoutPaid?.(checkoutBatchId, holdPlan);
         await onPaymentSuccess(method === 'paypal' ? 'paypal' : 'card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -835,22 +932,24 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       } catch (error) {
         logger.error(`❌ [${timestamp()}] PAYMENT ERROR:`, error);
         if (paymentStarted) {
-          // Do not cancel a reservation after an ambiguous capture response.
-          // The signed webhook finishes it, including after the app closes.
-          onPaymentPending?.();
+          // Never cancel a checkout once the card is approved; the server
+          // settles it and tells the client (reconcile-checkouts).
+          onPaymentPending?.('unknown');
           return;
         }
         if (createdIntentId && checkoutBatchId) {
           try { await cancelPaymentIntent(checkoutBatchId, createdIntentId); }
-          catch { onPaymentPending?.(); return; }
+          catch { onPaymentPending?.('unknown'); return; }
         }
         onClose();
         onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
       } finally {
+        onPaymentInFlight?.(false);
         setIsProcessing(false);
+        setConfirming(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, onPaymentInFlight, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
@@ -866,7 +965,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         try { await cancelPaymentIntent(checkoutBatchId, intentId); }
         catch (err) {
           logger.error('[checkout] could not cancel the open payment on close', err);
-          onPaymentPending?.();
+          onPaymentPending?.('unknown');
           return;
         } finally {
           processingRef.current = false;
@@ -928,10 +1027,10 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                     </Text>
                   </TouchableOpacity>
                 )}
-                {hasFees && (
+                {visitFees.length > 0 && (
                   <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                     <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late & no-show fees</Text>
-                    {fees!.map(fee => (
+                    {visitFees.map(fee => (
                       <View key={fee.providerId} style={styles.orderItem}>
                         <Text style={[styles.orderItemName, { color: theme.text }]}>
                           {fee.providerName}
@@ -963,6 +1062,42 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                         {FEE_CONSENT_LINE}
                       </Text>
                     </TouchableOpacity>
+                  </View>
+                )}
+                {lateCancelFees.length > 0 && (
+                  <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late cancellation</Text>
+                    {lateCancelFees.map(fee => (
+                      <View key={fee.providerId} style={styles.orderItem}>
+                        <Text style={[styles.orderItemName, { color: theme.text }]}>
+                          {fee.providerName}
+                          {`\nCancelling within ${fee.cancelNoticeHours} hours means you lose your £${((fee.lateCancelDepositPence ?? 0) / 100).toFixed(2)} deposit and may be charged up to £${((fee.lateCancelFeePence ?? 0) / 100).toFixed(2)} more.`}
+                        </Text>
+                      </View>
+                    ))}
+                    <TouchableOpacity
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreedToLateCancel }}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAgreedToLateCancel(v => !v);
+                      }}
+                      activeOpacity={0.7}
+                      style={[styles.orderItem, { alignItems: 'flex-start', marginTop: 8 }]}
+                    >
+                      <Ionicons name={agreedToLateCancel ? 'checkbox' : 'square-outline'} size={20} color={P.accent} />
+                      <Text style={[styles.paymentMethodName, { color: theme.text, marginLeft: 8 }]}>
+                        {LATE_CANCEL_CONSENT_LINE}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button" onPress={() => setShowLateCancelTerms(v => !v)} activeOpacity={0.7}>
+                      <Text style={[styles.paymentMethodName, { color: P.accent, marginTop: 6 }]}>
+                        {showLateCancelTerms ? 'Hide the terms' : 'Read the terms'}
+                      </Text>
+                    </TouchableOpacity>
+                    {showLateCancelTerms && (
+                      <Text style={[styles.paymentMethodName, { color: P.sub, marginTop: 6 }]}>{FEE_TERMS_BODY}</Text>
+                    )}
                   </View>
                 )}
 
@@ -1024,6 +1159,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                             activeOpacity={0.7}
                             onPress={() => {
                               Haptics.selectionAsync().catch(() => {});
+                              pickedCardRef.current = true;
                               setSelectedCard(option.id);
                               setPayError(null);
                             }}
@@ -1075,6 +1211,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   {payError && (
                     <Text accessibilityRole="alert" style={[styles.paymentMethodName, styles.payErrorText]}>{payError}</Text>
                   )}
+                  {heldNote && (
+                    <Text style={[styles.paySecureText, { color: P.sub, marginTop: 10 }]}>{heldNote}</Text>
+                  )}
                   <View style={styles.paySecureRow}>
                     <Ionicons name="lock-closed" size={12} color={P.sub} />
                     <Text style={[styles.paySecureText, { color: P.sub }]}>Card details go straight to Stripe</Text>
@@ -1090,10 +1229,15 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 }}
                 disabled={isProcessing || !canPay || !(payingWithSavedCard || cardComplete)}
               >
-                {isProcessing ? (
+                {confirming ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator color={P.onAccent} size="small" />
+                    <Text style={[styles.payButtonText, { color: P.onAccent }]}>Confirming your payment…</Text>
+                  </View>
+                ) : isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
-                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
+                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>{payButtonLabel(holdPlan, totalAmount)}</Text>
                 )}
               </TouchableOpacity>
             </KeyboardAvoidingView>
@@ -1188,7 +1332,8 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 
     const serviceName = item?.serviceName || 'Unknown Service';
     const serviceInstanceIndex = item?.serviceInstanceIndex || 1;
-    const duration = item?.duration || 'Unknown duration';
+    // The appointment's length, add-ons' extra time included.
+    const duration = (item?.duration && durationWithAddOns(item.duration, item.addOns)) || 'Unknown duration';
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
 
@@ -1258,9 +1403,13 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     onEdit(item);
                   }}
+                  // A held waitlist slot is one fixed time: there's nothing to change.
+                  disabled={!!item.waitlistHold}
                   activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={isScheduled
+                  accessibilityRole={item.waitlistHold ? 'text' : 'button'}
+                  accessibilityLabel={item.waitlistHold && isScheduled
+                    ? `Held for you, ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
+                    : isScheduled
                     ? `Change time, currently ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
                     : 'Pick a date and time'}
                 >
@@ -1270,7 +1419,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                       ? `${formatShortDayDate(bookingInfo.selectedDate)} · ${formatTime12(bookingInfo.selectedTime)}`
                       : 'No time picked'}
                   </Text>
-                  <Ionicons name="chevron-forward" size={12} color={whenColor} />
+                  {!item.waitlistHold && <Ionicons name="chevron-forward" size={12} color={whenColor} />}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.nodeRemove, { borderColor: P.border }]}
@@ -1301,16 +1450,28 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 )}
               </View>
 
+              {/* A held waitlist slot: the client's hold keeps running
+                  while they pay, so the time left stays on the card. */}
+              {item.waitlistHold && !issue && (
+                <View style={[styles.nodeBanner, { backgroundColor: P.accentDim }]}>
+                  <Ionicons name="time-outline" size={12} color={P.accentText} />
+                  <Text style={[styles.nodeBannerText, { color: P.accentText }]}>Held for you from your waitlist</Text>
+                  <WaitlistHoldCountdown expiresAt={item.waitlistHold.expiresAt} color={P.accentText} />
+                </View>
+              )}
               {issue && (
                 <View style={styles.nodeBanner}>
                   <Ionicons name="alert-circle" size={12} color="#F44336" />
                   <Text style={styles.nodeBannerText}>{issue}</Text>
-                  <TouchableOpacity onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    onEdit(item);
-                  }}>
-                    <Text style={styles.nodeBannerFix}>Fix</Text>
-                  </TouchableOpacity>
+                  {/* A held slot's time can't be changed; removing it is the fix. */}
+                  {!item.waitlistHold && (
+                    <TouchableOpacity onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      onEdit(item);
+                    }}>
+                      <Text style={styles.nodeBannerFix}>Fix</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
               {/* An out-of-hours time looks exactly like an ordinary one
@@ -1427,7 +1588,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const startMinutes = to24hMinutes(firstBooking.selectedTime);
     const last = items[items.length - 1]!;
     const lastBooking = getBooking(last.id);
-    const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+    const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(durationWithAddOns(last.duration, last.addOns));
     const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
     const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
     // Every flagged service in this group, in render order, so the banner can
@@ -1514,7 +1675,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     {b.isDepositOnly ? ' (Deposit)' : ''}
                   </Text>
                   <Text style={[styles.gchipMeta, { color: theme.secondaryText }]} numberOfLines={1}>
-                    {item.duration}
+                    {durationWithAddOns(item.duration, item.addOns)}
                   </Text>
                   {issuesByItemId.get(item.id) && (
                     <Text style={styles.groupRowIssue}>{issuesByItemId.get(item.id)}</Text>
@@ -1656,7 +1817,13 @@ const CartProviderSection = memo(function CartProviderSection({
           onNavigateProvider(providerItems);
         }}>
           <View style={styles.providerLogoContainer}>
-            {providerItems[0]?.providerImage ? (
+            {providerItems[0]?.providerImage?.uri ? (
+              <ProviderLogoCircle
+                providerId={providerItems[0].providerId}
+                uri={providerItems[0].providerImage.uri}
+                style={[styles.providerLogo, { borderColor: P.accentDim }]}
+              />
+            ) : providerItems[0]?.providerImage ? (
               <Image source={providerItems[0].providerImage} style={[styles.providerLogo, { borderColor: P.accentDim }]} />
             ) : (
               <View style={[styles.providerLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
@@ -1893,7 +2060,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [cartError, clearCartError, showAlert]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, myProviderId, myProviderIdStatus } = useAuth();
+  const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
+  // Checkout carries on after the checklist saves, by which time this render's
+  // handleCheckout would still see the details as missing.
+  const handleCheckoutRef = useRef<() => Promise<void>>(async () => {});
 
   // State management
   const [providerDepositPolicies, setProviderDepositPolicies] = useState<Record<string, ProviderDepositPolicy>>({});
@@ -1928,6 +2099,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
+  // The checkout that just went through, for the success screen: how much
+  // was only held for requests, and any hold the client's bank wants checked.
+  const [paidCheckout, setPaidCheckout] = useState<{ checkoutBatchId: string; plan: CheckoutHoldPlan | null } | null>(null);
 
   // Mirrors of the two outstanding-checkout ids, for the abandon path below:
   // it runs from a navigation listener and on unmount, neither of which can
@@ -1941,6 +2115,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // 20260810180302 — so the booking wouldn't be re-created, it would just
   // fail. Abandoning is therefore skipped while this is set.
   const isClaimingRef = useRef(false);
+  const paymentInFlightRef = useRef(false);
 
   /**
    * Give back the slots this checkout is holding.
@@ -1950,7 +2125,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
    * back early was the payment sheet's own × button. Every other way out of
    * a checkout — switching tabs, a tapped notification, the screen
    * unmounting, a dev reload — left the row sitting there for the full
-   * 10-minute TTL, and since get_provider_busy_spans counts held slots as
+   * 5-minute TTL, and since get_provider_busy_spans counts held slots as
    * busy, the client who placed the hold was then told their own slot was
    * unavailable when they went back to pick it again. That is the bug this
    * closes: two abandoned holds were reproduced live on 2026-09-07
@@ -1962,6 +2137,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
    */
   const abandonOutstandingCheckout = useCallback(() => {
     if (isClaimingRef.current) return;
+    // A payment already handed to Stripe is settled by the server
+    // (reconcile-checkouts); cancelling here would release a card the client
+    // has just approved and drop their booking.
+    if (paymentInFlightRef.current) return;
     const heldBatch = holdBatchIdRef.current;
     if (heldBatch) {
       holdBatchIdRef.current = null;
@@ -2099,7 +2278,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const last = unit.items[unit.items.length - 1]!;
       const lastBooking = (checkoutSnapshot.bookings[last.id] || {}) as ServiceBooking;
       const startMinutes = to24hMinutes(firstBooking.selectedTime);
-      const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+      const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(durationWithAddOns(last.duration, last.addOns));
       const spanKnown = !!firstBooking.selectedDate
         && startMinutes !== Number.MAX_SAFE_INTEGER
         && endMinutes > startMinutes;
@@ -2145,7 +2324,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
                   </View>
                   {!!gb.selectedTime && (
                     <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
-                      {formatTime12(gb.selectedTime)} · {groupItem.duration}
+                      {formatTime12(gb.selectedTime)} · {durationWithAddOns(groupItem.duration, groupItem.addOns)}
                     </Text>
                   )}
                   {gb.emergencyRequest && (
@@ -2310,12 +2489,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           providerName: item.providerId ?? item.providerName,
           date: booking?.selectedDate ?? '',
           time: booking?.selectedTime ?? '',
-          duration: item.duration,
+          duration: durationWithAddOns(item.duration, item.addOns),
           cartItemId: item.id,
           serviceId: item.serviceId,
           // See BookingContext's copy of this list: an accepted out-of-hours
           // request must not be re-flagged as a conflict by the cart.
           isEmergencyRequest: !!item.emergencyRequest,
+          // The slot is already held for this client, so it reads as taken;
+          // prepare_checkout confirms the hold is theirs.
+          heldForClient: !!item.waitlistHold,
         };
       })
     );
@@ -2798,19 +2980,41 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Only the checks that genuinely need Supabase (has someone ELSE taken this
   // slot, is the provider still working that day, is the promo still live) wait
   // for the checkout attempt.
-  const localItemIssues = useMemo(
-    () => findCartItemIssues(items.map(item => {
+  // A held waitlist slot ends at a known moment. Re-check the cart then (not
+  // every second: each card's own countdown does the ticking).
+  const [holdClock, setHoldClock] = useState(() => Date.now());
+  useEffect(() => {
+    const upcoming = items
+      .map(item => (item.waitlistHold ? new Date(item.waitlistHold.expiresAt).getTime() : NaN))
+      .filter(end => Number.isFinite(end) && end > holdClock);
+    if (upcoming.length === 0) return;
+    const timer = setTimeout(() => setHoldClock(Date.now()), Math.min(...upcoming) - Date.now() + 250);
+    return () => clearTimeout(timer);
+  }, [items, holdClock]);
+
+  const localItemIssues = useMemo(() => {
+    const issues = findCartItemIssues(items.map(item => {
       const booking = getServiceBooking(item.id);
       return {
         itemId: item.id,
         providerKey: item.providerId ?? item.providerName,
         date: booking.selectedDate,
         time: booking.selectedTime,
-        duration: item.duration,
+        duration: durationWithAddOns(item.duration, item.addOns),
+        // Only once the ownership lookup has actually answered; until then
+        // (or if it failed) the database guard at checkout still catches it.
+        ownProvider: myProviderIdStatus === 'resolved'
+          && !!myProviderId
+          && item.providerId === myProviderId,
       };
-    })),
-    [items, getServiceBooking],
-  );
+    }));
+    items.forEach(item => {
+      if (item.waitlistHold && holdSecondsLeft(item.waitlistHold.expiresAt, holdClock) === 0) {
+        issues.set(item.id, CART_ISSUE.waitlistHoldEnded);
+      }
+    });
+    return issues;
+  }, [items, getServiceBooking, holdClock, myProviderId, myProviderIdStatus]);
 
   // A stored date/time the app can't parse back shouldn't be possible — the
   // sheet only ever writes formats it understands. The client is shown the
@@ -2999,6 +3203,18 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   };
   useFocusEffect(useCallback(() => revalidateRef.current(), []));
 
+  // Start reading the client's saved cards while they look over the cart, so
+  // the payment sheet has them the moment it opens (the read takes seconds).
+  // Not for an empty cart, and not again within SAVED_CARDS_FRESH_MS.
+  const hasCartItems = items.length > 0;
+  const signedInUserId = user?.id ?? null;
+  useFocusEffect(useCallback(() => {
+    if (!USE_STRIPE_PAYMENTS || !hasCartItems || !signedInUserId) return;
+    listSavedCards({ maxAgeMs: SAVED_CARDS_FRESH_MS })
+      // The sheet reads them again when it opens, and shows the form if that fails too.
+      .catch(e => logger.warn('[checkout] could not read saved cards ahead of the sheet', e));
+  }, [hasCartItems, signedInUserId]));
+
   // Picking a single service out of the chooser. If that service is currently
   // part of a group, editing it means it no longer runs back-to-back with the
   // rest — so it leaves the group (bookingBatchId cleared) and becomes its own
@@ -3071,7 +3287,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         const providerKey = groupItems[0]!.providerId ?? groupItems[0]!.providerName;
         const chains = await AvailabilityService.findAllBackToBackSlots(
           providerKey,
-          groupItems.map(item => ({ serviceId: item.serviceId, duration: item.duration })),
+          groupItems.map(item => ({ serviceId: item.serviceId, duration: durationWithAddOns(item.duration, item.addOns) })),
           date,
         );
         if (!chains) return [];
@@ -3200,6 +3416,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   // Enhanced checkout with payment modal integration - USE EFFECTIVE TOTAL
   const handleCheckout = useCallback(async () => {
+  // The profile checks this as well, but a rebook or an offer can fill the cart
+  // without passing through there. Checkout is where every booking ends up.
+  if (accountStillLoading(user)) {
+    showAlert('One moment', 'We’re still loading your account. Please try again shortly.');
+    return;
+  }
+  if (holdForDetails(() => { void handleCheckoutRef.current(); })) return;
   try {
     setIsLoading(true);
     setError(null);
@@ -3277,7 +3500,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // finding, not a second one, so it reuses it rather than re-deriving it
     // with wording that could drift out of step.
     if (localItemIssues.size > 0) {
-      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
+      const hasOwnBusiness = [...localItemIssues.values()].includes(CART_ISSUE.ownProvider);
+      showAlert(
+        hasOwnBusiness ? "You can't book yourself" : 'Schedule Required',
+        hasOwnBusiness
+          ? 'Your cart has a service from your own business. Remove it to check out.'
+          : 'Some services in your cart need attention before checkout.',
+      );
       return;
     }
 
@@ -3389,7 +3618,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         ...(existing ?? { selectedDate: '', selectedTime: '', isDepositOnly: false }),
         notes: [existing?.notes, promoNote].filter(Boolean).join('\n'),
       } as ServiceBooking;
-      return { ...item, price: Math.max(0, (Number(item.price) || 0) - discount) };
+      return {
+        ...item,
+        price: Math.max(0, (Number(item.price) || 0) - discount),
+        // Card checkouts are priced by the server, which only discounts what
+        // it is told about — without this the client saw the discount and
+        // was charged full price.
+        ...(promo?.promo_code ? { appliedPromoCode: promo.promo_code } : {}),
+      };
     });
     const snapshot = {
       items: snapshotItems,
@@ -3410,6 +3646,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // frozenCheckoutTotals.total computes next render, rather than two
     // independent formulas that could drift apart under a future edit.
     setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
+    setPaidCheckout(null);
 
     // Show review modal pre-filled with user data
     setReviewName(user?.name || '');
@@ -3450,7 +3687,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, mobileProviderNames, identifyCartConflicts, localItemIssues, itemsByProvider, checkoutMetadataError, providerDepositPolicies, resolvedProviderNames]);
+}, [items, getServiceBooking, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, mobileProviderNames, identifyCartConflicts, localItemIssues, itemsByProvider, checkoutMetadataError, providerDepositPolicies, resolvedProviderNames, holdForDetails]);
+handleCheckoutRef.current = handleCheckout;
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -3758,12 +3996,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
-      const slug = providerItems[0]?.providerSlug;
-      if (!slug) {
+      // The database id first: it's what checkout books against, the restore
+      // re-links any item missing it, and the profile loads by id as well as
+      // by slug. The saved slug is only a fallback for an item with no id.
+      const first = providerItems[0];
+      const key = first?.providerId ?? first?.providerSlug;
+      if (!key) {
         showAlert('Something went wrong', "We couldn't open that provider's profile.");
         return;
       }
-      navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
+      navigation.navigate('ProviderProfile', { providerId: key, source: 'cart' });
     },
     [navigation, showAlert]
   );
@@ -3932,7 +4174,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
   return (
     <ErrorBoundary>
       <ThemedBackground style={{ flex: 1 }}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
         <SafeAreaView style={styles.safeArea}>
           {/* Header */}
           <View style={[styles.header, { backgroundColor: P.bg, borderBottomColor: P.border }]}>
@@ -4298,6 +4540,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               // service actually needs this and rejects
                               // if missing, regardless of this value.
                               safety_ack: agreedToPolicy,
+                              // The same checkbox, as consent to the Terms and
+                              // the provider's policy. The snapshot is the copy
+                              // this cart showed; the server freezes its own live
+                              // copy and refuses if the money terms differ.
+                              policy_accepted: agreedToPolicy,
+                              policy_snapshot: item.policySnapshot ?? null,
+                              // The code whose discount the review screen
+                              // showed. prepare_checkout re-validates it and
+                              // works the discount out itself.
+                              ...(item.appliedPromoCode ? { promo_code: item.appliedPromoCode } : {}),
                               // Set when the client accepted the out-of-hours
                               // confirmation in the booking sheet. The ack
                               // travels with it because prepare_checkout
@@ -4308,12 +4560,23 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               ...(booking.emergencyRequest
                                 ? { emergency: true, emergency_ack: true }
                                 : {}),
+                              // A held waitlist slot: the server reuses that row
+                              // and keeps its own 15 minutes running.
+                              ...(item.waitlistHold
+                                ? { waitlist_hold_id: item.waitlistHold.bookingId }
+                                : {}),
                             };
                           });
                           const prepared = await prepareCheckout(intent);
                           setServerCheckoutBatchId(prepared.checkoutBatchId);
                           setPaymentTotal(prepared.amountDue);
                         } else {
+                          // The older card-entry path books with
+                          // hold_cart_booking_slots, which knows nothing about a
+                          // held waitlist row and would clash with it.
+                          if (checkoutSnapshot.items.some(item => item.waitlistHold)) {
+                            throw new BookingError('A waitlist slot can only be paid for by card in this version of the app.');
+                          }
                           console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
                           const batchId = await holdCartCheckoutSlots(
                             checkoutSnapshot.items,
@@ -4332,22 +4595,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       } catch (err) {
                         logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
                         // prepareCheckout() throws the raw Supabase PostgrestError
-                        // (which DOES extend Error) rather than a BookingError, so a
-                        // deliberate DB guard message — the safety-ack gate's plain
-                        // RAISE EXCEPTION, which Postgres defaults to SQLSTATE P0001 —
-                        // needs unwrapping too, not just BookingError, or the client
-                        // never learns WHY. But PostgrestError carries the SAME shape
-                        // for a genuine technical failure (RLS, a constraint
-                        // violation, anything else with a real Postgres code), so
-                        // unwrapping has to stop at P0001 — anything else falls back
-                        // to the generic line instead of showing raw Postgres text.
-                        const isTechnical = (err as any)?.code && (err as any).code !== 'P0001';
-                        const message = err instanceof BookingError
-                          ? err.message
-                          : err instanceof Error && !isTechnical
-                            ? err.message.replace(/^Error:\s*/, '')
-                            : "We couldn't reserve that time. Please try again.";
-                        const title = err instanceof BookingError ? 'Scheduling Conflict' : 'Booking Not Completed';
+                        // rather than a BookingError. describeReserveFailure shows a
+                        // DB guard's own words (P0001) and never raw Postgres text,
+                        // naming the known causes (slot just taken, server busy,
+                        // no connection) instead of the catch-all.
+                        const { title, message } = err instanceof BookingError
+                          ? { title: 'Scheduling Conflict', message: err.message }
+                          : describeReserveFailure(err);
                         // Close the summary sheet FIRST. CartScreen's
                         // DialogHost is a sibling of this <Modal>, not a
                         // child, so an alert raised while the sheet is
@@ -4490,8 +4744,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   return f && (f.patchTestRequired || !f.isPregnancySafe);
                 });
                 const needsSafetyAck = safetyItems.length > 0;
+                const nonRefundableProviders = [...new Set(checkoutSnapshot.items
+                  .filter(i => i.policySnapshot?.['depositNonRefundable'] === true
+                    && resolveDepositMode(i.policySnapshot) !== 'full_only')
+                  .map(i => i.providerName))];
                 return (
                   <>
+                    {nonRefundableProviders.length > 0 && (
+                      <View style={[styles.safetyAckNotice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                        <Text style={[styles.safetyAckNoticeText, { color: P.sub }]}>
+                          {`The deposit for ${nonRefundableProviders.join(' and ')} is non-refundable. If you cancel, even in good time, the provider keeps it and the rest of what you paid comes back. All of it comes back if the provider cancels, declines or doesn't respond.`}
+                        </Text>
+                      </View>
+                    )}
                     {needsSafetyAck && (
                       <View style={[styles.safetyAckNotice, { backgroundColor: P.surface, borderColor: P.border }]}>
                         <Text style={[styles.safetyAckNoticeText, { color: P.sub }]}>
@@ -4514,7 +4779,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       </View>
                       {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
                       <Text style={[styles.reviewCheckboxLabel, { color: P.text, flex: 1 }]}>
-                        I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and each provider's cancellation policy
+                        I agree to the{' '}
+                        {/* Its own onPress so tapping the words opens the
+                            Terms instead of ticking the box. */}
+                        <Text style={{ color: P.accent, textDecorationLine: 'underline' }} onPress={() => openLegalPage('terms')}>Terms & Conditions</Text>
+                        <Text style={styles.requiredAsterisk}> *</Text> and each provider's cancellation policy
                         {needsSafetyAck ? ', and confirm I have seen the safety information above' : ''}
                       </Text>
                     </TouchableOpacity>
@@ -4534,7 +4803,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 onClose={() => {
                   // User backed out via the × close button without paying —
                   // free the held slots immediately rather than making the
-                  // next client wait out the 10-minute TTL. Best-effort:
+                  // next client wait out the 5-minute TTL. Best-effort:
                   // releaseCartCheckoutSlots never throws.
                   if (holdBatchId) {
                     releaseCartCheckoutSlots(holdBatchId);
@@ -4550,15 +4819,28 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
-                onPaymentPending={() => {
+                onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}
+                onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}
+                onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
-                  showAlert('Checking your payment', 'Your payment may have completed. Check your bookings before paying again. If the reservation expired, the payment will be refunded.');
+                  // The cart is kept in every case (only a booked checkout
+                  // clears it). The server also sends a notification with the
+                  // same news, so "we'll let you know" below is true.
+                  if (outcome === 'refunded') {
+                    showAlert('Booking not completed', "Your time was no longer available by the time your payment went through, so we've refunded it in full. It can take 5–10 working days to show on your statement. Your cart is still here if you'd like to pick another time.");
+                  } else if (outcome === 'not_charged') {
+                    showAlert("Payment didn't go through", "We couldn't confirm your booking in time, so the payment was cancelled and you haven't been charged. Your cart is still here if you'd like to try again.");
+                  } else {
+                    showAlert('Still confirming your payment', "We'll send you a notification as soon as it's settled. Please don't pay again in the meantime.");
+                  }
                 }}
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
                   setShowPaymentModal(false);
-                  setShowPaymentSuccessModal(true);
+                  // Paid after the client left the Cart: the success sheet would
+                  // float over another screen, so the booking notification tells them.
+                  if (navigation.isFocused()) setShowPaymentSuccessModal(true);
                 }}
                 onBookingFailed={(message) => {
                   // Booking failed after payment (or during) — the held
@@ -4597,10 +4879,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
 
                     <Text style={[styles.liquidGlassSuccessMessage, { color: P.sub }]}>
-                      Payment of £{paymentTotal.toFixed(2)} has been processed successfully.
-                      Appointments have been booked and will show up in Bookings when confirmed by
-                      providers.
+                      {checkoutSuccessMessage(paidCheckout?.plan ?? null, paymentTotal)}
                     </Text>
+
+                    {paidCheckout && <RequestHoldChecks checkoutBatchId={paidCheckout.checkoutBatchId} />}
 
                     <View style={styles.successButtonsContainer}>
                       {/* Primary — filled accent, the action we want most clients to take */}
@@ -4958,6 +5240,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         </SafeAreaView>
       </ThemedBackground>
       <DialogHost />
+      {beforeYouBookSheet}
     </ErrorBoundary>
   );
 };

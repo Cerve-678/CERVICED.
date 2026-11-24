@@ -18,6 +18,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -38,6 +39,7 @@ import {
 } from '../../services/databaseService';
 import { ALL_SERVICE_TYPE_OPTS, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
+import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
 import type { DbProvider } from '../../types/database';
 import type { LinkOnlyPortfolioStackParamList } from '../../navigation/types';
 import { uploadToStorage } from '../../services/providerRegistrationService';
@@ -131,13 +133,14 @@ export default function LinkOnlyPortfolioScreen() {
   // Every speciality offered for the service types they do, plus any saved one
   // outside that list (sign-up wording carried over) so it can be seen and
   // removed rather than persisting invisibly.
-  const specialtyOptions = useMemo(
+  const curatedSpecialtyOptions = useMemo(
     () => Array.from(new Set([
       ...serviceCategories.flatMap(category => SPECIALTIES_MAP[category] ?? []),
       ...specialties,
     ])),
     [serviceCategories, specialties],
   );
+  const specialtyOptions = useSpecialityOptionsWithLearned(curatedSpecialtyOptions, serviceCategories);
 
   const serviceTypeLabel = profile
     ? (profile.service_category === 'OTHER' && profile.custom_service_type
@@ -228,7 +231,7 @@ export default function LinkOnlyPortfolioScreen() {
               >
                 <View style={styles.previewTop}>
                   {profile.logo_url ? (
-                    <Image source={{ uri: profile.logo_url }} style={styles.previewLogo} contentFit="cover" transition={0} />
+                    <LogoCircle uri={profile.logo_url} framing={profile.logo_framing} style={styles.previewLogo} />
                   ) : (
                     <View style={[styles.previewLogo, styles.previewLogoEmpty]}>
                       <Text style={styles.previewInitials}>{initials}</Text>
@@ -310,6 +313,7 @@ export default function LinkOnlyPortfolioScreen() {
                     options={specialtyOptions}
                     palette={P}
                     placeholder="Search specialities"
+                    showSelectedChips
                   />
                   <TouchableOpacity
                     style={[styles.saveButton, savingSpecialties && styles.disabled]}

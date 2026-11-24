@@ -8,7 +8,7 @@ import type { ChatSuggestion } from "../services/becca/types";
 // capabilities marked `fitsLinkOnly`; anything else is "not part of your
 // setup" (user decision 2026-10-20, FUTURE_LOGIC "Link-only pros still see
 // full-service features", item 5).
-const FITS_LINK_ONLY = ["pv.inbox", "pv.notifications", "pv.hours", "pv.reach", "pv.availability", "pv.help"];
+const FITS_LINK_ONLY = ["pv.inbox", "pv.notifications", "pv.hours", "pv.reach", "pv.availability", "pv.app_navigation", "pv.help"];
 
 const linkOnly = (message: string) =>
   converse({ message, hat: "provider", bookings: [], linkOnly: true, conversation: { entities: {} } });

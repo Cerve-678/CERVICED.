@@ -17,23 +17,23 @@ export const CITY_AREAS: CityAreaData[] = [
     regions: [
       {
         region: 'North London',
-        areas: ['Camden', 'Islington', 'Hackney', 'Haringey', 'Enfield', 'Barnet'],
+        areas: ['Angel', 'Archway', 'Arnos Grove', 'Barnet', 'Barnsbury', 'Belsize Park', 'Bounds Green', 'Bowes Park', 'Camden', 'Camden Town', 'Canonbury', 'Chalk Farm', 'Colindale', 'Cricklewood', 'Crouch End', 'Dalston', 'De Beauvoir', 'East Finchley', 'Edgware', 'Edmonton', 'Enfield', 'Finchley', 'Finsbury Park', 'Golders Green', 'Hackney', 'Hampstead', 'Haringey', 'Harringay', 'Hendon', 'Highbury', 'Highgate', 'Holloway', 'Hornsey', 'Islington', 'Kentish Town', 'Kingsland', 'Manor House', 'Mill Hill', 'Muswell Hill', 'New Southgate', 'Newington Green', 'Palmers Green', 'Ponders End', 'Primrose Hill', 'Seven Sisters', 'Southgate', 'Stamford Hill', 'Stoke Newington', 'Stroud Green', 'Swiss Cottage', 'Tottenham', 'Totteridge', 'Tufnell Park', 'Turnpike Lane', 'Upper Holloway', 'West Hampstead', 'Whetstone', 'Winchmore Hill', 'Wood Green'],
       },
       {
         region: 'South London',
-        areas: ['Croydon', 'Lambeth', 'Southwark', 'Wandsworth', 'Lewisham', 'Bromley'],
+        areas: ['Abbey Wood', 'Addiscombe', 'Anerley', 'Balham', 'Battersea', 'Beckenham', 'Beddington', 'Bermondsey', 'Bexley', 'Bexleyheath', 'Blackheath', 'Borough', 'Brixton', 'Brockley', 'Bromley', 'Camberwell', 'Canada Water', 'Carshalton', 'Catford', 'Charlton', 'Cheam', 'Chislehurst', 'Clapham', 'Clapham Junction', 'Colliers Wood', 'Coulsdon', 'Crayford', 'Croydon', 'Crystal Palace', 'Deptford', 'Dulwich', 'Earlsfield', 'Elephant and Castle', 'Eltham', 'Erith', 'Forest Hill', 'Gipsy Hill', 'Greenwich', 'Grove Park', 'Herne Hill', 'Hither Green', 'Honor Oak', 'Kennington', 'Kidbrooke', 'Kingston upon Thames', 'Ladywell', 'Lambeth', 'Lee', 'Lewisham', 'London Bridge', 'Merton', 'Mitcham', 'Morden', 'Mottingham', 'New Cross', 'New Malden', 'Nine Elms', 'Norbury', 'Nunhead', 'Orpington', 'Oval', 'Peckham', 'Penge', 'Plumstead', 'Purley', 'Putney', 'Raynes Park', 'Rotherhithe', 'Sanderstead', 'Selhurst', 'Sidcup', 'South Norwood', 'Southfields', 'Southwark', 'Stockwell', 'Streatham', 'Surbiton', 'Surrey Quays', 'Sutton', 'Sydenham', 'Thamesmead', 'Thornton Heath', 'Tolworth', 'Tooting', 'Tulse Hill', 'Vauxhall', 'Wallington', 'Walworth', 'Wandsworth', 'Welling', 'West Norwood', 'West Wickham', 'Wimbledon', 'Woolwich'],
       },
       {
         region: 'East London',
-        areas: ['Tower Hamlets', 'Newham', 'Waltham Forest', 'Redbridge', 'Barking and Dagenham'],
+        areas: ['Barking', 'Barking and Dagenham', 'Barkingside', 'Beckton', 'Bethnal Green', 'Bow', 'Bromley-by-Bow', 'Canary Wharf', 'Canning Town', 'Chadwell Heath', 'Chingford', 'Clapton', 'Custom House', 'Dagenham', 'East Ham', 'Forest Gate', 'Gants Hill', 'Goodmayes', 'Hackney Central', 'Hackney Wick', 'Haggerston', 'Havering', 'Highams Park', 'Homerton', 'Hornchurch', 'Hoxton', 'Ilford', 'Isle of Dogs', 'Leyton', 'Leytonstone', 'Limehouse', 'London Fields', 'Manor Park', 'Mile End', 'Newham', 'Plaistow', 'Poplar', 'Rainham', 'Redbridge', 'Romford', 'Seven Kings', 'Shadwell', 'Shoreditch', 'Silvertown', 'Snaresbrook', 'South Woodford', 'Spitalfields', 'Stepney', 'Stratford', 'Tower Hamlets', 'Upminster', 'Upper Clapton', 'Upton Park', 'Victoria Park', 'Waltham Forest', 'Walthamstow', 'Wanstead', 'Wapping', 'West Ham', 'Whitechapel', 'Woodford', 'Woodford Green'],
       },
       {
         region: 'West London',
-        areas: ['Hammersmith and Fulham', 'Ealing', 'Hounslow', 'Hillingdon', 'Brent'],
+        areas: ['Acton', 'Alperton', 'Barnes', 'Brent', 'Brentford', 'Chiswick', 'Dollis Hill', 'Ealing', 'Ealing Broadway', 'Earls Court', 'East Acton', 'East Sheen', 'Eastcote', 'Feltham', 'Fulham', 'Greenford', 'Hammersmith', 'Hammersmith and Fulham', 'Hampton', 'Hanwell', 'Harlesden', 'Harrow', 'Hayes', 'Hillingdon', 'Holland Park', 'Hounslow', 'Ickenham', 'Isleworth', 'Kensal Green', 'Kensal Rise', 'Kenton', 'Kew', 'Kilburn', 'Kingsbury', 'Ladbroke Grove', 'Maida Vale', 'Mortlake', 'Neasden', 'Northfields', 'Northolt', 'Northwood', 'Notting Hill', 'Park Royal', 'Parsons Green', 'Perivale', 'Pinner', "Queen's Park", 'Richmond', 'Richmond upon Thames', 'Ruislip', "Shepherd's Bush", 'South Ealing', 'Southall', 'Stanmore', 'Teddington', 'Twickenham', 'Uxbridge', 'Wealdstone', 'Wembley', 'Wembley Park', 'West Drayton', 'West Ealing', 'West Kensington', 'Westbourne Park', 'White City', 'Whitton', 'Willesden'],
       },
       {
         region: 'Central London',
-        areas: ['Westminster', 'City of London', 'Kensington and Chelsea', 'Soho', 'Covent Garden'],
+        areas: ['Aldgate', 'Barbican', 'Bayswater', 'Belgravia', 'Bloomsbury', 'Chelsea', 'City of London', 'Clerkenwell', 'Covent Garden', 'Euston', 'Farringdon', 'Fitzrovia', 'Holborn', 'Kensington', 'Kensington and Chelsea', "King's Cross", 'Knightsbridge', 'Marylebone', 'Mayfair', 'Moorgate', 'Old Street', 'Paddington', 'Pimlico', "Regent's Park", 'Soho', 'South Bank', "St James's", "St John's Wood", 'Tower Hill', 'Victoria', 'Waterloo', 'Westminster'],
       },
     ],
   },
@@ -67,7 +67,7 @@ export const CITY_AREAS: CityAreaData[] = [
     regions: [
       {
         region: 'North Birmingham',
-        areas: ['Erdington', 'Sutton Coldfield', 'Perry Barr', 'Kingstanding'],
+        areas: ['Erdington', 'Perry Barr', 'Kingstanding'],
       },
       {
         region: 'South Birmingham',
@@ -167,7 +167,7 @@ export const CITY_AREAS: CityAreaData[] = [
     regions: [
       {
         region: 'North Liverpool',
-        areas: ['Anfield', 'Everton', 'Walton', 'Bootle'],
+        areas: ['Anfield', 'Everton', 'Walton'],
       },
       {
         region: 'South Liverpool',
@@ -242,7 +242,7 @@ export const CITY_AREAS: CityAreaData[] = [
       },
       {
         region: 'East Nottingham',
-        areas: ['Sneinton', 'Carlton', 'St Ann\'s'],
+        areas: ['Sneinton', 'Carlton', "St Ann's"],
       },
       {
         region: 'West Nottingham',
@@ -841,7 +841,7 @@ export const CITY_AREAS: CityAreaData[] = [
       },
       {
         region: 'West Brighton',
-        areas: ['Hove', 'Portslade', 'Aldrington'],
+        areas: ['Portslade', 'Aldrington'],
       },
       {
         region: 'Central Brighton',
@@ -888,7 +888,7 @@ export const CITY_AREAS: CityAreaData[] = [
     regions: [
       {
         region: 'North Watford',
-        areas: ['North Watford', 'Bushey'],
+        areas: ['North Watford'],
       },
       {
         region: 'South Watford',
@@ -998,7 +998,7 @@ export const CITY_AREAS: CityAreaData[] = [
       },
       {
         region: 'Surrounding Areas',
-        areas: ['Pitsea', 'Laindon', 'Wickford'],
+        areas: ['Pitsea', 'Laindon'],
       },
     ],
   },
@@ -1158,9 +1158,2416 @@ export const CITY_AREAS: CityAreaData[] = [
       },
     ],
   },
+  // Kent (Maidstone and Gillingham are above, with the original towns).
+  {
+    city: 'Canterbury',
+    regions: [
+      {
+        region: 'City Centre',
+        areas: ['Canterbury City Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Wincheap', 'Hales Place', 'Sturry', 'Thanington', 'Harbledown'],
+      },
+    ],
+  },
+  {
+    city: 'Dartford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dartford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Greenhithe', 'Stone', 'Swanscombe', 'Wilmington', 'Temple Hill'],
+      },
+    ],
+  },
+  {
+    city: 'Gravesend',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Gravesend Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Northfleet', 'Riverview Park', 'Singlewell', 'Higham'],
+      },
+    ],
+  },
+  {
+    city: 'Chatham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chatham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Walderslade', 'Lordswood', 'Princes Park', 'Wayfield'],
+      },
+    ],
+  },
+  {
+    city: 'Rochester',
+    regions: [
+      {
+        region: 'City Centre',
+        areas: ['Rochester City Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Strood', 'Frindsbury', 'Borstal', 'Wainscott'],
+      },
+    ],
+  },
+  {
+    city: 'Ashford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ashford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Kennington', 'Willesborough', 'Singleton', 'Repton Park'],
+      },
+    ],
+  },
+  {
+    city: 'Tunbridge Wells',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Tunbridge Wells Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Southborough', 'Rusthall', 'Pembury', 'Sherwood'],
+      },
+    ],
+  },
+  {
+    city: 'Tonbridge',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Tonbridge Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hildenborough', 'Hadlow'],
+      },
+    ],
+  },
+  {
+    city: 'Sevenoaks',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Sevenoaks Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Riverhead', 'Dunton Green', 'Kemsing', 'Otford'],
+      },
+    ],
+  },
+  {
+    city: 'Swanley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Swanley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hextable', 'Crockenhill'],
+      },
+    ],
+  },
+  {
+    city: 'Sittingbourne',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Sittingbourne Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Milton Regis', 'Kemsley', 'Murston', 'Iwade'],
+      },
+    ],
+  },
+  {
+    city: 'Faversham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Faversham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ospringe', 'Boughton under Blean'],
+      },
+    ],
+  },
+  {
+    city: 'Whitstable',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Whitstable Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Tankerton', 'Seasalter', 'Chestfield'],
+      },
+    ],
+  },
+  {
+    city: 'Herne Bay',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Herne Bay Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Herne', 'Greenhill', 'Beltinge'],
+      },
+    ],
+  },
+  {
+    city: 'Margate',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Margate Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cliftonville', 'Westbrook', 'Garlinge', 'Westgate-on-Sea'],
+      },
+    ],
+  },
+  {
+    city: 'Ramsgate',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ramsgate Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Pegwell', 'Newington'],
+      },
+    ],
+  },
+  {
+    city: 'Broadstairs',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Broadstairs Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ["St Peter's", 'Dumpton'],
+      },
+    ],
+  },
+  {
+    city: 'Folkestone',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Folkestone Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cheriton', 'Sandgate', 'Hawkinge'],
+      },
+    ],
+  },
+  {
+    city: 'Dover',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dover Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['River', 'Whitfield', 'Temple Ewell'],
+      },
+    ],
+  },
+  {
+    city: 'Deal',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Deal Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Walmer', 'Sholden'],
+      },
+    ],
+  },
+  // Around London and other large towns the original list left out.
+  {
+    city: 'Brentwood',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Brentwood Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Shenfield', 'Hutton', 'Pilgrims Hatch', 'Ingatestone'],
+      },
+    ],
+  },
+  {
+    city: 'Harlow',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Harlow Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Old Harlow', 'Church Langley', 'Potter Street'],
+      },
+    ],
+  },
+  {
+    city: 'Grays',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Grays Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Chafford Hundred', 'Tilbury', 'Stanford-le-Hope', 'South Ockendon'],
+      },
+    ],
+  },
+  {
+    city: 'Guildford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Guildford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Burpham', 'Merrow', 'Stoughton'],
+      },
+    ],
+  },
+  {
+    city: 'Epsom',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Epsom Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ewell', 'Stoneleigh', 'Ashtead'],
+      },
+    ],
+  },
+  {
+    city: 'Redhill',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Redhill Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Merstham', 'Earlswood'],
+      },
+    ],
+  },
+  {
+    city: 'Hemel Hempstead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hemel Hempstead Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Apsley', 'Boxmoor', 'Leverstock Green'],
+      },
+    ],
+  },
+  {
+    city: 'Stevenage',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stevenage Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Old Town', 'Shephall', 'Chells'],
+      },
+    ],
+  },
+  {
+    city: 'Hatfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hatfield Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Welham Green'],
+      },
+    ],
+  },
+  {
+    city: 'Eastbourne',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Eastbourne Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Meads', 'Old Town', 'Hampden Park', 'Polegate'],
+      },
+    ],
+  },
+  {
+    city: 'Hastings',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hastings Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['St Leonards-on-Sea', 'Bexhill-on-Sea', 'Ore', 'Silverhill'],
+      },
+    ],
+  },
+  {
+    city: 'Hull',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hull Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hessle', 'Cottingham', 'Anlaby', 'Newland'],
+      },
+    ],
+  },
+  {
+    city: 'Bournemouth',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bournemouth Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Boscombe', 'Winton', 'Southbourne', 'Christchurch'],
+      },
+    ],
+  },
+  {
+    city: 'Swindon',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Swindon Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Old Town', 'Stratton', 'Wroughton', 'Haydon Wick'],
+      },
+    ],
+  },
+  {
+    city: 'Huddersfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Huddersfield Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Almondbury', 'Lindley', 'Marsh', 'Birkby'],
+      },
+    ],
+  },
+  {
+    city: 'Bedford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bedford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Kempston', 'Biddenham', 'Goldington', 'Brickhill'],
+      },
+    ],
+  },
+  {
+    city: 'Walsall',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Walsall Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Bloxwich', 'Aldridge', 'Willenhall', 'Darlaston'],
+      },
+    ],
+  },
+  {
+    city: 'Dudley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dudley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Brierley Hill', 'Sedgley'],
+      },
+    ],
+  },
+  {
+    city: 'Oldham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Oldham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Chadderton', 'Royton', 'Shaw', 'Failsworth'],
+      },
+    ],
+  },
+  {
+    city: 'Warrington',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Warrington Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Stockton Heath', 'Birchwood', 'Great Sankey', 'Lymm'],
+      },
+    ],
+  },
+  {
+    city: 'Cheltenham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Cheltenham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Montpellier', 'Leckhampton', 'Charlton Kings', 'Prestbury'],
+      },
+    ],
+  },
+  // More towns and counties across the UK (2026-11-03).
+  {
+    city: 'Billericay',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Billericay Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Wickford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Wickford Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Rayleigh',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Rayleigh Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hockley', 'Rochford'],
+      },
+    ],
+  },
+  {
+    city: 'Canvey Island',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Canvey Island Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Benfleet',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Benfleet Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Thundersley', 'Hadleigh'],
+      },
+    ],
+  },
+  {
+    city: 'Clacton-on-Sea',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Clacton-on-Sea Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Jaywick', 'Holland-on-Sea'],
+      },
+    ],
+  },
+  {
+    city: 'Braintree',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Braintree Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Great Notley'],
+      },
+    ],
+  },
+  {
+    city: 'Witham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Witham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Loughton',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Loughton Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Debden'],
+      },
+    ],
+  },
+  {
+    city: 'Chigwell',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chigwell Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Buckhurst Hill',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Buckhurst Hill Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Epping',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Epping Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['North Weald'],
+      },
+    ],
+  },
+  {
+    city: 'Saffron Walden',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Saffron Walden Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Maldon',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Maldon Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Heybridge'],
+      },
+    ],
+  },
+  {
+    city: 'Harwich',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Harwich Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Dovercourt'],
+      },
+    ],
+  },
+  {
+    city: 'Waltham Abbey',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Waltham Abbey Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Hythe',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hythe Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Tenterden',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Tenterden Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Westerham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Westerham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Edenbridge',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Edenbridge Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Paddock Wood',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Paddock Wood Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Snodland',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Snodland Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'West Malling',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['West Malling Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Kings Hill', 'Larkfield'],
+      },
+    ],
+  },
+  {
+    city: 'Sheerness',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Sheerness Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Minster', 'Queenborough'],
+      },
+    ],
+  },
+  {
+    city: 'Cranbrook',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Cranbrook Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'New Romney',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['New Romney Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Lydd', 'Dymchurch'],
+      },
+    ],
+  },
+  {
+    city: 'Camberley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Camberley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Frimley'],
+      },
+    ],
+  },
+  {
+    city: 'Farnham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Farnham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Staines-upon-Thames',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Staines-upon-Thames Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ashford (Surrey)', 'Egham'],
+      },
+    ],
+  },
+  {
+    city: 'Weybridge',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Weybridge Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Addlestone'],
+      },
+    ],
+  },
+  {
+    city: 'Walton-on-Thames',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Walton-on-Thames Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hersham'],
+      },
+    ],
+  },
+  {
+    city: 'Esher',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Esher Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Claygate', 'Cobham'],
+      },
+    ],
+  },
+  {
+    city: 'Leatherhead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Leatherhead Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ashtead', 'Bookham'],
+      },
+    ],
+  },
+  {
+    city: 'Dorking',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dorking Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Godalming',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Godalming Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Farncombe'],
+      },
+    ],
+  },
+  {
+    city: 'Caterham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Caterham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Whyteleafe'],
+      },
+    ],
+  },
+  {
+    city: 'Oxted',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Oxted Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Reigate',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Reigate Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Horley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Horley Town Centre'],
+      },
+    ],
+  },
+  {
+    city: "Bishop's Stortford",
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ["Bishop's Stortford Town Centre"],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Sawbridgeworth'],
+      },
+    ],
+  },
+  {
+    city: 'Hertford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hertford Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Ware',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ware Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Hitchin',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hitchin Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Letchworth',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Letchworth Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Baldock'],
+      },
+    ],
+  },
+  {
+    city: 'Harpenden',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Harpenden Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Borehamwood',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Borehamwood Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Elstree'],
+      },
+    ],
+  },
+  {
+    city: 'Potters Bar',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Potters Bar Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Cheshunt',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Cheshunt Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Waltham Cross'],
+      },
+    ],
+  },
+  {
+    city: 'Hoddesdon',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hoddesdon Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Broxbourne'],
+      },
+    ],
+  },
+  {
+    city: 'Welwyn Garden City',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Welwyn Garden City Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Berkhamsted',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Berkhamsted Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Tring',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Tring Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Rickmansworth',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Rickmansworth Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Croxley Green'],
+      },
+    ],
+  },
+  {
+    city: 'Bushey',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bushey Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Royston',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Royston Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Horsham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Horsham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Haywards Heath',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Haywards Heath Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cuckfield'],
+      },
+    ],
+  },
+  {
+    city: 'Burgess Hill',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Burgess Hill Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hassocks'],
+      },
+    ],
+  },
+  {
+    city: 'Chichester',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chichester Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Selsey'],
+      },
+    ],
+  },
+  {
+    city: 'Bognor Regis',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bognor Regis Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Felpham'],
+      },
+    ],
+  },
+  {
+    city: 'Littlehampton',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Littlehampton Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Rustington'],
+      },
+    ],
+  },
+  {
+    city: 'Lewes',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Lewes Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Newhaven', 'Seaford'],
+      },
+    ],
+  },
+  {
+    city: 'Uckfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Uckfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Crowborough',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Crowborough Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'East Grinstead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['East Grinstead Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Shoreham-by-Sea',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Shoreham-by-Sea Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Lancing'],
+      },
+    ],
+  },
+  {
+    city: 'Hove',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hove Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Portslade'],
+      },
+    ],
+  },
+  {
+    city: 'Bracknell',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bracknell Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Crowthorne', 'Sandhurst'],
+      },
+    ],
+  },
+  {
+    city: 'Maidenhead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Maidenhead Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cookham'],
+      },
+    ],
+  },
+  {
+    city: 'Windsor',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Windsor Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Eton', 'Datchet'],
+      },
+    ],
+  },
+  {
+    city: 'Wokingham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Wokingham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Winnersh'],
+      },
+    ],
+  },
+  {
+    city: 'Newbury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Newbury Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Thatcham'],
+      },
+    ],
+  },
+  {
+    city: 'High Wycombe',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['High Wycombe Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hazlemere'],
+      },
+    ],
+  },
+  {
+    city: 'Aylesbury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Aylesbury Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Amersham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Amersham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Chesham'],
+      },
+    ],
+  },
+  {
+    city: 'Beaconsfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Beaconsfield Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Gerrards Cross'],
+      },
+    ],
+  },
+  {
+    city: 'Marlow',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Marlow Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Buckingham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Buckingham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Dunstable',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dunstable Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Houghton Regis'],
+      },
+    ],
+  },
+  {
+    city: 'Leighton Buzzard',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Leighton Buzzard Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Biggleswade',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Biggleswade Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Sandy'],
+      },
+    ],
+  },
+  {
+    city: 'Ampthill',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ampthill Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Flitwick'],
+      },
+    ],
+  },
+  {
+    city: 'Winchester',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Winchester Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Farnborough',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Farnborough Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Fleet'],
+      },
+    ],
+  },
+  {
+    city: 'Aldershot',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Aldershot Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Fareham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Fareham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Portchester'],
+      },
+    ],
+  },
+  {
+    city: 'Eastleigh',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Eastleigh Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Chandlers Ford'],
+      },
+    ],
+  },
+  {
+    city: 'Andover',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Andover Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Havant',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Havant Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Waterlooville', 'Emsworth'],
+      },
+    ],
+  },
+  {
+    city: 'Gosport',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Gosport Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Romsey',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Romsey Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Petersfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Petersfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Alton',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Alton Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Salford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Salford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Eccles', 'Swinton'],
+      },
+    ],
+  },
+  {
+    city: 'Wigan',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Wigan Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Leigh'],
+      },
+    ],
+  },
+  {
+    city: 'Rochdale',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Rochdale Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Heywood', 'Middleton'],
+      },
+    ],
+  },
+  {
+    city: 'Bury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bury Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ramsbottom', 'Prestwich'],
+      },
+    ],
+  },
+  {
+    city: 'Altrincham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Altrincham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Sale', 'Hale'],
+      },
+    ],
+  },
+  {
+    city: 'Ashton-under-Lyne',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ashton-under-Lyne Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Stalybridge', 'Hyde'],
+      },
+    ],
+  },
+  {
+    city: 'Sutton Coldfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Sutton Coldfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Halesowen',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Halesowen Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Stourbridge',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stourbridge Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Smethwick',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Smethwick Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Oldbury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Oldbury Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Wakefield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Wakefield Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ossett', 'Horbury'],
+      },
+    ],
+  },
+  {
+    city: 'Halifax',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Halifax Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Sowerby Bridge'],
+      },
+    ],
+  },
+  {
+    city: 'Dewsbury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dewsbury Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Batley'],
+      },
+    ],
+  },
+  {
+    city: 'Keighley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Keighley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Bingley'],
+      },
+    ],
+  },
+  {
+    city: 'Pontefract',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Pontefract Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Castleford'],
+      },
+    ],
+  },
+  {
+    city: 'St Helens',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['St Helens Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Birkenhead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Birkenhead Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Wallasey', 'Bebington'],
+      },
+    ],
+  },
+  {
+    city: 'Southport',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Southport Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Formby'],
+      },
+    ],
+  },
+  {
+    city: 'Bootle',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bootle Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Crosby'],
+      },
+    ],
+  },
+  {
+    city: 'Lancaster',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Lancaster Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Morecambe'],
+      },
+    ],
+  },
+  {
+    city: 'Blackburn',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Blackburn Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Darwen'],
+      },
+    ],
+  },
+  {
+    city: 'Burnley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Burnley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Nelson'],
+      },
+    ],
+  },
+  {
+    city: 'Chorley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chorley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Leyland'],
+      },
+    ],
+  },
+  {
+    city: 'Lincoln',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Lincoln Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Worcester',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Worcester Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Hereford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hereford Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Chester',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chester Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Carlisle',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Carlisle Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Durham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Durham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Shrewsbury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Shrewsbury Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Telford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Telford Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Stafford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stafford Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Lichfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Lichfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Nuneaton',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Nuneaton Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Rugby',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Rugby Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Leamington Spa',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Leamington Spa Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Warwick', 'Kenilworth'],
+      },
+    ],
+  },
+  {
+    city: 'Stratford-upon-Avon',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stratford-upon-Avon Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Kettering',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Kettering Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Corby',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Corby Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Wellingborough',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Wellingborough Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Mansfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Mansfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Chesterfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chesterfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Barnsley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Barnsley Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Grimsby',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Grimsby Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cleethorpes'],
+      },
+    ],
+  },
+  {
+    city: 'Scunthorpe',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Scunthorpe Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Harrogate',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Harrogate Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Darlington',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Darlington Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Hartlepool',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hartlepool Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Stockton-on-Tees',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stockton-on-Tees Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Gateshead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Gateshead Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'South Shields',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['South Shields Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Torquay',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Torquay Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Paignton'],
+      },
+    ],
+  },
+  {
+    city: 'Truro',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Truro Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Taunton',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Taunton Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Yeovil',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Yeovil Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Salisbury',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Salisbury Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Weymouth',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Weymouth Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Poole',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Poole Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Kidderminster',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Kidderminster Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Loughborough',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Loughborough Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Macclesfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Macclesfield Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Crewe',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Crewe Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Burton upon Trent',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Burton upon Trent Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Newport',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Newport Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Wrexham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Wrexham Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Bangor',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bangor Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Inverness',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Inverness Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Stirling',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stirling Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Perth',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Perth Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Paisley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Paisley Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Lisburn',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Lisburn Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Derry',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Derry Town Centre'],
+      },
+    ],
+  },
+  {
+    city: 'Newry',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Newry Town Centre'],
+      },
+    ],
+  },
 ];
 
 export const CITY_AREA_NAMES = CITY_AREAS.map(c => c.city);
+
+/** Towns above that sit in a county people search by name ("nails in kent").
+ *  Locations are stored as "<Area>, <Town>", so the county name itself never
+ *  appears in one; search widens the county to these towns instead. */
+export const COUNTY_TOWNS: Record<string, string[]> = {
+  Kent: ['Maidstone', 'Gillingham', 'Canterbury', 'Dartford', 'Gravesend', 'Chatham', 'Rochester', 'Ashford', 'Tunbridge Wells', 'Tonbridge', 'Sevenoaks', 'Swanley', 'Sittingbourne', 'Faversham', 'Whitstable', 'Herne Bay', 'Margate', 'Ramsgate', 'Broadstairs', 'Folkestone', 'Dover', 'Deal', 'Hythe', 'Tenterden', 'Westerham', 'Edenbridge', 'Paddock Wood', 'Snodland', 'West Malling', 'Sheerness', 'Cranbrook', 'New Romney'],
+  Essex: ['Chelmsford', 'Basildon', 'Colchester', 'Southend-on-Sea', 'Brentwood', 'Harlow', 'Grays', 'Billericay', 'Wickford', 'Rayleigh', 'Canvey Island', 'Benfleet', 'Clacton-on-Sea', 'Braintree', 'Witham', 'Loughton', 'Chigwell', 'Buckhurst Hill', 'Epping', 'Saffron Walden', 'Maldon', 'Harwich', 'Waltham Abbey'],
+  Surrey: ['Woking', 'Guildford', 'Epsom', 'Redhill', 'Camberley', 'Farnham', 'Staines-upon-Thames', 'Weybridge', 'Walton-on-Thames', 'Esher', 'Leatherhead', 'Dorking', 'Godalming', 'Caterham', 'Oxted', 'Reigate', 'Horley'],
+  Hertfordshire: ['Watford', 'St Albans', 'Hemel Hempstead', 'Stevenage', 'Hatfield', "Bishop's Stortford", 'Hertford', 'Ware', 'Hitchin', 'Letchworth', 'Harpenden', 'Borehamwood', 'Potters Bar', 'Cheshunt', 'Hoddesdon', 'Welwyn Garden City', 'Berkhamsted', 'Tring', 'Rickmansworth', 'Bushey', 'Royston'],
+  Sussex: ['Brighton', 'Worthing', 'Crawley', 'Eastbourne', 'Hastings', 'Horsham', 'Haywards Heath', 'Burgess Hill', 'Chichester', 'Bognor Regis', 'Littlehampton', 'Lewes', 'Uckfield', 'Crowborough', 'East Grinstead', 'Shoreham-by-Sea', 'Hove'],
+  Berkshire: ['Reading', 'Slough', 'Bracknell', 'Maidenhead', 'Windsor', 'Wokingham', 'Newbury'],
+  Buckinghamshire: ['Milton Keynes', 'High Wycombe', 'Aylesbury', 'Amersham', 'Beaconsfield', 'Marlow', 'Buckingham'],
+  Bedfordshire: ['Luton', 'Bedford', 'Dunstable', 'Leighton Buzzard', 'Biggleswade', 'Ampthill'],
+  Hampshire: ['Southampton', 'Portsmouth', 'Basingstoke', 'Winchester', 'Farnborough', 'Aldershot', 'Fareham', 'Eastleigh', 'Andover', 'Havant', 'Gosport', 'Romsey', 'Petersfield', 'Alton'],
+  'Greater Manchester': ['Manchester', 'Bolton', 'Stockport', 'Oldham', 'Salford', 'Wigan', 'Rochdale', 'Bury', 'Altrincham', 'Ashton-under-Lyne'],
+  'West Midlands': ['Birmingham', 'Coventry', 'Wolverhampton', 'Walsall', 'Dudley', 'Solihull', 'West Bromwich', 'Sutton Coldfield', 'Halesowen', 'Stourbridge', 'Smethwick', 'Oldbury'],
+  'West Yorkshire': ['Leeds', 'Bradford', 'Huddersfield', 'Wakefield', 'Halifax', 'Dewsbury', 'Keighley', 'Pontefract'],
+  Merseyside: ['Liverpool', 'St Helens', 'Birkenhead', 'Southport', 'Bootle'],
+  Lancashire: ['Preston', 'Blackpool', 'Lancaster', 'Blackburn', 'Burnley', 'Chorley'],
+};
+
+export type PlaceMatch =
+  | { kind: 'county'; name: string }
+  | { kind: 'town'; name: string }
+  /** `region` is where it sits in the picker ("East London"), so a search
+   *  result can say so without anyone stepping through the lists. */
+  | { kind: 'area'; name: string; town: string; region: string };
+
+const normalizePlace = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Edits needed to turn one string into the other (insert, delete, swap a letter). */
+function editDistance(a: string, b: string, cap: number): number {
+  if (Math.abs(a.length - b.length) > cap) return cap + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const v = Math.min(
+        (prev[j] ?? 0) + 1,
+        (row[j - 1] ?? 0) + 1,
+        (prev[j - 1] ?? 0) + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1),
+      );
+      row.push(v);
+      if (v < best) best = v;
+    }
+    if (best > cap) return cap + 1;
+    prev = row;
+  }
+  return prev[b.length] ?? cap + 1;
+}
+
+/** How many slips a typed name may have and still count: none for short
+ *  text, where one wrong letter already names somewhere else. */
+const allowedSlips = (length: number) => (length >= 9 ? 2 : length >= 5 ? 1 : 0);
+
+/**
+ * Every place the pickers know that matches what was typed, at any level, so
+ * nobody has to know that Stoke Newington sits under North London or that Kent
+ * is a list of towns. Names starting with the text come before ones containing
+ * it, and bigger places before smaller. Capped so the list stays readable.
+ *
+ * When nothing starts with or contains the text, a name a slip or two away
+ * still counts ("leyetonstone" finds Leytonstone), closest first.
+ */
+export function searchPlaces(query: string, limit = 40): PlaceMatch[] {
+  const q = normalizePlace(query);
+  if (!q) return [];
+  const starts: PlaceMatch[] = [];
+  const contains: PlaceMatch[] = [];
+  const near: { match: PlaceMatch; slips: number }[] = [];
+  const cap = allowedSlips(q.length);
+  const consider = (name: string, match: PlaceMatch) => {
+    const key = normalizePlace(name);
+    if (key.startsWith(q)) starts.push(match);
+    else if (q.length >= 2 && key.includes(q)) contains.push(match);
+    else if (cap > 0) {
+      const slips = editDistance(q, key, cap);
+      if (slips <= cap) near.push({ match, slips });
+    }
+  };
+  for (const name of Object.keys(COUNTY_TOWNS)) consider(name, { kind: 'county', name });
+  for (const { city } of CITY_AREAS) consider(city, { kind: 'town', name: city });
+  for (const { city, regions } of CITY_AREAS) {
+    for (const { region, areas } of regions) {
+      for (const name of areas) consider(name, { kind: 'area', name, town: city, region });
+    }
+  }
+  const direct = [...starts, ...contains];
+  if (direct.length) return direct.slice(0, limit);
+  return near.sort((a, b) => a.slips - b.slips).map(n => n.match).slice(0, limit);
+}
 
 export const getCityAreaData = (city: string): CityAreaData | undefined =>
   CITY_AREAS.find(c => c.city.toLowerCase() === city.trim().toLowerCase());

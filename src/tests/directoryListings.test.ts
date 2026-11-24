@@ -1,5 +1,5 @@
+import { cityFilterKeys, matchesCityFilter } from '../utils/providerCity';
 import {
-  citiesInLocation,
   filtersAllowDirectoryListings,
   listingInitial,
   listingInstagramUrl,
@@ -15,15 +15,17 @@ describe('listingInitial', () => {
   });
 });
 
-describe('citiesInLocation', () => {
-  it('finds the Search filter cities named in the area text', () => {
-    expect(citiesInLocation('Lewisham, South London')).toEqual(['London']);
-    expect(citiesInLocation('Dartford, South London')).toEqual(['London']);
-    expect(citiesInLocation(null)).toEqual([]);
-  });
+describe('City filter on a listing\'s imported area text', () => {
+  // Search builds a listing's cityKeys from its area text alone: listings
+  // have no "Areas you cover" list.
+  const matches = (picked: string[], area: string | null) =>
+    matchesCityFilter(picked, cityFilterKeys(area, []));
 
-  it('only matches whole words', () => {
-    expect(citiesInLocation('Bathgate')).toEqual([]);
+  it('finds the town the area text names', () => {
+    expect(matches(['London'], 'Lewisham, South London')).toBe(true);
+    expect(matches(['London'], 'Camberwell, South London')).toBe(true);
+    expect(matches(['Manchester'], 'Lewisham, South London')).toBe(false);
+    expect(matches(['London'], null)).toBe(false);
   });
 });
 

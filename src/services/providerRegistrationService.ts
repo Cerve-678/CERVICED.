@@ -8,13 +8,19 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
+import { geocodeUkPlace, isInUk } from './ukGeocode';
 import { themeBrandingColours } from '../constants/providerThemes';
+import { toReleaseTime } from '../utils/bookingHorizon';
 import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
+import type { ServiceTypeKey } from '../constants/serviceTypes';
 import { normalizeServiceImages } from '../utils/serviceImageDraft';
 export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import {
+  getMyProviderAddOns,
   getProviderBookingPolicies,
   getProviderLogoUrlByUserId,
+  getProviderServicePositions,
+  getProviderServiceDescriptionSnapshots,
   getProviderRegistrationCore,
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
@@ -24,28 +30,28 @@ import {
   providerSlugExists,
   removeStorageObjects,
   listUserStorageObjectPaths,
+  replaceProviderAddOns,
   replaceProviderServiceCatalog,
   saveProviderBookingPolicies,
   setMyProviderFullAddress,
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
+import { collapseDuplicateSavedServices } from '../features/provider-registration/serviceDraft';
+import { serviceDescriptionsMatch, type ExpectedServiceDescription } from '../features/provider-registration/serviceDescriptionVerification';
 import type { DbProvider, BusinessType, LogoFraming, ProviderBookingMode } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
 } from '../features/business-details/options';
+import {
+  addOnKeysForSavedService,
+  buildAddOnSaveItems,
+  libraryItemFromRow,
+  type AddOnLibraryItem,
+} from '../features/provider-registration/addOnLibrary';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
-
-export interface AddOnData {
-  id: number;
-  // The real service_add_ons.id when this add-on already exists in the DB —
-  // null for one created in this editing session. See ServiceData.dbId.
-  dbId: string | null;
-  name: string;
-  price: number;
-}
 
 export interface ServiceData {
   id: number;
@@ -64,7 +70,10 @@ export interface ServiceData {
   bufferAfterMins: number | null;
   description: string;
   images: ServiceImageDraft[];
-  addOns: AddOnData[];
+  /** Keys of the provider's add-ons ticked on this service (see
+   *  features/provider-registration/addOnLibrary). Add-ons are the
+   *  provider's own list now, not this service's. */
+  addOnKeys: string[];
   tags: string[];
   techniqueTags: string[];
   outcomeTags: string[];
@@ -75,7 +84,7 @@ export interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  serviceType: ServiceTypeKey | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
   skinTonesSuitable?: string[];
@@ -91,11 +100,18 @@ export interface ProviderRegistrationData {
   location: string;
   aboutText: string;
   /** Monthly release day (1-31): next month opens for booking on this day
-   *  (utils/bookingHorizon) and bell followers are told. InfoReg (Edit
-   *  Profile) is its ONLY editor — one change, and the booking limit, the
-   *  profile pill and the release message all follow. Saved by merging just
-   *  this key into automation_settings. null = rolling window instead. */
+   *  (utils/bookingHorizon) and bell followers are told. null = rolling
+   *  window instead. Edited here (Edit Profile) AND in Scheduling &
+   *  Availability; both write the same automation_settings key, so a change
+   *  on one shows on the other. */
   scheduleReleaseDay: number | null;
+  /** True only when the provider changed the release day on this screen
+   *  since it loaded. The save writes the day only then, so saving Edit
+   *  Profile never puts back an older day over one just set in Scheduling. */
+  scheduleReleaseDayEdited?: boolean;
+  /** 'HH:MM', UK time, the release day opens. Same edited-here rule. */
+  scheduleReleaseTime: string;
+  scheduleReleaseTimeEdited?: boolean;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
   // computed BEFORE the `gradient` field above gets its hardcoded fallback
@@ -107,11 +123,19 @@ export interface ProviderRegistrationData {
   hasCustomGradient: boolean;
   accentColor: string;
   profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
+  /** Branding → Business Name Font (providers.brand_font), read only so
+   *  previews letter the name as the profile does. Branding saves it. */
+  brandFont?: string | null;
   logo: string | null;
   /** How the logo sits in each Home card. Null = fill and centre. Cleared
    *  whenever a new logo is picked, since it describes the old image. */
   logoFraming: LogoFraming | null;
   categories: Record<string, ServiceData[]>;
+  /** The provider's add-ons (universal add-ons). undefined = not loaded (a
+   *  failed read, or a form built without its catalogue): a save then
+   *  leaves add-ons exactly as they are rather than replacing them with
+   *  nothing. [] = loaded, and there are none. */
+  addOnLibrary?: AddOnLibraryItem[];
   // Shown to clients under the category tab once selected — keyed the same
   // as `categories`, but optional per key since older/imported categories
   // may not have one yet.
@@ -148,8 +172,8 @@ export interface ProviderRegistrationData {
   // '' is this form's "not answered yet"; the four real values are the
   // canonical BusinessType union.
   businessType: BusinessType | '';
-  // Collected at signup (Step 4's "Who you work with" / "Tell me more" —
-  // see supabase/provider_signup_business_fields.sql), editable here too.
+  // Edited in Services & Pricing. No longer asked at sign-up (removed in #67);
+  // only accounts that signed up before then have one staged on `users`.
   teamSize: 'solo' | 'small_team' | 'large_team' | '';
   accessibilityNotes: string;
   /** providers.terms_accepted_at — stamped once, on first publish. Read-only
@@ -162,8 +186,12 @@ export interface ProviderRegistrationData {
   // (SearchScreen/HomeScreen) already reads this column, this form is its
   // first writer.
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
-  // Service-coverage cities — drives providers.service_locations, read by
-  // the client Search "City" filter. See src/constants/ukCities.ts.
+  priceBands: string[];
+  // providers.service_locations — "Areas you cover", edited in About You
+  // (mobile providers only): towns ("London") and areas ("Shoreditch,
+  // London") as AreaPicker writes them, matched by the client Search "City"
+  // filter alongside `location` (see src/utils/providerCity.ts). Only the
+  // first insert writes it from here; updates leave it to About You.
   serviceLocations: string[];
   fullAddress: string;
   /** Private arrival/access instructions, released to a booked client only
@@ -195,19 +223,22 @@ export interface ProviderRegistrationData {
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;
     depositType?: string;
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
+    policyImageUrls?: string[];
   } | null;
   // Enforced cancellation window (providers.cancellation_notice_hours) — set
-  // via the separate Automations screen, not this form, but the client-facing
-  // Policy tab prefers it over bookingPolicies.cancelNotice when both exist.
+  // from Policies, not this form. The database keeps bookingPolicies.cancelNotice
+  // saying the same thing (keep_cancel_notice_in_step), and wins if they differ.
   cancellationNoticeHours: number;
 }
 
@@ -266,12 +297,25 @@ function sniffImageType(
   return null;
 }
 
-/** Longest side, in pixels, of any image this app uploads. The largest a
- *  photo is ever shown is full screen width, 1,290 px on the biggest iPhone
- *  (there is no pinch-zoom), and an Explore card is a few hundred. At 2,048 a
- *  portrait photo is still 1,536 px wide, so nothing looks softer anywhere,
- *  while a 4,000-8,000 px original's 3-7 MB drops to roughly 400-700 KB. */
+/** Longest side, in pixels, of any photo this app uploads. The largest a
+ *  photo is ever shown is full screen width, 1,290 px on the biggest iPhone,
+ *  and an Explore card is a few hundred. At 2,048 a portrait photo is still
+ *  1,536 px wide, so nothing looks softer anywhere, while a 4,000-8,000 px
+ *  original's 3-7 MB drops to roughly 400-700 KB. */
 export const MAX_UPLOAD_IMAGE_EDGE_PX = 2048;
+
+/** Tallest a 'document' upload is kept. High enough that a long policy sheet
+ *  keeps its full width, low enough that a very long screenshot can't make a
+ *  bitmap too big for the phone to hold (2,048 x 8,192 is about 64 MB). */
+export const MAX_DOCUMENT_IMAGE_HEIGHT_PX = 8192;
+
+/** How an upload is shrunk. A 'photo' fits its longest side in
+ *  MAX_UPLOAD_IMAGE_EDGE_PX. A 'document' (the detailed policy image) is read
+ *  top to bottom at full screen width, and can be pinch-zoomed, so its width
+ *  is what has to stay sharp: capping a long sheet by its height left a
+ *  1,179 x 6,000 screenshot about 400 px wide, which reads blurry at full
+ *  width. */
+export type UploadImageShape = 'photo' | 'document';
 
 async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
   // Use expo-file-system to read the local file reliably on both iOS and Android.
@@ -304,17 +348,26 @@ async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
 async function shrinkImageForUpload(
   localUri: string,
   sniffedMime: string | undefined,
+  shape: UploadImageShape,
 ): Promise<string | null> {
   try {
     // Rendered once to read the upright (EXIF-applied) size, then reused as
     // the resize source so the file is only decoded once.
     const original = await ImageManipulator.manipulate(localUri).renderAsync();
     const { width, height } = original;
-    if (Math.max(width, height) <= MAX_UPLOAD_IMAGE_EDGE_PX) return null;
-    const resized = await ImageManipulator.manipulate(original)
-      .resize(width >= height
+    let target: { width: number } | { height: number };
+    if (shape === 'document') {
+      const scale = Math.min(MAX_UPLOAD_IMAGE_EDGE_PX / width, MAX_DOCUMENT_IMAGE_HEIGHT_PX / height);
+      if (scale >= 1) return null;
+      target = { width: Math.round(width * scale) };
+    } else {
+      if (Math.max(width, height) <= MAX_UPLOAD_IMAGE_EDGE_PX) return null;
+      target = width >= height
         ? { width: MAX_UPLOAD_IMAGE_EDGE_PX }
-        : { height: MAX_UPLOAD_IMAGE_EDGE_PX })
+        : { height: MAX_UPLOAD_IMAGE_EDGE_PX };
+    }
+    const resized = await ImageManipulator.manipulate(original)
+      .resize(target)
       .renderAsync();
     const saved = await resized.saveAsync(
       sniffedMime === 'image/png'
@@ -331,13 +384,14 @@ async function shrinkImageForUpload(
 export async function uploadToStorage(
   bucket: string,
   storagePath: string,
-  localUri: string
+  localUri: string,
+  shape: UploadImageShape = 'photo',
 ): Promise<string> {
   let bytes = await readLocalFileBytes(localUri);
 
   // Oversized photos are shrunk before upload, so every screen that shows
   // them later downloads a few hundred KB rather than several MB.
-  const shrunkUri = await shrinkImageForUpload(localUri, sniffImageType(bytes)?.mime);
+  const shrunkUri = await shrinkImageForUpload(localUri, sniffImageType(bytes)?.mime, shape);
   if (shrunkUri) bytes = await readLocalFileBytes(shrunkUri);
 
   // Content type comes from the bytes, never from the name. Only if the bytes
@@ -363,11 +417,17 @@ export async function uploadToStorage(
   }
 }
 
-function parseDurationToMinutes(duration: string): number {
+/**
+ * A service's duration label (the sign-up picker's "1 hr 30", or older
+ * "1 hr 30 mins" / "1.5 hours" / "90") to minutes. A number after the hours is
+ * minutes whether or not it says so: reading "1 hr 30" as 1 hr saved every
+ * half-hour preset half an hour short.
+ */
+export function serviceDurationToMinutes(duration: string): number {
   if (!duration) return 60;
   const lower = duration.toLowerCase().trim();
-  // "1 hr 30 mins" / "2 hours 15 min"
-  const hrMin = lower.match(/(\d+)\s*h(?:r|our)?s?\s*(\d+)\s*m/);
+  // "1 hr 30" / "1 hr 30 mins" / "2 hours 15 min" / "1h30"
+  const hrMin = lower.match(/(\d+)\s*h[a-z]*\s*(\d+)/);
   if (hrMin) return parseInt(hrMin[1] ?? '0') * 60 + parseInt(hrMin[2] ?? '0');
   // "1.5 hours" / "2hrs"
   const decHr = lower.match(/^(\d+\.?\d*)\s*h/);
@@ -378,12 +438,12 @@ function parseDurationToMinutes(duration: string): number {
   return 60;
 }
 
-function minutesToDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} mins`;
+/** Minutes back to a label in the picker's own format, so a saved preset reloads selected. */
+export function minutesToServiceDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
   const hrs = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  if (mins === 0) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
-  return `${hrs} hr ${mins} mins`;
+  return mins === 0 ? `${hrs} hr` : `${hrs} hr ${mins}`;
 }
 
 function generateSlug(name: string): string {
@@ -401,8 +461,6 @@ function generateSlug(name: string): string {
 // Coarse UK bounding box — enough to catch a wildly wrong geocode (a real
 // production row's public location_text is literally "New York"; nothing
 // today stops the same mistake for the real address either).
-const UK_BOUNDS = { minLat: 49.8, maxLat: 60.9, minLng: -8.2, maxLng: 1.8 };
-
 // Loose UK postcode shape, checked as a substring of a freeform address line
 // (not an anchored full-string match) — a cheap pre-check to reject obvious
 // garbage before spending a geocode call.
@@ -450,10 +508,7 @@ export async function geocodeAndValidateUkAddress(
     latitude = match.latitude;
     longitude = match.longitude;
   }
-  if (
-    latitude < UK_BOUNDS.minLat || latitude > UK_BOUNDS.maxLat ||
-    longitude < UK_BOUNDS.minLng || longitude > UK_BOUNDS.maxLng
-  ) {
+  if (!isInUk({ latitude, longitude })) {
     throw new Error("That address doesn't look like it's in the UK — please check it and try again.");
   }
 
@@ -463,6 +518,13 @@ export async function geocodeAndValidateUkAddress(
 // ── saveProviderToSupabase ───────────────────────────────────────────────────
 // Upserts the provider row, uploads images, replaces services/images/add-ons.
 // Also updates the user's role to 'provider' and refreshes the AsyncStorage cache.
+
+export class ServiceDescriptionVerificationError extends Error {
+  constructor() {
+    super('Service descriptions did not pass the post-save check');
+    this.name = 'ServiceDescriptionVerificationError';
+  }
+}
 
 /**
  * A local or remote image's width/height ratio, or null if it can't be read.
@@ -495,6 +557,15 @@ export async function saveProviderToSupabase(
   // overwritten or cleared.
   acceptedTerms?: boolean
 ): Promise<void> {
+  // An editor that already holds two copies of one saved service (see
+  // upsertServiceInList) would send both. The RPC writes that row twice and
+  // the description check after it then fails. Keep the latest copy.
+  data = {
+    ...data,
+    categories: Object.fromEntries(
+      Object.entries(data.categories).map(([name, list]) => [name, collapseDuplicateSavedServices(list)]),
+    ),
+  };
   // 0. Validate the real business address before anything else happens —
   // required for every business_type now, including 'mobile' (a private base
   // address, never shown to clients). Fails fast, before any upload or DB
@@ -554,12 +625,13 @@ export async function saveProviderToSupabase(
   // correct behaviour, not a bug. Never blocks the save on failure.
   let latitude: number | undefined;
   let longitude: number | undefined;
+  // Asked as a UK place: on its own, "East London" geocoded to South Africa.
   if (data.location?.trim()) {
     try {
-      const [match] = await Location.geocodeAsync(data.location.trim());
-      if (match) {
-        latitude = match.latitude;
-        longitude = match.longitude;
+      const coords = await geocodeUkPlace(data.location);
+      if (coords) {
+        latitude = coords.latitude;
+        longitude = coords.longitude;
       }
     } catch {
       // Silent failure — providers row keeps whatever lat/lng it already had
@@ -580,9 +652,9 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // automation_settings: only scheduleReleaseDay belongs to this screen, and
-  // it's merged in after the row is saved (below). The other keys belong to
-  // Automations and Payments, which merge their own.
+  // automation_settings: only scheduleReleaseDay is written here, merged in
+  // after the row is saved (below). The other keys belong to Automations and
+  // Payments, which merge their own.
 
   if (existingProvider) {
     try {
@@ -635,8 +707,11 @@ export async function saveProviderToSupabase(
         accessibility_notes: data.accessibilityNotes?.trim() || null,
         languages_spoken: data.languagesSpoken,
         price_tier: data.priceRange || null,
+        price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
-        service_locations: data.serviceLocations,
+        // No service_locations here: an existing provider edits "Areas you
+        // cover" in About You only. Writing back this form's loaded copy
+        // would undo a change made there since Edit Profile opened.
         preferred_payment_methods: data.preferredPaymentMethods,
         // reconcile, not `|| 'on_confirmation'`: the old fallback silently
         // turned "never share" into "share on confirmation" for any provider
@@ -695,6 +770,7 @@ export async function saveProviderToSupabase(
         accessibility_notes: data.accessibilityNotes?.trim() || null,
         languages_spoken: data.languagesSpoken,
         price_tier: data.priceRange || null,
+        price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
         preferred_payment_methods: data.preferredPaymentMethods,
@@ -714,11 +790,21 @@ export async function saveProviderToSupabase(
     }
   }
 
-  // The release day — merged server-side so no other key in
-  // automation_settings is touched.
-  await (data.scheduleReleaseDay != null
-    ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
-    : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
+  // The release day and time, only what was changed on this screen (see
+  // scheduleReleaseDayEdited). Merged server-side so no other key in
+  // automation_settings is touched. Clearing the day keeps the time.
+  const releaseSet: { scheduleReleaseDay?: number; scheduleReleaseTime?: string } = {};
+  const releaseRemove: 'scheduleReleaseDay'[] = [];
+  if (data.scheduleReleaseDayEdited) {
+    if (data.scheduleReleaseDay != null) releaseSet.scheduleReleaseDay = data.scheduleReleaseDay;
+    else releaseRemove.push('scheduleReleaseDay');
+  }
+  if (data.scheduleReleaseTimeEdited && data.scheduleReleaseDay != null) {
+    releaseSet.scheduleReleaseTime = data.scheduleReleaseTime;
+  }
+  if (Object.keys(releaseSet).length || releaseRemove.length) {
+    await mergeProviderAutomationSettings(providerId, releaseSet, releaseRemove);
+  }
 
   // Now that the new logo_url is durably saved, remove the old versioned
   // object it replaced — best-effort, never blocks the save. Without this,
@@ -760,7 +846,7 @@ export async function saveProviderToSupabase(
   // delete + reinsert in one transaction. If any insert fails, it ALL rolls
   // back and the provider's existing services are untouched (previously a
   // mid-save failure wiped services — see supabase/replace_provider_services.sql).
-  const servicesPayload: Record<string, unknown>[] = [];
+  const servicesPayload: (Record<string, unknown> & ExpectedServiceDescription)[] = [];
   for (const [categoryName, services] of Object.entries(data.categories)) {
     const safeCat = categoryName.replace(/[^a-zA-Z0-9]/g, '_');
     for (let sortOrder = 0; sortOrder < services.length; sortOrder++) {
@@ -817,7 +903,7 @@ export async function saveProviderToSupabase(
         name: svc.name,
         description: svc.description || null,
         price: svc.price,
-        duration_minutes: parseDurationToMinutes(svc.duration),
+        duration_minutes: serviceDurationToMinutes(svc.duration),
         buffer_before_mins: svc.bufferBeforeMins ?? null,
         buffer_after_mins: svc.bufferAfterMins ?? null,
         sort_order: sortOrder,
@@ -836,7 +922,8 @@ export async function saveProviderToSupabase(
         skin_tones_suitable: svc.skinTonesSuitable ?? null,
         audience: svc.audience || null,
         images,
-        add_ons: svc.addOns.map((a) => ({ id: a.dbId ?? null, name: a.name, price: a.price })),
+        // No 'add_ons' key: add-ons are saved below as the provider's own
+        // list, and replace_provider_services leaves them alone without it.
       });
     }
   }
@@ -846,6 +933,49 @@ export async function saveProviderToSupabase(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown database error';
     throw new Error(`Saving services failed: ${message}`);
+  }
+
+  // A 200 from the catalogue RPC says it ran, not that the provider's latest
+  // wording survived. Read it back before telling them the profile is saved.
+  try {
+    const stored = await getProviderServiceDescriptionSnapshots(providerId);
+    if (!serviceDescriptionsMatch(servicesPayload, stored)) {
+      logger.error('[providerRegistration] service descriptions differ after publish', {
+        providerId,
+        expectedCount: servicesPayload.length,
+        storedCount: stored.length,
+      });
+      throw new ServiceDescriptionVerificationError();
+    }
+  } catch (error) {
+    if (error instanceof ServiceDescriptionVerificationError) throw error;
+    logger.error('[providerRegistration] service description readback failed:', error);
+    throw new ServiceDescriptionVerificationError();
+  }
+
+  // 5a. Add-ons. Saved after the catalogue so services created in this save
+  // already have ids, which is what an add-on ticked on (or off) a single
+  // service is stored against. New services are matched back by category and
+  // position, the same two values the payload above wrote. Skipped entirely
+  // when the list never loaded, so a failed read can't wipe it.
+  if (data.addOnLibrary) {
+    try {
+      const library = data.addOnLibrary;
+      const needsLookup = Object.values(data.categories).some(list => list.some(svc => svc && !svc.dbId));
+      const idAt = new Map<string, string>();
+      if (needsLookup) {
+        for (const row of await getProviderServicePositions(providerId)) {
+          idAt.set(`${row.category_name}\u0000${row.sort_order}`, row.id);
+        }
+      }
+      const items = buildAddOnSaveItems(library, data.categories, (svc, categoryName) =>
+        svc.dbId ?? idAt.get(`${categoryName}\u0000${(data.categories[categoryName] ?? []).indexOf(svc)}`) ?? null,
+      );
+      await replaceProviderAddOns(providerId, items);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database error';
+      throw new Error(`Saving add-ons failed: ${message}`);
+    }
   }
 
   // 5b. Drop service-image objects this save orphaned. replace_provider_services
@@ -882,6 +1012,7 @@ export async function saveProviderToSupabase(
 
 interface RegistrationCatalogue {
   categories: Record<string, ServiceData[]>;
+  addOnLibrary?: AddOnLibraryItem[];
   categoryDescriptions: Record<string, string>;
   categoryServiceTypes: Record<string, string>;
   fullAddress: string;
@@ -920,6 +1051,7 @@ export function providerRowToRegistrationData(
     publicDirections: provider.public_directions || '',
     aboutText: provider.about_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
+    scheduleReleaseTime: toReleaseTime(provider.automation_settings?.scheduleReleaseTime),
     // Unset colours fall back to the provider's own theme, never a
     // placeholder: this object is saved back on the next profile save.
     gradient: (provider.gradient || themeBrandingColours(provider.profile_theme).gradient) as [string, string, ...string[]],
@@ -929,6 +1061,7 @@ export function providerRowToRegistrationData(
     logo: provider.logo_url || null,
     logoFraming: provider.logo_framing ?? null,
     categories: catalogue.categories,
+    ...(catalogue.addOnLibrary ? { addOnLibrary: catalogue.addOnLibrary } : {}),
     categoryDescriptions: catalogue.categoryDescriptions,
     phone: provider.phone || '',
     email: provider.email || '',
@@ -943,6 +1076,7 @@ export function providerRowToRegistrationData(
     termsAcceptedAt: provider.terms_accepted_at ?? null,
     languagesSpoken: provider.languages_spoken || [],
     priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
+    priceBands: provider.price_bands ?? [],
     serviceLocations: provider.service_locations || [],
     preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress: catalogue.fullAddress,
@@ -953,6 +1087,7 @@ export function providerRowToRegistrationData(
     // NULL round-trips as null — see the field's note on ProviderRegistrationData.
     addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
     backgroundImage: provider.background_image_url ?? null,
+    brandFont: provider.brand_font ?? null,
     isVerified: provider.is_verified ?? false,
     rating: Number(provider.rating) || 0,
     whatsapp: provider.whatsapp_number ?? '',
@@ -997,16 +1132,27 @@ export async function loadProviderFromSupabase(
   // either a brand-new signup or an offline draft that never reached the
   // server, so falling back to a local cache (an unsynced draft) is safe
   // here in a way it isn't in the catch block above.
-  if (!provider) return getCachedProviderData(userId);
+  if (!provider) {
+    // No saved provider yet, so there is no saved add-on list to protect:
+    // a draft without one simply starts empty.
+    const draft = await getCachedProviderData(userId);
+    return draft ? { ...draft, addOnLibrary: draft.addOnLibrary ?? [] } : null;
+  }
 
   // Street address, the services list, and the AsyncStorage fallback each
   // only depend on `provider.id` / `userId` — none on each other's result —
   // so fetch them together instead of one after another.
-  const [detailsResult, cached] = await Promise.all([
+  const [detailsResult, cached, addOnRows] = await Promise.all([
     getProviderRegistrationDetails(provider.id)
       .then(value => ({ value, error: null as unknown }))
       .catch(error => ({ value: null, error })),
     getCachedProviderData(userId).catch(() => null),
+    // undefined on failure, never []: an empty list would be saved back over
+    // the real one (see ProviderRegistrationData.addOnLibrary).
+    getMyProviderAddOns(provider.id).catch(error => {
+      logger.warn('loadProviderFromSupabase add-ons error:', error);
+      return undefined;
+    }),
   ]);
   if (detailsResult.error || !detailsResult.value) {
     logger.warn('loadProviderFromSupabase details error:', detailsResult.error);
@@ -1039,24 +1185,21 @@ export async function loadProviderFromSupabase(
         fit: img.fit === 'contain' ? 'contain' : 'cover',
       }));
 
-    const addOns = (svc.service_add_ons || []).map((ao: any, idx: number) => ({
-      id: idx + 1,
-      dbId: ao.id ?? null,
-      name: ao.name,
-      price: Number(ao.price),
-    }));
+    const addOnKeys = addOnRows && svc.id
+      ? addOnKeysForSavedService(addOnRows, { id: svc.id, categoryName: svc.category_name })
+      : [];
 
     (categories[svc.category_name] as ServiceData[]).push({
       id: localId++,
       dbId: svc.id ?? null,
       name: svc.name,
       price: Number(svc.price),
-      duration: minutesToDuration(svc.duration_minutes),
+      duration: minutesToServiceDuration(svc.duration_minutes),
       bufferBeforeMins: svc.buffer_before_mins ?? null,
       bufferAfterMins: svc.buffer_after_mins ?? null,
       description: svc.description || '',
       images,
-      addOns,
+      addOnKeys,
       tags: svc.tags || [],
       techniqueTags: svc.technique_tags || [],
       outcomeTags: svc.outcome_tags || [],
@@ -1078,6 +1221,7 @@ export async function loadProviderFromSupabase(
 
   const loaded = providerRowToRegistrationData(provider, cached, {
     categories,
+    ...(addOnRows ? { addOnLibrary: addOnRows.map(libraryItemFromRow) } : {}),
     categoryDescriptions,
     categoryServiceTypes,
     fullAddress,
@@ -1143,6 +1287,11 @@ export async function getCachedProviderData(userId: string): Promise<ProviderReg
             (services ?? []).map(svc => ({
               ...svc,
               images: normalizeServiceImages(svc.images),
+              // A build before universal add-ons cached `addOns` per
+              // service instead. Those aren't keys into any list, so they
+              // read as none, and with no addOnLibrary on that cache a
+              // save leaves the saved add-ons untouched.
+              addOnKeys: Array.isArray(svc.addOnKeys) ? svc.addOnKeys : [],
             })),
           ]),
         ),

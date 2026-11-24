@@ -6,7 +6,7 @@
 export const TIP_WINDOW_HOURS = 48;
 
 /** Minutes past midnight for "14:30", "14:30:00" or "2:30 PM"; null if unreadable. */
-function minutesOfDay(time: string): number | null {
+export function minutesOfDay(time: string): number | null {
   const match = time.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
   if (!match) return null;
   let hours = Number(match[1]);

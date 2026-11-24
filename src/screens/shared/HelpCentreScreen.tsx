@@ -5,12 +5,12 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { openLegalPage } from '../../utils/legalPage';
+import { openAboutPage } from '../../utils/aboutPage';
 import Icon from '../../components/IconLibrary';
 import { supportMailtoUrl } from '../../constants/support';
 import { useTranslation } from '../../i18n';
@@ -82,8 +84,8 @@ function buildMoreActions(
     { label: t('helpCentre.action.contact'), run: handleContactSupport },
     { label: t('helpCentre.action.report'), run: () => navigation.navigate('ReportProblem') },
     // Held in English (legal reference) by the i18n do-not-translate guard.
-    { label: t('helpCentre.action.terms'), run: () => navigation.navigate('Terms') },
-    { label: t('helpCentre.action.about'), run: () => navigation.navigate('About') },
+    { label: t('helpCentre.action.terms'), run: () => openLegalPage('terms') },
+    { label: t('helpCentre.action.about'), run: openAboutPage },
   ];
 }
 
@@ -121,7 +123,7 @@ export default function HelpCentreScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}

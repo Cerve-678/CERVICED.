@@ -50,8 +50,9 @@ automations (auto-accept, buffers, waitlist, reminders, deposits).
   `ThemeContext`, `RegistrationContext`) + Zustand stores (bookmarks, planner,
   app state)
 - **Backend:** Supabase (Postgres + Auth + Storage + Edge Functions +
-  Realtime). `src/services/databaseService.ts` is the **only** file allowed
-  to import the Supabase client directly.
+  Realtime). The database layer is the **only** code allowed to import the
+  Supabase client: topic files in `src/services/database/`, re-exported
+  through `src/services/databaseService.ts`, which everything else imports.
 - **Payments:** Stripe, mid-migration (see Payments section below) —
   `@stripe/stripe-react-native`, `src/services/stripeService.ts`
 - **Session storage:** envelope-encrypted (`largeSecureStore.ts`), not
@@ -73,7 +74,7 @@ src/
 │   ├── client/             Client-only screens
 │   ├── provider/           Provider-only screens
 │   └── shared/              Used by both hats (NotificationsScreen, BeccaScreen, DevSettingsScreen, etc.)
-├── services/             Supabase-backed logic (databaseService.ts boundary)
+├── services/             Supabase-backed logic (database/ topic files, behind databaseService.ts)
 ├── stores/                Zustand stores
 ├── theme/                  Enterprise theme tokens (mostly unused — see below)
 ├── types/                  Shared TS types
@@ -99,7 +100,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 |---|---|---|
 | Sign-up (**5 steps**, same flow for client/provider, role picked mid-flow) | ✅ | `src/screens/auth/SignUpStep1Screen.tsx`–`SignUpStep5Screen.tsx`. Corrected: `LOGIC.md` described a stale 4-step flow; the actual flow has 5 screens. |
 | Login (email/password) | ✅ | `src/screens/auth/LoginScreen.tsx`, `AuthContext` |
-| Sign in with Apple | 🚧 known bug | `LoginScreen.tsx`/`WelcomeScreen.tsx` `handleAppleLogin` call `supabase.auth.signInWithIdToken` directly — a first-time Apple sign-in silently creates a `users` row with no name/phone/DOB and drops straight into the main app. `credential.fullName`/`credential.email` (only populated by Apple on first authorization) are read but discarded. No "logged in but profile incomplete" routing exists yet — `RootNavigation.tsx` branches on `isLoggedIn` alone. Instagram/Google buttons are inert placeholders (`Alert.alert('Coming soon')`), not a similar risk. |
+| Sign in with Apple / Google | ✅ built, not device-tested | `LoginScreen.tsx`/`WelcomeScreen.tsx` pass Apple's one-time `credential.fullName` to `signInWithAppleIdToken`; Google (#244) goes through `signInWithGoogleIdToken` and its name comes from the session's `full_name`. A first Apple or Google sign-in has no `users` row, so `AuthContext.loadUserProfile` creates one as a client (`createSocialProfileIfMissing`, which never overwrites an existing row). They can browse straight away. Before booking, `features/bookings/BeforeYouBookSheet.tsx` asks for whichever of name, mobile and date of birth is blank; `ProviderProfileScreen`'s Book actions and `CartScreen`'s checkout both check it. Checkout also waits if the account hasn't finished loading. The check is in the app only: no server rule requires a DOB to book. |
 | Email verification | ✅ | `src/screens/auth/EmailVerificationScreen.tsx`, edge function `confirm-email` |
 | Forgot/reset password | ✅ | `ForgotPasswordScreen`, `ResetPasswordOTPScreen`, `NewPasswordScreen` |
 | Session persistence | ✅ | Envelope-encrypted via `largeSecureStore.ts` (not plaintext AsyncStorage — hardened Aug 2026) |
@@ -114,12 +115,13 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Provider profile creation/edit | ✅ | `src/screens/provider/ProviderMyProfileScreen.tsx` |
 | My Profile "Today" cards (day summary + swipeable booking cards) | ✅ code, ⚠️ not device-run | `src/features/providers/TodayScheduleCards.tsx`, timing rules in `todaySchedule.ts`. Summary leads the Dashboard until 2pm, booking cards lead from 2pm, summary leads again once the last client is done (cards then show tomorrow); the other card sits under Your work. "Needs a patch test" comes from `services.patch_test_required` — nothing records whether one was done |
 | Service management | ✅ | Provider profile / services screens |
+| Add-ons (universal, one list per provider) | ✅ code, ⚠️ migration `20261105223541` not applied, not device-run | InfoReg services page "Your add-ons" (`features/provider-registration/AddOnLibrarySection` + `AddOnEditorModal`), ticked per service in the service editor (`ServiceAddOnsField`, suggests existing add-ons as you type). Each add-on: one price, optional extra time (0–4 h, added to the appointment's length everywhere a time is found or an end time is written), pause switch, and a rule (every service / categories / picked services) with per-service exceptions. `provider_add_ons` is the source; `service_add_ons` rows are derived by `sync_provider_add_on_links()` so checkout and carts keep their ids. Rules live in `addOnLibrary.ts`, time in `features/bookings/addOnTime.ts` |
 | Portfolio photos | ✅ | Upload service, `portfolios/` storage bucket |
 | Weekly hours + blocked dates | ✅ | `src/screens/provider/ProviderScheduleScreen.tsx` → `provider_availability`, `provider_blocked_dates` |
 | Auto-accept bookings | ✅ | `ProviderAutomationsScreen.tsx` toggle → `providers.auto_accept_bookings` column, read by DB trigger `handle_new_booking()`. Confirmed still single source of truth — do not add a second toggle. |
 | Waitlist automation | ✅ | `ProviderAutomationsScreen.tsx` (`waitlistEnabled`, `autoAcceptWaitlist`) — DB-trigger-owned, see `WAITLIST.md` |
 | Promotions | ✅ | `ProviderPromotionsScreen.tsx` |
-| Provider automations (reminders, rebook nudge, review requests, buffer time, deposit requirement, max bookings/day) | ✅ | `ProviderAutomationsScreen.tsx` |
+| Provider automations (reminders, rebook nudge, review requests, check-ins, birthday greeting, daily recap, auto-accept, waitlist) | ✅ | `ProviderAutomationsScreen.tsx`. Buffer time and daily cap live on `SchedulingScreen`, deposits on `PaymentsScreen`, and the cancellation notice window on `PoliciesScreen` only (removed from Automations 2026-11-04). |
 | Provider analytics/revenue | ✅ | `ProviderAnalyticsScreen.tsx` — reads bookings/reviews |
 | Clientele view / inbox / conversations | ✅ | `ProviderClienteleScreen.tsx`, `ProviderInboxScreen.tsx`, `ProviderConversationScreen.tsx` |
 | Address release policy | ✅ | `providers.address_release_policy`, server-enforced via `client_bookings` view, not the app |
@@ -131,15 +133,17 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Browse/search/filter providers | ✅ | `HomeScreen`, `SearchScreen`, `ExploreScreen` → `databaseService.getProviders()`, capped at `DEFAULT_PROVIDER_QUERY_LIMIT` (200) |
 | Search services, typo-tolerant | ✅ (migrations `20261025120000` + `20261025130000` live, #171) | `SearchScreen` → `searchProvidersAndServices()` → RPC `search_services_ranked`: matching services as full-width cards scattered between the provider rows, two after each row (`searchResultsLayout.ts`; photo via `getServiceCoverImages`, description with the searched words in bold, the provider's availability tag, max 3 per provider; the card and its Book button open that service's booking sheet, the provider strip opens the profile), query rewritten into words live services use (typos "frsnch" → french, "blowdry"/"pony tail" joined or split, half-typed words), names/headings/tags/category words/descriptions matched, synonyms in SQL `search_synonym_map()`. Graded by `supabase/tests/service_search_eval.sql` (`scripts/search-eval.sh` tests an unapplied version): 91/92 on 2026-10-25. Becca's `searchProviders` gets the same matching |
 | Service tag suggestions + findability checks | ✅ (#179, no migration) | `src/features/providers/serviceTags.ts` (tag lists, templates, `suggestServiceDetails`, `descriptionProblem`) → both service editors (InfoReg `ServiceModal`, My Services `ServiceEditorSheet`) pre-tick tags read from a typed name; a NEW service needs a real description, 1+ tag and who-it's-for; existing ones aren't blocked. My Services shows a "Help clients find your services" card listing live services missing any of those |
-| Directory listings in Search | ✅ (2026-10-19) | Businesses imported from public directories that haven't joined (`providers.is_claimed = false`, `source = 'scraped'`) show in `SearchScreen` after every bookable provider as "Not on CERVICED yet" cards, via `databaseService.getDirectoryListings()`, the one client query exempt from `has_gone_live`. A grey initial stands in for a missing logo (`ListingInitialBadge`). Tapping one opens the read-only listing page in `ProviderProfileScreen` (`UnclaimedProviderView`, data from `getDirectoryListingDetail`, which reads only the columns it shows): link to their own page, Instagram, and claim. Not in Explore (listings have no photos). `is_active = false` takes one down. Rules: `src/features/providers/directoryListings.ts`. |
+| Directory listings in Search | ✅ (2026-11-24) | Businesses imported from public directories that haven't joined (`providers.is_claimed = false`, `source = 'scraped'`) show in `SearchScreen` after every bookable provider as "Not on CERVICED yet" cards, via `getDirectoryListings()` in `src/services/database/providers.ts`, the one client query exempt from `has_gone_live`. A grey initial stands in for a missing logo (`ListingInitialBadge`). Tapping one opens the read-only listing page in `ProviderProfileScreen` (`UnclaimedProviderView`, data from `getDirectoryListingDetail`, which reads only the columns it shows): link to their own page, Instagram, and claim. Not in Explore (listings have no photos). `is_active = false` takes one down. Rules: `src/features/providers/directoryListings.ts`. |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
+| Explore collections (folders of hearted looks) | ✅ (migration `20261110100000` live; not device-run) | Explore → Favourites shows a row of pastel "jelly" folders (`src/components/collections/`, `useCollectionsStore`). After a heart, a bar offers "Add to a collection"; the photo sheet has a folder button. Tables `explore_collections` / `explore_collection_items` are owner-only, only accept looks that are in `users.saved_portfolio`, and a trigger takes un-hearted looks out of every folder. Pink/blue/green only, 50 folders max |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
 | Cart pricing | ✅ | `CartContext.ts:554` — service fee = `max(subtotal * 0.05, £2)`. Confirmed still exactly this formula. |
 | Deposit vs full payment | ✅ | `BookingService.calculateDeposit()` — now driven by a provider-configurable `ProviderDepositPolicy` (type + amount), defaulting to 20% if unset, not a hardcoded 20% as `LOGIC.md` described |
-| Date/time scheduling | ✅ | `ModernBeautyCalendar` → `AvailabilityService.getAvailableSlots()`, real provider hours from Supabase, filters booked slots via `get_provider_busy_spans` RPC |
+| Date/time scheduling | ✅ | `ModernBeautyCalendar` → `AvailabilityService.getAvailableSlots()`, real provider hours from Supabase, filters booked slots via `get_provider_busy_spans` RPC, which also returns the provider's calendar-sync busy times (`provider_calendar_busy_blocks`: full providers' chosen phone calendars, start/end only, synced on Home/app open; Scheduling & Availability → Calendar Sync). `enforce_booking_bookability` refuses a new booking or move into one, except the provider's own |
 | Slot intervals, booking window, min notice, buffer time | ✅ | `providers.slot_interval_mins` / `booking_window_days` / `min_booking_notice_hrs` / `buffer_mins` |
+| Latest start per service | ✅ (2026-11-10, needs migration `20261110140000`) | `services.latest_start_time`, set in Edit Service (`ServiceEditorSheet`, "Latest start", Any time or 9am–8pm). NULL = any time in working hours. Server gate: `enforce_booking_bookability` (hard stop, no emergency opt-in; provider squeeze-in bypasses); `get_services_open_within` + `get_providers_availability` count only starts at or before it. App mirror: `utils/latestStart.ts` used by `AvailabilityService` (single slots, back-to-back chains, next free day, checkout re-check) and both reschedule pickers. |
 | Checkout availability re-check | ✅ | `AvailabilityService.isSlotAvailable()` queries Supabase at checkout |
-| Checkout slot hold | ✅ | 10-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
+| Checkout slot hold | ✅ | 5-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
 | Booking created in Supabase | ✅ | `BookingContext.createBookingsFromCart()` → `databaseService.createBooking()` |
 | Booking confirmation notification + email | ✅ | DB-trigger-owned notification + `sendEmail()` fire-and-forget |
 
@@ -168,7 +172,7 @@ both code paths exist simultaneously on purpose.**
 | Reschedule (RPC-only, forgery-hardened) | ✅ | `respond_to_reschedule_request`, `provider_initiate_reschedule` RPCs — see memory `reschedule-request-rls-forgery-fixed` |
 | Provider booking detail/history, accept/decline | ✅ | `ProviderBookingDetailScreen`, `ProviderBookingHistoryScreen` |
 | Real-time booking status sync | ✅ | `BookingContext` subscribes to Supabase realtime on `bookings` |
-| Leave a review | ✅ | `BookingsScreen` → `submitReview()` / `hasReviewedBooking()` |
+| Leave a review | ✅ | `BookingsScreen` / `BookingDetailScreen` → `submitReview()` / `hasReviewedBooking()`. Optional "Post anonymously" switch (off by default) hides the reviewer from everyone, the provider included; enforced in the DB (`20261108230000_anonymous_reviews.sql`, applied live 2026-11-08): direct table reads skip anonymous rows, and reviews are read through `get_provider_reviews` / `get_my_provider_reviews`, which blank reviewer, booking, service and tip |
 | Push notifications | ✅ | `pushNotificationService.ts`, edge function `send-push-notification`. Note: it reads the push *ticket*, not the delivery *receipt*, so failed deliveries are currently silent (memory `push-notification-receipt-blindspot`) |
 | Booking status values | ✅ | `BookingStatus` enum: `upcoming` / `in_progress` / `completed` / `cancelled` / `no_show` — always map raw DB status through `mapDbBookingStatus()`, never cast directly |
 | Notification types | ✅ | Real DB-backed enum in `src/types/database.ts`, far larger than the 6-item list in old `LOGIC.md`: booking pending/confirmed/declined, reschedule request/response/confirmed/declined, review request/received, promotion, waitlist_slot_available, address_released, and more |
@@ -177,7 +181,7 @@ both code paths exist simultaneously on purpose.**
 
 | Feature | Status | Where |
 |---|---|---|
-| Beauty Profile landing — two doors (Maintenance, My Profile) | ✅ code, ⚠️ not device-run | `BeautyProfileScreen` (state + single SAVE PROFILE) → `src/features/beauty-profile/` (`BeautyLanding`, `MyProfileView`, `CategoryEditor`). Completeness rules in `beautyProfileStats.ts` unchanged |
+| Beauty Profile landing — "Map of you" body map (approved 2026-11-08) | ✅ code, ⚠️ not device-run | `BeautyProfileScreen` (state + single SAVE PROFILE) → `src/features/beauty-profile/` (`BeautyMapLanding`, `BodyFigure` (4 outlines, Portrait + hands default, choice kept per account on the device), `bodyMap.ts` rules, `MyProfileView`, `CategoryEditor`). Maintenance's big card (`src/features/maintenance/NextUpCard`, Book / Done it / Snooze +7 days) sits above the map only while something is due, else a slim strip; also used on the Maintenance screen. "How Maintenance works" (`MaintenanceHowTo`, 4 frames) shows once per account (tour key `client_maintenance_howto`). Health & Safety, Maintenance and Circle strips under the map; Circle opens Your circle. Skin tone never shown. Completeness rules in `beautyProfileStats.ts` unchanged |
 | Maintenance list, item menu, add-my-own, setup flow | ✅ code, ⚠️ **migration unapplied** | `src/features/maintenance/`. Pure rules: `src/utils/maintenanceSuggestions.ts` + `src/constants/maintenanceServiceTypes.ts` (mirrored in SQL, parity-tested). Until `supabase/migrations/20261018180000_beauty_maintenance.sql` is applied, the Maintenance card shows "couldn't load / try again" and the Profile badge stays hidden |
 | Completed booking → service item | ⚠️ written, unapplied | `on_booking_completed_maintenance` trigger; keeps a client-edited interval and only moves the due date. Provider's `rebookingNudgeWeeks` wins over the default interval |
 | Maintenance / aftercare push | ⚠️ written, unapplied | `process_maintenance_reminders()` daily 09:30 + aftercare notice on completion. **Opt-in** (`notification_preferences.maintenanceReminders`, default false) — no row is written while off; the provider rebooking nudge only steps aside for a client who has opted in. Push copy is generic by design (legal-flagger 2026-10-10); detail is in-app only |
@@ -208,6 +212,7 @@ both code paths exist simultaneously on purpose.**
 | Bookings/notifications DELETE | ❌ by design | No RLS DELETE policy — client-side delete is a silent no-op; use a SECURITY DEFINER RPC |
 | Double-booking prevention | ✅ live | `bookings_no_overlap` constraint, future-only scope; 7 historical conflicts grandfathered (memory `booking-overlap-constraint-undeployed`) |
 | Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `find-address-by-postcode`, `request-claim-verification`, `send-account-email`, `send-booking-confirmation`, `send-push-notification`, `send-support-request`. All `verify_jwt = true` except `confirm-email`, which is a public link handler by design. The general-purpose `send-email` was **deleted** 2026-08-26 — see "Email & support" below. |
+| Admin dashboard | ✅ admins only | Account settings → **Admin** (`admin_users` only) → `AdminDashboardScreen`: sign-ups, clients, providers and sign-ins against the previous period, a 12-week sign-up chart, providers live/link-only/unclaimed listings, bookings, money through the app, and a Problems list (failed background jobs, failed payouts, unsent confirmation emails, refund requests, open support requests). One read, `admin_dashboard_overview(p_days)`, counts only. Money and Developer tools open from it. App crashes are in Sentry, not here. Developer tools have no other entry point, and their reset functions are admin-only on the server (`admin_dev_reset`, migration `20261103110000`) |
 | SQL migration tracking | ⚠️ known gap | Most of `supabase/*.sql` has no run/not-run record; a file's existence or absence from `RUN_ALL_MIGRATIONS.sql` is a signal, not proof — see `cerviced-migration-drift` agent before trusting any one file |
 
 ### Email & support (rebuilt 2026-08-24)
@@ -221,8 +226,9 @@ both code paths exist simultaneously on purpose.**
 | Booking confirmation email | ✅ DB-owned | Trigger `queue_booking_confirmation_email` on `bookings` → edge function `send-booking-confirmation`. The app is no longer involved |
 | Welcome emails | ✅ | `invokeSendAccountEmail('client_welcome' \| 'provider_welcome')` → `send-account-email`. The caller names only which welcome; template, recipient and name resolve server-side |
 | Email templates | ✅ | `supabase/functions/_shared/emailTemplates.ts`. `src/services/emailService.ts` was **deleted** — nothing renders email on the device any more |
+| Signup and password-reset code emails | ⚠️ sent by Supabase Auth | Written in `emailTemplates.ts`, rendered to `supabase/templates/*.html` by `scripts/build-auth-email-templates.ts`, then pasted into the dashboard (Authentication → Emails) by hand. Deploying edge functions does not update them |
 | Reporter acknowledgment email | ❌ | The ticket number exists but is only shown in-app; nothing emails the reporter a receipt |
-| Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer Settings; it is not attached to reports |
+| Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer tools (Admin → Developer tools); it is not attached to reports |
 | Helpdesk tooling | ❌ | Tickets are read by SQL or the Zoho inbox. No assignment, SLA, or search |
 
 **The row is the record; the email is a notification of it.**
@@ -329,6 +335,78 @@ notification call for something a trigger already fires — that's how the
 group-booking notification dedup bug happened (fixed 2026-08-08, keyed on
 `group_booking_id` now).
 
+### Release day, fully booked and closing a schedule
+
+Three different things that are easy to merge in your head. All three are
+worked out from the clock or live data, so none of them can get stuck.
+
+**Release day** (`automation_settings.scheduleReleaseDay` + `scheduleReleaseTime`
+'HH:MM', set in Scheduling & Availability or Edit Profile). A calendar day and a
+time, not an event: nothing being booked up triggers it and the provider does
+nothing. Before the day at the release time (UK time, 9am if never chosen)
+clients can book to the end of this UK month; from then, to the end of next month
+(`provider_last_bookable_date`, mirrored in `src/utils/bookingHorizon.ts`). A day
+past the month's end means its last day. Within five minutes of that moment
+(cron job 150, every five minutes) bell followers get "December has opened up
+with X. Get booking now." once a month (`process_follow_schedule_release_nudges`). It checks the month is open, not that
+a slot is free, so a provider with every date blocked still triggers it: the
+user chose to keep that (2026-11-01). It stays silent while the schedule is
+closed by hand.
+
+**Fully booked.** No free slot on any date currently bookable, from one check,
+`get_services_open_within`, behind the client profile's Fully Booked and "has
+space again". "Has space again" (`process_follow_openings_alerts`) skips
+providers with under 7 days left to book and blocked-out diaries with nothing
+booked, leaving their state alone, so neither can fake a change from full to open
+(`20261102100000_openings_alert_short_horizon.sql`). The provider side (migration
+`20261101200000_fully_booked_certificate.sql`): an hourly job,
+`process_provider_fully_booked_alerts`, notices two kinds of fill, only during the
+day (08:00 to 20:59 UK time). Full needs at least one booking (a blocked-out
+diary isn't full) and at least 7 days left to book (a release-day provider just
+before next month opens isn't full).
+- A whole month: no space from today to a month end at least 4 weeks away. Once
+  per calendar month. It sends "You're Fully Booked! November is fully booked",
+  pops the certificate (`src/components/FullyBookedCertificate.tsx`) up once
+  with confetti the next time they open My Profile, and counts towards the
+  Fully Booked achievements: the first, 3 times, and 3 months in a row (that one
+  only for providers with a release day).
+- A shorter run: a notification only. Again only after a day with space, and at
+  most once a week.
+Both go under the provider's Fully Booked switch, and tapping opens My Profile.
+A closed schedule, a link-only provider and one with nothing set
+up never count. When a slot frees up and the provider has the waitlist on,
+Auto holds it for the next person (10 minutes, then the next), or with Auto off
+the provider offers it from Bookings; otherwise anyone can book it straight
+away. With "Close my schedule when fully booked" on as well, a slot freed while
+closed goes to the waitlist only. `WAITLIST.md` has that path, which has barely run live.
+
+**Closed by hand** (`provider_schedule_closures`, migration
+`20261101190000_close_schedule_by_hand.sql`, UI in
+`src/features/providers/CloseScheduleSection.tsx` on the schedule screen). The
+provider's choice, at any time, even with free slots:
+- Clients can't make a new booking; the server refuses it in
+  `enforce_booking_bookability`. The profile says "Not taking bookings". The
+  provider can pick an optional reason (holiday, time off, training, fully booked)
+  and choose whether clients see it, through `get_provider_closure_reason`. Clients
+  never learn until when, and the table stays private.
+- With the waitlist off, a provider can have it close by itself when they fill
+  up (`automation_settings.autoCloseWhenFull`, in
+  `process_provider_fully_booked_alerts`). It only closes at the moment of filling,
+  so reopening by hand while still full sticks, and it doesn't tell clients why.
+- Existing bookings stay. Closing shows them, and for each the provider picks "I
+  can do it", Move or Cancel. Move and Cancel open the booking's own screen, so
+  closing adds no second path for refunds or client notifications.
+- Still allowed: the provider's own Add Booking and inviting from their waitlist
+  by hand, and a client requesting a move (every client move already needs the
+  provider's answer).
+- Stopped: automatic waitlist invites and "has space again", because a closed
+  schedule offers freed slots to nobody. A slot freed while closed is simply
+  bookable on reopening; it isn't offered to the waitlist first. Entries stay
+  waiting for the next slot.
+- Reopens on the first of: the Reopen button; the date they chose; with no date,
+  their next release day. A chosen date wins over the release day. With neither,
+  only Reopen opens it.
+
 ### Address release is server-enforced
 Clients read the `client_bookings` view, which masks the full address until
 policy-released — the app is not the enforcement point, the database is.
@@ -408,3 +486,8 @@ not plaintext AsyncStorage.
   with no name/phone/DOB. Confirmed by reading `LoginScreen.tsx`,
   `WelcomeScreen.tsx`, `AuthContext.tsx`, `EmailVerificationScreen.tsx`, and
   `RootNavigation.tsx` directly — not previously documented here.
+- 2026-11-02: Sign in with Apple row moved off "known bug": Apple accounts now
+  get a `users` row at first sign-in and a Before You Can Book checklist for
+  name, mobile and date of birth. This replaces the idea on the unmerged
+  `fix/apple-signin-completes-signup` branch of holding them on the signup steps.
+  Google sign-in (#244) gets the same row creation and checklist.

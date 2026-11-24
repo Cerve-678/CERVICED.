@@ -1,5 +1,6 @@
 import React from 'react';
 import NotificationPreferencesView, {
+  type AlwaysOnRow,
   type NotificationPreferenceSection,
 } from '../../components/NotificationPreferencesView';
 import {
@@ -37,6 +38,15 @@ const SECTIONS: NotificationPreferenceSection<NotificationPreferences>[] = [
   },
 ];
 
+// Not built yet, so no switch and no preference key. When Wrapped ships it
+// moves into DISCOVER as a real toggle.
+const COMING_UP: { title: string; rows: AlwaysOnRow[] } = {
+  title: 'COMING UP',
+  rows: [
+    { icon: 'auto-awesome', title: 'CERVICED Wrapped', subtitle: 'Your year in beauty, all in one recap' },
+  ],
+};
+
 export default function NotificationsSettingsScreen({ navigation }: { navigation: { goBack: () => void } }) {
   return (
     <NotificationPreferencesView
@@ -45,6 +55,7 @@ export default function NotificationsSettingsScreen({ navigation }: { navigation
       load={getNotificationPreferences}
       save={saveNotificationPreferences}
       sections={SECTIONS}
+      comingUp={COMING_UP}
       logTag="[NotificationsSettings]"
     />
   );

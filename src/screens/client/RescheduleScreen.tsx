@@ -21,18 +21,21 @@ import {
   ProviderReschedulePolicy,
 } from '../../services/databaseService';
 import { AvailabilityService } from '../../services/AvailabilityService';
-import { formatLongDate, formatTime12, formatTime12Safe, dateToYMD } from '../../utils/dateUtils';
+import { formatLongDate, formatTime12, formatTime12Safe, dateToYMD, toLocalDate } from '../../utils/dateUtils';
+import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import {
   rescheduleProbeStart, rescheduleCandidateDates, rescheduleWindowLabel, rescheduleRequestToken,
+  isSameMonth, sameMonthLastDay,
   RESCHEDULE_MAX_DATES,
 } from '../../utils/rescheduleWindow';
 import { logger, reportError } from '../../utils/logger';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
   navigation: any;
-  route: { params: { bookingId: string } };
+  route: { params: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined } };
 };
 
 interface DateOption {
@@ -70,6 +73,10 @@ async function fetchRealRescheduleDates(
   providerId: string,
   currentDate: string,
   isActive: () => boolean = () => true,
+  onDates: (dates: DateOption[]) => void = () => {},
+  /** The booking's service, so a time past its latest start isn't offered
+   *  only to be refused by the check on submit. */
+  serviceId?: string,
 ): Promise<DateOption[]> {
   const candidateDates = rescheduleCandidateDates(currentDate);
 
@@ -84,7 +91,7 @@ async function fetchRealRescheduleDates(
     const results = await Promise.all(
       batch.map(async date => ({
         date,
-        times: await AvailabilityService.getAvailableSlotTimes(providerId, date).catch(() => [] as string[]),
+        times: await AvailabilityService.getAvailableSlotTimes(providerId, date, undefined, serviceId).catch(() => [] as string[]),
       })),
     );
     if (!isActive()) return openDates;
@@ -97,15 +104,23 @@ async function fetchRealRescheduleDates(
       });
       if (openDates.length >= RESCHEDULE_MAX_DATES) return openDates;
     }
+    // Show what's found so far rather than making the client wait for all of it.
+    if (openDates.length > 0) onDates([...openDates]);
   }
   return openDates;
+}
+
+/** "November 2026" for a "YYYY-MM-DD" booking date. */
+function monthLabel(date: string): string {
+  const d = toLocalDate(date);
+  return Number.isNaN(d.getTime()) ? 'the same month' : d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RescheduleScreen({ navigation, route }: Props) {
   const bottomInset = useSystemBottomInset();
   useFont();
-  const { bookingId } = route.params;
+  const { bookingId, knownPolicy } = route.params;
   const { palette: C, isDarkMode } = useTheme();
   const { showConfirm, showAlert, DialogHost } = useAppDialog();
   const {
@@ -150,12 +165,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     [isGroupReschedule, booking, getBookingsByGroupId]
   );
 
-  const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
+  const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(knownPolicy ?? null);
   // Distinct from reschedulePolicy being null, which is also the "still
   // loading" value. Without it the notice check below reads 0 hours while the
   // fetch is in flight, renders the whole picker, then replaces it with the
   // "Too Close to Reschedule" block once the real number arrives.
-  const [policyLoaded, setPolicyLoaded] = useState(false);
+  const [policyLoaded, setPolicyLoaded] = useState(!!knownPolicy);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -193,8 +208,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!booking) return;
     let active = true;
-    setReschedulePolicy(null);
-    setPolicyLoaded(false);
+    // A policy handed over by the booking screen shows straight away; this read
+    // still refreshes it behind the picker. The server has the final say on submit.
+    if (!knownPolicy) {
+      setReschedulePolicy(null);
+      setPolicyLoaded(false);
+    }
     (booking.providerId
       ? getProviderReschedulePolicyById(booking.providerId)
       : getProviderReschedulePolicyByDisplayName(booking.providerName)
@@ -231,7 +250,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         setLoadingDates(true);
         setProviderUnpublished(false);
         Promise.all([
-          fetchRealRescheduleDates(providerRef, booking.bookingDate, () => active),
+          fetchRealRescheduleDates(providerRef, booking.bookingDate, () => active, dates => {
+            if (!active) return;
+            setDateOptions(dates);
+            setLoadingDates(false);
+          }, booking.serviceId || undefined),
           AvailabilityService.getAvailabilitySummary(providerRef).catch(() => null),
         ])
           .then(([options, summary]) => {
@@ -244,7 +267,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       }
     }
     return () => { active = false; };
-  }, [booking]);
+  }, [booking, knownPolicy]);
 
   const handleDateSelect = useCallback((date: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -271,6 +294,20 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     }
     return floor;
   }, [reschedulePolicy]);
+
+  // "New date must be: Same month" — the last day the pickers allow, and the
+  // only dates the strip offers. The server refuses anything else.
+  const sameMonthOnly = !!reschedulePolicy?.sameMonthOnly && !booking?.rescheduleRequest?.providerAvailableDates;
+  const maxPickerDate = useMemo(() => {
+    const last = sameMonthOnly && booking ? sameMonthLastDay(booking.bookingDate) : null;
+    // Notice can push the earliest day past the month's end; the picker can't
+    // take a maximum below its minimum, and the server's refusal then explains.
+    return last && last >= new Date(minPickerDate.getFullYear(), minPickerDate.getMonth(), minPickerDate.getDate()) ? last : undefined;
+  }, [sameMonthOnly, booking, minPickerDate]);
+  const shownDateOptions = useMemo(
+    () => (sameMonthOnly && booking ? dateOptions.filter(o => isSameMonth(o.date, booking.bookingDate)) : dateOptions),
+    [sameMonthOnly, booking, dateOptions],
+  );
 
   // Describes the window fetchRealRescheduleDates actually probed, so the
   // empty state doesn't claim "the next 14 days" for a booking whose window is
@@ -454,9 +491,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   const handleDecline = useCallback(() => {
     if (!booking) return;
     const groupSuffix = isGroupReschedule ? ` This applies to all ${groupSiblings.length} of your services with them.` : '';
+    const cancelsBooking = !isGroupReschedule && booking.rescheduleRequest?.cancelIfDeclined === true;
     showConfirm(
       'Decline These Times?',
-      `None of these will work? ${booking.providerName} will be notified and your original appointment time stays as-is.${groupSuffix}`,
+      cancelsBooking
+        ? `If you decline, this booking will be cancelled and any payment refunded in full. ${booking.providerName} will be notified.`
+        : `If you decline, your original appointment on ${formatDisplayDate(booking.bookingDate)} at ${formatTime12(booking.bookingTime)} stays booked. ${booking.providerName} will be notified.${groupSuffix}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -471,8 +511,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 await declineReschedule(booking.id);
               }
               navigation.goBack();
-            } catch (err: any) {
-              showAlert('Could Not Decline', err?.message || 'Something went wrong. Please try again.');
+            } catch (err: unknown) {
+              // Our own guard (P0001) is written for the client, e.g. a
+              // cancel-if-declined offer that closed when the appointment
+              // started; anything technical gets the plain fallback.
+              showAlert('Could Not Decline', toUserMessageAllowingDbGuard(err, 'Something went wrong. Please try again.', 'RescheduleScreen.decline'));
             } finally {
               setIsDeclining(false);
             }
@@ -539,7 +582,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               ? `All ${groupSiblings.length} of your services with ${booking.providerName} have been rescheduled to ${formatDisplayDate(selectedDate!)}.`
               : hasProviderResponse
               ? `Your appointment with ${booking.providerName} has been rescheduled to ${formatDisplayDate(selectedDate!)} at ${formatTime12(selectedTime!)}.`
-              : `Your reschedule request has been sent to ${booking.providerName}. You'll be notified when they respond with available times.`}
+              : `Your reschedule request has been sent to ${booking.providerName}. They have ${RESCHEDULE_REPLY_MINUTES} minutes to reply with available times. If they don't, your booking stays as it is.`}
           </Text>
           <TouchableOpacity style={[st.primaryBtn, { backgroundColor: C.accent, width: '100%' }]} onPress={() => {
             // popTo targets the Bookings route directly. This used to be two
@@ -686,6 +729,16 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
                   Pick one of these provider-offered slots to confirm your new appointment.
                 </Text>
+                {!!booking.rescheduleRequest?.providerNote && (
+                  <Text style={{ fontSize: 13, color: C.text, lineHeight: 19, marginTop: 8 }}>
+                    Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}
+                  </Text>
+                )}
+                <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 }}>
+                  {booking.rescheduleRequest?.cancelIfDeclined
+                    ? 'If you decline, this booking will be cancelled and any payment refunded in full.'
+                    : 'If you decline, your original appointment stays booked.'}
+                </Text>
               </View>
             ) : (
               <View style={{ backgroundColor: 'rgba(255,149,0,0.08)', borderColor: 'rgba(255,149,0,0.22)', borderWidth: 1, borderRadius: 12, padding: 14 }}>
@@ -713,9 +766,15 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   </View>
                 )}
                 {reschedulePolicy.rescheduleNoticeHours > 0 && (
-                  <View style={[st.row, { borderBottomWidth: 0 }]}>
+                  <View style={[st.row, reschedulePolicy.sameMonthOnly ? { borderBottomColor: C.border } : { borderBottomWidth: 0 }]}>
                     <Text style={[st.rowLabel, { color: C.sub }]}>Notice required</Text>
                     <Text style={[st.rowValue, { color: C.text }]}>{reschedulePolicy.rescheduleNoticeHours}h before</Text>
+                  </View>
+                )}
+                {reschedulePolicy.sameMonthOnly && (
+                  <View style={[st.row, { borderBottomWidth: 0 }]}>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>New date</Text>
+                    <Text style={[st.rowValue, { color: C.text }]}>In {monthLabel(booking.bookingDate)}</Text>
                   </View>
                 )}
               </View>
@@ -753,6 +812,14 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   Please check back later, or message {booking.providerName} directly.
                 </Text>
               </View>
+            ) : shownDateOptions.length === 0 && sameMonthOnly ? (
+              <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                <Ionicons name="calendar-clear-outline" size={28} color={C.sub} />
+                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>No open times left this month</Text>
+                <Text style={{ color: C.sub, marginTop: 4, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 }}>
+                  {booking.providerName} only lets bookings move to another day in {monthLabel(booking.bookingDate)}. Use "Request specific time" to ask for a day that month, or message them directly.
+                </Text>
+              </View>
             ) : dateOptions.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                 <Ionicons name="calendar-clear-outline" size={28} color={C.sub} />
@@ -763,7 +830,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 4 }}>
-                {dateOptions.map(opt => {
+                {shownDateOptions.map(opt => {
                   const isSelected = selectedDate === opt.date;
                   return (
                     <TouchableOpacity
@@ -835,6 +902,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                       themeVariant={isDarkMode ? 'dark' : 'light'}
                       textColor={C.text}
                       minimumDate={minPickerDate}
+                      {...(maxPickerDate ? { maximumDate: maxPickerDate } : {})}
                       style={{ width: '100%' }}
                     />
                   ) : (
@@ -861,6 +929,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 onChange={handleCustomDateChange}
                 display="default"
                 minimumDate={minPickerDate}
+                {...(maxPickerDate ? { maximumDate: maxPickerDate } : {})}
               />
             ) : (
               <DateTimePicker

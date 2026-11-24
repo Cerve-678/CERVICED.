@@ -7,7 +7,7 @@
 // the entry from their own list.
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useHideTabBar } from '../../navigation/useHideTabBar';
@@ -181,7 +181,7 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
           <View style={styles.card}>
             <View style={styles.providerRow}>
               {provider?.logo_url ? (
-                <Image source={{ uri: provider.logo_url }} style={styles.logo} contentFit="cover" transition={0} />
+                <LogoCircle uri={provider.logo_url} framing={provider.logo_framing} style={styles.logo} />
               ) : (
                 <View style={[styles.logo, { backgroundColor: P.accent }]}>
                   <Text style={[styles.initials, { color: P.onAccent }]}>{initials}</Text>

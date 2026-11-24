@@ -20,7 +20,6 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   // which is why it must NOT be the number shown next to a "Deposit" label.
   const amountPaidAtCheckout = booking.amountPaid || 0;
   const depositAmount = booking.depositAmount || 0;
-  const remainingBalance = total - amountPaidAtCheckout;
 
   // `payment_type` only records WHICH option was taken (deposit vs. pay in
   // full) — it says nothing about whether money ever moved. A booking a
@@ -33,25 +32,24 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const paymentStatus = booking.paymentStatus ?? PaymentStatus.PENDING;
   const isDeposit = paymentType === 'deposit';
   const isPaidInFull = paymentStatus === PaymentStatus.PAID_IN_FULL;
-  const isUnpaid = !isPaidInFull && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
+  // A request's payment held on the card: the amount is set aside, not taken,
+  // and is only charged if the provider accepts.
+  const isHeld = paymentStatus === PaymentStatus.AUTHORISED;
+  const isUnpaid = !isPaidInFull && !isHeld && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
 
-  // On a deposit the figure shown is the provider's own deposit, never the
-  // deposit + the platform fee bundled together — the fee is CERVICED's, not
-  // part of what the client has put towards the provider's service.
+  // Two figures, always (owner's call, 2026-11-01): Paid is what actually left
+  // the client's card, platform fee included, and Due at Appointment is what's
+  // still to pay. Together they make Total, and Paid matches the bank statement.
   //
-  // The fee gets NO "paid" row of its own anywhere. It is already inside
-  // `total` and already itemised in the receipt's services breakdown, and a
-  // third mention of the same fee next to the deposit made the card read
-  // as if it had been charged twice. Deposit + balance not summing exactly
-  // to Total is the intended reading: what you still owe the provider is the
-  // number that matters at the appointment.
-  //
-  // `isUnpaid` is checked FIRST: a booking can carry payment_type 'deposit'
-  // while payment_status is still 'pending', and labelling that "Deposit
-  // Paid" would assert a payment that never happened. An unpaid booking
-  // reads "Total Paid £0.00", which is simply true.
-  const paidLabel = !isUnpaid && isDeposit ? 'Deposit Paid' : 'Total Paid';
-  const paidAmount = isUnpaid ? 0 : isDeposit ? depositAmount : amountPaidAtCheckout;
+  // `isUnpaid` is checked first: a booking can carry payment_type 'deposit'
+  // while payment_status is still 'pending', and nothing has been paid.
+  const paidLabel = isHeld ? 'Held on your card' : 'Paid';
+  const paidAmount = isUnpaid ? 0 : amountPaidAtCheckout;
+  const remainingBalance = Math.max(0, total - paidAmount);
+  // The deposit itself, shown as its own line in the breakdown (owner's call,
+  // 2026-11-08), only once it has actually been paid. It's part of the
+  // service price, not added on top, and Paid above already includes it.
+  const depositPaid = isDeposit && !isUnpaid && !isHeld ? depositAmount : 0;
 
   return {
     servicePrice,
@@ -67,8 +65,10 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isDeposit,
     isPaidInFull,
     isUnpaid,
+    isHeld,
     paidLabel,
     paidAmount,
+    depositPaid,
   };
 }
 
@@ -92,16 +92,32 @@ export interface RefundOutcome {
 }
 
 export function describeRefundOutcome(
-  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName' | 'paymentStatus'>,
+  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName' | 'paymentStatus'>
+    & Partial<Pick<ConfirmedBooking, 'amountPaid' | 'serviceCharge'>>,
   noticeHours: number,
 ): RefundOutcome | null {
   const kept = booking.policyRetainedAmount ?? 0;
   const refunded = booking.refundedAmount ?? 0;
+  // A full refund hands the client back the platform fee too, but that part
+  // never came out of the provider's share. Their badge shows only what came
+  // out of their share: a partial refund is always from the share, so capping
+  // the client's total at the share is exact for both (refundPlan.ts).
+  const fee = Number(booking.serviceCharge ?? 0);
+  const share = Number(booking.amountPaid ?? 0) - fee;
+  const refundedFromShare = fee > 0 && share > 0 ? Math.min(refunded, share) : refunded;
   const money = (n: number) => `£${n.toFixed(2)}`;
   const provider = booking.providerName?.trim() || 'Your provider';
   const policy = noticeHours > 0 ? `${noticeHours}-hour cancellation policy` : 'cancellation policy';
   const keptLine = `${provider} kept ${money(kept)} under their ${policy}.`;
 
+  if (booking.paymentStatus === PaymentStatus.NOT_CHARGED) {
+    return {
+      title: 'Not charged',
+      message: "Your card wasn't charged. We've asked your bank to release the hold; some banks take a few days to stop showing it.",
+      rows: [],
+      providerStatus: 'Not charged',
+    };
+  }
   if (booking.paymentStatus === PaymentStatus.REFUND_PENDING) {
     return {
       title: 'Refund pending',
@@ -110,6 +126,16 @@ export function describeRefundOutcome(
         : 'Your refund is being processed. This will update once it has gone through.',
       rows: kept > 0 ? [{ label: 'Kept under cancellation policy', amount: kept }] : [],
       providerStatus: 'Refund pending',
+    };
+  }
+  // The payment status can arrive before the refunded amount is refreshed in
+  // the booking detail. Keep the issued tag visible during that short window.
+  if ((booking.paymentStatus === PaymentStatus.REFUNDED || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) && refunded <= 0 && kept <= 0) {
+    return {
+      title: 'Refunded',
+      message: 'Your refund has been issued. Banks usually take 5–10 working days to show it.',
+      rows: [],
+      providerStatus: 'Refund issued',
     };
   }
   if (kept > 0) {
@@ -130,10 +156,81 @@ export function describeRefundOutcome(
       title: 'Refunded',
       message: `${money(refunded)} refunded to you. Banks usually take 5–10 working days to show it.`,
       rows: [{ label: 'Refunded', amount: -refunded }],
-      providerStatus: `Refund issued · ${money(refunded)}`,
+      providerStatus: `Refund issued · ${money(refundedFromShare)}`,
     };
   }
   return null;
+}
+
+/**
+ * What the client's cancel sheet and the "cancelled" message say about getting
+ * their money back. Null when nothing was paid in the app (or it has already
+ * been refunded): money paid off-app is between them and the provider.
+ *
+ * Mirrors apply-cancellation-refund: an early cancel refunds everything paid,
+ * platform fee included; a non-refundable deposit stays with the provider and
+ * the rest comes back; inside the notice window the provider's policy decides,
+ * so the copy promises only what the policy doesn't keep.
+ */
+export interface CancelRefundCopy {
+  /** Added to the confirm sheet, after the existing warning. */
+  confirmLine: string;
+  /** The success message once the cancel has gone through. */
+  doneMessage: string;
+  /** The confirm line says everything on its own, in place of the generic
+   *  "may be subject to their policy" warning. */
+  replacesWarning?: boolean;
+}
+
+export function describeCancelRefund(
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'amountPaid' | 'providerName'> & Partial<Pick<ConfirmedBooking, 'refundedAmount' | 'depositAmount'>>,
+  opts: { policyApplies: boolean; depositNonRefundable: boolean; lateCancelFeePence?: number | null },
+): CancelRefundCopy | null {
+  // A request whose payment is only held: withdrawing it is never charged,
+  // whatever the provider's policy (apply-cancellation-refund agrees).
+  if (booking.paymentStatus === PaymentStatus.AUTHORISED) {
+    return {
+      confirmLine: " Your card hasn't been charged, so the hold on it will be released.",
+      doneMessage: "Your request has been cancelled. Your card wasn't charged, and we've asked your bank to release the hold. Some banks take a few days to stop showing it.",
+    };
+  }
+  const inApp = booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
+    || booking.paymentStatus === PaymentStatus.PAID_IN_FULL
+    || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
+  const back = Number(booking.amountPaid ?? 0) - Number(booking.refundedAmount ?? 0);
+  if (!inApp || back <= 0) return null;
+  const provider = booking.providerName?.trim() || 'your provider';
+  const bank = 'Banks usually take 5–10 working days to show it.';
+  // Late, deposit only, half-price policy (user's chosen wording 2026-11-13):
+  // the deposit stays with the provider and they may charge the rest up to half.
+  const topUp = Number(opts.lateCancelFeePence ?? 0);
+  const deposit = Number(booking.depositAmount ?? 0);
+  if (opts.policyApplies && topUp > 0 && deposit > 0 && booking.paymentStatus === PaymentStatus.DEPOSIT_PAID) {
+    const more = `£${(topUp / 100).toFixed(2)}`;
+    const kept = `£${deposit.toFixed(2)}`;
+    return {
+      confirmLine: `Late cancellation: you'll lose your ${kept} deposit and may be charged up to ${more} more.`,
+      doneMessage: `Your appointment has been cancelled. ${provider} keeps your ${kept} deposit and may charge up to ${more} more to your saved card, as you agreed when booking.`,
+      replacesWarning: true,
+    };
+  }
+  if (opts.policyApplies) {
+    return {
+      confirmLine: ` Anything ${provider}'s policy doesn't keep will be refunded to you.`,
+      doneMessage: `Your appointment has been cancelled. Anything ${provider}'s policy doesn't keep will be refunded to you. ${bank}`,
+    };
+  }
+  if (opts.depositNonRefundable) {
+    return {
+      confirmLine: '',
+      doneMessage: `Your appointment has been cancelled. Your deposit is non-refundable, so ${provider} keeps it, and the rest will be refunded to you. ${bank}`,
+    };
+  }
+  const amount = `£${back.toFixed(2)}`;
+  return {
+    confirmLine: ` You'll be refunded ${amount} in full, including the platform fee.`,
+    doneMessage: `Your appointment has been cancelled. You'll be refunded ${amount} in full. ${bank}`,
+  };
 }
 
 /**
@@ -158,4 +255,52 @@ export function describeSettlementTiming(hoursBefore: number | null, noticeHours
   }
   const hrs = Math.floor(hoursBefore);
   return `Cancelled ${hrs} hour${hrs === 1 ? '' : 's'} before${notice}.`;
+}
+
+/** What the provider's Issue Refund sheet would move, in pence of their share. */
+export interface ProviderRefundPreview {
+  refundPence: number;
+  keepPence: number;
+  error: string | null;
+  /** Sent to the server as a full refund, so the client also gets the fee back. */
+  isFull: boolean;
+}
+
+/**
+ * Whether the refund sheet's "Cancel appointment too" box is ticked. Only a
+ * full refund of a booking that can still be cancelled can cancel it. Ticked by
+ * default then: a fully refunded appointment left booked means the client can
+ * turn up having paid nothing, which is rarely what the provider meant. The
+ * provider's own tick or untick (`providerChoice`, null until they touch it)
+ * wins and survives switching between full and partial.
+ */
+export function cancelsWithRefund(isFull: boolean, canCancel: boolean, providerChoice: boolean | null): boolean {
+  return isFull && canCancel && (providerChoice ?? true);
+}
+
+/**
+ * Mirrors supabase/functions/_shared/refundPlan.ts for display only; the
+ * server re-derives every figure. `heldPence` is what the provider still holds.
+ *
+ * Typing everything they still hold into a partial refund IS a full refund:
+ * the provider is handing all of it back, so the client gets back everything
+ * they paid, fee included, exactly as if they'd picked Full refund. The one
+ * exception is after a late cancellation the provider's policy settled: giving
+ * back the kept amount stays partial and CERVICED keeps its fee, as the
+ * late-cancel rule says (refundPlan.test).
+ */
+export function previewProviderRefund(
+  heldPence: number,
+  mode: 'full' | 'custom',
+  typed: string,
+  policySettled: boolean,
+): ProviderRefundPreview {
+  const held = Math.max(0, heldPence);
+  if (mode === 'full') return { refundPence: held, keepPence: 0, error: null, isFull: true };
+  const text = typed.trim();
+  if (!text) return { refundPence: 0, keepPence: held, error: null, isFull: false };
+  const pence = Math.round(Number(text) * 100);
+  if (!Number.isFinite(pence) || pence <= 0) return { refundPence: 0, keepPence: held, error: 'Enter an amount above £0.00.', isFull: false };
+  if (pence > held) return { refundPence: 0, keepPence: held, error: `You can refund at most £${(held / 100).toFixed(2)}.`, isFull: false };
+  return { refundPence: pence, keepPence: held - pence, error: null, isFull: pence === held && !policySettled };
 }

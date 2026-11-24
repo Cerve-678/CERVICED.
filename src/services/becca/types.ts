@@ -9,6 +9,7 @@
 
 import type { Provider } from "../ProviderDataService";
 import type { ConfirmedBooking } from "../../types/booking";
+import type { AddToCartParams } from "../../contexts/CartContext";
 
 // ==================== CHAT MESSAGE SHAPE ====================
 // These types live here, with Becca, rather than in the service that happens
@@ -26,6 +27,8 @@ export interface ChatMessage {
   providerRecommendations?: Provider[];
   /** Real portfolio work shown inline for style and inspiration requests. */
   inspiration?: BeccaInspiration[];
+  /** The answer's own shape, when it has one. See BeccaAnswer. */
+  answer?: BeccaAnswer;
   imageUri?: string;
   /**
    * Populated only by a vision model. Nothing writes this today — the image
@@ -33,6 +36,74 @@ export interface ChatMessage {
    * BECCA_CAPABILITIES.md §3.3.
    */
   imageAnalysis?: string;
+  /**
+   * What Becca understood this turn: the capability that answered, or null
+   * when she didn't catch it (the honest fallback). Absent on replies that
+   * weren't an attempt to understand (small talk, confirmations, "which one
+   * did you mean"). Read by the miss log (missLog.ts); not saved with chats.
+   */
+  understood?: { capabilityId: string | null };
+}
+
+/**
+ * How a reply is laid out around its text. The engine picks one from what
+ * the capability returned (see chooseLayout in engine.ts):
+ *  - `headline`: one number, rule or yes/no, shown big, with what was checked
+ *    as small proof tags, then the text, then any card.
+ *  - `stepsThenCard`: a real search. The steps tick off, fold into a "How I
+ *    found these" line, then the text and the card.
+ *  - `cardFirst`: a quick look-up. The card leads, the steps wait behind a
+ *    "How I found this" line underneath.
+ */
+export type AnswerLayout = "headline" | "stepsThenCard" | "cardFirst";
+
+export interface AnswerHeadline {
+  /** The big part: "2 moves", "Yes", "3". Always a fact from the data. */
+  value: string;
+  /** What it means, in a few words: "per booking, with 48h notice". */
+  label: string;
+}
+
+export interface AnswerCardRow {
+  title: string;
+  detail?: string;
+  /** A short highlighted fact on the right: a price, a date. */
+  tag?: string;
+  /** Makes the row open that provider's profile, and shows their logo. */
+  provider?: Provider;
+  /** A price range drawn as a bar on the card's `scale`. */
+  range?: { min: number; max: number };
+  /** Draws this row's bar in the highlight colour: the cheapest, the busiest. */
+  highlight?: boolean;
+}
+
+export interface AnswerCard {
+  /** The band across the top, e.g. "VOLUME LASHES". */
+  title: string;
+  /** Small text on the right of the band, e.g. "3 matches". */
+  meta?: string;
+  rows?: AnswerCardRow[];
+  /** Big-number tiles, e.g. 2 / moves per booking. */
+  stats?: { value: string; label: string }[];
+  footer?: string;
+  /**
+   * A ticket's date block on the left ("MON / 10 / NOV"), for a single
+   * appointment. Replaces the band.
+   */
+  stamp?: { top: string; big: string; bottom: string };
+  /** The shared scale every row's `range` is drawn on, with its axis labels. */
+  scale?: { min: number; max: number; labels: string[] };
+}
+
+export interface BeccaAnswer {
+  layout: AnswerLayout;
+  headline?: AnswerHeadline;
+  card?: AnswerCard;
+  /**
+   * What Becca actually did, past tense, with the real counts: "Searched 14
+   * lash providers". Never a step that didn't run.
+   */
+  work?: string[];
 }
 
 /** A safe, client-visible slice of an Explore portfolio item. */
@@ -253,8 +324,17 @@ export interface PendingAction {
   /** Label for the confirm button. */
   confirmLabel: string;
   /** Performs the write. Only ever called after explicit confirmation. */
-  run: () => Promise<string>;
+  run: () => Promise<PendingActionDone>;
+  /**
+   * A second version of the same write, offered as its own button — "with
+   * the add-ons" vs "without". Tapping either one confirms it, and running
+   * one retires the other, so only one of the two can ever happen.
+   */
+  alternative?: { id: string; confirmLabel: string; run: () => Promise<PendingActionDone> };
 }
+
+/** What Becca says once a confirmed write has run, plus where to go next. */
+export type PendingActionDone = string | { text: string; suggestions: ChatSuggestion[] };
 
 export interface CapabilityResult {
   /** The answer, already written for a human. */
@@ -265,6 +345,14 @@ export interface CapabilityResult {
   providers?: Provider[];
   /** Portfolio imagery from Explore, only from live providers. */
   inspiration?: BeccaInspiration[];
+  /** The answer as one big fact; makes the layout `headline`. */
+  headline?: AnswerHeadline;
+  /** The answer as a card. Replaces the provider strip when it lists providers. */
+  card?: AnswerCard;
+  /** The steps this run really took, with their real counts. */
+  work?: string[];
+  /** Names the layout outright, when the default rule (see chooseLayout) doesn't fit. */
+  layout?: AnswerLayout;
   /** A write awaiting confirmation. The engine renders the confirm chips. */
   pendingAction?: PendingAction;
   /**
@@ -325,8 +413,22 @@ export interface Capability {
    * Ignored for the client hat and for full providers.
    */
   fitsLinkOnly?: boolean;
+  /**
+   * What Becca shows while this capability runs — one to three short steps,
+   * each describing work `run` really does ("Reading Lola's deposit policy…"),
+   * never a fact from the answer. Shown in order once the engine has decided
+   * on this capability; see EngineInput.onProgress.
+   */
+  thinking: string[] | ((turn: ThinkingTurn) => string[]);
   /** Runs the capability against real app data. */
   run: (ctx: CapabilityContext) => Promise<CapabilityResult>;
+}
+
+/** What a capability's loading steps may read: the turn, before it runs. */
+export interface ThinkingTurn {
+  entities: EntityBag;
+  /** The repaired ask — the same text the capability's `run` will see. */
+  message: string;
 }
 
 /**
@@ -379,6 +481,8 @@ export interface ConversationContext {
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
   lastCapabilityId?: string;
+  /** Provider setting just located, for "how do I change this?" follow-ups. */
+  lastNavigationAsk?: string;
   /** The exact booking most recently discussed, for explicit follow-ups. */
   lastBooking?: NonNullable<EntityBag["booking"]>;
   /**
@@ -444,8 +548,19 @@ export interface CapabilityContext {
   verbatimMessage: string;
   /** Bookings from BookingContext — already loaded, no refetch. */
   bookings: ConfirmedBooking[];
+  /**
+   * Client hat only: CartContext's addToCart, for a confirmed pendingAction
+   * to call. Never call it from `run` itself — see PendingAction.
+   */
+  addToCart?: (item: AddToCartParams) => void;
   /** Signed-in user id, when available. */
   userId?: string;
+  /**
+   * Client hat only: Account → Your area (users.client_area), from
+   * AuthContext. "Near me" answers measure from it when nothing was picked
+   * on this phone — see planClientLocation.
+   */
+  clientArea?: string;
   /**
    * Provider hat only: the provider is link-only (takes bookings on their own
    * booking site). Only capabilities marked `fitsLinkOnly` ever run with this

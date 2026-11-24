@@ -1,13 +1,17 @@
+import { closureReasonForClient } from './scheduleClosure';
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AvailabilityService } from "../../services/AvailabilityService";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import {
   getProviderActivePromotions,
+  getProviderClosureReason,
+  isProviderTakingBookings,
   getProviderBySlug,
   getProviderProfilePreviewBySlug,
   getProviderPortfolio,
   getProviderProfileViewerContext,
+  peekCachedProviderProfile,
   getProviderReviews,
   trackUserInteraction,
 } from "../../services/databaseService";
@@ -16,33 +20,13 @@ import type { DirectoryListingDetail } from "../../services/directoryListingServ
 import userLearningService from "../../services/userLearningService";
 import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
+import { isProviderProfileUuid } from "../../utils/providerProfileLink";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
-
-export interface ProviderReviewItem {
-  id: number | string;
-  name: string;
-  rating: number;
-  comment: string;
-  date: string;
-}
+import { mapProviderReviews } from "./reviewPresentation";
+import type { ProviderReviewItem } from "./reviewPresentation";
 
 const PROFILE_REVIEWS_LIMIT = 10;
-
-export const mapProviderReviews = (
-  rows: Awaited<ReturnType<typeof getProviderReviews>>,
-): ProviderReviewItem[] =>
-  rows.map((review) => ({
-    id: review.id,
-    name: review.user?.name?.trim() || "Anonymous",
-    rating: review.rating,
-    comment: review.comment ?? "",
-    date: new Date(review.created_at).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }),
-  }));
 
 export interface ProviderProfileDataState {
   provider: ProviderProfileData | null;
@@ -59,8 +43,14 @@ export interface ProviderProfileDataState {
    *  row caps and render in two different places on the profile. */
   portfolio: { work: DbPortfolioItem[]; venue: DbPortfolioItem[] };
   portfolioLoading: boolean;
+  portfolioError: boolean;
+  reloadPortfolio: () => Promise<void>;
   openingHours: WeeklyOpeningHoursDay[] | null;
   openingHoursLoading: boolean;
+  /** False only once the server says this provider has closed their schedule. */
+  takingBookings: boolean;
+  /** Set only when closed and the provider chose to tell clients why. */
+  closureReason: string | null;
   currentUserId: string | null;
   currentUserName: string;
   isOwnProvider: boolean;
@@ -86,9 +76,17 @@ export function useProviderProfileData(
     knownOwnedProviderId,
   );
   knownOwnedProviderIdRef.current = knownOwnedProviderId;
-  const [provider, setProvider] = useState<ProviderProfileData | null>(null);
-  const [providerDbId, setProviderDbId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A profile already in the cache (an Explore prefetch, or My Profile's logo
+  // tap) draws on the first frame. Starting on the skeleton and swapping a
+  // frame later read as a flash, most of all on the logo preview.
+  const [seed] = useState(() => {
+    const cached = peekCachedProviderProfile(providerSlug);
+    return cached ? { profile: mapProviderProfileData(cached), id: cached.id } : null;
+  });
+  const [provider, setProvider] = useState<ProviderProfileData | null>(seed?.profile ?? null);
+  const [providerDbId, setProviderDbId] = useState<string | null>(seed?.id ?? null);
+  const [loading, setLoading] = useState(!seed);
+  const keepSeedRef = useRef(seed !== null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [unclaimedProvider, setUnclaimedProvider] =
     useState<DirectoryListingDetail | null>(null);
@@ -101,23 +99,56 @@ export function useProviderProfileData(
     venue: DbPortfolioItem[];
   }>({ work: [], venue: [] });
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [portfolioError, setPortfolioError] = useState(false);
+  const portfolioRequestRef = useRef(0);
   const [openingHours, setOpeningHours] = useState<
     WeeklyOpeningHoursDay[] | null
   >(null);
   const [openingHoursLoading, setOpeningHoursLoading] = useState(true);
+  const [takingBookings, setTakingBookings] = useState(true);
+  const [closureReason, setClosureReason] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("");
   const [isOwnProvider, setIsOwnProvider] = useState(false);
   const [viewerChecked, setViewerChecked] = useState(false);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
 
+  const loadPortfolio = useCallback(async (id: string): Promise<void> => {
+    const request = ++portfolioRequestRef.current;
+    setPortfolioLoading(true);
+    setPortfolioError(false);
+    try {
+      const rows = await getProviderPortfolio(id, { includeVenue: true });
+      if (request === portfolioRequestRef.current) setPortfolio(rows);
+    } catch (error: unknown) {
+      if (request === portfolioRequestRef.current) {
+        setPortfolioError(true);
+        logger.warn("Failed to load provider portfolio:", error);
+      }
+    } finally {
+      if (request === portfolioRequestRef.current) setPortfolioLoading(false);
+    }
+  }, []);
+  const reloadPortfolio = useCallback(
+    () => providerDbId ? loadPortfolio(providerDbId) : Promise.resolve(),
+    [providerDbId, loadPortfolio],
+  );
+
   useEffect(() => {
     profileGenerationRef.current += 1;
+    portfolioRequestRef.current += 1;
     let cancelled = false;
-    setLoading(true);
+    // The first run keeps the first frame's cached copy; a later slug change
+    // looks in the cache again.
+    if (keepSeedRef.current) {
+      keepSeedRef.current = false;
+    } else {
+      const cached = peekCachedProviderProfile(providerSlug);
+      setProvider(cached ? mapProviderProfileData(cached) : null);
+      setProviderDbId(cached?.id ?? null);
+      setLoading(!cached);
+    }
     setLoadFailed(false);
-    setProvider(null);
-    setProviderDbId(null);
     setUnclaimedProvider(null);
     setReviews([]);
     setReviewsLoading(true);
@@ -125,8 +156,11 @@ export function useProviderProfileData(
     setPromotions([]);
     setPortfolio({ work: [], venue: [] });
     setPortfolioLoading(true);
+    setPortfolioError(false);
     setOpeningHours(null);
     setOpeningHoursLoading(true);
+    setTakingBookings(true);
+    setClosureReason(null);
     setCurrentUserId(null);
     setCurrentUserName("");
     setIsOwnProvider(false);
@@ -149,7 +183,14 @@ export function useProviderProfileData(
         if (!data) data = await fullProfileRequest;
         if (cancelled) return;
         if (!data) {
-          const unclaimed = await getDirectoryListingDetail(providerSlug);
+          // Unclaimed directory listings are only ever opened by their UUID,
+          // and the lookup matches providers.id (a uuid column). Passing a
+          // slug — which is what the cart, Home and Explore send — makes
+          // Postgres reject the query, so a provider that has simply gone
+          // offline showed "Could not load provider" instead of "not found".
+          const unclaimed = isProviderProfileUuid(providerSlug)
+            ? await getDirectoryListingDetail(providerSlug)
+            : null;
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;
         }
@@ -210,16 +251,7 @@ export function useProviderProfileData(
         // includeVenue: the client profile renders venue/workspace shots
         // inside Additional Information, so it needs both halves — it is one
         // of the two callers getProviderPortfolio's second query exists for.
-        void getProviderPortfolio(data.id, { includeVenue: true })
-          .then((rows) => {
-            if (!cancelled) setPortfolio(rows);
-          })
-          .catch((error: unknown) => {
-            logger.warn("Failed to load provider portfolio:", error);
-          })
-          .finally(() => {
-            if (!cancelled) setPortfolioLoading(false);
-          });
+        void loadPortfolio(data.id);
 
         void AvailabilityService.getWeeklyOpeningHours(data.id)
           .then((hours) => {
@@ -230,6 +262,20 @@ export function useProviderProfileData(
           })
           .finally(() => {
             if (!cancelled) setOpeningHoursLoading(false);
+          });
+
+        // The label only: the server refuses the booking either way, so a
+        // failed lookup leaves the buttons as they are rather than hiding them.
+        void isProviderTakingBookings(data.id)
+          .then((taking) => {
+            if (!cancelled) setTakingBookings(taking);
+            return taking ? null : getProviderClosureReason(data.id);
+          })
+          .then((reason) => {
+            if (!cancelled) setClosureReason(closureReasonForClient(reason));
+          })
+          .catch((error: unknown) => {
+            logger.warn("Failed to check whether provider is taking bookings:", error);
           });
 
         // Booking authority is fail-closed. Never show a booking control
@@ -269,8 +315,9 @@ export function useProviderProfileData(
     return () => {
       cancelled = true;
       profileGenerationRef.current += 1;
+      portfolioRequestRef.current += 1;
     };
-  }, [providerSlug]);
+  }, [providerSlug, loadPortfolio]);
 
   const loadAllReviews = useCallback(async (): Promise<void> => {
     if (!providerDbId || reviewsLoadedAll || reviewsLoading) return;
@@ -302,8 +349,12 @@ export function useProviderProfileData(
     promotions,
     portfolio,
     portfolioLoading,
+    portfolioError,
+    reloadPortfolio,
     openingHours,
     openingHoursLoading,
+    takingBookings,
+    closureReason,
     currentUserId,
     currentUserName,
     isOwnProvider,

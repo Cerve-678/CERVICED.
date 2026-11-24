@@ -737,6 +737,152 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
 }
 
 // ---------------------------------------------------------------------------
+// Supabase Auth codes — signup verification and password reset
+// ---------------------------------------------------------------------------
+// Supabase Auth sends these two, not us, so nothing here runs on our server:
+// scripts/build-auth-email-templates.ts renders them to supabase/templates/*.html
+// and that HTML is pasted into the dashboard, where Supabase fills in the
+// {{ .Token }} and {{ .Email }} placeholders itself.
+//
+// Deliberately NOT the shared letter() shell. They are a quiet white page with
+// the code in six boxes, the same six boxes the app's code screens ask you to
+// fill in. Tinted boxes for signup and solid accent for a reset, so the two are
+// different at a glance.
+//
+// Account-level, and the person may not have a hat yet, so they take the
+// provider palette like passwordChangedEmail.
+
+/** Supabase's placeholders. Not ours to fill in, and never escaped. */
+const AUTH_TOKEN = '{{ .Token }}';
+const AUTH_EMAIL = '{{ .Email }}';
+
+/** Matches `otp_expiry = 3600` in supabase/config.toml. Change both together. */
+const AUTH_CODE_EXPIRY = 'Expires in 1 hour';
+
+/**
+ * One box per digit, cut from the token with Go's `slice`.
+ *
+ * The length check matters: Supabase has no fallback for a template that fails
+ * while rendering, so slicing a shorter token would mean no email at all. Any
+ * other length shows the whole code in one piece instead.
+ */
+function digitBoxes(P: EmailPalette, solid: boolean) {
+  const fill = solid ? P.accent : P.surface;
+  const ink = solid ? P.onAccent : P.accent;
+  const box = (digit: string) =>
+    `<td width="15%" height="58" align="center" valign="middle" bgcolor="${fill}" style="background:${fill};border-radius:14px;font-family:${DISPLAY};font-size:24px;line-height:58px;color:${ink};">${digit}</td>`;
+  const boxes = [0, 1, 2, 3, 4, 5]
+    .map((i) => box(`{{ slice .Token ${i} ${i + 1} }}`))
+    .join(`<td width="2%" style="font-size:0;line-height:0;">&nbsp;</td>`);
+  return `
+      {{ if eq (len .Token) 6 }}
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="table-layout:fixed;margin-top:26px;">
+        <tr>${boxes}</tr>
+      </table>
+      {{ else }}
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top:26px;">
+        <tr>${box(AUTH_TOKEN)}</tr>
+      </table>
+      {{ end }}`;
+}
+
+function authCodeEmail(opts: {
+  subject: string;
+  preview: string;
+  kicker: string;
+  title: string;
+  /** HTML. */
+  instruction: string;
+  solidBoxes: boolean;
+  ignoreLabel: string;
+  ignoreText: string;
+  sentBecause: string;
+}) {
+  const P = PROVIDER;
+  return {
+    subject: opts.subject,
+    html: `<!DOCTYPE html>
+<html lang="en" style="color-scheme:light only;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <link href="${FONT_LINK}" rel="stylesheet" />
+  <style>
+    @import url('${FONT_LINK}');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
+    body { background-color: ${P.card}; font-family: ${BODY}; }
+    a { color: ${P.accent}; }
+  </style>
+</head>
+<body style="background:${P.card};margin:0;padding:0;font-family:${BODY};">${preheader(opts.preview)}
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:${P.card};">
+    <tr><td align="center" style="padding:32px 24px 40px;">
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:440px;">
+        <tr><td>
+
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td valign="middle"><img src="${BRAND_MARK}" alt="CERVICED" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:9px;" /></td>
+          <td valign="middle" style="padding-left:10px;font-family:${DISPLAY};font-size:14px;letter-spacing:4px;color:${P.accent};">CERVICED</td>
+        </tr>
+      </table>
+
+      <p style="margin:48px 0 0;font-family:${DISPLAY};font-size:11px;letter-spacing:2.4px;text-transform:uppercase;line-height:1.4;color:${P.sub};">${opts.kicker}</p>
+      <h1 style="margin:12px 0 0;font-family:${DISPLAY};font-weight:400;font-size:30px;letter-spacing:0.4px;line-height:1.15;color:${P.text};">${opts.title}</h1>
+      <p style="margin:12px 0 0;font-family:${BODY};font-size:15px;font-weight:600;line-height:1.6;color:${P.sub};">${opts.instruction}</p>
+${digitBoxes(P, opts.solidBoxes)}
+
+      <p style="margin:14px 0 0;font-family:${BODY};font-size:12px;font-weight:600;line-height:1.6;color:${P.sub};">${AUTH_CODE_EXPIRY}. Don't share it with anyone.</p>
+
+      <div style="height:1px;line-height:1px;font-size:0;background:${P.border};margin:32px 0 22px;">&nbsp;</div>
+
+      <p style="margin:0;font-family:${BODY};font-size:13px;font-weight:600;line-height:1.65;color:${P.sub};"><span style="color:${P.text};font-weight:700;">${opts.ignoreLabel}</span> ${opts.ignoreText}</p>
+
+      <p style="margin:40px 0 0;font-family:${BODY};font-size:12px;font-weight:600;line-height:1.7;color:${P.sub};">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a><br />${opts.sentBecause}<br />&copy; CERVICED &middot; cerviced.co</p>
+
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  };
+}
+
+export function signupCodeEmail() {
+  const P = PROVIDER;
+  return authCodeEmail({
+    subject: `Your CERVICED verification code: ${AUTH_TOKEN}`,
+    preview: `${AUTH_TOKEN} is your CERVICED verification code. ${AUTH_CODE_EXPIRY}.`,
+    kicker: 'Last step',
+    title: "Here's your code",
+    instruction: `Enter it in the CERVICED app to confirm <span style="color:${P.text};font-weight:700;word-break:break-word;">${AUTH_EMAIL}</span>`,
+    solidBoxes: false,
+    ignoreLabel: "Didn't sign up?",
+    ignoreText: "You can ignore this email. This address won't be verified without the code.",
+    sentBecause: 'Sent because this address was entered on CERVICED.',
+  });
+}
+
+export function recoveryCodeEmail() {
+  const P = PROVIDER;
+  return authCodeEmail({
+    subject: `Your CERVICED password reset code: ${AUTH_TOKEN}`,
+    preview: `${AUTH_TOKEN} is your CERVICED password reset code. ${AUTH_CODE_EXPIRY}.`,
+    kicker: 'Forgot password',
+    title: "Here's your reset code",
+    instruction: `Enter it in the CERVICED app, then choose a new password for <span style="color:${P.text};font-weight:700;word-break:break-word;">${AUTH_EMAIL}</span>`,
+    solidBoxes: true,
+    ignoreLabel: "Didn't ask for this?",
+    ignoreText: 'You can ignore this email and your password stays exactly as it is.',
+    sentBecause: 'Sent because a password reset was requested for this address.',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Booking confirmation — the receipt letterhead
 // ---------------------------------------------------------------------------
 // Deliberately NOT the shared letter() shell. The booking confirmation mirrors
@@ -747,8 +893,8 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
 //
 // Money wording follows the app's calculateBookingPaymentBreakdown: paid state
 // comes from payment_status, never payment_type (a hand-added booking is
-// payment_type 'full' with nothing paid), and a deposit is the provider's own
-// figure, never deposit + platform fee.
+// payment_type 'full' with nothing paid), and the payment box is two figures:
+// Paid (what left the card, platform fee included) and Due at Appointment.
 
 /** The CVD mark alone, transparent, in client plum. */
 const BRAND_MARK_PLUM = `${BRAND_ASSETS}/cerviced-mark-plum.png`;
@@ -787,11 +933,12 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   // PaymentStatus.PAID_IN_FULL ('paid_in_full'), which only exists after mapping.
   const isPaidInFull = params.paymentStatus === 'fully_paid';
   const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
-  const paidAmount = isUnpaid ? 0 : isDeposit ? params.depositAmount : params.amountPaid;
-  const remaining = Math.max(0, total - (isUnpaid ? 0 : params.amountPaid));
+  // Paid is what left the card, platform fee included; Due at Appointment is the rest.
+  // Same two figures as the in-app receipt (calculateBookingPaymentBreakdown).
+  const paidAmount = isUnpaid ? 0 : params.amountPaid;
+  const remaining = Math.max(0, total - paidAmount);
 
   const state = isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
-  const paidLabel = isUnpaid ? 'Total paid' : isDeposit ? 'Deposit paid to provider' : 'Paid today';
 
   const label = (text: string, colour = P.sub) =>
     `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
@@ -813,9 +960,15 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
     params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
     (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
 
+  // The deposit, once paid, listed under Total with the payment — same as the
+  // in-app receipt (calculateBookingPaymentBreakdown's depositPaid). It's part
+  // of the price, so it never goes in the lines above Total.
+  const depositPaid = isDeposit && !isUnpaid ? params.depositAmount : 0;
+
   const payRows =
-    payRow(paidLabel, paidAmount, remaining <= 0) +
-    (remaining > 0 ? payRow('Due to provider at appointment', remaining, true) : '');
+    (depositPaid > 0 ? payRow('Deposit paid', depositPaid, false) : '') +
+    payRow(depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', paidAmount, remaining <= 0) +
+    payRow('Due at Appointment', remaining, remaining > 0);
 
   const e = {
     providerName: esc(params.providerName),
@@ -1108,13 +1261,51 @@ export function payoutFailedSupportEmail(params: {
   };
 }
 
+/** A bank dispute that needs a person: one the amount couldn't be matched to
+ *  a booking, or money to put right after one closed. Internal only. */
+export function bankDisputeSupportEmail(params: {
+  title: string;
+  amount: string;
+  reason: string;
+  /** One line per booking on the disputed payment. */
+  bookings: string[];
+  nextStep: string;
+}) {
+  const P = PROVIDER;
+  const rows: Array<[string, string]> = [
+    ['Disputed', params.amount],
+    ['Bank reason', params.reason],
+    ...params.bookings.map((line, i) => [i === 0 ? 'Bookings' : '', line] as [string, string]),
+  ];
+  return {
+    subject: `${params.title}: ${params.amount}`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${esc(params.amount)}: ${esc(params.title)}`,
+      content:
+        eyebrow(P, 'Bank dispute') +
+        headline(P, esc(params.title)) +
+        panel(
+          P,
+          'What we know',
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${internalRows(P, rows)}
+        </table>`,
+          18,
+        ) +
+        note(P, `<strong>What to do:</strong> ${esc(params.nextStep)}`, 0),
+    }),
+  };
+}
+
 export function moneySummaryEmail(params: {
   failed: MoneySummaryLine[];
   owed: MoneySummaryLine[];
   refunds: MoneySummaryLine[];
+  unsentRefunds: MoneySummaryLine[];
 }) {
   const P = PROVIDER;
-  const total = params.failed.length + params.owed.length + params.refunds.length;
+  const total = params.failed.length + params.owed.length + params.refunds.length + params.unsentRefunds.length;
   const section = (label: string, lines: MoneySummaryLine[]) =>
     lines.length === 0
       ? ''
@@ -1138,13 +1329,14 @@ export function moneySummaryEmail(params: {
     subject: `Today: ${total} money ${total === 1 ? 'thing' : 'things'} waiting`,
     html: letter(P, {
       audience: 'alert',
-      preview: `${params.failed.length} failed, ${params.owed.length} owed, ${params.refunds.length} refund requests`,
+      preview: `${params.failed.length} failed, ${params.owed.length} owed, ${params.refunds.length} refund requests, ${params.unsentRefunds.length} refunds not sent`,
       content:
         eyebrow(P, 'Daily money summary') +
         headline(P, `${total} ${total === 1 ? 'thing is' : 'things are'} waiting`) +
         section('Failed payments to providers', params.failed) +
         section('Money providers owe', params.owed) +
         section('Refund requests', params.refunds) +
+        section('Refunds that never went out', params.unsentRefunds) +
         note(P, 'Open Money (admin) in your settings in the CERVICED app to deal with these.', 0),
     }),
   };

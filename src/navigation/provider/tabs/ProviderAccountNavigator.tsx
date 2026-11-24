@@ -13,10 +13,11 @@ import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
-import AboutScreen from '../../../screens/shared/AboutScreen';
-import TermsScreen from '../../../screens/shared/TermsScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
+import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
+import AdminCreatedAccountsScreen from '../../../screens/shared/AdminCreatedAccountsScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
@@ -37,6 +38,7 @@ import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccount
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
+import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
 import { ProviderAccountStackParamList } from '../../types';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
@@ -64,6 +66,22 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="MyPublicProfile"
         component={MyPublicProfileComponent}
+        options={{ headerShown: false }}
+      />
+
+      {/* Someone else's profile, opened by a provider-only account scanning their
+          QR code. The screen knows it's in the provider hat: Book explains, and
+          Message opens their public contact options, so nothing here leads into
+          a client-only flow. */}
+      <ProviderAccountStack.Screen
+        name="PublicProviderProfile"
+        component={MyPublicProfileComponent}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="FullCervicedFeatures"
+        component={FullCervicedFeaturesScreen}
         options={{ headerShown: false }}
       />
 
@@ -256,17 +274,6 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
-      <ProviderAccountStack.Screen
-        name="About"
-        component={AboutScreen}
-        options={{ headerShown: false }}
-      />
-
-      <ProviderAccountStack.Screen
-        name="Terms"
-        component={TermsScreen}
-        options={{ headerShown: false }}
-      />
 
       <ProviderAccountStack.Screen
         name="ReportProblem"
@@ -275,8 +282,26 @@ export default function ProviderAccountNavigator() {
       />
 
       <ProviderAccountStack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
         name="AdminMoney"
         component={AdminMoneyScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminCreateAccount"
+        component={AdminCreateAccountScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminCreatedAccounts"
+        component={AdminCreatedAccountsScreen}
         options={{ headerShown: false }}
       />
 

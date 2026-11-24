@@ -12,6 +12,8 @@ export interface EnvConfig {
   TRANSLATION_API_URL: string;
   APP_VERSION: string;
   BUILD_NUMBER: string;
+  GOOGLE_WEB_CLIENT_ID: string;
+  GOOGLE_IOS_CLIENT_ID: string;
 }
 
 class EnvironmentService {
@@ -45,8 +47,16 @@ class EnvironmentService {
         process.env['EXPO_PUBLIC_TRANSLATION_API_URL'] ||
         'https://translation.googleapis.com/language/translate/v2',
       APP_VERSION: Constants.expoConfig?.version || '1.0.0',
-      BUILD_NUMBER: Constants.expoConfig?.android?.versionCode?.toString() || 
+      BUILD_NUMBER: Constants.expoConfig?.android?.versionCode?.toString() ||
                    Constants.expoConfig?.ios?.buildNumber || '1',
+      // The OAuth client Supabase's Google provider verifies tokens against
+      // (entered in Supabase Auth → Providers → Google). Android sign-in
+      // only needs this one.
+      GOOGLE_WEB_CLIENT_ID: process.env['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'] || '',
+      // iOS-specific OAuth client, registered against this app's bundle id
+      // in Google Cloud Console. Empty until a build config supplies one —
+      // see googleSignInEnabled below.
+      GOOGLE_IOS_CLIENT_ID: process.env['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID'] || '',
     };
   }
 
@@ -108,6 +118,22 @@ class EnvironmentService {
    *  check this first and fall back to a non-native path. */
   get isExpoGo(): boolean {
     return Constants.appOwnership === 'expo';
+  }
+
+  get googleWebClientId(): string {
+    return this.config.GOOGLE_WEB_CLIENT_ID;
+  }
+
+  get googleIosClientId(): string {
+    return this.config.GOOGLE_IOS_CLIENT_ID;
+  }
+
+  /** True only when a web client id is configured. Like Stripe/Google Pay,
+   *  @react-native-google-signin/google-signin's native module isn't bundled
+   *  in Expo Go, so this also gates on isExpoGo — callers must fall back
+   *  rather than invoke the native sign-in flow when this is false. */
+  get googleSignInEnabled(): boolean {
+    return this.config.GOOGLE_WEB_CLIENT_ID.length > 0 && !this.isExpoGo;
   }
 
   get fullConfig(): EnvConfig {

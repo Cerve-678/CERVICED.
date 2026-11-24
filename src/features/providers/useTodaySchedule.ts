@@ -1,14 +1,14 @@
 // src/features/providers/useTodaySchedule.ts
-// Loads today's and tomorrow's bookings for My Profile's two "today" cards
-// and keeps the clock moving while the screen is open, so "next", the done
+// Loads the bookings for My Profile's two "today" cards (today and tomorrow for
+// the summary, plus the next few after that for the booking cards) and keeps the clock moving while the screen is open, so "next", the done
 // rows and the 2pm swap follow the time without a refresh.
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { getProviderBookingsByDateRange, getServiceSafetyFlags } from '../../services/databaseService';
+import { getProviderBookingsByDateRange, getProviderUpcomingBookings, getServiceSafetyFlags } from '../../services/databaseService';
 import type { BookingWithAddOns } from '../../types/database';
 import { dateToYMD } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
-import { buildTodaySchedule, type TodaySchedule } from './todaySchedule';
+import { buildTodaySchedule, UPCOMING_CARD_COUNT, type TodaySchedule } from './todaySchedule';
 
 const TICK_MS = 60_000;
 
@@ -29,7 +29,13 @@ export function useTodaySchedule(providerId: string | null): TodaySchedule<Booki
   const load = useCallback(async () => {
     if (!providerId) return;
     try {
-      const rows = await getProviderBookingsByDateRange(providerId, todayYmd, tomorrowYmd);
+      const afterTomorrow = new Date(`${tomorrowYmd}T12:00:00`);
+      afterTomorrow.setDate(afterTomorrow.getDate() + 1);
+      const [nearRows, laterRows] = await Promise.all([
+        getProviderBookingsByDateRange(providerId, todayYmd, tomorrowYmd),
+        getProviderUpcomingBookings(providerId, dateToYMD(afterTomorrow), UPCOMING_CARD_COUNT),
+      ]);
+      const rows = [...nearRows, ...laterRows];
       const flags = await getServiceSafetyFlags(
         rows.map(b => b.service_id).filter((id): id is string => !!id),
       );

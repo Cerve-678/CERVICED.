@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (...parts: string[]): string =>
   fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
 
 describe('client support screen performance contracts', () => {
-  const database = read('services', 'databaseService.ts');
+  const database = readDatabaseLayer();
 
   it('keeps realtime access out of notification and conversation screens', () => {
     for (const screen of [

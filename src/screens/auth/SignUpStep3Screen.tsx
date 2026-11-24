@@ -3,20 +3,20 @@ import React, { useState, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import SignUpHeader from '../../components/SignUpHeader';
 import { DobField, FieldRow, FormCard, PrimaryButton, ScreenTitle, SectionLabel, useFieldInputStyle } from '../../components/signup/FormKit';
 import { Ionicons } from '@expo/vector-icons';
-import { validateEmail, validateDob } from '../../utils/validation';
+import { validateOptionalEmail, validateDob } from '../../utils/validation';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -65,8 +65,9 @@ export default function SignUpStep3Screen({ navigation }: Props) {
     }
     if (!isUser) {
       if (!businessName.trim()) errs.businessName = 'Business name is required';
-      if (!businessEmail.trim()) errs.businessEmail = 'Business email is required';
-      else if (!validateEmail(businessEmail)) errs.businessEmail = 'Enter a valid email';
+      // Optional, like Business phone: blank is fine, a typo isn't.
+      const emailErr = validateOptionalEmail(businessEmail);
+      if (emailErr) errs.businessEmail = emailErr;
     }
     return errs;
   }, [isUser, needsDob, dobDay, dobMonth, dobYear, businessName, businessEmail]);
@@ -94,7 +95,7 @@ export default function SignUpStep3Screen({ navigation }: Props) {
     if (!isUser) {
       updateData({
         businessName,
-        businessEmail,
+        businessEmail: businessEmail.trim(),
         businessPhone: businessPhone.trim(),
         instagram: instagram.replace(/^@/, '').trim(),
         tiktok: tiktok.replace(/^@/, '').trim(),
@@ -133,7 +134,7 @@ export default function SignUpStep3Screen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView
@@ -162,7 +163,7 @@ export default function SignUpStep3Screen({ navigation }: Props) {
                 <FieldRow label="BUSINESS EMAIL" error={fieldError('businessEmail')}>
                   <TextInput
                     style={inputStyle} value={businessEmail} onChangeText={setBusinessEmail}
-                    onBlur={() => markTouched('businessEmail')} placeholder="hello@glowstudio.com" placeholderTextColor={t.sub}
+                    onBlur={() => markTouched('businessEmail')} placeholder="hello@glowstudio.com (optional)" placeholderTextColor={t.sub}
                     keyboardType="email-address" autoCapitalize="none"
                   />
                 </FieldRow>

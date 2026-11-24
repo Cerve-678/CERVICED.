@@ -13,7 +13,7 @@ import {
 describe('displaySettings pure helpers', () => {
   describe('clampTextScale', () => {
     it('leaves an in-range value untouched', () => {
-      expect(clampTextScale(1.15)).toBe(1.15);
+      expect(clampTextScale(1.06)).toBe(1.06);
     });
 
     it('clamps below the minimum step', () => {
@@ -32,21 +32,27 @@ describe('displaySettings pure helpers', () => {
 
   describe('snapTextScaleToStep', () => {
     it('snaps to the nearest discrete step', () => {
-      expect(snapTextScaleToStep(0.9)).toBe(0.85);
-      expect(snapTextScaleToStep(1.06)).toBe(1.0);
-      expect(snapTextScaleToStep(1.1)).toBe(1.15);
-      expect(snapTextScaleToStep(1.9)).toBe(1.3);
+      expect(snapTextScaleToStep(0.9)).toBe(0.92);
+      expect(snapTextScaleToStep(1.02)).toBe(1.0);
+      expect(snapTextScaleToStep(1.1)).toBe(1.12);
+      expect(snapTextScaleToStep(1.9)).toBe(1.12);
     });
 
     it('snaps a clamped out-of-range value', () => {
-      expect(snapTextScaleToStep(-5)).toBe(0.85);
+      expect(snapTextScaleToStep(-5)).toBe(0.92);
     });
   });
 
   describe('labelForTextScale', () => {
     it('returns the label of the nearest step', () => {
       expect(labelForTextScale(1.0)).toBe('Default');
-      expect(labelForTextScale(0.85)).toBe('Small');
+      expect(labelForTextScale(0.92)).toBe('Small');
+      expect(labelForTextScale(1.12)).toBe('Larger');
+    });
+
+    it('puts anyone saved on the old, bigger sizes on Larger', () => {
+      expect(snapTextScaleToStep(1.15)).toBe(1.12);
+      expect(snapTextScaleToStep(1.3)).toBe(1.12);
       expect(labelForTextScale(1.3)).toBe('Larger');
     });
   });

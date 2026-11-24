@@ -5,9 +5,9 @@
 
 #generated
 
-**81 screens.** Curated overview: [[Screens & Navigation]].
+**85 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (34)
+## Provider (35)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
 - `src/screens/provider/AboutYouScreen.tsx`
@@ -16,6 +16,7 @@
 - `src/screens/provider/BusinessDetailsScreen.tsx`
 - `src/screens/provider/BusinessInfoScreen.tsx`
 - `src/screens/provider/BusinessProfileScreen.tsx`
+- `src/screens/provider/FullCervicedFeaturesScreen.tsx`
 - `src/screens/provider/InfoRegScreen.tsx`
 - `src/screens/provider/LinkOnlyAnalyticsScreen.tsx`
 - `src/screens/provider/LinkOnlyHomeScreen.tsx`
@@ -43,7 +44,7 @@
 - `src/screens/provider/SchedulingScreen.tsx`
 - `src/screens/provider/ServicesPricingScreen.tsx`
 
-## Client / shared (47)
+## Client / shared (50)
 - `src/screens/auth/AuthScreen.tsx`
 - `src/screens/auth/ClaimProviderScreen.tsx`
 - `src/screens/auth/EmailVerificationScreen.tsx`
@@ -58,12 +59,14 @@
 - `src/screens/auth/SignUpStep4Screen.tsx`
 - `src/screens/auth/SignUpStep5Screen.tsx`
 - `src/screens/auth/WelcomeScreen.tsx`
+- `src/screens/client/ActivityCentreScreen.tsx`
 - `src/screens/client/BeautyBillingScreen.tsx`
 - `src/screens/client/BeautyProfileScreen.tsx`
 - `src/screens/client/BookingDetailScreen.tsx`
 - `src/screens/client/BookingsScreen.tsx`
 - `src/screens/client/BookmarkedProvidersScreen.tsx`
 - `src/screens/client/CartScreen.tsx`
+- `src/screens/client/CircleScreen.tsx`
 - `src/screens/client/ClientIntakeFormScreen.tsx`
 - `src/screens/client/ExploreScreen.tsx`
 - `src/screens/client/ExternalBookingDetailScreen.tsx`
@@ -78,7 +81,9 @@
 - `src/screens/client/SearchScreen.tsx`
 - `src/screens/client/SubscriptionScreen.tsx`
 - `src/screens/client/UserProfileScreen.tsx`
-- `src/screens/shared/AboutScreen.tsx`
+- `src/screens/shared/AdminCreateAccountScreen.tsx`
+- `src/screens/shared/AdminCreatedAccountsScreen.tsx`
+- `src/screens/shared/AdminDashboardScreen.tsx`
 - `src/screens/shared/AdminMoneyScreen.tsx`
 - `src/screens/shared/BeccaScreen.tsx`
 - `src/screens/shared/ChangeCredentialsScreen.tsx`
@@ -89,5 +94,4 @@
 - `src/screens/shared/LanguageRegionScreen.tsx`
 - `src/screens/shared/NotificationsScreen.tsx`
 - `src/screens/shared/ReportProblemScreen.tsx`
-- `src/screens/shared/TermsScreen.tsx`
 - `src/screens/shared/TextSizingScreen.tsx`

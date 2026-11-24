@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../contexts/ThemeContext';
+import { stackHidesTabBar, tabStackRouteNames } from '../navigation/tabBarVisibility';
 import { useExploreFocusStore } from '../stores/useExploreFocusStore';
 import { explorePillVisible } from '../utils/exploreTabBarScroll';
 import {
@@ -95,15 +96,25 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   // Composed with the scroll-hide values below (not just a second style
   // object) so this is a true no-op for every screen that never sets it.
   const focusedRouteOptions = descriptors[state.routes[state.index]?.key ?? '']?.options;
-  // Custom tab bars must implement tabBarHideOnKeyboard themselves.
-  const [keyboardVisible, setKeyboardVisible] = useState(Keyboard.isVisible());
+  // Custom tab bars must implement tabBarHideOnKeyboard themselves. Only a
+  // keyboard opened after the bar appears hides it. The bar is drawn fresh at
+  // sign-in and on a hat switch, while the previous screen's keyboard (the
+  // Login form's) is still closing: reading Keyboard.isVisible() here made it
+  // start hidden and slide in late over the provider calendar.
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
   const keyboardHidden = !!focusedRouteOptions?.tabBarHideOnKeyboard && keyboardVisible;
-  const forceHidden = keyboardHidden || (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
+  const focusedTab = state.routes[state.index];
+  // Settings sub-screens (both hats) and the provider's Quick Access screens:
+  // the rule lives in tabBarVisibility.ts.
+  const stackHidden = !!focusedTab && stackHidesTabBar(focusedTab.name, tabStackRouteNames(focusedTab));
+  const forceHidden = keyboardHidden
+    || stackHidden
+    || (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
   const forceHideProgress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(forceHideProgress, {

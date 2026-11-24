@@ -6,13 +6,13 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -23,7 +23,6 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AddressPicker from '../../components/AddressPicker';
 import AreaPicker from '../../components/AreaPicker';
-import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
@@ -70,10 +69,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      await Promise.all([
-        updateUser({ name: name.trim(), phone: phone.trim(), clientAddress: clientAddress.trim() || null, clientArea: clientArea.trim() || null }),
-        user?.id ? updateUserDob(user.id, dob ? dateToYMD(dob) : null) : Promise.resolve(),
-      ]);
+      await updateUser({ name: name.trim(), phone: phone.trim(), dob: dob ? dateToYMD(dob) : '', clientAddress: clientAddress.trim() || null, clientArea: clientArea.trim() || null });
     } catch {
       setLoading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -134,7 +130,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}
