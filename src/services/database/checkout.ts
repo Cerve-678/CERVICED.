@@ -410,7 +410,8 @@ export async function getProviderDepositPoliciesByDisplayNames(
   const { data, error } = await supabase
     .from("providers")
     .select("display_name, booking_policies")
-    .in("display_name", displayNames);
+    .in("display_name", displayNames)
+    .eq("is_claimed", true); // never an imported directory listing
 
   if (error || !data) return {};
 

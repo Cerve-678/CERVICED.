@@ -66,6 +66,8 @@ export {
   searchProvidersAndServices,
   getServiceCoverImages,
   searchProviders,
+  getDirectoryListings,
+  getDirectoryListingDetail,
   logSearchEvent,
   getProviderProfilePreviewBySlug,
   getProviderBySlug,
@@ -99,6 +101,8 @@ export type {
   ProviderProfileViewerContext,
   ProviderAccountEditorInfo,
   ProviderLogoFramingEntry,
+  DirectoryListingRow,
+  DirectoryListingDetailRow,
 } from "./database/providers";
 export {
   getProviderPortfolio,

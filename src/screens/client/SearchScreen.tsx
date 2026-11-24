@@ -35,8 +35,8 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
-import type { FacetService, ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
+import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, getDirectoryListings, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
+import type { DirectoryListingRow, FacetService, ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
 import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
@@ -48,6 +48,8 @@ import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
+import { filtersAllowDirectoryListings } from '../../features/providers/directoryListings';
+import { ListingInitialBadge } from '../../components/ListingInitialBadge';
 import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
@@ -78,7 +80,8 @@ interface ProviderCardData {
   providerId: string;
   name: string;
   service: string;
-  logo: { uri: string } | number;
+  /** null = a directory listing with no logo; the card shows its initial. */
+  logo: { uri: string } | number | null;
   distanceMiles: number | null;
   latitude: number | null;
   longitude: number | null;
@@ -87,6 +90,9 @@ interface ProviderCardData {
   /** Books on their own page (booking_mode 'external') — no rating, prices or
    *  availability here, and only some filters can match them. */
   isLinkOnly: boolean;
+  /** A business that hasn't joined CERVICED (see directoryListings.ts) —
+   *  shown after every bookable provider, keyed and opened by its uuid. */
+  isListing: boolean;
   estimatedWait: string;
   // Real £min–£max from this provider's active services, resolved via a
   // batched fetch (see providersWithPriceRange below) — null until resolved
@@ -181,6 +187,7 @@ interface ProviderCardProps {
   onPress: () => void;
   index: number;
   P: AppTheme;
+  dark: boolean;
   widthStyle?: ViewStyle | undefined;
 }
 
@@ -305,8 +312,51 @@ type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 
 
 
+// ── Directory listings — businesses not on CERVICED yet. They have no
+// rating, prices, availability or coordinates, so those fields stay empty
+// and the filters that need them drop listings (filtersAllowDirectoryListings).
+function mapListingToCardData(l: DirectoryListingRow): ProviderCardData {
+  return {
+    id: l.id,
+    providerId: l.id,
+    name: l.display_name,
+    service: l.service_category,
+    logo: l.logo_url ? { uri: l.logo_url } : null,
+    location: l.location_text ?? '',
+    cityKeys: cityFilterKeys(l.location_text, []),
+    latitude: null,
+    longitude: null,
+    distanceMiles: null,
+    rating: 0,
+    reviewCount: 0,
+    isLinkOnly: false,
+    isListing: true,
+    estimatedWait: '',
+    priceRange: null,
+    priceTier: null,
+    priceBands: [],
+    businessType: null,
+    specialties: [],
+    availability: null,
+    walkInsWelcome: false,
+    groupBookingsAvailable: false,
+    veganCrueltyFree: false,
+  };
+}
+
+// A failed listing lookup leaves Search showing the bookable providers on
+// their own rather than failing the whole page.
+async function loadListingCards(query: string, category?: string): Promise<ProviderCardData[]> {
+  try {
+    return (await getDirectoryListings(query, category)).map(mapListingToCardData);
+  } catch (error) {
+    logger.error('[Search] directory listings failed to load:', error);
+    return [];
+  }
+}
+
 // ── Provider Card — vertical, sits two-up (three-up on iPad) in the results grid ──────────────────
-const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, widthStyle }) => {
+const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, dark, widthStyle }) => {
   const slideAnim = useRef(new Animated.Value(24)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const availInfo = provider.availability ? AVAILABILITY_INFO[provider.availability] : null;
@@ -328,7 +378,11 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
 
         {/* Provider image */}
         <View style={styles.imageWrap}>
-          <Image source={provider.logo} style={styles.cardImage} contentFit="cover" transition={0} />
+          {provider.logo ? (
+            <Image source={provider.logo} style={styles.cardImage} contentFit="cover" transition={0} />
+          ) : (
+            <ListingInitialBadge name={provider.name} dark={dark} fontSize={44} style={styles.cardImage} />
+          )}
           <CircleStack providerId={provider.providerId} providerName={provider.name} style={styles.cardCircle} />
         </View>
 
@@ -357,7 +411,11 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
             )}
           </View>
 
-          {provider.isLinkOnly ? (
+          {provider.isListing ? (
+            <View style={styles.metaRow}>
+              <Text style={[styles.reviewCount, { color: P.sub }]}>Not on CERVICED yet</Text>
+            </View>
+          ) : provider.isLinkOnly ? (
             <View style={styles.metaRow}>
               <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
             </View>
@@ -407,9 +465,9 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
         </View>
       </TouchableOpacity>
 
-      {/* Book Now */}
+      {/* Book Now — a listing can't be booked here, so it just opens */}
       <TouchableOpacity style={[styles.bookBtn, { backgroundColor: P.accent }]} onPress={onPress} activeOpacity={0.8}>
-        <Text style={[styles.bookBtnText, { color: P.onAccent }]}>Book Now</Text>
+        <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{provider.isListing ? 'View' : 'Book Now'}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -572,6 +630,10 @@ export default function SearchScreen({ navigation, route }: Props) {
     return Object.keys(CATEGORY_CODE_MAP).find(k => CATEGORY_CODE_MAP[k] === code) ?? 'All';
   });
   const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
+  // Directory listings matching the same query/category, kept apart from
+  // providerData so the availability/price/facet lookups below never run
+  // for businesses that aren't on CERVICED.
+  const [listingData, setListingData]     = useState<ProviderCardData[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
   // Individual services matching a typed query, best first, plus the query
@@ -674,6 +736,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       distanceMiles: null,
       rating: p.rating, reviewCount: p.review_count,
       isLinkOnly: p.booking_mode === 'external',
+      isListing: false,
       estimatedWait: '10–15 min',
       // Resolved separately once the batched price-range fetch returns —
       // see providersWithPriceRange below. price_tier is kept purely for
@@ -755,11 +818,15 @@ export default function SearchScreen({ navigation, route }: Props) {
       setProvidersError(null);
       try {
         const q = searchQuery.trim();
-        const result = await searchProvidersAndServices(q, catCode);
+        const [result, listings] = await Promise.all([
+          searchProvidersAndServices(q, catCode),
+          loadListingCards(q, catCode),
+        ]);
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData(result.providers.map(mapDbToCardData));
         setServiceResults(result.services);
         setCorrectedQuery(result.correctedQuery);
+        setListingData(listings);
         if (q) {
           // Zero-result searches are valuable learning signals too.
           logSearchEvent({
@@ -778,6 +845,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setProviderData([]);
         setServiceResults([]);
         setCorrectedQuery(null);
+        setListingData([]);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       } finally {
         if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
@@ -1182,8 +1250,14 @@ export default function SearchScreen({ navigation, route }: Props) {
       list.sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity));
     }
 
-    return list;
-  }, [providersWithSpecialties, activeFilters, availabilityLoading, serviceCriteria, serviceMatchByProviderId, hairTypeMatchIds, specialityMatchIds]);
+    // Listings always come after every bookable provider, whatever the sort.
+    if (!filtersAllowDirectoryListings(activeFilters)) return list;
+    const cities = activeFilters.city ?? [];
+    const listings = cities.length
+      ? listingData.filter(p => matchesCityFilter(cities, p.cityKeys))
+      : listingData;
+    return listings.length ? [...list, ...listings] : list;
+  }, [providersWithSpecialties, listingData, activeFilters, availabilityLoading, serviceCriteria, serviceMatchByProviderId, hairTypeMatchIds, specialityMatchIds]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
@@ -1285,12 +1359,17 @@ export default function SearchScreen({ navigation, route }: Props) {
     setRefreshing(true);
     const requestId = ++providerRequestIdRef.current;
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-    searchProvidersAndServices(searchQuery.trim(), catCode)
-      .then(result => {
+    const q = searchQuery.trim();
+    Promise.all([
+      searchProvidersAndServices(q, catCode),
+      loadListingCards(q, catCode),
+    ])
+      .then(([result, listings]) => {
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData(result.providers.map(mapDbToCardData));
         setServiceResults(result.services);
         setCorrectedQuery(result.correctedQuery);
+        setListingData(listings);
         setProvidersError(null);
       })
       .catch((err) => {
@@ -1299,6 +1378,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setProviderData([]);
         setServiceResults([]);
         setCorrectedQuery(null);
+        setListingData([]);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       })
       .finally(() => {
@@ -1313,7 +1393,9 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // The 'view' interaction is tracked once, by ProviderProfileScreen itself
     // on load — tracking it again here double-counted every visit.
-    prefetchProviderBySlug(provider.id);
+    // A listing has no live profile to prefetch: ProviderProfile finds no
+    // provider for its uuid and shows the listing page instead.
+    if (!provider.isListing) prefetchProviderBySlug(provider.id);
     navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
   }, [navigation]);
 
@@ -1440,12 +1522,13 @@ export default function SearchScreen({ navigation, route }: Props) {
             onPress={() => handleProviderPress(provider)}
             index={item.firstIndex + i}
             P={P}
+            dark={isDarkMode}
             widthStyle={cardWidthStyle}
           />
         ))}
       </View>
     );
-  }, [serviceCovers, providerRatings, availabilityBySlug, highlightQuery, handleServicePress, handleServiceProviderPress, handleProviderPress, P, cardWidthStyle]);
+  }, [serviceCovers, providerRatings, availabilityBySlug, highlightQuery, handleServicePress, handleServiceProviderPress, handleProviderPress, P, isDarkMode, cardWidthStyle]);
 
   // Each active (non-default) filter as a dismissible chip — key, label, and
   // the callback to clear just that one. distance's "Any" value is 999, not

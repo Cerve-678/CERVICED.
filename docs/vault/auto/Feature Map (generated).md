@@ -40,12 +40,12 @@ Curated: [[Address Release]] · **123 files**
 - … +93 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **241 files**
+Curated: [[Availability & Slots]] · **242 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
-- `src/screens/client/SearchScreen.tsx` _(110)_
+- `src/screens/client/SearchScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(97)_
 - `src/services/becca/capabilities/client.ts` _(92)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **241 files**
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- … +211 more
+- … +212 more
 
 ## Payments
 Curated: [[Payments]] · **205 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **205 files**
 - … +175 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **420 files**
+Curated: [[Booking Flow]] · **421 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/screens/client/CartScreen.tsx` _(732)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -126,8 +126,8 @@ Curated: [[Booking Flow]] · **420 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(143)_
 - `src/services/database/edgeFunctions.ts` _(143)_
 - `src/services/AvailabilityService.ts` _(141)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(134)_
 - `supabase/waitlist_holds.sql` _(134)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(133)_
 - `src/services/becca/engine.ts` _(130)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **420 files**
 - `src/types/booking.ts` _(109)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/database.ts` _(104)_
-- … +390 more
+- … +391 more
 
 ## Notifications
 Curated: [[Notifications]] · **215 files**
@@ -182,7 +182,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **107 files**
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(37)_
-- `src/services/database/providers.ts` _(30)_
+- `src/services/database/providers.ts` _(33)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
