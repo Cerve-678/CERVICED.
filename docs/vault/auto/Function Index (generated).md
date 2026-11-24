@@ -5,7 +5,7 @@
 
 #generated
 
-**4366 functions** across **642 files**.
+**4368 functions** across **643 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -274,9 +274,10 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (64)
+### `src/features/providers/` (65)
 - `aboutPreview.ts` — **aboutPreview**
 - `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
+- `announcementAudience.ts` — **interestedRecipientIds**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
 - `calendarBusyBlocks.ts` — **addDaysYmd** · pad · timeFromMinutes · **toUkBusyBlocks** · **ukTodayYmd** · ukWallMs · ymdFromWallMs
@@ -480,7 +481,7 @@
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
 - `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · cancelBooking · canDispute · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleRefund · handleRefunded · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · hasFormForService · hasPackForService · isAddressReleased · loadSentItems · missingForms · missingPacks · parseMin · Perf · ProviderBookingDetailScreen · refreshBookingStatus · releaseAddressNow · Row · sendMissingForm · sendMissingPack · statusCard · submitPassOn · suggestRow · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleDismissReleasedSlot · handleHistoryFilterPress · handleOfferReleasedSlot · handlePickForReleasedSlot · handleRemoveWaitlistEntry · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount · waitlistPlaces
-- `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · clientCount · ClientSheet · close · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleCloseClient · handleMessage · handleOpenClient · handleRebook · handleSend · handleSheetChange · initials · load · loadHistory · loadNote · loadProfile · peopleCount · ProviderClienteleScreen · retry · sectionLabel · snapPoints · TabBar · tomorrow9am
+- `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · clientCount · ClientSheet · close · countsPeople · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleCloseClient · handleMessage · handleOpenClient · handleRebook · handleSend · handleSheetChange · initials · load · loadHistory · loadNote · loadProfile · peopleCount · ProviderClienteleScreen · retry · sectionLabel · snapPoints · TabBar · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — effective · flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
 - `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsByDate · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · dayAvailability · DayTimeline · displayMonth · finishTour · firstNameOf · formatCreatedAt · formatDateString · getMondayOf · getMonthDays · getWeekDates · goNextWeek · goPrevWeek · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · shiftDateString · SkeletonCard · statusCfg · SummaryRow · tap · timelineBookings · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · weekDates · WeekView · windowsByDate
