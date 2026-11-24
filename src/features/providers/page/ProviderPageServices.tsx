@@ -759,6 +759,8 @@ export function ProviderPageServices({
                           ],
                           darkPillButtons && [styles.darkPillButton, { backgroundColor: fullyBooked ? withAlpha(SV.sub, 0.18) : SV.text }],
                           captionPillButtons && [styles.captionPillButton, { borderColor: fullyBooked ? SV.border : SV.text }],
+                          // Last: the closed label is two lines, so it needs less side padding.
+                          !takingBookings && styles.closedButton,
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -781,10 +783,17 @@ export function ProviderPageServices({
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             darkPillButtons && !fullyBooked && [styles.darkPillButtonText, { color: darkPillInk }],
                             captionPillButtons && [styles.captionPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
+                            // Last, over every style's size and spacing: Neon's and
+                            // Caption Pill's wide-spaced capitals ran "Not taking
+                            // bookings" far past the pill (owner, 11-24).
+                            !takingBookings && styles.closedButtonText,
                           ]}
+                          numberOfLines={takingBookings ? undefined : 2}
+                          adjustsFontSizeToFit={!takingBookings}
+                          minimumFontScale={0.8}
                         >
                           {!takingBookings
-                              ? "Not taking bookings"
+                              ? "Not taking\nbookings"
                               : fullyBooked
                               ? "Fully Booked"
                               // Boutique says "Add to basket"; it still opens the booking sheet.
@@ -1149,6 +1158,8 @@ const styles = StyleSheet.create({
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 12, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
+  closedButton: { paddingHorizontal: 12 },
+  closedButtonText: { fontSize: 10, lineHeight: 13, letterSpacing: 0.6, textAlign: "center" },
   darkPillButton: { borderRadius: 999, paddingHorizontal: 20, shadowOpacity: 0, elevation: 0 },
   darkPillButtonText: { fontFamily: "Figtree-SemiBold", fontSize: 13 },
   captionPillButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 999, shadowOpacity: 0, elevation: 0 },

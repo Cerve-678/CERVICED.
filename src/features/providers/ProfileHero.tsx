@@ -25,7 +25,7 @@ import type { LogoFraming } from "../../types/database";
 import { HeroPhoto, HeroPhotoFramesContext, type HeroPhotoFrames } from "./HeroPhoto";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
-import { NeonHero } from "./heroes/NeonHero";
+import { NEON_NAME_SIZE, NeonHero } from "./heroes/NeonHero";
 import { CapsuleHero } from "./heroes/CapsuleHero";
 import { MoodboardHero } from "./heroes/MoodboardHero";
 import { LatteHero } from "./heroes/LatteHero";
@@ -295,7 +295,7 @@ function ProfileHeroLayoutBody({
 
   switch (pageStyle.hero) {
     case "neonSign":
-      return <NeonHero name={name} kicker={kicker} accent={accent} heroColour={heroColour} pickedNameStyle={pickedName(62)} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
+      return <NeonHero name={name} kicker={kicker} accent={accent} heroColour={heroColour} pickedNameStyle={pickedName(NEON_NAME_SIZE)} renderLogo={renderLogo} tick={tick} meta={meta} details={details} />;
     case "tallCapsule":
       return (
         <CapsuleHero
