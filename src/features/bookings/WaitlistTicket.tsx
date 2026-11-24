@@ -13,7 +13,6 @@ import {
   formatCountdown,
   heldTimeRangeLabel,
   holdSecondsLeft,
-  offeredSlotLabel,
   waitlistCardState,
   waitlistDatesLabel,
 } from './waitlist';
@@ -36,8 +35,6 @@ interface WaitlistTicketProps {
   busy: boolean;
   /** Price and length for a held slot; null while it loads or if it can't be read. */
   service: WaitlistTicketService | null;
-  /** Set once the held slot is paid for: the ticket is stamped. */
-  paid: { paid: number; leftToPay: number; requestSent: boolean } | null;
   onClose: () => void;
   onConfirmAndPay: (place: MyWaitlistPlace) => void;
   onPass: (place: MyWaitlistPlace) => void;
@@ -57,7 +54,7 @@ interface WaitlistTicketProps {
  * closes the ticket; Bookings' "Waiting for" card says what happened.
  */
 export function WaitlistTicket({
-  place, nowMs, busy, service, paid, onClose, onConfirmAndPay, onPass, onChangeDates, onLeave, onHoldEnded, children,
+  place, nowMs, busy, service, onClose, onConfirmAndPay, onPass, onChangeDates, onLeave, onHoldEnded, children,
 }: WaitlistTicketProps) {
   const { palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
@@ -68,7 +65,7 @@ export function WaitlistTicket({
   if (place) lastPlace.current = place;
   const shown = place ?? lastPlace.current;
   const state = shown ? waitlistCardState(shown, nowMs) : 'gone';
-  const visible = !!place && (state !== 'gone' || !!paid);
+  const visible = !!place && state !== 'gone';
 
   // pageSheet already starts below the status bar on iOS; Android shows the
   // modal full screen, so it needs the inset itself.
@@ -83,7 +80,7 @@ export function WaitlistTicket({
     >
       <View style={[styles.screen, { paddingTop: topPad }]}>
         <View style={styles.header}>
-          <Text style={styles.cap}>{paid ? 'Booked' : state === 'held' ? 'Held for you' : 'Waitlist'}</Text>
+          <Text style={styles.cap}>{state === 'held' ? 'Held for you' : 'Waitlist'}</Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onClose(); }}
             hitSlop={12}
@@ -96,37 +93,7 @@ export function WaitlistTicket({
         </View>
 
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomInset + 24 }]}>
-          {shown && paid && (
-            <>
-              <View style={styles.ticket}>
-                <View style={styles.top}>
-                  <View style={[styles.stamp, { backgroundColor: P.accent }]}>
-                    <Ionicons name="checkmark" size={30} color={P.onAccent} />
-                  </View>
-                  <Text style={[styles.xl, { marginTop: 8 }]}>From the waitlist</Text>
-                  <Text style={styles.sub}>{paid.requestSent ? `Sent to ${shown.providerName} to accept` : 'to your diary'}</Text>
-                </View>
-                {ticketCut()}
-                <View style={styles.bottom}>
-                  {row('When', offeredSlotLabel(shown.offeredDate, shown.offeredTime) ?? 'Your slot')}
-                  {row('Service', shown.serviceName)}
-                  {row('Paid today', `£${paid.paid.toFixed(2)}`)}
-                  {paid.leftToPay > 0 && row('Left to pay at the appointment', `£${paid.leftToPay.toFixed(2)}`)}
-                  {row('Status', paid.requestSent ? 'Request sent' : 'Confirmed')}
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: P.accentDim }]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); onClose(); }}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.buttonText, { color: P.accentText }]}>See booking</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {shown && !paid && state === 'held' && shown.offerExpiresAt && (
+          {shown && state === 'held' && shown.offerExpiresAt && (
             <>
               <View style={styles.ticket}>
                 <View style={styles.top}>
@@ -172,7 +139,7 @@ export function WaitlistTicket({
             </>
           )}
 
-          {shown && !paid && state === 'waiting' && (
+          {shown && state === 'waiting' && (
             <>
               <View style={styles.ticket}>
                 <View style={styles.top}>
@@ -366,7 +333,6 @@ const createStyles = (P: Palette) =>
       borderWidth: 4,
       borderColor: P.accentDim,
     },
-    stamp: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
     pair: { flexDirection: 'row', gap: 10 },
     pairButton: { flex: 1 },
     button: { minHeight: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
