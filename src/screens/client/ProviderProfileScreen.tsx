@@ -133,7 +133,7 @@ import {
   listingServiceKind,
 } from "../../features/providers/directoryListings";
 import { ListingInitialBadge } from "../../components/ListingInitialBadge";
-import { JoinNudgeBar } from "../../components/JoinNudgeBar";
+import { JoinNudgeBar, JoinNudgeSideToast } from "../../components/JoinNudgeBar";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
 import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
@@ -843,12 +843,10 @@ const LISTING_HERO = {
 function UnclaimedProviderView({
   provider,
   currentUserId,
-  onBack,
   onClaim,
 }: {
   provider: DirectoryListingDetail;
   currentUserId: string | null | undefined;
-  onBack: () => void;
   onClaim: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -860,7 +858,6 @@ function UnclaimedProviderView({
 
   const [nudgePending, setNudgePending] = useState(false);
   const [nudgeSent, setNudgeSent] = useState(false);
-  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [footerHeight, setFooterHeight] = useState(0);
 
   const openLink = () => {
@@ -904,7 +901,6 @@ function UnclaimedProviderView({
     }
   };
 
-  const showNudge = !nudgeDismissed;
   const nudgeBottom = footerHeight + 12;
 
   return (
@@ -917,31 +913,23 @@ function UnclaimedProviderView({
         style={[unclaimedStyles.hero, { height: insets.top + 170 }]}
       />
 
-      <View style={[unclaimedStyles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          onPress={onBack}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={unclaimedStyles.backButton}
-          activeOpacity={0.7}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={unclaimedStyles.pill}>
-          <Text style={unclaimedStyles.pillText}>Not on CERVICED yet</Text>
-        </View>
-      </View>
-
+      {/* Back is the screen's native header (white, set in the header
+          effect), so the page draws no back button of its own. */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[unclaimedStyles.scroll, { paddingTop: insets.top + 96 }]}
+        contentContainerStyle={[unclaimedStyles.scroll, { paddingTop: insets.top + 52 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Below the header row so the back arrow never covers it. */}
+        <View style={unclaimedStyles.pillRow}>
+          <View style={unclaimedStyles.pill}>
+            <Text style={unclaimedStyles.pillText}>Not on CERVICED yet</Text>
+          </View>
+        </View>
         <View
           style={[
             unclaimedStyles.sheet,
-            { backgroundColor: P.bg, paddingBottom: showNudge ? 58 + 32 : 24 },
+            { backgroundColor: P.bg, paddingBottom: 58 + 32 },
           ]}
         >
           <View style={[unclaimedStyles.logoRing, { backgroundColor: P.bg }]}>
@@ -1052,15 +1040,14 @@ function UnclaimedProviderView({
         </TouchableOpacity>
       </View>
 
-      {showNudge && footerHeight > 0 && (
-        <JoinNudgeBar
+      {footerHeight > 0 && (
+        <JoinNudgeSideToast
           bottom={nudgeBottom}
           businessName={provider.displayName}
           sent={nudgeSent}
           pending={nudgePending}
           sentLabel="Nudged! We'll let them know"
           onNudge={() => { void nudge(); }}
-          onDismiss={() => setNudgeDismissed(true)}
         />
       )}
     </ThemedBackground>
@@ -1069,24 +1056,12 @@ function UnclaimedProviderView({
 
 const unclaimedStyles = StyleSheet.create({
   hero: { position: "absolute", top: 0, left: 0, right: 0 },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 2,
-    paddingHorizontal: 16,
+  pillRow: {
+    height: 44,
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "flex-end",
   },
   pill: {
     paddingHorizontal: 11,
@@ -1164,8 +1139,8 @@ const unclaimedStyles = StyleSheet.create({
   },
   noticeText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 21,
   },
   footer: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   claimButton: {
@@ -2417,6 +2392,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       navigation.setOptions({ headerShown: false });
       return;
     }
+    // A "Not on CERVICED yet" listing: the native back only, white over the
+    // listing's dark band. Bookmark and Share need a real provider, so a
+    // listing shows neither rather than two buttons that do nothing.
+    if (!provider && unclaimedProvider) {
+      navigation.setOptions({
+        headerShown: true,
+        headerTransparent: true,
+        headerTintColor: "#FFFFFF",
+        headerBackButtonDisplayMode: 'minimal',
+        headerTitle: "",
+        headerRight: () => null,
+        headerBackground: () => null,
+      });
+      return;
+    }
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
@@ -2511,6 +2501,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     OP.text,
     provider?.brandFont,
     asOwnPreview,
+    unclaimedProvider,
   ]);
   const handleScroll = useCallback(
     (event: any) => {
@@ -3390,7 +3381,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <UnclaimedProviderView
           provider={unclaimedProvider}
           currentUserId={currentUserId}
-          onBack={() => navigation.goBack()}
           onClaim={() => {
             // ClaimProvider is a root-stack screen, several levels above
             // wherever this tab screen sits — navigating via the root ref
