@@ -910,14 +910,14 @@ function UnclaimedProviderView({
         colors={isDarkMode ? LISTING_HERO.dark : LISTING_HERO.light}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.6, y: 1 }}
-        style={[unclaimedStyles.hero, { height: insets.top + 170 }]}
+        style={[unclaimedStyles.hero, { height: insets.top + 194 }]}
       />
 
       {/* Back is the screen's native header (white, set in the header
           effect), so the page draws no back button of its own. */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[unclaimedStyles.scroll, { paddingTop: insets.top + 52 }]}
+        contentContainerStyle={[unclaimedStyles.scroll, { paddingTop: insets.top + 76 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Below the header row so the back arrow never covers it. */}
