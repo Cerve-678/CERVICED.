@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
@@ -35,6 +36,8 @@ import {
   type UnclaimedProviderSummary,
   type UnclaimedProviderDetail,
 } from '../../services/providerClaimService';
+import { getListingNudgeCount } from '../../services/databaseService';
+import { listingNudgeLine } from '../../features/providers/directoryListings';
 import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'ClaimProvider'>;
@@ -68,6 +71,19 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
   const [selected, setSelected] = useState<UnclaimedProviderDetail | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isLoadingKnown, setIsLoadingKnown] = useState(!!knownProviderId);
+  // People who nudged this listing to join, shown to the owner on the preview.
+  const [nudgeCount, setNudgeCount] = useState(0);
+
+  useEffect(() => {
+    setNudgeCount(0);
+    if (!selected) return;
+    let cancelled = false;
+    getListingNudgeCount(selected.id)
+      .then(count => { if (!cancelled) setNudgeCount(count); })
+      // Nice to have, not part of claiming: the preview just goes without it.
+      .catch((e: unknown) => logger.error('[ClaimProvider] nudge count failed:', e));
+    return () => { cancelled = true; };
+  }, [selected]);
 
   useEffect(() => {
     if (!knownProviderId) return;
@@ -273,6 +289,12 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
+              {listingNudgeLine(nudgeCount) && (
+                <View style={[styles.nudgeRow, { backgroundColor: t.surface }]}>
+                  <Ionicons name="megaphone-outline" size={18} color={t.text} />
+                  <Text style={[styles.nudgeText, { color: t.text }]}>{listingNudgeLine(nudgeCount)}</Text>
+                </View>
+              )}
               {selected.scrapedFields.length > 0 && (
                 <View style={[styles.noticeBox, { backgroundColor: t.surface, borderColor: t.accent }]}>
                   <Text style={[styles.noticeText, { color: t.text }]}>
@@ -337,6 +359,8 @@ const styles = StyleSheet.create({
   resultSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2 },
   emptyText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, textAlign: 'center', marginTop: 24 },
   noticeBox: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 20 },
+  nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, padding: 14, marginBottom: 16 },
+  nudgeText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, fontWeight: '700' },
   noticeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19 },
   aboutText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, marginBottom: 24 },
   primaryBtn: { minHeight: 50, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 8 },

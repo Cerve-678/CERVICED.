@@ -125,8 +125,15 @@ import { heroPhotosForPage } from "../../features/providers/heroPhotos";
 import { pageJumpTargets } from "../../features/providers/page/jumpTargets";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
-import { listingInstagramUrl, listingLink } from "../../features/providers/directoryListings";
+import {
+  listingCategoryLabel,
+  listingInstagramUrl,
+  listingLink,
+  listingNotice,
+  listingServiceKind,
+} from "../../features/providers/directoryListings";
 import { ListingInitialBadge } from "../../components/ListingInitialBadge";
+import { JoinNudgeBar } from "../../components/JoinNudgeBar";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
 import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
@@ -821,21 +828,40 @@ const offersStyles = StyleSheet.create({
 // (see directoryListings.ts). Deliberately has no services/availability/
 // booking UI at all — those don't exist for a row nobody has onboarded yet.
 // Its job is to show enough to recognise the business, send the client to
-// the business's own page or Instagram, and offer the owner a way to claim it.
+// the business's own page or Instagram, let them nudge it to join (the same
+// join nudge a link-only provider's page has), and offer the owner a way to
+// claim it.
+//
+// It's CERVICED's page, not the business's, so it follows the viewer's own
+// colours and dark mode rather than a provider theme. The band behind the top
+// is a fixed CERVICED colour, never the business's.
+const LISTING_HERO = {
+  light: ["#3F1E36", "#7A4A6C"] as const,
+  dark: ["#2E3A4E", "#1E1B21"] as const,
+};
+
 function UnclaimedProviderView({
   provider,
-  theme,
+  currentUserId,
   onBack,
   onClaim,
 }: {
   provider: DirectoryListingDetail;
-  theme: ProviderThemeTokens;
+  currentUserId: string | null | undefined;
   onBack: () => void;
   onClaim: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { palette: P, isDarkMode } = useTheme();
   const link = listingLink(provider.website);
   const instagramUrl = listingInstagramUrl(provider.instagram);
+  const kind = listingServiceKind(provider.customServiceType, provider.serviceCategory);
+  const longName = provider.displayName.length > 20;
+
+  const [nudgePending, setNudgePending] = useState(false);
+  const [nudgeSent, setNudgeSent] = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [footerHeight, setFooterHeight] = useState(0);
 
   const openLink = () => {
     if (!link) return;
@@ -856,189 +882,287 @@ function UnclaimedProviderView({
     });
   };
 
+  // Same record as a link-only provider's nudge: record_provider_stat
+  // 'join_nudge', at most one per client per business per day. The team
+  // messages the most-nudged listings (Admin → Nudged businesses).
+  const nudge = async () => {
+    if (nudgePending || nudgeSent) return;
+    if (!currentUserId) {
+      Alert.alert("Sign in to nudge them", "Sign in to your CERVICED account, then tap Nudge.");
+      return;
+    }
+    setNudgePending(true);
+    try {
+      await recordProviderStat([provider.id], "join_nudge");
+      setNudgeSent(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (error) {
+      logger.warn("[ProviderProfile] could not record listing nudge", error);
+      Alert.alert("Couldn't send your nudge", "Please try again in a moment.");
+    } finally {
+      setNudgePending(false);
+    }
+  };
+
+  const showNudge = !nudgeDismissed;
+  const nudgeBottom = footerHeight + 12;
+
   return (
-    <View style={[unclaimedStyles.container, { backgroundColor: theme.bg }]}>
+    <ThemedBackground>
+      <FocusAwareStatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={isDarkMode ? LISTING_HERO.dark : LISTING_HERO.light}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.6, y: 1 }}
+        style={[unclaimedStyles.hero, { height: insets.top + 170 }]}
+      />
+
       <View style={[unclaimedStyles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           onPress={onBack}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={[unclaimedStyles.backButton, { backgroundColor: theme.surface }]}
+          style={unclaimedStyles.backButton}
+          activeOpacity={0.7}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Text style={[unclaimedStyles.backButtonText, { color: theme.text }]}>←</Text>
+          <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
         </TouchableOpacity>
+        <View style={unclaimedStyles.pill}>
+          <Text style={unclaimedStyles.pillText}>Not on CERVICED yet</Text>
+        </View>
       </View>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={unclaimedStyles.content}
+        contentContainerStyle={[unclaimedStyles.scroll, { paddingTop: insets.top + 96 }]}
         showsVerticalScrollIndicator={false}
       >
-        {provider.logoUrl ? (
-          <Image
-            source={{ uri: provider.logoUrl }}
-            style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]}
-            contentFit="cover"
-            transition={0}
-          />
-        ) : (
-          <ListingInitialBadge
-            name={provider.displayName}
-            dark={theme.isDark}
-            fontSize={38}
-            style={unclaimedStyles.logo}
-          />
-        )}
-
-        <Text style={[unclaimedStyles.name, { color: theme.text }]}>
-          {provider.displayName}
-        </Text>
-
-        <View style={[unclaimedStyles.chip, { backgroundColor: theme.surface }]}>
-          <Text style={[unclaimedStyles.chipText, { color: theme.sub }]}>
-            {[provider.serviceCategory, provider.locationText].filter(Boolean).join(" · ")}
-          </Text>
-        </View>
-
-        {(link || instagramUrl) && (
-          <View style={unclaimedStyles.actions}>
-            {link && (
-              <TouchableOpacity
-                style={[unclaimedStyles.linkButton, { backgroundColor: theme.accent }]}
-                onPress={openLink}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-              >
-                <Text style={unclaimedStyles.linkButtonText}>{link.label}</Text>
-                <Ionicons name="open-outline" size={15} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
-            {instagramUrl && (
-              <TouchableOpacity
-                style={[unclaimedStyles.instagramButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={openInstagram}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${provider.instagram} on Instagram`}
-              >
-                <Ionicons name="logo-instagram" size={16} color={theme.text} />
-                <Text style={[unclaimedStyles.instagramButtonText, { color: theme.text }]} numberOfLines={1}>
-                  @{provider.instagram}
-                </Text>
-              </TouchableOpacity>
+        <View
+          style={[
+            unclaimedStyles.sheet,
+            { backgroundColor: P.bg, paddingBottom: showNudge ? 58 + 32 : 24 },
+          ]}
+        >
+          <View style={[unclaimedStyles.logoRing, { backgroundColor: P.bg }]}>
+            {provider.logoUrl ? (
+              <Image
+                source={{ uri: provider.logoUrl }}
+                style={[unclaimedStyles.logo, { backgroundColor: P.surface }]}
+                contentFit="cover"
+                transition={0}
+              />
+            ) : (
+              <ListingInitialBadge
+                name={provider.displayName}
+                dark={isDarkMode}
+                fontSize={34}
+                style={unclaimedStyles.logo}
+              />
             )}
           </View>
-        )}
 
-        {provider.aboutText && (
-          <Text style={[unclaimedStyles.about, { color: theme.sub }]}>
-            {provider.aboutText}
+          <Text
+            style={[unclaimedStyles.name, { color: P.text, fontSize: longName ? 18 : 22 }]}
+            numberOfLines={2}
+          >
+            {provider.displayName}
           </Text>
-        )}
 
-        <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
-            This business isn't on CERVICED yet and hasn't partnered with us,
-            so you can't book it in the app. Booking happens on their own
-            page, which CERVICED doesn't run. These details come from public
-            directories and may be out of date. If it's your business, claim
-            it below, or email support@cerviced.co to have it corrected or
-            removed.
-          </Text>
+          <View style={unclaimedStyles.chips}>
+            <View style={[unclaimedStyles.chip, { backgroundColor: P.accentDim }]}>
+              <Text style={[unclaimedStyles.chipText, { color: P.accentText }]}>
+                {listingCategoryLabel(provider.serviceCategory)}
+              </Text>
+            </View>
+            {kind && (
+              <View style={[unclaimedStyles.chip, { backgroundColor: P.accentDim }]}>
+                <Text style={[unclaimedStyles.chipText, { color: P.accentText }]}>{kind}</Text>
+              </View>
+            )}
+            {provider.locationText && (
+              <View style={[unclaimedStyles.chip, { backgroundColor: P.surface }]}>
+                <Text style={[unclaimedStyles.chipText, { color: P.sub }]}>{provider.locationText}</Text>
+              </View>
+            )}
+          </View>
+
+          {(link || instagramUrl) && (
+            <View style={unclaimedStyles.actions}>
+              {link ? (
+                <TouchableOpacity
+                  style={[unclaimedStyles.primaryButton, { backgroundColor: P.accent }]}
+                  onPress={openLink}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Text style={[unclaimedStyles.primaryButtonText, { color: P.onAccent }]}>{link.label}</Text>
+                  <Ionicons name="open-outline" size={15} color={P.onAccent} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[unclaimedStyles.primaryButton, { backgroundColor: P.accent }]}
+                  onPress={openInstagram}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                >
+                  <Ionicons name="logo-instagram" size={16} color={P.onAccent} />
+                  <Text style={[unclaimedStyles.primaryButtonText, { color: P.onAccent }]}>Open their Instagram</Text>
+                </TouchableOpacity>
+              )}
+              {link && instagramUrl && (
+                <TouchableOpacity
+                  style={[unclaimedStyles.roundButton, { backgroundColor: P.card, borderColor: P.border }]}
+                  onPress={openInstagram}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                >
+                  <Ionicons name="logo-instagram" size={20} color={P.text} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {provider.aboutText && (
+            <Text style={[unclaimedStyles.about, { color: P.sub }]}>{provider.aboutText}</Text>
+          )}
+
+          <View style={[unclaimedStyles.noticeCard, { backgroundColor: P.surface, borderColor: P.border }]}>
+            <Text style={[unclaimedStyles.noticeText, { color: P.sub }]}>
+              {listingNotice(!!link)}
+            </Text>
+          </View>
         </View>
       </ScrollView>
 
-      <View style={[unclaimedStyles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.sep }]}>
+      <View
+        style={[unclaimedStyles.footer, { backgroundColor: P.bg, paddingBottom: insets.bottom + 16, borderTopColor: P.sep }]}
+        onLayout={e => setFooterHeight(e.nativeEvent.layout.height)}
+      >
         <TouchableOpacity
-          style={[unclaimedStyles.claimButton, { borderColor: theme.border }]}
+          style={[unclaimedStyles.claimButton, { borderColor: P.border }]}
           onPress={onClaim}
           activeOpacity={0.85}
         >
-          <Text style={[unclaimedStyles.claimButtonText, { color: theme.text }]}>
+          <Text style={[unclaimedStyles.claimButtonText, { color: P.text }]}>
             Is this your business? Claim it
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+
+      {showNudge && footerHeight > 0 && (
+        <JoinNudgeBar
+          bottom={nudgeBottom}
+          businessName={provider.displayName}
+          sent={nudgeSent}
+          pending={nudgePending}
+          sentLabel="Nudged! We'll let them know"
+          onNudge={() => { void nudge(); }}
+          onDismiss={() => setNudgeDismissed(true)}
+        />
+      )}
+    </ThemedBackground>
   );
 }
 
 const unclaimedStyles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
+  hero: { position: "absolute", top: 0, left: 0, right: 0 },
+  header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
-  backButtonText: { fontSize: 20, lineHeight: 22 },
-  content: { flexGrow: 1, alignItems: "center", paddingHorizontal: 32, paddingTop: 24, paddingBottom: 24 },
-  logo: { width: 88, height: 88, borderRadius: 44 },
+  pill: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  pillText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  scroll: { flexGrow: 1 },
+  sheet: {
+    flexGrow: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+  },
+  logoRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 30,
+    padding: 5,
+    marginTop: -48,
+  },
+  logo: { width: 86, height: 86, borderRadius: 26 },
   name: {
     fontFamily: "BakbakOne-Regular",
-    fontSize: 20,
-    marginTop: 16,
-    textAlign: "center",
+    marginTop: 12,
   },
-  chip: {
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   chipText: {
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "700",
   },
-  actions: { alignSelf: "stretch", gap: 10, marginTop: 24 },
-  linkButton: {
+  actions: { flexDirection: "row", gap: 8, marginTop: 20 },
+  primaryButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     borderRadius: 16,
-    paddingVertical: 15,
+    minHeight: 50,
+    paddingHorizontal: 14,
   },
-  linkButtonText: {
+  primaryButtonText: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 14,
-    color: "#FFFFFF",
+    flexShrink: 1,
   },
-  instagramButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+  roundButton: {
+    width: 50,
+    height: 50,
     borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-  },
-  instagramButtonText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 14,
-    fontWeight: "700",
+    alignItems: "center",
+    justifyContent: "center",
   },
   about: {
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     lineHeight: 20,
-    textAlign: "center",
     marginTop: 16,
   },
   noticeCard: {
-    alignItems: "flex-start",
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
-    marginTop: 28,
+    marginTop: 18,
   },
   noticeText: {
-    flex: 1,
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     lineHeight: 17,
@@ -3265,7 +3389,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       return (
         <UnclaimedProviderView
           provider={unclaimedProvider}
-          theme={OP}
+          currentUserId={currentUserId}
           onBack={() => navigation.goBack()}
           onClaim={() => {
             // ClaimProvider is a root-stack screen, several levels above
@@ -4274,37 +4398,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* Join nudge — a link-only provider can't be booked here, so this
             never shares the spot with the selection bar above. */}
         {isLinkOnly && viewerChecked && currentUserId && !isOwnProvider && !joinNudgeDismissed && (
-          <View style={[styles.joinNudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE }]}>
-            <Ionicons
-              name={joinNudgeSent ? "checkmark-circle" : "megaphone-outline"}
-              size={18}
-              color="#FFFFFF"
-            />
-            <Text style={styles.joinNudgeBarText} numberOfLines={1}>
-              {joinNudgeSent ? "Nudge sent" : "Want them on CERVICED?"}
-            </Text>
-            {!joinNudgeSent && (
-              <TouchableOpacity
-                style={[styles.joinNudgeBarButton, joinNudgePending && styles.joinNudgeButtonMuted]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); void handleJoinNudge(); }}
-                disabled={joinNudgePending}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Nudge ${provider.displayName} to take bookings on CERVICED`}
-              >
-                <Text style={styles.joinNudgeBarButtonText}>{joinNudgePending ? "Sending…" : "Nudge"}</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.joinNudgeBarClose}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); setJoinNudgeDismissed(true); }}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss"
-            >
-              <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
-            </TouchableOpacity>
-          </View>
+          <JoinNudgeBar
+            bottom={FLOATING_TAB_BAR_CLEARANCE}
+            businessName={provider.displayName}
+            sent={joinNudgeSent}
+            pending={joinNudgePending}
+            onNudge={() => { void handleJoinNudge(); }}
+            onDismiss={() => setJoinNudgeDismissed(true)}
+          />
         )}
 
         {/* No bottom edge inset — the pink sheet must run under the home indicator */}
@@ -4642,11 +4743,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  joinNudgeButtonMuted: {
-    opacity: 0.55,
-  },
-  // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
-  // as the selection bar, fixed near-black so it reads on every provider theme.
   // Riviera's pinned bar, over the foot of the page above the tab bar.
   pinnedBookBar: {
     position: "absolute",
@@ -4675,52 +4771,6 @@ const styles = StyleSheet.create({
   pinnedBookPrice: { fontSize: 12, marginTop: 2 },
   pinnedBookButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   pinnedBookButtonText: { fontFamily: "BakbakOne-Regular", fontSize: 14, color: "#FFFFFF" },
-  joinNudgeBar: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    zIndex: 999,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: "#050505",
-    paddingLeft: 18,
-    paddingRight: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.34,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  joinNudgeBarText: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  joinNudgeBarButton: {
-    height: 42,
-    borderRadius: 21,
-    paddingHorizontal: 18,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  joinNudgeBarButtonText: {
-    color: "#26201E",
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  joinNudgeBarClose: {
-    width: 36,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   providerNameLarge: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 28,

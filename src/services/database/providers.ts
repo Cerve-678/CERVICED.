@@ -739,6 +739,8 @@ export interface DirectoryListingDetailRow extends DirectoryListingRow {
   about_text: string | null;
   instagram: string | null;
   website: string | null;
+  /** What the import says they do ("Wigs"), shown beside the category. */
+  custom_service_type: string | null;
 }
 
 const DIRECTORY_LISTING_SELECT =
@@ -755,7 +757,7 @@ export async function getDirectoryListingDetail(
 ): Promise<DirectoryListingDetailRow | null> {
   const { data, error } = await supabase
     .from("providers")
-    .select(`${DIRECTORY_LISTING_SELECT}, about_text, instagram, website`)
+    .select(`${DIRECTORY_LISTING_SELECT}, about_text, instagram, website, custom_service_type`)
     .eq("id", id)
     .eq("is_claimed", false)
     .eq("source", "scraped")

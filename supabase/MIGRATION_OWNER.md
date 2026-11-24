@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-df (feat/listing-page-nudge: 20261124130000_listing_nudges, written, NOT applied)
 ```
+
+### Pending 2026-11-24 (clients nudge "Not on CERVICED yet" listings to join)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124130000 | `listing_nudges` | **NOT APPLIED.** Waiting for the user's go-ahead. Live max at writing `20261123220000`; no unapplied migration above it on any open PR. Redefines `record_provider_stat` from live with an md5 guard (`33e29c0b…`) so 'join_nudge' also counts for an active directory listing; adds `listing_nudge_count` (anon + authenticated) and `admin_listing_nudges` (admins). |
 
 ### Applied 2026-11-23 (signed-out visitors read a provider's written terms)
 

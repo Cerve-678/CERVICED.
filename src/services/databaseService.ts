@@ -519,9 +519,12 @@ export {
   getMyProviderDailyStats,
   getMyLinkOnlyDashboardExtras,
   getMyProviderSaverCount,
+  getListingNudgeCount,
+  getAdminListingNudges,
 } from "./database/analytics";
 export type {
   LinkOnlyDashboardExtras,
+  AdminListingNudge,
 } from "./database/analytics";
 export {
   getUserProfileById,

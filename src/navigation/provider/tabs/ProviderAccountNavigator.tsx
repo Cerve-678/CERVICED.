@@ -18,6 +18,7 @@ import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
 import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import AdminCreatedAccountsScreen from '../../../screens/shared/AdminCreatedAccountsScreen';
+import AdminListingNudgesScreen from '../../../screens/shared/AdminListingNudgesScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
@@ -302,6 +303,12 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="AdminCreatedAccounts"
         component={AdminCreatedAccountsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminListingNudges"
+        component={AdminListingNudgesScreen}
         options={{ headerShown: false }}
       />
 
