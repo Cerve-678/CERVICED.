@@ -55,7 +55,6 @@ import {
 } from "./ProfilePageStyle";
 import { latteShade } from "./heroes/LatteHero";
 import type { HeroPhotoFrames } from "./HeroPhoto";
-import { moodboardTag } from "./heroes/MoodboardHero";
 
 const noop = () => {};
 
@@ -300,10 +299,9 @@ export function ProfileStylePreview({
   // Capsule: a full pill in the page's ink, the word in lowercase.
   const darkPillBook = pageStyle.buttonShape === "darkPill";
   // Moodboard: a fine outline pill in the ink, thin spaced caps; services as
-  // tagged rows, the tag from what they do.
+  // rows of a serif name and a light price.
   const captionBook = pageStyle.buttonShape === "captionPill";
   const tagged = pageStyle.serviceLayout === "taggedRows";
-  const previewTag = moodboardTag(kicker.split("·")[0] ?? "");
   const serviceInk = surface && servicesSitOnPage(pageStyle) ? (pour ? sheetInk(servicesPalette.background) : page) : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -647,13 +645,8 @@ export function ProfileStylePreview({
                         <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]}>{previewPrice(services[index].price)}</Text>
                       </View>
                     ) : tagged ? (
-                      // Moodboard: the tag, the name in a serif, the price in light type.
+                      // Moodboard: the name in a serif, the price in light type.
                       <View style={styles.menuRow}>
-                        {previewTag ? (
-                          <View style={[styles.taggedTag, { borderColor: withAlpha(serviceInk.text, 0.2) }]}>
-                            <Text style={[styles.taggedTagText, { color: serviceInk.sub }]} numberOfLines={1}>{previewTag}</Text>
-                          </View>
-                        ) : null}
                         <Text style={[styles.serviceName, styles.menuName, styles.taggedName, { color: serviceInk.text }]} numberOfLines={1}>{services[index].name}</Text>
                         <Text style={[styles.taggedPrice, { color: serviceInk.text }]}>{previewPrice(services[index].price)}</Text>
                       </View>
@@ -876,8 +869,6 @@ const styles = StyleSheet.create({
   bookShopBox: { borderWidth: 1, borderRadius: 1 },
   bookDarkPillText: { fontFamily: "Figtree-SemiBold" },
   bookCaptionText: { fontFamily: "Jost-Light", fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase" },
-  taggedTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
-  taggedTagText: { fontFamily: "Jost-Light", fontSize: 8, letterSpacing: 1.5 },
   taggedName: { fontFamily: "InstrumentSerif-Regular", fontWeight: "400", fontSize: 15 },
   taggedPrice: { fontFamily: "Jost-Light", fontSize: 13 },
   bookShopText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
