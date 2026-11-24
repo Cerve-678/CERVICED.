@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-24 (the Terms notice points to the website instead of "Tap to read")
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124230000 | `terms_notice_wording` | **APPLIED 2026-11-24** on the user's "yes to both", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124220000`, no unapplied migration above it on any open PR. md5 guard on live `send_terms_updated_notice(text,text)` matched (`3c40f820…`). Forced-rollback dry run first: 16 rows rewritten, 0 left with "Tap to read", anon/authenticated still can't execute, live unchanged afterwards. Verified live: version recorded (live max); md5 `ac682a81…`; EXECUTE service_role only; all 16 `terms_updated` rows now end "You can read the full Terms at cerviced.co/legal." The notice opens nothing in the app (#762). |
+
 ### Applied 2026-11-24 (the address reaches a client on time, in summer and for last-minute bookings)
 
 | Recorded version | Name | Verified live |
