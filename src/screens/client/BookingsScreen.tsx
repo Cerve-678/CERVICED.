@@ -47,7 +47,9 @@ import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard';
 import { WaitlistDatesSheet } from '../../features/bookings/WaitlistDatesSheet';
 import { WaitlistTicket, type WaitlistTicketService } from '../../features/bookings/WaitlistTicket';
-import { buildWaitlistHoldCartItem, holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
+import { WaitlistPaySheet, type WaitlistPaidResult } from '../../features/bookings/WaitlistPaySheet';
+import type { CheckoutWaitResult } from '../../features/cart/checkoutOutcome';
+import { holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { TodoMark } from '../../components/TodoMark';
@@ -242,6 +244,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // state. A held ticket also shows today's price and length.
   const [ticketPlaceId, setTicketPlaceId] = useState<string | null>(null);
   const [ticketService, setTicketService] = useState<WaitlistTicketService | null>(null);
+  // The held place being paid for on its ticket, and the place it was once
+  // paid (kept as it was: the waitlist entry ends when the slot is booked).
+  const [payPlaceId, setPayPlaceId] = useState<string | null>(null);
+  const [paidTicket, setPaidTicket] = useState<{ place: MyWaitlistPlace; result: WaitlistPaidResult } | null>(null);
 
   // "Booked elsewhere" entries — the client's own notes of bookings made on a
   // link-only provider's page. Reloaded on focus, since they're added from a
@@ -299,37 +305,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Confirm & pay: the held slot goes into the cart at its fixed time and the
   // client pays for it like any booking. The 15 minutes keep running.
-  const handleConfirmAndPay = useCallback(async (place: MyWaitlistPlace) => {
-    if (!place.holdBookingId) return;
-    setWaitlistBusyId(place.id);
-    try {
-      const hold = await getBookingById(place.holdBookingId);
-      if (!hold || hold.status !== 'on_hold' || !hold.hold_expires_at) {
-        showAlert('This slot has gone', "Its time ran out before you could pay, so you've come off this waitlist. You can rejoin.");
-        await loadWaitlist();
-        return;
-      }
-      const live = await getRebookableService(hold.provider_id, hold.service_name_snapshot);
-      if (!live || live.id !== hold.service_id) {
-        showAlert("Can't book this right now", `${place.providerName} isn't taking bookings for ${place.serviceName} at the moment.`);
-        return;
-      }
-      addToCart(buildWaitlistHoldCartItem({
-        holdBookingId: hold.id,
-        holdExpiresAt: hold.hold_expires_at,
-        bookingDate: hold.booking_date,
-        bookingTime: hold.booking_time,
-        providerId: hold.provider_id,
-        providerImage: hold.provider_logo_snapshot,
-        live,
-      }));
-      navigation.getParent()?.navigate('Cart' as never);
-    } catch (error) {
-      showAlert("Couldn't open checkout", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.confirmAndPayWaitlist'));
-    } finally {
-      setWaitlistBusyId(null);
-    }
-  }, [addToCart, loadWaitlist, navigation, showAlert]);
 
   const handlePassWaitlist = useCallback((place: MyWaitlistPlace) => {
     const holdId = place.holdBookingId;
@@ -431,17 +406,51 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       // The ticket shows the slot without its price and end time.
       .catch((error: unknown) => logger.warn('[Bookings] held service failed to load for the ticket', error));
   }, []);
-  const closeWaitlistTicket = useCallback(() => setTicketPlaceId(null), []);
-  const ticketPlace = useMemo(
-    () => (ticketPlaceId ? waitlistPlaces.find(place => place.id === ticketPlaceId) ?? null : null),
-    [ticketPlaceId, waitlistPlaces],
-  );
-  // The dialog host sits outside the ticket's Modal, so the ticket closes
-  // before anything that asks or alerts.
-  const handleTicketConfirmAndPay = useCallback((place: MyWaitlistPlace) => {
+  const closeWaitlistTicket = useCallback(() => {
     setTicketPlaceId(null);
-    void handleConfirmAndPay(place);
-  }, [handleConfirmAndPay]);
+    setPayPlaceId(null);
+    setPaidTicket(null);
+  }, []);
+  const ticketPlace = useMemo(() => {
+    if (!ticketPlaceId) return null;
+    if (paidTicket?.place.id === ticketPlaceId) return paidTicket.place;
+    return waitlistPlaces.find(place => place.id === ticketPlaceId) ?? null;
+  }, [paidTicket, ticketPlaceId, waitlistPlaces]);
+  const payPlace = useMemo(
+    () => (payPlaceId ? waitlistPlaces.find(place => place.id === payPlaceId) ?? null : null),
+    [payPlaceId, waitlistPlaces],
+  );
+  // Confirm & pay opens the payment sheet on the ticket. From a Bookings card
+  // the ticket opens first, so the sheet has something to sit on.
+  const handleConfirmAndPay = useCallback((place: MyWaitlistPlace) => {
+    if (ticketPlaceId === place.id) {
+      setPayPlaceId(place.id);
+      return;
+    }
+    // iOS can't present the sheet while the ticket is still sliding up.
+    openWaitlistTicket(place);
+    setTimeout(() => setPayPlaceId(place.id), 450);
+  }, [openWaitlistTicket, ticketPlaceId]);
+  const handleWaitlistPaid = useCallback((place: MyWaitlistPlace, result: WaitlistPaidResult) => {
+    setPaidTicket({ place, result });
+    setPayPlaceId(null);
+    void loadWaitlist();
+    void reloadBookings();
+  }, [loadWaitlist, reloadBookings]);
+  // The dialog host sits outside the ticket's Modal, so the ticket closes
+  // before the alert. Same wording as the Cart for the same three outcomes.
+  const handleWaitlistPaymentPending = useCallback((outcome: Exclude<CheckoutWaitResult, 'succeeded'>) => {
+    setPayPlaceId(null);
+    setTicketPlaceId(null);
+    void loadWaitlist();
+    if (outcome === 'refunded') {
+      showAlert('Booking not completed', "Your time was no longer available by the time your payment went through, so we've refunded it in full. It can take 5–10 working days to show on your statement.");
+    } else if (outcome === 'not_charged') {
+      showAlert("Payment didn't go through", "We couldn't confirm your booking in time, so the payment was cancelled and you haven't been charged.");
+    } else {
+      showAlert('Still confirming your payment', "We'll send you a notification as soon as it's settled. Please don't pay again in the meantime.");
+    }
+  }, [loadWaitlist, showAlert]);
   const handleTicketPass = useCallback((place: MyWaitlistPlace) => {
     setTicketPlaceId(null);
     handlePassWaitlist(place);
@@ -2390,8 +2399,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           nowMs={waitlistNow}
           busy={!!ticketPlace && waitlistBusyId === ticketPlace.id}
           service={ticketService}
+          paid={paidTicket && paidTicket.place.id === ticketPlace?.id ? paidTicket.result : null}
           onClose={closeWaitlistTicket}
-          onConfirmAndPay={handleTicketConfirmAndPay}
+          onConfirmAndPay={handleConfirmAndPay}
           onPass={handleTicketPass}
           onChangeDates={handleOpenWaitlistDates}
           onLeave={handleLeaveFromDatesSheet}
@@ -2404,6 +2414,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             onClose={() => setDatesSheetPlace(null)}
             onSave={(place, dates) => { void handleSaveWaitlistDates(place, dates); }}
             onLeave={handleLeaveFromDatesSheet}
+          />
+          <WaitlistPaySheet
+            place={payPlace}
+            onClose={() => setPayPlaceId(null)}
+            onPaid={handleWaitlistPaid}
+            onPending={handleWaitlistPaymentPending}
           />
         </WaitlistTicket>
 
