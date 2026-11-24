@@ -1,15 +1,17 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
-  buildWaitlistHoldCartItem,
   formatCountdown,
+  heldTimeRangeLabel,
   holdSecondsLeft,
   placeInLineLabel,
   sortWaitlistPlaces,
   waitlistCardState,
+  waitlistCheckoutCharge,
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
-import type { MyWaitlistPlace, RebookableService } from '../services/databaseService';
+import type { MyWaitlistPlace } from '../services/databaseService';
+import { formatTime12Safe } from '../utils/dateUtils';
 
 const NOW = new Date('2026-11-10T14:00:00Z').getTime();
 
@@ -51,6 +53,12 @@ describe('how a waitlist place reads', () => {
     expect(waitlistDatesLabel(['2026-11-18'])).toBe('18 Nov onward');
   });
 
+  it('gives a held slot its start and end time, or just the start', () => {
+    expect(heldTimeRangeLabel('14:00:00', 120)).toBe(`${formatTime12Safe('14:00')} – ${formatTime12Safe('16:00')}`);
+    expect(heldTimeRangeLabel('14:00', null)).toBe(formatTime12Safe('14:00'));
+    expect(heldTimeRangeLabel(null, 60)).toBeNull();
+  });
+
   it('counts down whole seconds and never below zero', () => {
     expect(holdSecondsLeft('2026-11-10T14:15:00Z', NOW)).toBe(900);
     expect(holdSecondsLeft('2026-11-10T13:59:00Z', NOW)).toBe(0);
@@ -87,25 +95,15 @@ describe('which card a place shows', () => {
 });
 
 describe('paying for a held slot', () => {
-  const live: RebookableService = {
-    id: 's1', name: 'Classic Full Set', price: 65, durationMinutes: 120, categoryName: 'Lashes',
-    providerSlug: 'studio-ren', providerDisplayName: 'Studio Ren', addOns: [],
-  };
+  it('charges the full price unless the provider takes deposits only', () => {
+    expect(waitlistCheckoutCharge(65, undefined)).toEqual({ charged: 65, isDeposit: false, leftToPay: 0 });
+    expect(waitlistCheckoutCharge(65, { depositAvailable: false, depositOnly: false, depositType: 'percentage', depositAmount: 0 }))
+      .toEqual({ charged: 65, isDeposit: false, leftToPay: 0 });
+  });
 
-  it('goes into the cart at its fixed time, carrying the hold', () => {
-    const item = buildWaitlistHoldCartItem({
-      holdBookingId: 'b1', holdExpiresAt: '2026-11-10T14:15:00Z',
-      bookingDate: '2026-11-20', bookingTime: '14:00:00',
-      providerId: 'p1', providerImage: 'https://x/logo.png', live,
-    });
-    expect(item).toMatchObject({
-      providerId: 'p1',
-      selectedDate: '2026-11-20',
-      selectedTime: '14:00',
-      service: { id: 's1', price: 65, duration: '2h' },
-      waitlistHold: { bookingId: 'b1', expiresAt: '2026-11-10T14:15:00Z' },
-      forceNewInstance: true,
-    });
+  it("charges a deposit-only provider's deposit and leaves the rest for the appointment", () => {
+    expect(waitlistCheckoutCharge(65, { depositAvailable: true, depositOnly: true, depositType: 'fixed', depositAmount: 20 }))
+      .toEqual({ charged: 20, isDeposit: true, leftToPay: 45 });
   });
 });
 
@@ -183,5 +181,31 @@ describe('the migration keeps waitlist slots paid for', () => {
   it('stops clients editing their own place in line', () => {
     expect(sql).toContain('DROP POLICY IF EXISTS "Waitlist participants can see and manage their entries"');
     expect(sql).not.toMatch(/ON public\.provider_waitlist\s+FOR (UPDATE|ALL)/);
+  });
+});
+
+describe('a held slot is paid for on its ticket', () => {
+  const SHEET = readFileSync(join(__dirname, '../features/bookings/WaitlistPaySheet.tsx'), 'utf8');
+  const BOOKINGS = readFileSync(join(__dirname, '../screens/client/BookingsScreen.tsx'), 'utf8');
+
+  it('checks out the held row with the same agreement the Cart asks for', () => {
+    expect(SHEET).toContain('waitlist_hold_id: held.holdId');
+    expect(SHEET).toContain('policy_accepted: agreed');
+    expect(SHEET).toContain('safety_ack: agreed');
+    expect(SHEET).toContain("and each provider's cancellation policy");
+  });
+
+  it('asks for missing details first and pays through the shared Stripe sheet', () => {
+    expect(SHEET).toContain('holdForDetails(');
+    expect(SHEET).toContain('<StripePaymentSheet');
+  });
+
+  it('hands the checkout back when the client leaves without paying, but not mid-payment', () => {
+    expect(SHEET).toContain('if (checkout && !inFlightRef.current) release(checkout.batchId);');
+  });
+
+  it('no longer sends the client to the Cart', () => {
+    expect(BOOKINGS).not.toContain("navigate('Cart' as never);\n    } catch (error) {\n      showAlert(\"Couldn't open checkout\"");
+    expect(BOOKINGS).toContain('<WaitlistPaySheet');
   });
 });

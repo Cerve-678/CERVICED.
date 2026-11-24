@@ -494,6 +494,12 @@ Frontier before applying: `20261103000000` (#268, applied by its own session). `
 |---|---|---|
 | 20261101190000 | `close_schedule_by_hand` | **APPLIED** by the user (SQL editor), version recorded by the file. Frontier before apply: `20261101180000`. Verified live: table `provider_schedule_closures` (RLS on, 0 policies, 0 rows, not readable by anon or authenticated); `provider_next_release_after`, `provider_schedule_is_closed` (not executable by authenticated); `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated, not anon); the closed check present in `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`, `process_follow_openings_alerts`, `invite_next_waitlist_entry`, `expire_waitlist_holds`, `decline_waitlist_hold`. With nobody closed, 10 of 10 live providers report taking bookings and 50 of 50 sampled services still find a slot. Not yet exercised: a real close and reopen from the app. The file records its own version. |
 
+
+### Applied 2026-10-24 (listing claims checked through Instagram)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261024100000 | `listing_claims_checked_by_instagram` | **APPLIED 2026-10-24** by Codex (Supabase MCP execute_sql) on the user's OK, version recorded. Re-verified live by cerviced-ae: the `claim_token*`/`claim_attempts` columns and `claim_provider_profile()` are gone; `provider_claim_requests` has RLS on with one policy (`provider_claim_requests_own_read`, SELECT, authenticated, `user_id = auth.uid()`); anon has no table or column privilege; authenticated can SELECT `bio_code` but not `review_note` and cannot write; `request_provider_claim` is EXECUTE for authenticated only (md5 `6eeb6e4758f83fa5eb36d4aa718b659b`) and `review_provider_claim` for postgres/service_role only (md5 `6554a980bf87c9b7547097cc9bf35566`), both identical to the file. Under `SET LOCAL ROLE anon` the table and both functions give 42501. Authored as `20261019235500` (frontier `20261019233000`), renumbered above the live frontier `20261021112728`. Does not touch `notifications_type_check`. Still to do: delete the old `request-claim-verification` Edge Function in the dashboard. |
 ### Applied 2026-11-01 (provider achievements)
 
 | Authored version | Name | Status |

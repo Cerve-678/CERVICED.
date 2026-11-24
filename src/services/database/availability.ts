@@ -20,6 +20,7 @@ export async function resolveActiveProviderIdByDisplayName(
     .select("id")
     .ilike("display_name", displayName)
     .eq("is_active", true)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   if (error) throw error;
   return data?.id ?? null;
@@ -936,6 +937,7 @@ export async function getProviderCancellationPolicy(
     .from("providers")
     .select("cancellation_notice_hours, booking_policies")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return mapCancellationPolicyRow(data);
 }
@@ -1038,7 +1040,7 @@ export async function getProviderSchedulingConstraints(
     .select(`${BOOKING_HORIZON_COLUMNS}, min_booking_notice_hrs`);
   const { data } = UUID_RE.test(providerIdOrDisplayName)
     ? await query.eq("id", providerIdOrDisplayName).maybeSingle()
-    : await query.eq("display_name", providerIdOrDisplayName).maybeSingle();
+    : await query.eq("display_name", providerIdOrDisplayName).eq("is_claimed", true).maybeSingle();
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
     scheduleReleaseDay: toReleaseDay((data as any)?.schedule_release_day),

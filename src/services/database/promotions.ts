@@ -246,6 +246,7 @@ export async function validatePromoCode(
     .from("providers")
     .select("id")
     .eq("display_name", providerDisplayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   if (!provider) return null;
 

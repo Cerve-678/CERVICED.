@@ -1,42 +1,13 @@
-// Database access: Edge function calls (payments, emails, claims) and saved cards.
+// Database access: Edge function calls (payments, emails) and saved cards.
 // Part of the database layer. Screens and other code import from
 // ../databaseService, never from this file directly.
 import { getPaymentRequestError } from "../../utils/paymentRequestError";
 import { supabase } from "../../lib/supabase";
-import { invalidateOwnProviderIds } from "./account";
 import { getMyProviderProfile } from "./providers";
 
-// ── Edge Function and claim adapters ───────────────────────────────────────
+// ── Edge Function adapters ─────────────────────────────────────────────────
 // These small, typed adapters keep the shared Supabase client out of feature
 // services. Feature services remain responsible for their UX fallback policy.
-
-export async function requestProviderClaimVerification(
-  providerId: string,
-): Promise<{ maskedEmail: string }> {
-  const { data, error } = await supabase.functions.invoke('request-claim-verification', {
-    body: { providerId },
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(String(data.error));
-  if (typeof data?.maskedEmail !== 'string') throw new Error('Invalid verification response.');
-  return { maskedEmail: data.maskedEmail };
-}
-
-export async function claimUnclaimedProviderProfile(
-  providerId: string,
-  code: string,
-): Promise<string> {
-  const { data, error } = await supabase.rpc('claim_provider_profile', {
-    p_provider_id: providerId,
-    p_claim_token: code,
-  });
-  if (error) throw error;
-  if (typeof data !== 'string') throw new Error('Invalid claim response.');
-  // Claiming attaches an existing row to this account — same ownership
-  // change as creating one, so the memoised answer has to go.
-  invalidateOwnProviderIds();
-  return data;
-}
 
 export type AccountEmailKind =
   | 'client_welcome'

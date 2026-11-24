@@ -20,7 +20,8 @@ interface WaitlistPlaceCardProps {
   busy: boolean;
   onConfirmAndPay: (place: MyWaitlistPlace) => void;
   onPass: (place: MyWaitlistPlace) => void;
-  onChangeDates: (place: MyWaitlistPlace) => void;
+  /** Opens the place's ticket. */
+  onOpen: (place: MyWaitlistPlace) => void;
   onRejoin: (place: MyWaitlistPlace) => void;
   onDismiss: (place: MyWaitlistPlace) => void;
   /** A held card's time just ran out. */
@@ -30,11 +31,11 @@ interface WaitlistPlaceCardProps {
 /**
  * One waitlist place in Bookings' "Waiting for" section. Held: the slot is
  * the client's for the time shown, with Confirm & pay and Pass it on. Waiting:
- * their place in line and their dates (tap to change). Gone: the hold ended,
+ * their place in line and their dates (tap for the ticket). Gone: the hold ended,
  * they've come off this waitlist, and can rejoin.
  */
 export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
-  place, nowMs, busy, onConfirmAndPay, onPass, onChangeDates, onRejoin, onDismiss, onHoldEnded,
+  place, nowMs, busy, onConfirmAndPay, onPass, onOpen, onRejoin, onDismiss, onHoldEnded,
 }) => {
   const { palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
@@ -99,10 +100,10 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
   if (state === 'waiting') {
     return (
       <Pressable
-        onPress={() => { Haptics.selectionAsync().catch(() => {}); onChangeDates(place); }}
+        onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(place); }}
         style={({ pressed }) => [styles.card, pressed && styles.pressed]}
         accessibilityRole="button"
-        accessibilityLabel={`${who}, ${placeInLineLabel(place.placeInLine)}, ${waitlistDatesLabel(place.preferredDates)}. Change dates or leave.`}
+        accessibilityLabel={`${who}, ${placeInLineLabel(place.placeInLine)}, ${waitlistDatesLabel(place.preferredDates)}. Open your ticket.`}
       >
         <View style={styles.rowBetween}>
           <View style={styles.names}>

@@ -12,7 +12,7 @@ import {
   peekCachedProviderProfile,
   trackUserInteraction,
 } from "../services/databaseService";
-import { getUnclaimedProviderDetail } from "../services/providerClaimService";
+import { getDirectoryListingDetail } from "../services/directoryListingService";
 import userLearningService from "../services/userLearningService";
 import { mapProviderProfileData } from "../features/providers/profileMapper";
 import { useProviderProfileData } from "../features/providers/useProviderProfileData";
@@ -35,8 +35,8 @@ jest.mock("../services/AvailabilityService", () => ({
   },
 }));
 
-jest.mock("../services/providerClaimService", () => ({
-  getUnclaimedProviderDetail: jest.fn(),
+jest.mock("../services/directoryListingService", () => ({
+  getDirectoryListingDetail: jest.fn(),
 }));
 
 jest.mock("../services/userLearningService", () => ({
@@ -63,7 +63,7 @@ describe("useProviderProfileData", () => {
     (getProviderProfilePreviewBySlug as jest.Mock).mockImplementation(
       (slug: string) => getProviderBySlug(slug),
     );
-    (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(null);
+    (getDirectoryListingDetail as jest.Mock).mockResolvedValue(null);
     (peekCachedProviderProfile as jest.Mock).mockReturnValue(undefined);
     (userLearningService.trackInteraction as jest.Mock).mockResolvedValue(
       undefined,
@@ -250,14 +250,14 @@ describe("useProviderProfileData", () => {
     // providers.id (uuid), so a slug made the whole load fail.
     (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue(null);
     (getProviderBySlug as jest.Mock).mockResolvedValue(null);
-    (getUnclaimedProviderDetail as jest.Mock).mockRejectedValue(
+    (getDirectoryListingDetail as jest.Mock).mockRejectedValue(
       new Error('invalid input syntax for type uuid: "studio-a"'),
     );
 
     const { result } = renderHook(() => useProviderProfileData("studio-a"));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(getUnclaimedProviderDetail).not.toHaveBeenCalled();
+    expect(getDirectoryListingDetail).not.toHaveBeenCalled();
     expect(result.current.loadFailed).toBe(false);
     expect(result.current.provider).toBeNull();
     expect(result.current.unclaimedProvider).toBeNull();
@@ -268,12 +268,12 @@ describe("useProviderProfileData", () => {
     const listing = { id, displayName: "Unclaimed Studio" };
     (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue(null);
     (getProviderBySlug as jest.Mock).mockResolvedValue(null);
-    (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(listing);
+    (getDirectoryListingDetail as jest.Mock).mockResolvedValue(listing);
 
     const { result } = renderHook(() => useProviderProfileData(id));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(getUnclaimedProviderDetail).toHaveBeenCalledWith(id);
+    expect(getDirectoryListingDetail).toHaveBeenCalledWith(id);
     expect(result.current.unclaimedProvider).toBe(listing);
     expect(result.current.loadFailed).toBe(false);
   });

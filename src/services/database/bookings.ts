@@ -206,6 +206,9 @@ export async function getProviderIdByDisplayName(
     .select("id")
     .ilike("display_name", name)
     .eq("is_active", true)
+    // Not an imported directory listing — those share this table, and one
+    // named like a real provider would make this lookup ambiguous.
+    .eq("is_claimed", true)
     .maybeSingle();
   return (data as any)?.id ?? null;
 }

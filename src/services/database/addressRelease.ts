@@ -157,6 +157,7 @@ export async function getProviderAddressPolicyByDisplayName(
     .from("providers")
     .select("business_type, address_release_policy")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return data ? (data as ProviderAddressPolicy) : null;
 }

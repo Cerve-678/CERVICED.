@@ -370,6 +370,7 @@ export async function getProviderReschedulePolicyByDisplayName(
     .from("providers")
     .select("booking_policies")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return mapReschedulePolicyRow(data);
 }
@@ -445,7 +446,7 @@ export async function getProviderBookingDetailMetadata(params: {
     );
   query = params.providerId
     ? query.eq("id", params.providerId)
-    : query.eq("display_name", params.displayName);
+    : query.eq("display_name", params.displayName).eq("is_claimed", true);
 
   const [{ data, error }, bookingNoticeHours] = await Promise.all([
     query.maybeSingle(),

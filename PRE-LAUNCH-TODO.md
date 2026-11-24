@@ -672,8 +672,8 @@ reintroduce a generic sender for convenience.
 `send-support-request` requires a signed-in user and can only ever mail
 `support@cerviced.co`, so the blast radius is spam into our own inbox from an
 identifiable account — acceptable for now, deliberately not solved. If it
-becomes a problem, the cooldown pattern in `request-claim-verification`
-(a `*_last_sent_at` column checked before sending) is the shape to follow, and
+becomes a problem, a `*_last_sent_at` column checked before sending (the
+pattern the retired email-code listing claim used) is the shape to follow, and
 would need a `support_requests` table to hang off.
 
 ## 13. RESOLVED 2026-08-24 — no email had ever been sent: `cerviced.co` was unverified in Resend

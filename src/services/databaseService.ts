@@ -68,6 +68,8 @@ export {
   searchProvidersAndServices,
   getServiceCoverImages,
   searchProviders,
+  getDirectoryListings,
+  getDirectoryListingDetail,
   logSearchEvent,
   getProviderProfilePreviewBySlug,
   getProviderBySlug,
@@ -101,6 +103,8 @@ export type {
   ProviderProfileViewerContext,
   ProviderAccountEditorInfo,
   ProviderLogoFramingEntry,
+  DirectoryListingRow,
+  DirectoryListingDetailRow,
 } from "./database/providers";
 export {
   getProviderPortfolio,
@@ -566,11 +570,15 @@ export {
   replaceMyProviderMessageTemplates,
   searchUnclaimedProviders,
   getUnclaimedProviderDetail,
+  requestProviderClaim,
+  getLatestProviderClaimRequest,
 } from "./database/providerAccount";
 export type {
   ProviderMessageTemplate,
   UnclaimedProviderSearchRow,
   UnclaimedProviderDetailRow,
+  ProviderClaimStatus,
+  ProviderClaimRequestRow,
 } from "./database/providerAccount";
 export {
   getOrCreateConversation,
@@ -602,8 +610,6 @@ export type {
   DbBeccaMessage,
 } from "./database/becca";
 export {
-  requestProviderClaimVerification,
-  claimUnclaimedProviderProfile,
   invokeSendAccountEmail,
   invokeSendSupportRequest,
   lookupPostcodeAddresses,
