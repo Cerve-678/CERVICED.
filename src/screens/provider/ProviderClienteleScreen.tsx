@@ -47,6 +47,7 @@ import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFac
 import { reportError } from '../../utils/logger';
 import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { interestedRecipientIds } from '../../features/providers/announcementAudience';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -408,7 +409,10 @@ const csSt = StyleSheet.create({
 
 // ── Announcement Sheet ────────────────────────────────────────────────────────
 
-type AudienceKey = 'all' | 'repeat' | 'new' | 'lapsed' | 'followers';
+type AudienceKey = 'all' | 'interested' | 'repeat' | 'new' | 'lapsed' | 'followers';
+
+/** Audiences counted in people rather than clients: they reach people who haven't booked. */
+const countsPeople = (a: AudienceKey) => a === 'followers' || a === 'interested';
 
 const clientCount = (n: number) => `${n} client${n !== 1 ? 's' : ''}`;
 const peopleCount = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
@@ -446,6 +450,7 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
 
   const audienceOptions: { key: AudienceKey; label: string; icon: string }[] = [
     { key: 'all',    label: 'All clients',    icon: 'people-outline' },
+    { key: 'interested', label: 'Interested', icon: 'heart-outline' },
     { key: 'repeat', label: 'Repeat clients', icon: 'repeat-outline' },
     { key: 'new',    label: 'New clients',    icon: 'sparkles-outline' },
     { key: 'lapsed', label: 'Lapsed (60d+)',  icon: 'time-outline' },
@@ -454,6 +459,7 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
 
   const recipientIds = (): string[] => {
     if (audience === 'all')    return clients.map(c => c.user_id);
+    if (audience === 'interested') return interestedRecipientIds(clients.map(c => c.user_id), followers.map(f => f.userId));
     if (audience === 'repeat') return clients.filter(c => c.booking_count >= 2).map(c => c.user_id);
     if (audience === 'new')    return clients.filter(c => c.booking_count === 1).map(c => c.user_id);
     if (audience === 'followers') return followers.map(f => f.userId);
@@ -461,7 +467,7 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
   };
 
   const recipientCount = counts[audience];
-  const recipients = audience === 'followers' ? peopleCount(recipientCount) : clientCount(recipientCount);
+  const recipients = countsPeople(audience) ? peopleCount(recipientCount) : clientCount(recipientCount);
   const canSend = title.trim().length > 0 && body.trim().length > 0 && recipientCount > 0 && !sending;
 
   const sheetRef = useRef<BottomSheet>(null);
@@ -519,7 +525,7 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
         onScheduled(schedAt);
       } else {
         const { sent } = await sendAnnouncement(title.trim(), body.trim(), ids);
-        onSent(audience === 'followers' ? peopleCount(sent) : clientCount(sent));
+        onSent(countsPeople(audience) ? peopleCount(sent) : clientCount(sent));
       }
       setTitle('');
       setBody('');
@@ -963,7 +969,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const lapsedClients = clients.filter(c => daysSince(c.last_booking_date) > 60);
   const displayed = tab === 'all' ? clients : tab === 'repeat' ? repeatClients : tab === 'new' ? newClients : lapsedClients;
   const counts = { all: clients.length, repeat: repeatClients.length, new: newClients.length, lapsed: lapsedClients.length };
-  const audienceCounts = { ...counts, followers: followers.length };
+  const audienceCounts = {
+    ...counts,
+    interested: interestedRecipientIds(clients.map(c => c.user_id), followers.map(f => f.userId)).length,
+    followers: followers.length,
+  };
 
   const handleAnnouncementSent = (who: string) => {
     setAnnouncementOpen(false);

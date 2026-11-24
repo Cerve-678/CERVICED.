@@ -224,7 +224,8 @@ export interface ProviderPageServicesProps {
   waitlistPlaces: Record<string, MyWaitlistPlace>;
   /** A held waitlist slot opens its ticket in Bookings, where it's paid for. */
   onOpenHeldPlace: (place: MyWaitlistPlace) => void;
-  onLeaveWaitlist: (place: MyWaitlistPlace) => void;
+  /** Opens the client's ticket for that waitlist place (Leave is on it). */
+  onOpenWaitlistPlace: (place: MyWaitlistPlace) => void;
   onJoinWaitlist: (service: ServiceData) => void;
 }
 
@@ -265,7 +266,7 @@ export function ProviderPageServices({
   onEditAddOns,
   waitlistPlaces,
   onOpenHeldPlace,
-  onLeaveWaitlist,
+  onOpenWaitlistPlace,
   onJoinWaitlist,
 }: ProviderPageServicesProps) {
   const {
@@ -758,6 +759,8 @@ export function ProviderPageServices({
                           ],
                           darkPillButtons && [styles.darkPillButton, { backgroundColor: fullyBooked ? withAlpha(SV.sub, 0.18) : SV.text }],
                           captionPillButtons && [styles.captionPillButton, { borderColor: fullyBooked ? SV.border : SV.text }],
+                          // Last: the closed label is two lines, so it needs less side padding.
+                          !takingBookings && styles.closedButton,
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -780,10 +783,17 @@ export function ProviderPageServices({
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             darkPillButtons && !fullyBooked && [styles.darkPillButtonText, { color: darkPillInk }],
                             captionPillButtons && [styles.captionPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
+                            // Last, over every style's size and spacing: Neon's and
+                            // Caption Pill's wide-spaced capitals ran "Not taking
+                            // bookings" far past the pill (owner, 11-24).
+                            !takingBookings && styles.closedButtonText,
                           ]}
+                          numberOfLines={takingBookings ? undefined : 2}
+                          adjustsFontSizeToFit={!takingBookings}
+                          minimumFontScale={0.8}
                         >
                           {!takingBookings
-                              ? "Not taking bookings"
+                              ? "Not taking\nbookings"
                               : fullyBooked
                               ? "Fully Booked"
                               // Boutique says "Add to basket"; it still opens the booking sheet.
@@ -825,27 +835,23 @@ export function ProviderPageServices({
                     }
                     if (wEntry) {
                       return (
-                        <View
+                        <TouchableOpacity
                           style={[
                             styles.waitlistChip,
                             { borderColor: adaptiveAccentColor + "70", backgroundColor: adaptiveAccentColor + "0D" },
                           ]}
+                          onPress={() => {
+                            runAction(() => onOpenWaitlistPlace(wEntry));
+                          }}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${placeInLineLabel(wEntry.placeInLine)} for ${service.name}. Open your waitlist ticket.`}
                         >
                           <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
                             {placeInLineLabel(wEntry.placeInLine)}
                           </Text>
-                          <TouchableOpacity
-                            onPress={() => {
-                              runAction(() => onLeaveWaitlist(wEntry));
-                            }}
-                            activeOpacity={0.6}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Leave the ${service.name} waitlist`}
-                          >
-                            <Text style={[styles.waitlistChipX, { color: adaptiveAccentColor }]}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
+                          <Ionicons name="chevron-forward" size={11} color={adaptiveAccentColor} />
+                        </TouchableOpacity>
                       );
                     }
                     // undefined means "still checking" and true means
@@ -1152,6 +1158,8 @@ const styles = StyleSheet.create({
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 12, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
+  closedButton: { paddingHorizontal: 12 },
+  closedButtonText: { fontSize: 10, lineHeight: 13, letterSpacing: 0.6, textAlign: "center" },
   darkPillButton: { borderRadius: 999, paddingHorizontal: 20, shadowOpacity: 0, elevation: 0 },
   darkPillButtonText: { fontFamily: "Figtree-SemiBold", fontSize: 13 },
   captionPillButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 999, shadowOpacity: 0, elevation: 0 },
@@ -1234,11 +1242,6 @@ const styles = StyleSheet.create({
     fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     letterSpacing: 0.3,
-  },
-  waitlistChipX: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    opacity: 0.7,
   },
   waitlistJoinBtn: {
     borderRadius: 20,

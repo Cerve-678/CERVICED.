@@ -87,7 +87,7 @@ export function PageStylePreview({ styleKey }: { styleKey: string | null }) {
       onEditAddOns={noop}
       waitlistPlaces={{}}
       onOpenHeldPlace={noop}
-      onLeaveWaitlist={noop}
+      onOpenWaitlistPlace={noop}
       onJoinWaitlist={noop}
     />
   );

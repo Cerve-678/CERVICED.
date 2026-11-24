@@ -237,11 +237,16 @@ export async function providerOfferWaitlistSlot(
   entryId: string,
   bookingDate: string,
   bookingTime: string,
+  /** The provider said yes to a time outside their working hours. */
+  outsideHours = false,
 ): Promise<string> {
   const { data, error } = await supabase.rpc("provider_offer_waitlist_slot", {
     p_entry_id: entryId,
     p_booking_date: bookingDate,
     p_booking_time: bookingTime,
+    // Only sent when true, so the call matches older databases too. See
+    // 20261124150000_waitlist_offer_outside_hours.sql.
+    ...(outsideHours ? { p_outside_hours: true } : {}),
   });
   if (error) throw error;
   return data as string;

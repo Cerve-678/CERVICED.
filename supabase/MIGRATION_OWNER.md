@@ -62,6 +62,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261124200000 | `schedule_reopen_alerts` | **APPLIED 2026-11-24** by the user pasting the file into the SQL editor (MCP `execute_sql` was declined), in one transaction with its `schema_migrations` row. Lock held on this branch, live max `20261124150000` (cerviced-9b's, applied by cerviced-f9), no unapplied migration above it on any open PR. md5 guard on live `reopen_my_schedule` matched (`93ab36d9…`). Forced-rollback dry run first (pasted by the user): 5 "Aestheticsby N is back from holiday" alerts for its 5 savers, none for a 1-hour test closure, Glo Installs (still closed) untouched, Rose Haus's ended row cleared; live unchanged afterwards. Verified live: version recorded (live max); `reopen_my_schedule` md5 `14b8bc39…` (the dry run's); `process_schedule_reopen_alerts` exists, not executable by anon or authenticated; cron `schedule-reopen-alerts` `11,26,41,56 * * * *`; Rose Haus's ended closure cleared, no alerts sent at apply. Reopen now ends the closure (`reopens_on` = today) instead of deleting it. Push for savers without the bell needs `send-push-notification` deployed from this branch (on top of #743). |
 
+### Applied 2026-11-24 (a provider can offer a waitlist client a time outside their hours)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124150000 | `waitlist_offer_outside_hours` | **APPLIED 2026-11-24** on the user's pick ("Ask, then allow"), via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124140000`, no unapplied migration above it on any open PR. md5 guard on live `provider_offer_waitlist_slot(uuid,date,time)` matched (`64e2e2a1…`). Forced-rollback dry run first, signed in as a live provider with a temporary waitlist entry: 5:30pm on a day closing at 6pm refused without the switch ("outside the provider's working hours"), held (`on_hold`) with it, bypass back to off, old 3-argument function gone, live unchanged afterwards. Verified live: version recorded (live max); `provider_offer_waitlist_slot(uuid,date,time,boolean)` md5 `0dc93fe0…`, EXECUTE for authenticated + service_role only, same as before. Replaces the 3-argument function with one taking `p_outside_hours boolean DEFAULT FALSE`, so older app builds behave as before. |
+
 ### Applied 2026-11-24 (the "slot opened" notification leads with the time)
 
 | Recorded version | Name | Verified live |
