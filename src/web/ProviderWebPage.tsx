@@ -46,6 +46,8 @@ import { mapsUrlFor } from '../utils/mapsLink';
 import { SiteMessagePage } from './SiteMessagePage';
 import { WEB_BOOKING_ENABLED, sheetInitialFrom } from './webBooking';
 import type { WebBookingChoice } from './webBooking';
+import { WebAccountStep } from './WebAccountStep';
+import type { WebBookingAccount } from './WebAccountStep';
 import { WebCheckoutSheet } from './WebCheckoutSheet';
 
 const PAGE_WIDTH = 480;
@@ -229,6 +231,8 @@ function ProviderWebPageContent({
   const [sheetService, setSheetService] = useState<ProviderProfileService | null>(null);
   const [sheetInitial, setSheetInitial] = useState<BookingSheetProps['initial']>(undefined);
   const [choice, setChoice] = useState<WebBookingChoice | null>(null);
+  // Who is booking, once signed in with an email code and their details saved.
+  const [bookingAccount, setBookingAccount] = useState<WebBookingAccount | null>(null);
   const openBookingSheet = useCallback((service: ProviderProfileService) => {
     setSheetInitial(undefined);
     setSheetService(service);
@@ -408,7 +412,11 @@ function ProviderWebPageContent({
             backgroundColor={OP.card}
             onChange={changeBooking}
             onClose={() => setChoice(null)}
-          />
+          >
+            {tokens => (
+              <WebAccountStep tokens={tokens} accentColor={adaptiveAccentColor} onReadyChange={setBookingAccount} />
+            )}
+          </WebCheckoutSheet>
         </>
       ) : null}
       <FullImageViewer uris={policyPages} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />

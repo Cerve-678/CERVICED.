@@ -25,6 +25,8 @@ export {
   sendPasswordReset,
   verifyRecoveryOtp,
   verifySignupOtp,
+  sendEmailSignInCode,
+  getSignedInAccount,
   resendSignupOtp,
   updateCurrentPassword,
   updatePasswordAndSignOut,
