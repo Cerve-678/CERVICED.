@@ -23,6 +23,11 @@ const WALL_REACH = 140;
  *  showing through them (owner, 11-23). The sheet draws over the rest. */
 const WALL_TAIL = 40;
 
+/** The sign's name size. 62 crowded the top and a longer name ran to two
+ *  huge lines (owner, 11-24: "neon title is too big"); a long name also
+ *  shrinks to fit rather than wrapping further. */
+export const NEON_NAME_SIZE = 46;
+
 /** The wall: their backdrop colour, deepened until it reads as night. */
 export function neonWallColour(heroColour: string): string {
   return blend(heroColour, "#000000", isDarkColor(heroColour) ? 0.55 : 0.82);
@@ -46,6 +51,7 @@ export function GlowText({
   glow,
   strength = 1,
   numberOfLines,
+  fit = false,
 }: {
   children: string;
   style: StyleProp<TextStyle>;
@@ -54,11 +60,16 @@ export function GlowText({
   /** Scales the halo: 1 for the sign, less for headings. */
   strength?: number;
   numberOfLines?: number;
+  /** Shrinks a long line to fit. The halo layers share the crisp copy's box,
+   *  so they shrink by the same amount and stay lined up. */
+  fit?: boolean;
 }) {
+  const fitProps = fit ? { adjustsFontSizeToFit: true, minimumFontScale: 0.6 } : null;
   const layer = (radius: number) => (
     <Text
       style={[style, styles.glowLayer, { color: glow, textShadowColor: glow, textShadowRadius: radius * strength }]}
       numberOfLines={numberOfLines}
+      {...fitProps}
       accessible={false}
       importantForAccessibility="no"
     >
@@ -69,7 +80,7 @@ export function GlowText({
     <View>
       {layer(34)}
       {layer(16)}
-      <Text style={[style, { color: tube, textShadowColor: glow, textShadowRadius: 7 * strength, textShadowOffset: { width: 0, height: 0 } }]} numberOfLines={numberOfLines}>
+      <Text style={[style, { color: tube, textShadowColor: glow, textShadowRadius: 7 * strength, textShadowOffset: { width: 0, height: 0 } }]} numberOfLines={numberOfLines} {...fitProps}>
         {children}
       </Text>
     </View>
@@ -111,7 +122,7 @@ export function NeonHero({
       </View>
       {renderLogo(52)}
       <View accessible accessibilityRole="header" accessibilityLabel={name} style={styles.nameRow}>
-        <GlowText style={[styles.name, pickedNameStyle, styles.nameRoom]} tube={tube} glow={glow} numberOfLines={2}>
+        <GlowText style={[styles.name, pickedNameStyle, styles.nameRoom]} tube={tube} glow={glow} numberOfLines={2} fit>
           {name}
         </GlowText>
         {tick}
@@ -139,8 +150,8 @@ const styles = StyleSheet.create({
   // tall and the text has room either side (owner, 2026-11-23: it was cut off).
   name: {
     fontFamily: "MsMadi-Regular",
-    fontSize: 62,
-    lineHeight: 96,
+    fontSize: NEON_NAME_SIZE,
+    lineHeight: 72,
     textAlign: "center",
     textShadowOffset: { width: 0, height: 0 },
   },
