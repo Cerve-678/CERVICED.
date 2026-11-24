@@ -8,6 +8,8 @@ import {
   sortWaitlistPlaces,
   waitlistCardState,
   waitlistCheckoutCharge,
+  nextWaitingFor,
+  firstNameOf,
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
 import type { MyWaitlistPlace } from '../services/databaseService';
@@ -207,5 +209,28 @@ describe('a held slot is paid for on its ticket', () => {
   it('no longer sends the client to the Cart', () => {
     expect(BOOKINGS).not.toContain("navigate('Cart' as never);\n    } catch (error) {\n      showAlert(\"Couldn't open checkout\"");
     expect(BOOKINGS).toContain('<WaitlistPaySheet');
+  });
+});
+
+describe("who a freed slot goes to next", () => {
+  const e = (id: string, service_id: string | null, position: number, status = 'waiting') =>
+    ({ id, service_id, position, status, created_at: `2026-11-0${position}T10:00:00Z` });
+
+  it('picks the same service first, then any service, in queue order', () => {
+    const list = [e('any1', null, 1), e('s2', 's', 3), e('s1', 's', 2), e('other', 't', 1)];
+    expect(nextWaitingFor(list, 's')?.id).toBe('s1');
+    expect(nextWaitingFor(list, 'u')?.id).toBe('any1');
+  });
+
+  it('skips the client holding it and anyone not waiting', () => {
+    const list = [e('held', 's', 1, 'notified'), e('s2', 's', 2), e('s3', 's', 3)];
+    expect(nextWaitingFor(list, 's', 's2')?.id).toBe('s3');
+    expect(nextWaitingFor([], 's')).toBeNull();
+  });
+
+  it('uses the first name', () => {
+    expect(firstNameOf('Jo Martin')).toBe('Jo');
+    expect(firstNameOf('  ')).toBeNull();
+    expect(firstNameOf(null)).toBeNull();
   });
 });

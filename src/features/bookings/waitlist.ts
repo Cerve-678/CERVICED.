@@ -108,3 +108,32 @@ export function waitlistCheckoutCharge(
   const charged = isDeposit ? BookingService.calculateDeposit(price, toDepositPolicy(policy)) : price;
   return { charged, isDeposit, leftToPay: isDeposit ? Math.max(0, price - charged) : 0 };
 }
+
+/** The fields nextWaitingFor reads from a provider's waitlist entry. */
+interface QueueEntry {
+  id: string;
+  service_id: string | null;
+  status: string;
+  position: number;
+  created_at: string;
+}
+
+/**
+ * Who a freed slot goes to next, the way the database picks: people waiting
+ * for that service first, then people happy with any service, each in queue
+ * order (position, then when they joined). `excludeId` leaves out the client
+ * who has it now.
+ */
+export function nextWaitingFor<T extends QueueEntry>(entries: T[], serviceId: string | null, excludeId?: string): T | null {
+  const inOrder = (a: T, b: T) => a.position - b.position || a.created_at.localeCompare(b.created_at);
+  const waiting = entries.filter(e => e.status === "waiting" && e.id !== excludeId);
+  const same = serviceId ? waiting.filter(e => e.service_id === serviceId).sort(inOrder) : [];
+  const any = waiting.filter(e => e.service_id === null).sort(inOrder);
+  return same[0] ?? any[0] ?? null;
+}
+
+/** "Jo" from "Jo Martin"; null when there's no name. */
+export function firstNameOf(name: string | null | undefined): string | null {
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? first : null;
+}
