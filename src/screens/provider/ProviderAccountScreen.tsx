@@ -7,9 +7,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  StatusBar,
   Modal,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -31,17 +31,21 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getCurrentRefreshToken, getProviderDisplayNameByUserId, getUnreadNotificationCount } from '../../services/databaseService';
+import { getCurrentRefreshToken, getProviderDisplayNameByUserId } from '../../services/databaseService';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 import { dobToParts } from '../../utils/dateUtils';
+import { openLegalPage } from '../../utils/legalPage';
+import { openAboutPage } from '../../utils/aboutPage';
+import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 
 // ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
 const LIGHT = {
   bg:        '#F5F1EC',
   surface:   '#EDE8E2',
   card:      '#FFFFFF',
-  accent:    '#5C4033',
+  accent:    '#5C4033', onAccent: '#FFFFFF',
   accentText:'#5C4033',
   ice:       '#FFFFFF',
   text:      '#000000',
@@ -55,7 +59,7 @@ const DARK = {
   bg:        '#1A1815',
   surface:   '#201D1A',
   card:      '#252220',
-  accent:    '#AF9197',
+  accent:    '#AF9197', onAccent: '#1A1815',
   // Lighter than `accent` — that muted dusty rose reads as faint/hard to read
   // when it's the color of small TEXT (rowTitle, ring-badge initials) against
   // the near-black dark cards, even though it's fine as an icon/fill color.
@@ -79,13 +83,17 @@ interface SettingsOptionProps {
   onPress: () => void;
   P: typeof LIGHT;
   danger?: boolean;
+  /** Shown, but part of the full CERVICED experience: a lock replaces the chevron. */
+  locked?: boolean;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }: SettingsOptionProps) => (
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger, locked }: SettingsOptionProps) => (
   <TouchableOpacity
-    style={styles.row}
+    style={[styles.row, locked && { opacity: 0.6 }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
+    accessibilityRole="button"
+    accessibilityLabel={locked ? `${title}, locked. ${subtitle}` : undefined}
   >
     <View style={styles.rowLeft}>
       <View style={styles.rowIcon}>
@@ -96,7 +104,9 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }
         <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
-    <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />
+    {locked
+      ? <Icon name="lock" size={14} color={P.sub} />
+      : <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />}
   </TouchableOpacity>
 ));
 SettingsOption.displayName = 'SettingsOption';
@@ -132,7 +142,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { user, logout, switchMode, hatState, myBookingMode } = useAuth();
   const isAdmin = useIsCervicedAdmin(user?.id);
   // This screen is a link-only provider's Profile tab. The CERVICED-booking
-  // shortcuts (Analytics, Offers, Clientele, Schedule, Booking history) don't
+  // shortcuts (Analytics, Offers, Clientele, Payouts, Booking history) don't
   // apply to them — their analytics are on Home — so they get Edit profile and
   // Branding in the hero, and a Your Business section of the parts of a
   // profile they have, in place of those.
@@ -140,6 +150,10 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
   const { t } = useTranslation();
+
+  const [achievementsLockedOpen, setAchievementsLockedOpen] = useState(false);
+  const showAchievementsLocked = useCallback(() => setAchievementsLockedOpen(true), []);
+
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
   const [showClientModal, setShowClientModal] = useState(false);
@@ -150,12 +164,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const [providerDisplayName, setProviderDisplayName] = useState<string | null>(null);
   // Unread notifications waiting in the *other* (client) hat, surfaced on the
   // switch control so a dual-role user never misses them while in provider mode.
-  const [clientUnread, setClientUnread] = useState(0);
-
-  useFocusEffect(useCallback(() => {
-    if (!hatState.owned.client) { setClientUnread(0); return; }
-    getUnreadNotificationCount('client').then(setClientUnread).catch(() => {});
-  }, [hatState.owned.client]));
+  const clientUnread = useUnreadNotificationCount('client', hatState.owned.client);
 
   // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
   // screen that never unmounts, so a one-time check could get permanently
@@ -217,6 +226,12 @@ export default function ProviderAccountScreen({ navigation }: any) {
     }
   };
 
+  const clientCardCopy = !hatState.clientHatKnown
+    ? { title: t('providerAccount.forClients.checking.title'), sub: t('providerAccount.forClients.checking.sub') }
+    : hatState.owned.client
+      ? { title: t('providerAccount.forClients.switch.title'), sub: t('providerAccount.forClients.switch.sub') }
+      : { title: t('providerAccount.forClients.create.title'), sub: t('providerAccount.forClients.create.sub') };
+
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     logout();
@@ -247,7 +262,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         <ScrollView
           style={styles.content}
@@ -303,7 +318,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('EditProfile'); }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.previewStatNum, { color: '#FFFFFF' }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
+                <Text style={[styles.previewStatNum, { color: P.onAccent }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
@@ -396,7 +411,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.myBusiness')}</Text>
               <View style={styles.carousel}>
-                <CarouselCard key="schedule" icon="calendar-today" title={t('providerAccount.myBusiness.schedule.title')} subtitle={t('providerAccount.myBusiness.schedule.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
+                <CarouselCard key="payouts" icon="payment" title={t('providerAccount.myBusiness.payouts.title')} subtitle={t('providerAccount.myBusiness.payouts.sub')} onPress={() => navigation.navigate('Payments')} P={P} />
                 <CarouselCard key="inbox" icon="email" title={t('providerAccount.myBusiness.inbox.title')} subtitle={t('providerAccount.myBusiness.inbox.sub')} onPress={() => navigation.navigate('ProviderInbox')} P={P} />
                 <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} />
               </View>
@@ -409,6 +424,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <SettingsOption icon="storefront" title={t('providerAccount.linkOnly.businessInfo.title')} subtitle={t('providerAccount.linkOnly.businessInfo.sub')} onPress={() => navigation.navigate('BusinessInfo')} P={P} />
               <SettingsOption icon="calendar-today" title={t('providerAccount.linkOnly.hours.title')} subtitle={t('providerAccount.linkOnly.hours.sub')} onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
               <SettingsOption icon="receipt" title={t('providerAccount.linkOnly.policies.title')} subtitle={t('providerAccount.linkOnly.policies.sub')} onPress={() => navigation.navigate('Policies')} P={P} />
+              <SettingsOption icon="auto-awesome" title={t('providerAccount.linkOnly.fullCerviced.title')} subtitle={t('providerAccount.linkOnly.fullCerviced.sub')} onPress={() => navigation.navigate('FullCervicedFeatures')} P={P} />
             </View>
             )}
 
@@ -453,7 +469,16 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.notifications.sub' : 'providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="star" title={t('providerAccount.account.achievements.title')} subtitle={t('providerAccount.account.achievements.sub')} onPress={() => navigation.navigate('Achievements')} P={P} />
+              {/* Achievements are earned from CERVICED bookings, so link-only
+                  pros see the row locked (owner's call, 2026-11-03). */}
+              <SettingsOption
+                icon="star"
+                title={t('providerAccount.account.achievements.title')}
+                subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.achievements.sub' : 'providerAccount.account.achievements.sub')}
+                onPress={isLinkOnly ? showAchievementsLocked : () => navigation.navigate('Achievements')}
+                locked={isLinkOnly}
+                P={P}
+              />
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}
@@ -483,19 +508,22 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.forClients')}</Text>
               <TouchableOpacity
-                style={[styles.providerCard, { backgroundColor: P.accent, shadowColor: P.shadow }]}
+                style={[styles.providerCard, { backgroundColor: P.accent, shadowColor: P.shadow }, !hatState.clientHatKnown && { opacity: 0.6 }]}
                 onPress={handleSwitchToClient}
+                // Setting up a "new" client profile rewrites the existing one,
+                // so nothing can be offered until we know which this account has.
+                disabled={!hatState.clientHatKnown}
                 activeOpacity={0.85}
               >
                 <View style={styles.providerCardIcon}>
-                  <Icon name="swap-horiz" size={18} color="#FFFFFF" />
+                  <Icon name="swap-horiz" size={18} color={P.onAccent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.providerCardTitle}>
-                    {hatState.owned.client ? t('providerAccount.forClients.switch.title') : t('providerAccount.forClients.create.title')}
+                  <Text style={[styles.providerCardTitle, { color: P.onAccent }]}>
+                    {clientCardCopy.title}
                   </Text>
-                  <Text style={styles.providerCardSub}>
-                    {hatState.owned.client ? t('providerAccount.forClients.switch.sub') : t('providerAccount.forClients.create.sub')}
+                  <Text style={[styles.providerCardSub, { color: P.onAccent, opacity: 0.72 }]}>
+                    {clientCardCopy.sub}
                   </Text>
                 </View>
                 {clientUnread > 0 && (
@@ -509,17 +537,17 @@ export default function ProviderAccountScreen({ navigation }: any) {
             {/* ── App Info & Legal ────────────────────────────────────────── */}
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.appInfo')}</Text>
-              <SettingsOption icon="info" title={t('providerAccount.appInfo.about.title')} subtitle={t('providerAccount.appInfo.about.sub')} onPress={() => navigation.navigate('About')} P={P} />
+              <SettingsOption icon="info" title={t('providerAccount.appInfo.about.title')} subtitle={t('providerAccount.appInfo.about.sub')} onPress={openAboutPage} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
-              <SettingsOption icon="gavel" title={t('providerAccount.appInfo.terms.title')} subtitle={t('providerAccount.appInfo.terms.sub')} onPress={() => navigation.navigate('Terms')} P={P} />
+              <SettingsOption icon="gavel" title={t('providerAccount.appInfo.terms.title')} subtitle={t('providerAccount.appInfo.terms.sub')} onPress={() => openLegalPage('provider-terms')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="bug-report" title={t('providerAccount.appInfo.report.title')} subtitle={t('providerAccount.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} P={P} />
               {/* Admin accounts only, so English only like the screen it opens. */}
               {isAdmin && (
                 <>
                   <View style={[styles.sep, { backgroundColor: P.sep }]} />
-                  <SettingsOption icon="receipt" title="Money (admin)" subtitle="Failed payments, money owed, refund requests" onPress={() => navigation.navigate('AdminMoney')} P={P} />
+                  <SettingsOption icon="bar-chart" title="Admin" subtitle="Growth, problems, money and developer tools" onPress={() => navigation.navigate('AdminDashboard')} P={P} />
                 </>
               )}
             </View>
@@ -564,7 +592,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>{t('providerAccount.clientModal.cta')}</Text>
+              <Text style={[styles.modalBtnText, { color: P.onAccent }]}>{t('providerAccount.clientModal.cta')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowClientModal(false)} activeOpacity={0.6}>
@@ -598,6 +626,13 @@ export default function ProviderAccountScreen({ navigation }: any) {
         </BlurView>
       </Modal>
 
+      <FullCervicedLockedSheet
+        visible={achievementsLockedOpen}
+        title={t('providerAccount.linkOnly.achievements.lockedTitle')}
+        note={t('providerAccount.linkOnly.achievements.lockedBody')}
+        onClose={() => setAchievementsLockedOpen(false)}
+        onSeeMore={() => navigation.navigate('FullCervicedFeatures')}
+      />
     </View>
   );
 }

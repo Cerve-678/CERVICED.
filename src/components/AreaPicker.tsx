@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { type ReactNode, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,15 +11,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { CITY_AREA_NAMES, getCityAreaData } from '../data/cityAreas';
+import { CITY_AREA_NAMES, COUNTY_TOWNS, getCityAreaData, searchPlaces, type PlaceMatch } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { samePlace } from '../utils/providerCity';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
  *
  * Used by BOTH hats for the coarse-location question:
  *   - client Account "Your area"       -> users.client_area
+ *   - client sign-up "Where are you based?" (Step 5) -> users.client_area
  *   - provider InfoReg "Where you're based" -> providers.location_text (geocoded)
+ *   - provider About You "Areas you cover" (variant 'cover', one place per pick)
+ *     -> providers.service_locations, via AreasYouCoverPicker
  *
  * It is deliberately the ONE component for this — a client's "Camden, London"
  * and a provider's "Camden, London" mean the same thing, and there is no second
@@ -28,8 +32,12 @@ import { useSystemBottomInset } from '../utils/bottomSafeGap';
  * provider_private_details).
  *
  * Every step has an "Other…" escape hatch: a provider whose town isn't one of
- * the ~60 structured cities still has to be able to set a location to go live,
+ * the structured towns still has to be able to set a location to go live,
  * and a client whose area isn't listed still needs to answer the question.
+ * Those boxes search as you type too, so "Leytonstone" typed there is offered
+ * back as Leytonstone, East London — picked, it's saved like any listed area.
+ * Whatever is typed and not picked is saved exactly as typed. Nothing here
+ * ever reads the street address; that lives in AddressPicker.
  */
 
 export type AreaPickerProps = {
@@ -40,13 +48,24 @@ export type AreaPickerProps = {
   disabled?: boolean;
   /** Explanatory line under the modal heading. Defaults to the client wording. */
   subtitle?: string;
+  /** 'based' (default) answers "where are you"; 'cover' adds one place to a
+   *  list of places covered, so it also offers a whole town ("All of
+   *  London") and words its headings for adding. */
+  variant?: 'based' | 'cover';
+  /** Places already chosen, ticked in the lists so nobody adds one twice. */
+  picked?: readonly string[];
+  /** Replaces the default field with the caller's own control; call `open`
+   *  to show the picker. */
+  renderTrigger?: (open: () => void) => ReactNode;
 };
 
-type Step = 'city' | 'region' | 'area';
+type Step = 'city' | 'county' | 'region' | 'area';
 
 /** Sentinel for "my city isn't one of the structured ones" — a non-city
  *  string so it can never collide with a real CITY_AREA_NAMES entry. */
 const OTHER_CITY = '__other__';
+
+const COUNTY_NAMES = Object.keys(COUNTY_TOWNS);
 
 const DEFAULT_SUBTITLE =
   'Shown to a provider who travels to you, so they can check the distance ' +
@@ -58,23 +77,27 @@ export default function AreaPicker({
   accentColor = '#AF9197',
   disabled,
   subtitle = DEFAULT_SUBTITLE,
+  variant = 'based',
+  picked,
+  renderTrigger,
 }: AreaPickerProps) {
+  const covering = variant === 'cover';
+  const isPicked = (place: string) => !!picked?.some(p => samePlace(p, place));
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>('city');
   const [city, setCity] = useState<string | null>(null);
   const [region, setRegion] = useState<string | null>(null);
+  const [county, setCounty] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   // Free-text entry on the 'area' step: reached via "Other city…" (unlisted
   // city) or "Other…" on the area list (unlisted area within a known city).
   const [freeText, setFreeText] = useState('');
   const [areaOther, setAreaOther] = useState(false);
 
-  const cities = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return CITY_AREA_NAMES;
-    return CITY_AREA_NAMES.filter(name => name.toLowerCase().includes(q));
-  }, [query]);
+  const matches = useMemo(() => searchPlaces(query), [query]);
+  const typed = query.trim();
+  const freeTyped = freeText.trim();
 
   const cityData = city && city !== OTHER_CITY ? getCityAreaData(city) : undefined;
   const regionData = useMemo(
@@ -90,6 +113,7 @@ export default function AreaPicker({
     setStep('city');
     setCity(null);
     setRegion(null);
+    setCounty(null);
     setQuery('');
     setFreeText('');
     setAreaOther(false);
@@ -109,6 +133,26 @@ export default function AreaPicker({
     setStep('region');
   };
 
+  const pickCounty = (name: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setCounty(name);
+    setStep('county');
+  };
+
+  // A place found by searching is already the whole answer.
+  const pickSearchedArea = (name: string, town: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    onChange(`${name}, ${town}`);
+    setVisible(false);
+  };
+
+  const useTypedPlace = () => {
+    if (!typed) return;
+    Haptics.selectionAsync().catch(() => {});
+    onChange(typed);
+    setVisible(false);
+  };
+
   const pickOtherCity = () => {
     Haptics.selectionAsync().catch(() => {});
     setCity(OTHER_CITY);
@@ -123,6 +167,14 @@ export default function AreaPicker({
     setRegion(name);
     setAreaOther(false);
     setStep('area');
+  };
+
+  // 'cover' only: the whole town rather than one area of it.
+  const pickWholeTown = () => {
+    if (!city || city === OTHER_CITY) return;
+    Haptics.selectionAsync().catch(() => {});
+    onChange(city);
+    setVisible(false);
   };
 
   const pickArea = (name: string) => {
@@ -143,6 +195,10 @@ export default function AreaPicker({
   const confirmFreeText = () => {
     const t = freeText.trim();
     if (!t) return;
+    // Typed a place we list, word for word: save it as that place, with its
+    // own town, rather than as loose text.
+    const listed = freeMatches.find(m => m.name.toLowerCase() === t.toLowerCase());
+    if (listed) { pickMatch(listed); return; }
     Haptics.selectionAsync().catch(() => {});
     onChange(city && city !== OTHER_CITY ? `${t}, ${city}` : t);
     setVisible(false);
@@ -155,37 +211,94 @@ export default function AreaPicker({
       if (city === OTHER_CITY) { setCity(null); setStep('city'); return; }
       setStep('region');
     } else if (step === 'region') {
+      setStep(county ? 'county' : 'city');
+    } else if (step === 'county') {
+      setCounty(null);
       setStep('city');
     }
   };
 
   const freeTextMode = step === 'area' && (city === OTHER_CITY || areaOther);
 
+  // Typing in an "Other…" box still finds listed places, so nobody types an
+  // area we already have and ends up with it unmatched. Inside a town, that
+  // town's own areas come first.
+  const freeMatches = useMemo(() => {
+    if (!freeTextMode) return [];
+    const found = searchPlaces(freeText, 12);
+    if (!city || city === OTHER_CITY) return found;
+    const inTown = (m: PlaceMatch) => m.kind === 'area' && m.town === city;
+    return [...found.filter(inTown), ...found.filter(m => !inTown(m))];
+  }, [freeTextMode, freeText, city]);
+
+  const exactly = (list: PlaceMatch[], text: string) =>
+    list.some(m => m.name.toLowerCase() === text.toLowerCase());
+
+  const pickMatch = (match: PlaceMatch) => {
+    if (match.kind === 'county') pickCounty(match.name);
+    else if (match.kind === 'town') pickCity(match.name);
+    else pickSearchedArea(match.name, match.town);
+  };
+
+  // One row per found place. An area says where it sits ("East London"), so
+  // the answer reads as London → East → Leytonstone without the steps.
+  const matchRow = (match: PlaceMatch) => (
+    <TouchableOpacity
+      key={`${match.kind}:${match.name}:${match.kind === 'area' ? match.town : ''}`}
+      style={styles.row}
+      onPress={() => pickMatch(match)}
+    >
+      <View style={styles.matchText}>
+        <Text style={styles.rowText}>{match.name}</Text>
+        {match.kind === 'area' ? (
+          <Text style={styles.matchWhere}>
+            {match.region.includes(match.town) ? match.region : `${match.region} · ${match.town}`}
+          </Text>
+        ) : match.kind === 'county' ? (
+          <Text style={styles.matchWhere}>County</Text>
+        ) : null}
+      </View>
+      {match.kind === 'area'
+        ? rowEnd(`${match.name}, ${match.town}`, accentColor)
+        : <Ionicons name="chevron-forward" size={17} color="#8B8B95" />}
+    </TouchableOpacity>
+  );
+
   const heading =
     step === 'city'
-      ? 'Which city are you in?'
-      : step === 'region'
-        ? `Whereabouts in ${city}?`
-        : city === OTHER_CITY
-          ? 'Where are you based?'
-          : `Pick your area in ${region}`;
+      ? covering ? 'Add a place you cover' : 'Where are you based?'
+      : step === 'county'
+        ? `Which part of ${county}?`
+        : step === 'region'
+          ? `Whereabouts in ${city}?`
+          : city === OTHER_CITY
+            ? covering ? 'Which place?' : 'Where are you based?'
+            : covering ? `Pick an area in ${region}` : `Pick your area in ${region}`;
+
+  // Already on the list: a tick instead of the usual chevron.
+  const rowEnd = (place: string, chevronColor: string) =>
+    isPicked(place)
+      ? <Ionicons name="checkmark-circle" size={19} color={accentColor} accessibilityLabel="Already added" />
+      : <Ionicons name="chevron-forward" size={17} color={chevronColor} />;
 
   return (
     <>
-      <TouchableOpacity
-        style={[styles.field, disabled && styles.disabled]}
-        onPress={open}
-        disabled={disabled}
-        activeOpacity={0.75}
-        accessibilityRole="button"
-        accessibilityLabel="Choose your area"
-      >
-        <Ionicons name="map-outline" size={20} color={accentColor} />
-        <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
-          {value || 'Select your area'}
-        </Text>
-        <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
-      </TouchableOpacity>
+      {renderTrigger ? renderTrigger(open) : (
+        <TouchableOpacity
+          style={[styles.field, disabled && styles.disabled]}
+          onPress={open}
+          disabled={disabled}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Choose your area"
+        >
+          <Ionicons name="map-outline" size={20} color={accentColor} />
+          <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
+            {value || 'Select your area'}
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
+        </TouchableOpacity>
+      )}
 
       <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
@@ -221,7 +334,7 @@ export default function AreaPicker({
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="London"
+                  placeholder="Search a town or area, like Stoke Newington"
                   placeholderTextColor="#8B8B95"
                   style={styles.input}
                   autoCapitalize="words"
@@ -231,7 +344,7 @@ export default function AreaPicker({
             ) : null}
 
             {freeTextMode ? (
-              <View style={styles.freeWrap}>
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.freeWrap}>
                 <TextInput
                   value={freeText}
                   onChangeText={setFreeText}
@@ -250,9 +363,19 @@ export default function AreaPicker({
                   disabled={!freeText.trim()}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.confirmBtnText}>Use this area</Text>
+                  <Text style={styles.confirmBtnText}>
+                    {freeTyped && !exactly(freeMatches, freeTyped)
+                      ? `Use "${freeTyped}"`
+                      : covering ? 'Add this place' : 'Use this area'}
+                  </Text>
                 </TouchableOpacity>
-              </View>
+                {freeMatches.length > 0 ? (
+                  <View>
+                    <Text style={styles.matchHeading}>Did you mean</Text>
+                    {freeMatches.map(matchRow)}
+                  </View>
+                ) : null}
+              </ScrollView>
             ) : (
               <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.results}>
                 {step === 'city' && (
@@ -266,19 +389,49 @@ export default function AreaPicker({
                   </TouchableOpacity>
                 )}
 
-                {step === 'city' &&
-                  cities.map(name => (
+                {step === 'city' && !typed &&
+                  [...COUNTY_NAMES.map(name => ({ name, isCounty: true })), ...CITY_AREA_NAMES.map(name => ({ name, isCounty: false }))]
+                    .sort((a, b) => (a.name === 'London' ? -1 : b.name === 'London' ? 1 : a.name.localeCompare(b.name)))
+                    .map(({ name, isCounty }) => (
+                      <TouchableOpacity key={name} style={styles.row} onPress={() => (isCounty ? pickCounty(name) : pickCity(name))}>
+                        <Text style={styles.rowText}>{name}</Text>
+                        <Ionicons name="chevron-forward" size={17} color="#8B8B95" />
+                      </TouchableOpacity>
+                    ))}
+
+                {step === 'city' && !!typed && matches.map(matchRow)}
+
+                {/* Not one of ours, or spelt their own way: what they typed is
+                    still a fine answer, saved exactly as typed. */}
+                {step === 'city' && !!typed && !exactly(matches, typed) ? (
+                  <TouchableOpacity style={[styles.otherRow, { borderColor: accentColor }]} onPress={useTypedPlace} activeOpacity={0.85}>
+                    <Ionicons name="add-circle-outline" size={17} color={accentColor} />
+                    <Text style={[styles.otherRowText, { color: accentColor }]}>Use "{typed}"</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {step === 'county' &&
+                  (county ? COUNTY_TOWNS[county] ?? [] : []).map(name => (
                     <TouchableOpacity key={name} style={styles.row} onPress={() => pickCity(name)}>
                       <Text style={styles.rowText}>{name}</Text>
                       <Ionicons name="chevron-forward" size={17} color="#8B8B95" />
                     </TouchableOpacity>
                   ))}
 
-                {step === 'city' && cities.length === 0 ? (
-                  <Text style={styles.empty}>
-                    No matching city — tap "Other city…" above to enter your area
-                    manually.
-                  </Text>
+                {step === 'region' && covering && city && city !== OTHER_CITY ? (
+                  <TouchableOpacity
+                    style={styles.row}
+                    onPress={pickWholeTown}
+                    activeOpacity={0.5}
+                    accessibilityRole="button"
+                    accessibilityLabel={`All of ${city}`}
+                  >
+                    <View style={styles.wholeTownText}>
+                      <Text style={[styles.rowText, styles.wholeTownTitle, { color: accentColor }]}>All of {city}</Text>
+                      <Text style={styles.wholeTownSub}>Every area in {city}</Text>
+                    </View>
+                    {rowEnd(city, accentColor)}
+                  </TouchableOpacity>
                 ) : null}
 
                 {step === 'region' &&
@@ -298,7 +451,7 @@ export default function AreaPicker({
                     {regionData?.areas.map(a => (
                       <TouchableOpacity key={a} style={styles.row} onPress={() => pickArea(a)}>
                         <Text style={styles.rowText}>{a}</Text>
-                        <Ionicons name="chevron-forward" size={17} color={accentColor} />
+                        {rowEnd(city && city !== OTHER_CITY ? `${a}, ${city}` : a, accentColor)}
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity
@@ -341,10 +494,16 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#D1D1D6' },
   rowText: { flex: 1, color: '#1C1C1E', fontSize: 15, lineHeight: 21 },
   empty: { color: '#6B6B73', textAlign: 'center', marginTop: 30, fontSize: 14, lineHeight: 20 },
+  wholeTownText: { flex: 1 },
+  wholeTownTitle: { fontWeight: '700' },
+  wholeTownSub: { marginTop: 2, color: '#6B6B73', fontSize: 12, lineHeight: 16 },
   // "Other…" escape hatch — dashed accent pill, set apart from the plain rows.
   otherRow: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 100, borderWidth: 1, borderStyle: 'dashed', marginTop: 12, marginBottom: 4 },
   otherRowText: { fontSize: 13, fontWeight: '700' },
   freeWrap: { paddingTop: 20, paddingBottom: 28, gap: 14 },
+  matchHeading: { marginTop: 6, color: '#6B6B73', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  matchText: { flex: 1 },
+  matchWhere: { marginTop: 2, color: '#6B6B73', fontSize: 12, lineHeight: 16 },
   freeInput: { minHeight: 52, borderRadius: 12, paddingHorizontal: 14, backgroundColor: '#F2F2F7', color: '#1C1C1E', fontSize: 15 },
   confirmBtn: { minHeight: 50, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
   confirmDisabled: { opacity: 0.4 },

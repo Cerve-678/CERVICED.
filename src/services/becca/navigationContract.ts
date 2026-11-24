@@ -26,11 +26,17 @@ export const CLIENT_PROFILE_SCREENS = new Set([
   "PaymentMethods",
   "Subscription",
   "HelpCentre",
-  "About",
-  "Terms",
   "ReportProblem",
   "Points",
 ]);
+
+/**
+ * Profile-tab destinations that are pages on the public website, not screens:
+ * the Terms (cerviced.co/legal) and About (cerviced.co/about). BeccaScreen
+ * opens them in the in-app browser instead of navigating. Both used to be
+ * screens; navigating to the deleted "Terms" route silently did nothing.
+ */
+export const CLIENT_WEBSITE_PAGES = new Set(["Terms", "About"]);
 
 export const PROVIDER_PUSH_NAV: Record<string, string> = {
   schedule: "ProviderSchedule",
@@ -45,6 +51,8 @@ export const PROVIDER_PUSH_NAV: Record<string, string> = {
   analytics: "Analytics",
   history: "BookingHistory",
   automations: "Automations",
+  payments: "Payments",
+  policies: "Policies",
 };
 
 export const PROVIDER_TAB_NAV: Record<string, { tab: string; screen: string }> = {
@@ -86,7 +94,8 @@ export function isBeccaNavigationSuggestion(
   if (screen === "Explore") return true;
   if (screen === "Profile") {
     const profileScreen = suggestion.data?.params?.["profileScreen"];
-    return typeof profileScreen === "string" && CLIENT_PROFILE_SCREENS.has(profileScreen);
+    return typeof profileScreen === "string"
+      && (CLIENT_PROFILE_SCREENS.has(profileScreen) || CLIENT_WEBSITE_PAGES.has(profileScreen));
   }
   return CLIENT_BECCA_SCREENS.has(screen);
 }

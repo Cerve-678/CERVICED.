@@ -1,16 +1,17 @@
-# CERVICED waitlist site
+# CERVICED website (www.cerviced.co)
 
-Pre-launch marketing site. **Not part of the app build** — no React Native, no
-Expo, no dependencies. Two files:
+Two parts, built together by `npm run build:site` (`scripts/build-site.mjs`)
+into `dist/`:
 
-| File | What it is |
+| Part | What it is |
 |---|---|
-| `index.html` | The entire site. All CSS and JS inlined. |
-| `waitlist_signups.sql` | The table the form wants to write to. **Never applied.** |
+| `waitlist/` (this folder) | The static pages: Home (`index.html`), About (`about/`), Legal (`legal/`). All CSS and JS inlined, no dependencies. Copied into the build unchanged. |
+| `src/web/` | The web app, built by Expo (react-native-web) from `App.web.tsx`. It serves provider pages at `/@handle` with the app's own page components (`src/features/providers/page/`). Its `index.html` becomes `app.html`. |
 
-Nothing here imports from `src/`, and nothing in `src/` imports from here.
-
----
+Nothing in `src/` imports from `waitlist/`. Until provider pages are built
+(web booking plan, step 3) `/@handle` shows "This page is coming soon".
+In a development build, `/_dev/page-styles?style=<key>` draws the shared
+provider page with a sample provider in any page style.
 
 ## Live
 
@@ -20,14 +21,30 @@ Nothing here imports from `src/`, and nothing in `src/` imports from here.
 | https://cerviced.co | 308 → www |
 | https://cerviced.vercel.app | same deployment |
 
-Hosted on Vercel, auto-deploying from `main`. Push to `main` and it is live in
-about 30 seconds. There is no build step — Vercel copies the folder.
+Hosted on Vercel, auto-deploying from `main` (about 2 minutes: install,
+then the Expo web export).
 
-**Vercel project settings that matter.** Root Directory must be `waitlist`;
-Framework Preset `Other`; Build / Output / Install commands all empty with
-their Override toggles off. If Root Directory ever reverts to `./`, Vercel
-finds the app's `package.json` at the repo root, tries to build the Expo app,
-and every URL 404s.
+**Vercel project settings that matter (since the web app, 2026-11-20).**
+Root Directory is **empty** (the repo root), Framework Preset `Other`.
+Install, build, output, routes and headers all come from `vercel.json` at
+the repo root, so the Override toggles stay off. Don't set Root Directory
+back to `waitlist`: with a Root Directory set, this project took the build
+commands from `vercel.json` but dropped its rewrites, or dropped the whole
+file once a second `vercel.json` sat in `waitlist/` (found from the build
+logs, 2026-11-20). `vercel.json`:
+
+- rewrites `/@:handle` to `/app.html` (the web app);
+- skips the build for any branch that isn't `main` and doesn't have `site`
+  or `web` in its name (`scripts/vercel-ignore-build.sh`), because the Hobby
+  plan rate-limits builds;
+- caches the web app's hashed files (`/_expo/static/…`) for a year.
+
+The Supabase URL and anon key are read from `eas.json`'s production profile
+at build time, so Vercel needs no environment variables. If a merge shows no
+Vercel deployment, push an empty `chore(site): redeploy` commit to `main`.
+
+To roll back, use Vercel's Instant Rollback on the last good deployment. A
+failed build never replaces the live site.
 
 ## DNS (Namecheap — `dns1/dns2.registrar-servers.com`)
 
@@ -98,42 +115,57 @@ markup if JS never runs.
 
 ## Outstanding — read before pointing anyone at this
 
-**1. The privacy notice is a placeholder, and it is rendering live right now.**
-A dashed box reading *"Privacy notice — placeholder, do not deploy"* is on the
-public page. `LEGAL-COMPLIANCE-NOTES.md` §1 records that this project has no
-Privacy Policy at all. A UK-facing form collecting email addresses needs a real
-one under UK GDPR/PECR. **Do not draft this unilaterally** — per `CLAUDE.md`,
-flag it and implement whatever wording the user directs.
+**1. The privacy notice is the legal page.** The consent line and the footer
+link to `/legal#privacy`. The old placeholder box was removed on 2026-11-03.
+That page is still a draft — see item 5.
 
-**2. The form stores nothing.** `WAITLIST` at the top of the page script has
-`supabaseUrl` and `anonKey` blank, so submitting says *"Preview mode — nothing
-was sent."* No data has ever been captured.
+Since 2026-11-08 both pages share the same header menu (About us, How it works,
+Health & safety, Terms & policies, Join the waitlist) and a four-column footer
+that links every policy on `/legal` by its section id (`#terms`,
+`#provider-terms`, `#privacy`, `#cookies`, `#fees`, `#safety`, `#providers`,
+`#community`, `#reviews`, `#complaints`) plus `/about` (the About page, `about/index.html`) and the home page's
+`#for-you` and `#join`. The app's About row opens `/about` too, so it is the
+only copy of the About text. If you rename or add a policy section, update both
+footers. Every page has a light/dark switch in the header (`#theme-toggle`). A
+visitor's choice is saved in localStorage as `cerviced-theme` and applied by a
+small script in `<head>` before first paint; with no choice saved, the page
+follows the device. The About page's animations (hero, "one client's month",
+the one-cart demo, scroll reveals) run only under `html.motion`, which that
+same script sets when the device allows motion; otherwise everything is simply
+shown. The one-cart markup is the finished cart, and the script empties it and
+plays it in, so a visitor without script still sees the whole thing.
+The footer contact is support@cerviced.co, the address the legal page
+uses (the old footer said hello@cerviced.com).
 
-**3. `waitlist_signups.sql` was never run.** The table does not exist. Its
-`anon` policy is insert-only with **no** select policy on purpose, so the public
-page can write signups but cannot read them back out. If it goes ahead it should
-become a properly-timestamped migration, not an ad hoc run.
-
-**Undecided:** whether signups belong in the live app Supabase project, a
-separate marketing project, or a hosted form service. This was asked and never
-answered.
+**2. Where sign-ups go (since 2026-11-10).** The form posts to
+`public.waitlist_signups` in the app's live Supabase project, created by
+`supabase/migrations/20261110150000_waitlist_signups.sql` (the user chose the
+app's database over a separate project or a form service). `WAITLIST` at the top
+of the page script holds the project URL and the app's publishable anon key,
+the same one every app build ships. The table lets `anon` INSERT only, with
+length and shape checks in the policy; there is **no** select, update or delete
+for anon or authenticated, so the list can't be read back through the website.
+Read it in the Supabase dashboard (Table Editor → waitlist_signups). A repeat
+email on the same side is a 409, shown as "You're already on the list".
+Nothing was captured before 2026-11-10.
 
 Provider and client answers are already stored as separate columns, not one
 blob — `business_name`/`services`/`current_tool` are provider-only,
 `books_most` is client-only, and `role` filters between them.
 
-**4. It lives inside the app repo.** Every waitlist tweak is a commit to the
-app's `main`, and Vercel has read access to the whole private repo. A separate
-repo would decouple them. Not urgent; worth doing before this sees real traffic.
+**4. It lives inside the app repo, on purpose now.** The web app renders the
+app's own provider page components, so it has to build from this repo.
 
 **5. `legal/index.html` is a draft, not lawyer-reviewed.** It holds all of
 Cerviced's policies on one page (served at `/legal` once on `main`): Client
 Terms, Provider Terms of Business, Privacy, Cookies, Fees & Refunds, Provider
 Standards, Community, Reviews, Health & Safety, Complaints. It was drafted on
-2026-10-19 at the user's direction, and nothing links to it yet. Before linking
-it from the waitlist page (or replacing item 1's placeholder with it):
-- fill the highlighted placeholders: company number, registered office, ICO
-  registration number and the provider liability cap;
+2026-10-19 at the user's direction. Since 2026-11-03 the waitlist page and the
+app's Welcome and sign-up screens link to it. Still to do:
+- company number, registered office and ICO registration number were taken
+  out for now at the user's request (not left as blanks). Put them back once
+  known: UK companies must show the number and registered office on their
+  website. The provider liability cap is still a highlighted blank;
 - have a solicitor review it, then remove the `noindex` meta tag;
 - keep the Client Terms in step with the app's `TermsScreen.tsx`. They're the
   in-app Terms rewrite (PR #115) minus its §31 "For Providers", which moved into

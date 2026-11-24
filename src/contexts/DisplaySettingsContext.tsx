@@ -187,3 +187,26 @@ export function useDisplaySettings(): DisplaySettingsContextType {
   }
   return context;
 }
+
+/** What a visitor to the website gets: the default text size, font, language
+ *  and region. There's no account and no Display settings screen on the web,
+ *  so nothing can change them. One constant value, so nothing re-renders on it. */
+const VISITOR_DISPLAY_SETTINGS: DisplaySettingsContextType = {
+  ...DEFAULT_DISPLAY_SETTINGS,
+  fontFamily: fontFamilyForChoice(DEFAULT_DISPLAY_SETTINGS.fontChoice),
+  setTextScale: () => {},
+  setFontChoice: () => {},
+  setLanguage: () => {},
+  setRegion: () => {},
+};
+
+/** The website's stand-in for DisplaySettingsProvider (src/web/SiteApp.tsx).
+ *  Shared components that read display settings, such as the provider page's
+ *  translated About text, then work without the app's account and storage. */
+export function VisitorDisplaySettingsProvider({ children }: { children: ReactNode }) {
+  return (
+    <DisplaySettingsContext.Provider value={VISITOR_DISPLAY_SETTINGS}>
+      {children}
+    </DisplaySettingsContext.Provider>
+  );
+}

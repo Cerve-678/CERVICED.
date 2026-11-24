@@ -23,6 +23,7 @@ const BOOKINGS: Section = {
     { key: 'providerBookingChanges', icon: 'sliders', title: 'Changes & Cancellations', subtitle: 'Cancelled bookings and reschedule outcomes' },
     { key: 'providerReminders', icon: 'notifications', title: 'Appointment Reminders', subtitle: 'The day before, and forms not sent yet' },
     { key: 'providerForms', icon: 'receipt', title: 'Client Forms', subtitle: 'When a client fills in a form' },
+    { key: 'providerWaitlist', icon: 'people', title: 'Waitlist', subtitle: 'When someone joins your waitlist' },
   ],
 };
 const MESSAGES: Section = {
@@ -47,7 +48,7 @@ const YOUR_BUSINESS: Section = {
     SAVES_ROW,
     { key: 'providerReviews', icon: 'star', title: 'Reviews', subtitle: 'When a client leaves a review' },
     { key: 'providerDailyRecap', icon: 'stack', title: 'Today’s Schedule', subtitle: 'A morning recap of the day ahead' },
-    { key: 'providerFullyBooked', icon: 'bar-chart', title: 'Fully Booked', subtitle: 'When your calendar has no openings left' },
+    { key: 'providerFullyBooked', icon: 'bar-chart', title: 'Fully Booked', subtitle: 'When every slot you’ve opened is booked, with your certificate' },
   ],
 };
 

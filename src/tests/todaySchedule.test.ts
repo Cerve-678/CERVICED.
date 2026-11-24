@@ -1,7 +1,8 @@
 // Pins the timing rules for My Profile's two "today" cards: the summary leads
 // until 2pm, the booking cards lead from 2pm, and the summary leads again once
-// the last client is done (when the cards look at tomorrow instead).
+// the last client is done. The cards always show the next five bookings.
 import {
+  bookingCardsLead,
   buildTodaySchedule,
   minutesOfDay,
   shortClientName,
@@ -77,6 +78,21 @@ describe('buildTodaySchedule', () => {
     expect(at(9, 0, []).phase).toBe('dayDone');
   });
 
+  it('puts the coming-up cards first on a free day with bookings coming up', () => {
+    const later = [booking('t', '10:00:00', '11:00:00', { booking_date: TOMORROW })];
+    const free = at(9, 0, later);
+    expect(free.phase).toBe('dayDone');
+    expect(bookingCardsLead(free)).toBe(true);
+    // Nothing coming up either: the summary's "FREE TODAY" stays on top.
+    expect(bookingCardsLead(at(9, 0, []))).toBe(false);
+  });
+
+  it('keeps the summary on top before 2pm and once the day is done', () => {
+    expect(bookingCardsLead(at(8, 30))).toBe(false);
+    expect(bookingCardsLead(at(14, 0))).toBe(true);
+    expect(bookingCardsLead(at(16, 0))).toBe(false);
+  });
+
   it('counts a completed booking as done even before its end time', () => {
     const s = at(9, 15, [booking('a', '09:00:00', '10:00:00', { status: 'completed' }), booking('b', '11:00:00', '12:00:00')]);
     expect(s.today.map(x => x.state)).toEqual(['done', 'next']);
@@ -113,6 +129,43 @@ describe('buildTodaySchedule', () => {
     const s = at(18, 0, [...DAY, ...tomorrowRows]);
     expect(s.tomorrow.map(x => `${x.booking.id}:${x.state}`)).toEqual(['t1:next', 't2:later']);
     expect(s.todos.map(t => `${t.kind}:${t.booking.id}`)).toEqual(['request:t2']);
+  });
+
+  it('lists the next bookings still to come on any date, finished ones gone', () => {
+    const later = [
+      booking('z', '09:00:00', '10:00:00', { booking_date: '2026-11-20' }),
+      booking('t', '12:00:00', '13:00:00', { booking_date: TOMORROW }),
+      booking('y', '16:00:00', '17:00:00', { booking_date: '2026-10-30' }),
+    ];
+    const s = at(11, 0, [...DAY, ...later]);
+    expect(s.upcoming.map(x => x.booking.id)).toEqual(['b', 'c', 't', 'y', 'z']);
+    expect(s.upcoming[0]?.state).toBe('now');
+  });
+
+  it('never shows more than five', () => {
+    const later = ['p', 'q', 'r', 's', 't', 'u'].map((id, i) =>
+      booking(id, '09:00:00', '10:00:00', { booking_date: `2026-11-0${i + 1}` }));
+    expect(at(8, 0, later).upcoming.map(x => x.booking.id)).toEqual(['p', 'q', 'r', 's', 't']);
+  });
+
+  it('still shows upcoming bookings on a day with nothing left, the first one marked next', () => {
+    const later = [booking('x', '10:00:00', '11:00:00', { booking_date: '2026-11-03' })];
+    const s = at(18, 0, [...DAY, ...later]);
+    expect(s.phase).toBe('dayDone');
+    expect(s.upcoming.map(x => `${x.booking.id}:${x.state}`)).toEqual(['x:next']);
+  });
+
+  it('leaves out cancelled, no-show and completed bookings on later dates', () => {
+    const later = (['cancelled', 'no_show', 'completed'] as const).map((status, i) =>
+      booking(`n${i}`, '10:00:00', '11:00:00', { booking_date: '2026-11-03', status }));
+    expect(at(18, 0, later).upcoming).toEqual([]);
+  });
+
+  it('carries a request and patch-test flag on a later booking', () => {
+    const later = [booking('x', '10:00:00', '11:00:00', { booking_date: '2026-11-03', status: 'pending', service_id: 'svc-patch' })];
+    const [slot] = at(18, 0, later).upcoming;
+    expect(slot?.isRequest).toBe(true);
+    expect(slot?.needsPatchTest).toBe(true);
   });
 
   it('finishes a legacy booking with no end time a minute after it starts', () => {

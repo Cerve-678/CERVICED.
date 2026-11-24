@@ -27,9 +27,16 @@ export const STORAGE_KEYS = {
   CART_ITEMS:          '@cerviced_cart',
   /** Set once the Welcome screen's full intro animation has played on this device */
   WELCOME_INTRO_SEEN:  '@cerviced_welcome_intro_seen',
-  /** Device calendar ids a link-only provider chose to show as their diary on
-   *  Home. Device-only on purpose: the events never leave the phone. */
+  /** Device calendar ids a provider chose: a link-only provider's diary on
+   *  Home, or the calendars a full provider's calendar sync reads busy times
+   *  from. Per phone on purpose; the events themselves never leave it. */
   DIARY_CALENDAR_IDS:  '@cerviced_diary_calendar_ids',
+  /** Prefix: the view a provider's Home calendar opens in, stored at
+   *  `<this>:<userId>` (features/provider-bookings/calendarViewPreference.ts). */
+  PROVIDER_CALENDAR_VIEW: '@cerviced_provider_calendar_view',
+  /** Explore photos this phone has already shown, so the next visit leads
+   *  with new ones (utils/exploreSeen.ts). Device-only. */
+  EXPLORE_SEEN:        '@cerviced_explore_seen',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
@@ -58,8 +65,25 @@ export const TOUR_SEEN_PREFIXES = {
   CLIENT_EXPLORE: '@client_explore_tour_seen_',
   /** ProviderHomeScreen — the provider's first-run tour */
   PROVIDER_HOME:  '@provider_tour_seen_',
+  /** ProviderInfoPackScreen — the Info Packs welcome */
+  PROVIDER_INFO_PACKS: '@provider_info_packs_welcome_seen_',
+  /** ProviderIntakeFormScreen — the Forms welcome */
+  PROVIDER_FORMS: '@provider_forms_welcome_seen_',
+  /** Beauty Profile → Maintenance — "How Maintenance works" */
+  CLIENT_MAINTENANCE_HOWTO: '@client_maintenance_howto_seen_',
+  /** Service editor — the Info Pack / Form tip card, closed or used */
+  PROVIDER_SERVICE_PACK_TIP: '@provider_service_pack_tip_seen_',
+  /** Policies — the Info Pack / Form tip card, closed or used */
+  PROVIDER_POLICIES_PACK_TIP: '@provider_policies_pack_tip_seen_',
+  /** ProviderMyProfileScreen — the spotlight tour */
+  PROVIDER_MY_PROFILE: '@provider_my_profile_tour_seen_',
 } as const;
 
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];
 
 export const tourSeenKey = (prefix: TourSeenPrefix, userId: string): string => `${prefix}${userId}`;
+
+/** The day (YYYY-MM-DD) a link-only provider last closed the "Become a full
+ *  member" nudge bar on Home, per account. Only a per-device convenience: an
+ *  empty value just means the bar can show again once enough nudges arrive. */
+export const joinNudgeBarDismissedKey = (userId: string): string => `@cerviced_join_nudge_bar_dismissed_${userId}`;

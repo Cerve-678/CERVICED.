@@ -978,15 +978,17 @@ shipped, and where it differs from the design below:
   `automation_settings.scheduleReleaseDay` set means monthly, and it replaces
   `booking_window_days` (which is kept, so clearing the day restores it).
 - **The horizon is computed from the clock, not stored** (deviation from
-  point 2 below). Before the Nth at 09:00 UTC: bookable to the end of this
+  point 2 below). Before the Nth at the release time (09:00 UTC until
+  2026-11-09; since then the provider's own time, UK time, 9am by default —
+  migration 20261109250000): bookable to the end of this
   month. From then: to the end of next month. A day past the month's end means
   its last day. Computing it means it can't fail to advance, which is the
   failure point 2 was guarding against. Server: `provider_last_bookable_date()`
   (used by `enforce_booking_bookability` and `get_services_availability`).
   App: `src/utils/bookingHorizon.ts` (used by every AvailabilityService horizon
   and Becca). Keep the two in step.
-- **The push is true when it's sent.** The cron still runs at 09:00 UTC, the
-  release minute, and `process_follow_schedule_release_nudges()` now only
+- **The push is true when it's sent.** The cron runs every five minutes
+  (was daily at 09:00 UTC, the old fixed release minute), and `process_follow_schedule_release_nudges()` now only
   sends once `provider_last_bookable_date()` reaches next month: "December has
   opened up with … Get booking now." (the user's wording). It skips providers
   who aren't live. A time-only change to an existing booking past the horizon
@@ -1269,8 +1271,8 @@ capabilities all read it. Explore's own filter tabs do not yet.
   of the feed (just above Book Again) instead of its normal early slot
   between Near You and Book Again.
 - **SearchScreen** has a "Who It's For" filter (Women/Men/Kids) in
-  `FilterOptions.audience`, resolved via a new batched
-  `getProviderAudienceMatches(providerIds, audience)` scoped to the
+  `FilterOptions.audience`, resolved via the batched
+  `getProviderServiceFacets(providerIds)` audience sets, scoped to the
   already-searched candidate set — same shape as the existing `hairType`
   filter, same "qualifies via any matching service" rule as Home.
 - **Becca** — `src/services/becca/entityResolver.ts`'s `AUDIENCE_OVERRIDES`
@@ -1279,7 +1281,7 @@ capabilities all read it. Explore's own filter tabs do not yet.
   "for my daughter"), independent of whether that phrase also overrode the
   resolved category to MALE/KIDS. Two capabilities in
   `capabilities/client.ts` use it: the main "find a provider" capability
-  narrows `dbProviders` via `getProviderAudienceMatches` before replying, and
+  narrows `dbProviders` via `getProviderServiceFacets`' audience sets before replying, and
   the inspiration/gallery capability passes `audience` through to
   `getDiscoverServices()`. **Not yet wired**: the price-lookup capability
   ("how much are nails") and the availability capability ("who's free this
@@ -1648,3 +1650,65 @@ price difference handled by the payments rules in
 
 List each size as its own service in one category. It works with everything
 today; the cost is a longer profile.
+
+---
+
+## Provider week view: two layouts parked for later (chosen 2026-11-08)
+
+### Where this came from
+
+Cards in the provider Home week view used to cut their words off: each day
+was about 40px wide, and one clash halved every card that day. Five fixes
+were mocked up. The user picked **Roomier grid**, which shipped: arrows in
+their own row, 72px hours, first name plus a wrapping service line, and
+overlap columns counted per clash (`assignOverlapColumns` in
+`src/utils/dayTimelineRange.ts`). Two more were kept for the future. Colours
+stay as they are: they follow the order of the day and don't mean anything,
+and colouring by service type was offered and turned down.
+
+The limit Roomier grid can't get past: seven columns on a phone leave each
+day about 46px wide, so long service names still get cut off, just later.
+Both options below solve that by not putting seven columns on screen at
+once.
+
+### Option A: Three-day swipe
+
+- Three days on screen at a time, each about 107px wide, so cards show
+  time, price, client, service and any clash or request label in full.
+- Swipe sideways through the week, snapping one day at a time so no column
+  is ever half on screen. The date strip above shows all seven dates with a
+  highlight over the three that are visible. Tapping a date jumps there.
+- Build it as a native horizontal `ScrollView` (`pagingEnabled` or
+  `snapToInterval` = one day's width) inside the vertical scroll, sharing
+  one fixed time column. Don't use a `PanResponder` around the grid: that
+  was tried for week paging and broke vertical scrolling (see the comment
+  above `WeekView`'s arrows).
+- Open on the selected day, clamped so the three visible days stay inside
+  Mon–Sun.
+- Trade-off: the whole week is no longer on one screen.
+
+### Option B: Days as rows
+
+- Turn the grid on its side. Each day is a row about 80px tall and time
+  runs left to right at about 104px per hour, so words run along the card
+  instead of across it.
+- All seven days fit on one screen with no scrolling down. One horizontal
+  scroll moves every row together, with hour labels along the top and the
+  day labels fixed on the left.
+- A clash stacks as lanes inside that row only. The same
+  `assignOverlapColumns` works: feed it start and length along the time
+  axis instead of top and height.
+- Closed or blocked days are a shaded row labelled "Closed" / "Blocked".
+- Trade-off: you see about three hours at a time and swipe for the rest,
+  and a 30-minute booking is still a narrow card.
+
+### Either way
+
+- Should probably be a fourth choice in the Home view button and under
+  My Profile → Manage → Calendar view
+  (`src/features/provider-bookings/calendarViewPreference.ts`), not a
+  replacement for the 7-day grid, so a provider who wants the whole week at
+  a glance keeps it.
+- Reuse `bookingsByDate`, `scheduleIssues` and the per-day availability
+  shading that `WeekView` already gets, so the new layout can't disagree
+  with the grid about what's on.

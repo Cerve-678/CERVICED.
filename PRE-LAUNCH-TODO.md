@@ -1310,3 +1310,241 @@ another, and the offer they were promised isn't honoured.
 - Update `docs/PAYMENTS_AND_LOGIC.md` in the same change.
 - Test a promo on a full payment, on a deposit, and in a cart with several
   providers, checking review screen, payment sheet, receipt and payout agree.
+
+---
+
+## 30. Providers can work out the platform fee from their own booking data (2026-11-03)
+
+**Decide before launch: is this worth fixing?**
+
+The app never shows a provider the platform fee, and the handbook says they
+never see it. But the refund sheet reads `bookings.service_charge` and
+`booking_refunds.amount_pence` / `payout_adjust_pence` directly, and a provider
+is allowed to read those rows. Someone inspecting the app's network traffic
+could see the fee or work it out. Nothing on screen shows it.
+
+This isn't new. Fixing it means changing how the refund sheet loads its data
+(`getProviderRefundState` in `databaseService.ts`), so is that worth doing before
+launch?
+
+- **To fix:** give the sheet a provider-safe database function that returns only
+  the provider's own figures, and stop providers reading those columns directly.
+  Check nothing else provider-side reads them first.
+- **Claude's suggestion, 2026-11-02:** leave it for now. The fee is already shown
+  to clients and it's a small amount.
+
+Found by the security review of PRs #251 and #254.
+
+---
+
+## 31. Booking settings the server doesn't fully enforce (2026-11-03)
+
+Audited against the live database. Window, monthly release, minimum notice,
+working hours, blocked dates, Close Schedule, buffers, deposits, the
+cancellation window and auto-accept are all enforced server-side. These
+aren't, or only partly:
+
+### 31a. Maximum bookings per day is skipped on four paths
+
+`max_bookings_per_day` is checked only in `prepare_checkout` (the live Stripe
+checkout) and `provider_create_manual_booking` (Add Booking). It is not checked
+in:
+
+- `place_reschedule_hold` and a date-changing UPDATE on `bookings`, so a client
+  rescheduling onto a day that's already at the limit goes over it.
+- `invite_next_waitlist_entry`. That's usually fine, since an invite fills a
+  slot a cancellation just freed, but nothing guarantees it.
+- `hold_cart_booking_slots`, the non-Stripe checkout path. It isn't used while
+  Stripe checkout is on.
+
+**To fix:** move the count into `enforce_booking_bookability` so every insert,
+and every date change, is checked once. Exempt `bypass_scheduling_policy` (the
+provider's own override) and a time-only change on the same day. The
+reschedule picker and the cart already hide full days app-side
+(`countProviderBookingsOnDates`), so this is the server backstop.
+
+### 31b. A service's minimum age is shown but never checked
+
+`services.min_age` shows on the profile as "Minimum age 16" and nothing stops a
+younger client booking it. Enforcing it means checking the client's date of
+birth (`users.date_of_birth`) at checkout.
+
+**Decide first (product/legal, not engineering):** whether to use DOB for this,
+what to show a client who's too young, and what the Terms say about age. See
+`LEGAL-COMPLIANCE-NOTES.md` on age verification. A DOB check only proves what
+the client typed in.
+
+### 31c. "Accepting new clients: No / Waitlist only" does nothing
+
+Providers set this on the Scheduling screen (`providers.accepts_new_clients`:
+yes / waitlist / no), but nothing reads it: a provider on "No" can be booked by
+anyone. Live on 2026-11-03: 2 providers say yes and 10 have never set it, so
+enforcing it changes no one's bookings on day one.
+
+**Plan (agreed with the owner 2026-11-03, parked here rather than built):**
+
+1. **One "existing client" check** in the database, used by both the app and
+   the server. Decided: **a no-show alone does not make someone an existing
+   client.** Still to decide: which bookings count. The suggestion is any
+   booking the provider accepted (completed, upcoming confirmed, in progress),
+   but not cancelled, declined or never-accepted requests. The alternative is
+   completed appointments only.
+2. **The server enforces it** in `enforce_booking_bookability`: on "No" or
+   "Waitlist only", a client who isn't an existing client is refused with
+   "This provider isn't taking new clients right now". These still go through:
+   the provider's own Add Booking, moving an existing booking, and a waitlist
+   invite (how a new client gets in under "Waitlist only").
+3. **The client sees:** an existing client books as normal. A new client gets a
+   note and no Book buttons under "No", and "Join the waitlist" in place of
+   Book under "Waitlist only" (the existing `provider_waitlist`). Search keeps
+   these providers in results with an "Existing clients only" label.
+4. **Checks:** tests for the existing-client rule and each mode, the trigger
+   rejections, and the security/booking reviews.
+
+### 31d. Consultation required for new clients
+
+Already item 16: built client-side but no screen can turn it on. It needs the
+same existing-client check as 31c, so build that once and reuse it.
+
+### 31e. Slot interval isn't a server rule
+
+`slot_interval_mins` only decides which start times the picker offers. The
+server accepts any start time inside working hours. That's harmless while all
+bookings come through the picker. Low priority.
+
+### 31f. Information only, by design
+
+Who you take (`clientele`), travel radius and service areas, patch test policy
+wording, walk-ins and group bookings are shown to clients, not enforced. Travel
+radius is the one that may matter: a mobile provider can be booked to an
+address outside their radius. Decide whether that should be checked against
+the client's address at checkout.
+
+### 31g. Search's "available today" dots ignore minimum notice for "Any time" booking windows (found 2026-11-10)
+
+In live `get_providers_availability` the slot filter reads
+`booking_window_days <= 0 OR day <= today + window AND start >= now + notice`.
+AND binds tighter than OR, so for a provider whose booking window is "Any
+time" (0) the notice check never runs. A provider with 24h notice and no
+window limit can show "Available today" in Search for a slot nobody can
+actually book (the booking trigger and the picker both refuse it correctly).
+Display-only, no wrong bookings. Fix: bracket the OR so notice applies to
+everyone. Migration `20261110140000` kept the existing meaning on purpose
+(it bracketed the whole clause unchanged), so this is still open.
+
+## 32. Review later — which bookings still unlock a client's beauty profile (2026-11-08)
+
+Since `get_client_beauty_profile_for_booking` (migration 20261108190000, PR
+#342), a provider only gets the part of a client's Beauty Profile that fits the
+booked service, plus allergies, medical notes and photography consent.
+
+Still open: **any** booking with that provider unlocks it, whatever its state
+or age. A cancelled booking, a declined or never-accepted request, and a
+booking from years ago all still let the provider read the client's allergies
+and medical notes. This is the same as before #342.
+
+Decide whether access should end when a booking is cancelled or declined, and
+whether it should lapse after a set time (for example, some months after the
+appointment). Parked by the user on 2026-11-08: "leave for now but put in to
+do review future". Raised by the security review of #342.
+
+## 33. To do — make a second copy of the same form impossible in the database (2026-11-18)
+
+A client should never get the same form twice for one booking. Today the app
+makes sure of it (PRs #598, #607):
+
+- the Forms client list shows "Already has this form" and won't let you tick it;
+- sending skips any booking that already has the form, or one with the same name;
+- the booking page only offers forms that booking doesn't have;
+- auto-send never adds a form to a booking that already has one.
+
+What's missing is a database rule, like info packs already have
+(`booking_info_packs` is unique on `booking_id, info_pack_id`). Without it, two
+phones sending the same form to the same appointment at the same instant could
+both get through. Live had no duplicates on 2026-11-18.
+
+The fix:
+
+1. A unique index on `booking_intake_forms (booking_id, library_form_id)`.
+   Rows with no library form (NULL) aren't affected.
+2. `ON CONFLICT DO NOTHING` on the two auto-send inserts
+   (`handle_auto_send_intake_form`, `apply_hold_claimed_side_effects`), so the
+   rule can never make a booking fail to confirm. Redefine both from live with
+   md5 guards.
+3. `sendLibraryFormToBookings` switches to an upsert that ignores duplicates,
+   and only notifies the clients whose form was really added.
+
+Parked by the user on 2026-11-18: "put it in to do". Needs a migration (check
+`supabase/MIGRATION_OWNER.md`) and a forced-rollback dry run before applying.
+
+## 34. To do — make the waitlist match the user's design (2026-11-19)
+
+The user says the waitlist that's built isn't the one they designed. The
+design board is the In-App Waitlist artifact:
+https://claude.ai/artifact/Nt2QjLCdj5etrvJ93zaTyh
+
+**Client side (the user's words, 2026-11-18):** "I am supposed to have a tick
+in the provider's page, it's not supposed to be in Bookings."
+
+What's built today (#474):
+
+- On the provider's page, a waitlisted service shows a "2nd in line ✕" chip
+  (✕ leaves the waitlist), or "Held for you" when a slot is being held. Since
+  #663 it is drawn in `src/features/providers/page/ProviderPageServices.tsx`;
+  the screen only passes `waitlistPlaces`, `onLeaveWaitlist`,
+  `onJoinWaitlist` and `onOpenHeldPlace`.
+- The client's Bookings tab has a "WAITING FOR" section of place cards
+  (`src/features/bookings/WaitlistPlaceCard.tsx`).
+
+On 2026-11-10 the user picked idea B, "Waiting lives in Bookings", from that
+artifact, which is why the Bookings section exists. No mockup on the board
+shows a tick on the provider page. So the request may reverse that pick.
+**Ask before building:**
+
+1. Is it only a tick ("✓ On the waitlist") on the service, with the Bookings
+   section kept? Or does the waitlist come out of Bookings completely, so the
+   provider page is the only place?
+2. If it leaves Bookings: where does a client see a slot being held for
+   them, and pay for it? Today that's the "Held for you" card in Bookings plus
+   the waitlist alert.
+3. How does a client leave the waitlist, if the ✕ is replaced by a tick?
+
+Offer a side-by-side mockup (light and dark) built from the current code,
+before writing any code.
+
+**Provider side drifts from design B too** (provider waitlist cards on the To
+Do tab, `ProviderBookingHistoryScreen.tsx`):
+
+- no countdown bar while a slot is held for someone;
+- the button says "Leave it open" where the design says "Open to everyone";
+- no next person's name ("Offer it to Jo");
+- no dates under the client's name.
+
+Fix these after the client side is settled, so both sides come from one
+pass over the same board.
+
+Context: the provider is told when someone joins (#636, "Mini Manicure ·
+3rd in line" / "Faith joined your waitlist."). Any wording change on the
+client side should stay consistent with that alert.
+
+Parked by the user on 2026-11-19: "put waitlist stuff in to do with artifact
+and all". No migration expected for the client tick alone.
+
+## 35. To do — keep the "unread in your other mode" line live (2026-11-19)
+
+When the Notifications list is empty, it can say "You're all caught up here —
+but you have 3 unread in client mode." That number is fetched once, when the
+screen opens (`otherHatUnread` in `src/screens/shared/NotificationsScreen.tsx`).
+If a notification for the other hat arrives while you're on the screen, the
+line doesn't change until you open it again.
+
+Nothing is lost and every bell is right; it's cosmetic.
+
+The fix: replace the one-off fetch with the shared hook the bells already use,
+`useUnreadNotificationCount(isProvider ? 'client' : 'provider', hasOtherHat)`
+(`src/features/notifications/useUnreadNotificationCount.ts`, #665). App only,
+no migration.
+
+Found in the 2026-11-19 sweep for gaps between the two hats (after #665 and
+#666); that sweep found nothing else. Parked by the user on 2026-11-19: "put
+in to do".

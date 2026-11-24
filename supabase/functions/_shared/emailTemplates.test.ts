@@ -29,9 +29,12 @@ import {
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
+  recoveryCodeEmail,
   refundRequestedProviderEmail,
   payoutFailedSupportEmail,
+  bankDisputeSupportEmail,
   moneySummaryEmail,
+  signupCodeEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
@@ -110,11 +113,16 @@ const every = () => [
     }),
   ],
   [
+    'bankDisputeSupportEmail',
+    bankDisputeSupportEmail({ title: HOSTILE, amount: HOSTILE, reason: HOSTILE, bookings: [HOSTILE], nextStep: HOSTILE }),
+  ],
+  [
     'moneySummaryEmail',
     moneySummaryEmail({
       failed: [{ title: HOSTILE, amount: HOSTILE }],
       owed: [{ title: HOSTILE, amount: HOSTILE }],
       refunds: [{ title: HOSTILE, amount: HOSTILE }],
+      unsentRefunds: [{ title: HOSTILE, amount: HOSTILE }],
     }),
   ],
 ] as Array<[string, { subject: string; html: string }]>;
@@ -211,20 +219,20 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Cerviced platform fee');
     expect(html).toContain('£74.99');
     expect(html).toContain('Paid in full');
-    expect(html).not.toContain('Due to provider');
+    expect(html).toContain('Due at Appointment');
+    expect(html).toContain('£0.00');
   });
 
   it('tells a client who paid in full that they paid, using the status the database stores', () => {
     const { html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'fully_paid' });
     expect(html).toContain('Paid in full');
-    expect(html).toContain('Paid today');
+    expect(html).toContain('>Paid<');
     expect(html).toContain('£74.99');
     expect(html).not.toContain('Awaiting payment');
-    expect(html).not.toContain('Total paid');
     expect(html).not.toContain('Due to provider');
   });
 
-  it("shows a deposit as the provider's own figure, with the balance due", () => {
+  it('shows a deposit as what left the card and what remains', () => {
     const { html } = bookingConfirmationEmail({
       ...BOOKING,
       paymentType: 'deposit',
@@ -232,11 +240,35 @@ describe('booking confirmation money', () => {
       depositAmount: 20,
       amountPaid: 21.99,
     });
-    expect(html).toContain('Deposit paid to provider');
-    expect(html).toContain('£20.00');
-    expect(html).not.toContain('£21.99');
-    expect(html).toContain('Due to provider at appointment');
+    // £65 + £8 add-on + £1.99 fee = £74.99 total; £21.99 paid, £53.00 left.
+    expect(html).toContain('Deposit paid');
+    expect(html).toContain('>Paid (incl. fee)<');
+    expect(html).toContain('£21.99');
+    expect(html).toContain('Due at Appointment');
     expect(html).toContain('£53.00');
+    expect(html).not.toContain('Due to provider');
+  });
+
+  it('lists a paid deposit under the total, with the payment', () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      paymentType: 'deposit',
+      paymentStatus: 'deposit_paid',
+      depositAmount: 20,
+      amountPaid: 21.99,
+    });
+    const depositLine = html.search(/>Deposit paid<\/td>\s*<td[^>]*>£20\.00</);
+    expect(depositLine).toBeGreaterThan(-1);
+    expect(depositLine).toBeGreaterThan(html.indexOf('>Total<'));
+    expect(depositLine).toBeLessThan(html.indexOf('>Paid (incl. fee)<'));
+  });
+
+  it('leaves the deposit line out until the deposit is paid, and on a full payment', () => {
+    const unpaid = bookingConfirmationEmail({
+      ...BOOKING, paymentType: 'deposit', paymentStatus: 'pending', depositAmount: 20, amountPaid: 0,
+    }).html;
+    expect(unpaid).not.toMatch(/>Deposit paid<\/td>/);
+    expect(bookingConfirmationEmail(BOOKING).html).not.toMatch(/>Deposit paid<\/td>/);
   });
 
   it('never calls a hand-added unpaid booking paid in full', () => {
@@ -304,5 +336,50 @@ describe('refundRequestedProviderEmail', () => {
     expect(refundRequestedProviderEmail({ ...base, heldPence: 4500 }).html).toContain('Your £45.00 for this booking is on hold');
     expect(refundRequestedProviderEmail(base).html).not.toContain('on hold');
     expect(refundRequestedProviderEmail({ ...base, heldPence: 0 }).html).not.toContain('on hold');
+  });
+});
+
+// These two are rendered to static HTML that Supabase fills in itself. What must
+// survive is the literal placeholder: escaped or dropped, every user would get a
+// code email with no code in it.
+describe('Supabase Auth code emails', () => {
+  for (const [name, email] of [
+    ['signup', signupCodeEmail()],
+    ['recovery', recoveryCodeEmail()],
+  ] as const) {
+    it(`${name}: puts the code in the subject and the inbox preview`, () => {
+      expect(email.subject).toContain('{{ .Token }}');
+      expect(email.html).toMatch(/\{\{ \.Token \}\} is your CERVICED/);
+    });
+
+    it(`${name}: draws six boxes, and shows the code whole if it is not six digits`, () => {
+      for (let i = 0; i < 6; i++) {
+        expect(email.html).toContain(`{{ slice .Token ${i} ${i + 1} }}`);
+      }
+      // Slicing a shorter token fails the render, and Supabase then sends nothing.
+      const guard = email.html.indexOf('{{ if eq (len .Token) 6 }}');
+      const fallback = email.html.indexOf('{{ else }}');
+      expect(guard).toBeGreaterThan(-1);
+      expect(email.html.indexOf('{{ slice .Token 0 1 }}')).toBeGreaterThan(guard);
+      expect(email.html.indexOf('{{ slice .Token 5 6 }}')).toBeLessThan(fallback);
+      expect(email.html.indexOf('{{ .Token }}', fallback)).toBeGreaterThan(fallback);
+      expect(email.html.indexOf('{{ end }}')).toBeGreaterThan(fallback);
+    });
+
+    it(`${name}: names the address and has no script`, () => {
+      expect(email.html).toContain('{{ .Email }}');
+      expect(email.html).not.toMatch(/<script/i);
+    });
+  }
+
+  it('makes signup and reset different at a glance', () => {
+    const accentBox = 'bgcolor="#5C4033"';
+    expect(recoveryCodeEmail().html).toContain(accentBox);
+    expect(signupCodeEmail().html).not.toContain(accentBox);
+  });
+
+  it('does not tell someone they have an account when they may not', () => {
+    expect(signupCodeEmail().html).not.toContain('you have a CERVICED account');
+    expect(recoveryCodeEmail().html).not.toContain('you have a CERVICED account');
   });
 });

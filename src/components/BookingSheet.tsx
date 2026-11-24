@@ -19,7 +19,7 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
-import type { ScrollViewInstance } from 'react-native';
+import type { ScrollViewInstance, TextInputInstance } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from './SafeArea';
@@ -42,8 +42,13 @@ import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerT
 import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
+import { policyImageUrls } from '../features/providers/policyImages';
+import { FullImageViewer } from './FullImageViewer';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { logger } from '../utils/logger';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { durationWithAddOns, formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -117,6 +122,8 @@ export interface BookingSheetAddOn {
   name: string;
   price: number;
   description?: string;
+  /** Minutes this add-on adds to the appointment. */
+  extraMinutes?: number;
 }
 
 export interface BookingSheetService {
@@ -130,7 +137,7 @@ export interface BookingSheetService {
 }
 
 export interface BookingSheetResult {
-  selectedAddOns: { id: string | number; name: string; price: number }[];
+  selectedAddOns: ChosenAddOn[];
   date: string;
   time: string;
   notes: string;
@@ -153,7 +160,7 @@ export interface BookingSheetResult {
   emergencyRequest?: EmergencyRequest;
 }
 
-interface BookingSheetProps {
+export interface BookingSheetProps {
   isVisible: boolean;
   onClose: () => void;
   mode: 'add' | 'edit';
@@ -175,6 +182,9 @@ interface BookingSheetProps {
    *  edits their policy later. Caller already has this loaded (e.g.
    *  ProviderProfileScreen's own Policy tab reads the same data). */
   bookingPolicies?: Record<string, unknown> | null;
+  /** Show the provider's policy pictures as a card on the last step. Only
+   *  for providers using a page template; the default layout is unchanged. */
+  showPolicyPagesCard?: boolean;
   adaptiveAccentColor: string;
   /** Sheet's background colour — always the caller's own content-backdrop
    *  colour (e.g. the provider's card colour, or the cart's card colour),
@@ -183,7 +193,7 @@ interface BookingSheetProps {
   backgroundColor: string;
   initial?:
     | {
-        selectedAddOns?: { id: string | number; name: string; price: number }[] | undefined;
+        selectedAddOns?: ChosenAddOn[] | undefined;
         selectedDate?: string | undefined;
         selectedTime?: string | undefined;
         notes?: string | undefined;
@@ -200,6 +210,9 @@ interface BookingSheetProps {
    *  it, above the main service's, and both are scheduled together on
    *  submit. Caller adds both as separate cart items. */
   consultationRequired?: BookingSheetService | null;
+  /** The last step's button in mode="add". The app adds to its Cart; the
+   *  website has no cart and goes straight on to paying (src/web). */
+  submitLabel?: string;
   onSubmit: (result: BookingSheetResult) => void;
 }
 
@@ -213,10 +226,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   providerKey,
   providerServiceCategory,
   bookingPolicies,
+  showPolicyPagesCard = false,
   adaptiveAccentColor,
   backgroundColor,
   initial,
   consultationRequired,
+  submitLabel,
   onSubmit,
 }) => {
   const insets = useSafeAreaInsets();
@@ -238,9 +253,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     [adaptiveAccentColor]
   );
 
-  const [selectedAddOns, setSelectedAddOns] = useState<
-    { id: string | number; name: string; price: number }[]
-  >([]);
+  const [selectedAddOns, setSelectedAddOns] = useState<ChosenAddOn[]>([]);
+  // The appointment's real length: the service plus its add-ons' extra
+  // time. Everything that finds or checks a time uses this, not
+  // service.duration, so a client is only offered times it fits in.
+  const appointmentDuration = useMemo(
+    () => durationWithAddOns(service?.duration ?? '', selectedAddOns),
+    [service?.duration, selectedAddOns],
+  );
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
@@ -266,6 +286,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   //   confirm — the full booking read back, and the terms gate
   // "addons" stays first and stays conditional, exactly as before.
   const [step, setStep] = useState<BookingStep>('when');
+  const [serviceDetailsExpanded, setServiceDetailsExpanded] = useState(false);
 
   const resolvedOnce = useRef(false);
   const depositFetched = useRef(false);
@@ -304,6 +325,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [fetchedBookingPolicies, setFetchedBookingPolicies] =
     useState<Record<string, unknown> | null>(null);
   const effectiveBookingPolicies = bookingPolicies ?? fetchedBookingPolicies;
+  // Their uploaded policy pages, shown again on the last step so the client
+  // has them in front of them before adding the booking. Reading only — the
+  // tick that records agreement is the Terms one below and the cart's own.
+  const policyPages = useMemo(() => policyImageUrls(effectiveBookingPolicies), [effectiveBookingPolicies]);
+  const [showPolicyPages, setShowPolicyPages] = useState(false);
   const emergencyPolicyText =
     typeof effectiveBookingPolicies?.['emergencyBookingPolicy'] === 'string'
       ? (effectiveBookingPolicies['emergencyBookingPolicy'] as string).trim()
@@ -316,18 +342,48 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
   }, []);
 
+  // Notes sits closest to the pinned footer, so the keyboard can land on top
+  // of it. The nudge used to be a flat 80pt, which wasn't enough when Notes was
+  // low on screen — the client typed blind. Measure where the box actually is
+  // against where the keyboard actually starts, and scroll by the overlap.
+  const notesInputRef = useRef<TextInputInstance>(null);
+  const notesFocused = useRef(false);
+  const keyboardTop = useRef<number | null>(null);
+  const nudgeNotesAboveKeyboard = useCallback(() => {
+    if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
+    notesScrollTimer.current = setTimeout(() => {
+      const top = keyboardTop.current;
+      if (!notesFocused.current || top == null) return;
+      notesInputRef.current?.measureInWindow((_x, y, _width, height) => {
+        // The character count under the box should stay readable too.
+        const overlap = y + height + 32 - top;
+        if (overlap > 0) {
+          scrollRef.current?.scrollTo({
+            y: scrollOffsetY.current + overlap,
+            animated: true,
+          });
+        }
+      });
+    }, 100);
+  }, []);
+
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSubscription = Keyboard.addListener(showEvent, (event) => {
       setKeyboardHeight(event.endCoordinates.height);
+      keyboardTop.current = event.endCoordinates.screenY;
+      nudgeNotesAboveKeyboard();
     });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      keyboardTop.current = null;
+    });
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, []);
+  }, [nudgeNotesAboveKeyboard]);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
   useEffect(() => {
@@ -341,6 +397,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setConsultationDate('');
     setConsultationTime('');
     setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'when');
+    setServiceDetailsExpanded(false);
     resolvedOnce.current = false;
     depositFetched.current = false;
     termsFetched.current = false;
@@ -368,10 +425,13 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   useEffect(() => {
     if (!isVisible || !service || resolvedOnce.current) return;
     if (initial?.selectedDate && initial?.selectedTime) { resolvedOnce.current = true; return; }
+    // Wait until the add-ons are chosen: an add-on can make the appointment
+    // longer, and a time picked for the service alone may not fit it.
+    if (step === 'addons') return;
     resolvedOnce.current = true;
     setIsResolvingSlot(true);
     const uuidServiceId = service.dbId && UUID_RE.test(service.dbId) ? service.dbId : undefined;
-    AvailabilityService.resolveNextAvailableSlot(providerIdentifier, service.duration, uuidServiceId)
+    AvailabilityService.resolveNextAvailableSlot(providerIdentifier, appointmentDuration, uuidServiceId)
       .then(slot => {
         if (slot) {
           setSelectedDate(slot.date);
@@ -380,7 +440,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       })
       .catch(error => logger.error('Error auto-resolving next available slot:', error))
       .finally(() => setIsResolvingSlot(false));
-  }, [isVisible, service, providerIdentifier, initial?.selectedDate, initial?.selectedTime]);
+  }, [isVisible, service, providerIdentifier, initial?.selectedDate, initial?.selectedTime, step, appointmentDuration]);
 
   // Same auto-resolve, for the required consultation's own slot — always
   // resolved fresh (a consultation is never pre-filled via `initial`, it's
@@ -460,7 +520,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const toggleAddOn = useCallback((addOn: BookingSheetAddOn) => {
     setSelectedAddOns(prev => {
       const exists = prev.find(a => a.id === addOn.id);
-      return exists ? prev.filter(a => a.id !== addOn.id) : [...prev, { id: addOn.id, name: addOn.name, price: addOn.price }];
+      return exists
+        ? prev.filter(a => a.id !== addOn.id)
+        : [...prev, { id: addOn.id, name: addOn.name, price: addOn.price, extraMinutes: addOn.extraMinutes ?? 0 }];
     });
   }, []);
 
@@ -707,9 +769,24 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 ? 'Choose Add-ons'
                 : mode === 'add' ? 'Book Service' : 'Edit Booking'}
             </Text>
-            <Text style={[styles.headerSubtitle, { color: tokens.sub }]}>
-              {service.name} • £{service.price}
-            </Text>
+            <TouchableOpacity
+              style={styles.serviceDisclosure}
+              onPress={() => setServiceDetailsExpanded(expanded => !expanded)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${service.name}, £${service.price}. Service description`}
+              accessibilityHint={serviceDetailsExpanded ? 'Hide the service description' : 'Show the full service description'}
+              accessibilityState={{ expanded: serviceDetailsExpanded }}
+            >
+              <Text style={[styles.headerSubtitle, { color: tokens.sub }]} numberOfLines={2}>
+                {service.name} · £{service.price}
+              </Text>
+              <Ionicons
+                name={serviceDetailsExpanded ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={adaptiveAccentColor}
+              />
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[styles.closeButton, { backgroundColor: adaptiveAccentColor }]}
@@ -719,6 +796,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             <Text style={[styles.closeButtonText, { color: onAccentColor }]}>✕</Text>
           </TouchableOpacity>
         </View>
+
+        {serviceDetailsExpanded && (
+          <View style={[styles.serviceDescriptionPanel, { borderBottomColor: tokens.border }]}>
+            <Text style={[styles.serviceDescriptionLabel, { color: adaptiveAccentColor }]}>ABOUT THIS SERVICE</Text>
+            <ScrollView style={styles.serviceDescriptionScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+              <Text style={[styles.serviceDescriptionText, { color: tokens.text }]}>
+                {service.description?.trim() || 'No description has been added for this service yet.'}
+              </Text>
+            </ScrollView>
+          </View>
+        )}
 
         <StepProgress
           current={step}
@@ -765,7 +853,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         <Text style={[styles.addOnDescription, { color: tokens.sub }]}>{addOn.description}</Text>
                       )}
                     </View>
-                    <Text style={[styles.addOnPrice, { color: adaptiveAccentColor }]}>+£{addOn.price}</Text>
+                    <View style={styles.addOnPriceColumn}>
+                      <Text style={[styles.addOnPrice, { color: adaptiveAccentColor }]}>+£{addOn.price}</Text>
+                      {!!addOn.extraMinutes && (
+                        <Text style={[styles.addOnTime, { color: tokens.sub }]}>{formatAddOnExtraTime(addOn.extraMinutes)}</Text>
+                      )}
+                    </View>
                     <View
                       style={[
                         styles.addOnCheckbox,
@@ -795,7 +888,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     selectedAddOns.map(a => (
                       <View key={a.id} style={styles.addOnSummaryRow}>
                         <Text style={[styles.addOnSummaryName, { color: tokens.text }]}>{a.name}</Text>
-                        <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>+£{a.price}</Text>
+                        <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>
+                          +£{a.price}{a.extraMinutes ? ` · ${formatAddOnExtraTime(a.extraMinutes)}` : ''}
+                        </Text>
                       </View>
                     ))
                   ) : (
@@ -850,7 +945,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   allowRequests={EMERGENCY_BOOKINGS_ENABLED}
                   providerLabel={providerDisplayName}
                   providerName={providerIdentifier}
-                  serviceDuration={service.duration}
+                  serviceDuration={appointmentDuration}
                   accentColor={adaptiveAccentColor}
                   textColor={tokens.text}
                   subColor={tokens.sub}
@@ -945,6 +1040,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add notes</Text>
                 <TextInput
+                  ref={notesInputRef}
                   style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
                   value={notes}
                   onChangeText={setNotes}
@@ -954,16 +1050,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   numberOfLines={4}
                   maxLength={500}
                   onFocus={() => {
-                    // Notes sits closest to the payment summary. Give it a
-                    // small nudge when typing starts, without moving promo
-                    // code or avoiding the keyboard across the whole sheet.
-                    if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
-                    notesScrollTimer.current = setTimeout(() => {
-                      scrollRef.current?.scrollTo({
-                        y: scrollOffsetY.current + 80,
-                        animated: true,
-                      });
-                    }, 100);
+                    // Notes sits closest to the payment summary. Lift just
+                    // this box clear of the keyboard when typing starts,
+                    // without moving promo code or avoiding the keyboard
+                    // across the whole sheet. When the keyboard is already up
+                    // (coming from another field) no show event follows, so
+                    // nudge from here; otherwise the show event does it.
+                    notesFocused.current = true;
+                    nudgeNotesAboveKeyboard();
+                  }}
+                  onBlur={() => {
+                    notesFocused.current = false;
                   }}
                 />
                 <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
@@ -1050,6 +1147,38 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     told either way.
                   </Text>
                 </View>
+              )}
+
+              {showPolicyPagesCard && policyPages.length > 0 && (
+                <TouchableOpacity
+                  style={[styles.policyPeek, { backgroundColor: withAlpha(tokens.text, 0.05), borderColor: tokens.border }]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setShowPolicyPages(true);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Read ${providerDisplayName}'s policy, ${policyPages.length} ${policyPages.length === 1 ? 'page' : 'pages'}`}
+                >
+                  <View style={styles.policyPeekStack}>
+                    {policyPages.length > 1 ? (
+                      <Image source={{ uri: policyPages[1]! }} style={[styles.policyPeekThumb, styles.policyPeekThumbBack]} contentFit="cover" contentPosition="top" transition={0} />
+                    ) : null}
+                    <Image source={{ uri: policyPages[0]! }} style={styles.policyPeekThumb} contentFit="cover" contentPosition="top" transition={0} />
+                  </View>
+                  <View style={styles.policyPeekText}>
+                    <Text style={[styles.policyPeekTitle, { color: tokens.text }]} numberOfLines={1}>
+                      {providerDisplayName}'s policy
+                    </Text>
+                    <Text style={[styles.policyPeekSub, { color: tokens.sub }]}>
+                      Worth a read before you book
+                    </Text>
+                    <Text style={[styles.policyPeekLink, { color: adaptiveAccentColor }]}>
+                      Read their {policyPages.length === 1 ? 'page' : `${policyPages.length} pages`}
+                    </Text>
+                  </View>
+                  <Text style={[styles.policyPeekChevron, { color: tokens.sub }]}>›</Text>
+                </TouchableOpacity>
               )}
 
               {/* Shown whether or not there's a structured booking policy — a
@@ -1175,7 +1304,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       ? stepBlocker
                       : step === 'confirm'
                       ? (mode === 'add'
-                          ? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart')
+                          ? (submitLabel ?? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart'))
                           : 'Save Changes')
                       : 'Continue'}
                   </Text>
@@ -1267,6 +1396,15 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         </View>
       </Modal>
 
+      {/* Their policy pages, from the card on the last step. A sibling of the
+          sheet's Modal, like the Emergency Booking Policy below. */}
+      <FullImageViewer
+        uris={policyPages}
+        visible={showPolicyPages}
+        onClose={() => setShowPolicyPages(false)}
+        label="Policy document"
+      />
+
       {/* The provider's Emergency Booking Policy — a separate document from
           their Terms & Conditions above. Opened from the "scheduling conflict"
           prompt, so it lands on top of both the sheet and that prompt. */}
@@ -1315,8 +1453,14 @@ const styles = StyleSheet.create({
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
+  // On a computer's browser (the website's /@handle page) the sheet is as wide
+  // as the page under it rather than the whole window. A phone is narrower
+  // than this, so the app is unchanged.
+  sheet: {
+    flex: 1, width: '100%', marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden',
+    ...(Platform.OS === 'web' ? { maxWidth: 480 } : {}),
+  },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -1325,7 +1469,12 @@ const styles = StyleSheet.create({
   backButton: { width: 28, alignItems: 'flex-start', justifyContent: 'center', marginRight: 4 },
   backButtonText: { fontSize: 28, fontWeight: '300', lineHeight: 28 },
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
-  headerSubtitle: { fontSize: 13, marginTop: 4 },
+  headerSubtitle: { fontSize: 13, flexShrink: 1 },
+  serviceDisclosure: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 4, paddingVertical: 4, paddingRight: 8 },
+  serviceDescriptionPanel: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  serviceDescriptionLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
+  serviceDescriptionScroll: { maxHeight: 180 },
+  serviceDescriptionText: { fontSize: 13, lineHeight: 20 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   closeButtonText: { fontSize: 15, fontWeight: '700' },
   body: { flex: 1 },
@@ -1344,7 +1493,9 @@ const styles = StyleSheet.create({
   },
   addOnName: { fontSize: 14, fontWeight: '600' },
   addOnDescription: { fontSize: 12, marginTop: 2 },
-  addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
+  addOnPrice: { fontSize: 13, fontWeight: '700' },
+  addOnPriceColumn: { alignItems: 'flex-end', marginRight: 10 },
+  addOnTime: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   addOnCheckmark: { fontSize: 12, fontWeight: '700' },
   providerTermsBlock: { marginTop: 4 },
@@ -1420,6 +1571,31 @@ const styles = StyleSheet.create({
   },
   doneButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
   submitButtonDisabled: { opacity: 0.5 },
+  policyPeek: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 16,
+  },
+  policyPeekStack: { width: 58, height: 76 },
+  policyPeekThumb: {
+    position: 'absolute',
+    left: 0,
+    top: 4,
+    width: 50,
+    height: 70,
+    borderRadius: 6,
+    backgroundColor: 'rgba(127,127,127,0.15)',
+  },
+  policyPeekThumbBack: { left: 8, top: 0, transform: [{ rotate: '6deg' }], opacity: 0.85 },
+  policyPeekText: { flex: 1, gap: 2 },
+  policyPeekTitle: { fontSize: 14, fontWeight: '700' },
+  policyPeekSub: { fontSize: 12 },
+  policyPeekLink: { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  policyPeekChevron: { fontSize: 22 },
   submitButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,

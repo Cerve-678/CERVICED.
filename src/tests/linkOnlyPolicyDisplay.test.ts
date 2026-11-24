@@ -39,16 +39,18 @@ test('a full provider still sees every row', () => {
 
 test('every profile surface passes the link-only flag', () => {
   const read = (...p: string[]) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
-  expect(read('screens', 'client', 'ProviderProfileScreen.tsx')).toContain('{ linkOnly: isLinkOnly }');
+  expect(read('features', 'providers', 'page', 'ProviderPageSheet.tsx')).toContain('{ linkOnly: isLinkOnly }');
   expect(read('features', 'providers', 'profilePresentation.ts')).toContain('{ linkOnly: provider.isLinkOnly }');
   expect(read('screens', 'provider', 'LinkOnlyHomeScreen.tsx')).toContain('{ linkOnly: true }');
-  expect(read('screens', 'provider', 'ProviderMyProfileScreen.tsx')).toContain("{ linkOnly: myBookingMode === 'external' }");
+  expect(read('screens', 'provider', 'ProviderMyProfileScreen.tsx')).toContain("{ linkOnly: myBookingMode === 'external', showNoDeposit: true }");
 });
 
 test('a link-only save clears what CERVICED would apply or charge', () => {
   const screen = fs.readFileSync(path.join(__dirname, '..', 'screens', 'provider', 'PoliciesScreen.tsx'), 'utf8');
   expect(screen).toContain('...(isLinkOnly ? LINK_ONLY_CLEARED : {})');
-  for (const key of ['cancelPenalty', 'noShowAction', 'lateFee', 'noShowFee']) {
+  for (const key of ['cancelPenalty', 'noShowAction', 'lateFee']) {
     expect(screen).toMatch(new RegExp(`LINK_ONLY_CLEARED[\\s\\S]*${key}: ''`));
   }
+  // The £ no-show fee is retired for everyone (20261113200000): dropped on load.
+  expect(screen).toContain("delete (merged as Record<string, unknown>)['noShowFee'];");
 });

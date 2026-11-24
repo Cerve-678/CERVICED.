@@ -36,7 +36,11 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "READ_CONTACTS"
+      ],
+      "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS"
       ],
       "config": {
         "googleMaps": {
@@ -46,8 +50,15 @@
     },
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "CERVICED",
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
       "expo-video",
       "expo-font",
@@ -66,12 +77,24 @@
         }
       ],
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "Find friends who are already on CERVICED. Your address book is never saved."
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow CERVICED to use Face ID for faster sign-in."
         }
       ],
       "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.357077853920-ql1jouphva11936c33cmp2u2jbgd0bm3"
+        }
+      ],
       "@sentry/react-native",
       [
         "@sentry/react-native/expo",
@@ -100,7 +123,15 @@
       "expo-image",
       "expo-sharing",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

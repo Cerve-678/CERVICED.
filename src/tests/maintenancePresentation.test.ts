@@ -1,5 +1,4 @@
 import {
-  categoryOf,
   learnedWeeks,
   rhythmLineFor,
   snoozedDueOn,
@@ -130,11 +129,5 @@ describe('Your rhythm helpers', () => {
     // learned_* is kept on provider rows too; the line must still be the provider's.
     expect(rhythmLineFor(item({ intervalSource: 'provider', repeatWeeks: 6, learnedDays: 21, learnedFrom: 4 })))
       .toEqual({ kind: 'provider', weeks: 6, provider: 'Lash Lab' });
-  });
-
-  it('files items under their type\'s category; take-downs are hair, events are other', () => {
-    expect(categoryOf(item({ typeKey: 'waxing' }))).toBe('AESTHETICS');
-    expect(categoryOf(item({ kind: 'takedown', typeKey: null }))).toBe('HAIR');
-    expect(categoryOf(item({ kind: 'event', typeKey: null }))).toBeNull();
   });
 });

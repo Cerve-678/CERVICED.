@@ -57,6 +57,8 @@ interface MasonryGridProps<T> {
   columnGap?: number;
   contentPadding?: number;
   ListHeaderComponent?: React.ReactNode;
+  // Rendered under the columns, e.g. a spinner while the next page loads.
+  ListFooterComponent?: React.ReactNode;
   ListEmptyComponent?: React.ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -80,6 +82,7 @@ function MasonryGridInner<T>(
     columnGap = spacing.sm,
     contentPadding = spacing.lg,
     ListHeaderComponent,
+    ListFooterComponent,
     ListEmptyComponent,
     refreshing,
     onRefresh,
@@ -242,6 +245,7 @@ function MasonryGridInner<T>(
           </View>
         ))}
       </View>
+      {ListFooterComponent}
     </Animated.ScrollView>
   );
 }

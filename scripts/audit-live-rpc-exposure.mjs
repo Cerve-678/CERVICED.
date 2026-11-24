@@ -14,7 +14,8 @@ const contracts = [
   { name: 'dev_reset_client', arguments: '', allowed: ['authenticated'] },
   { name: 'expire_cart_holds', arguments: '', allowed: [] },
   { name: 'expire_waitlist_holds', arguments: '', allowed: [] },
-  { name: 'get_client_beauty_profile_for_provider', arguments: 'p_client_user_id uuid', allowed: ['authenticated'] },
+  { name: 'get_client_beauty_profile_for_booking', arguments: 'p_booking_id uuid', allowed: ['authenticated'] },
+  { name: 'beauty_profile_fields_for_category', arguments: 'p_category text', allowed: [] },
   { name: 'get_promotion_audience', arguments: 'p_promotion_id uuid', allowed: ['authenticated'] },
   {
     name: 'get_provider_busy_spans',

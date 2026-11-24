@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useStackHidesTabBar } from '../../navigation/tabBarVisibility';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +54,10 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   const { palette: OP } = useTheme();
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
+  const insets = useSafeAreaInsets();
+  // Opened from Settings → Inbox or Home → Quick Access → Inbox there is no tab
+  // bar to clear, only the home indicator.
+  const tabBarHidden = useStackHidesTabBar();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -215,7 +221,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
                 : [styles.bubbleProvider, { backgroundColor: OP.surface, borderColor: OP.border }],
             ]}
           >
-            <Text style={[styles.bubbleText, { color: isMine ? '#fff' : OP.text }]}>
+            <Text style={[styles.bubbleText, { color: isMine ? OP.onAccent : OP.text }]}>
               {item.content}
             </Text>
           </View>
@@ -305,7 +311,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         <View style={[styles.inputRow, {
           backgroundColor: OP.bg,
           borderTopColor: OP.border,
-          paddingBottom: keyboardVisible ? 10 : FLOATING_TAB_BAR_CLEARANCE,
+          paddingBottom: keyboardVisible ? 10 : tabBarHidden ? Math.max(insets.bottom, 10) : FLOATING_TAB_BAR_CLEARANCE,
         }]}>
           <TextInput
             style={[styles.input, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}
@@ -324,9 +330,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             activeOpacity={0.75}
           >
             {sending ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={OP.onAccent} />
             ) : (
-              <Ionicons name="arrow-up" size={20} color="#fff" />
+              <Ionicons name="arrow-up" size={20} color={OP.onAccent} />
             )}
           </TouchableOpacity>
         </View>

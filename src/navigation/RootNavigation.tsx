@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { CommonActions, NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import * as Notifications from 'expo-notifications';
 import ClientTabNavigation from './client/ClientTabNavigator';
@@ -14,7 +14,7 @@ import { openProviderProfileLink, type ProviderProfileLinkOutcome } from './open
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
-import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
+import { parseProviderProfileDeepLink } from '../utils/providerProfileLink';
 import { useAppDialog } from '../components/AppDialog';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
@@ -33,21 +33,20 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
 import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
 import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
+import { useCircleEnabledSync } from '../stores/useCircleStore';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
 const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>, [string, string]> = {
   not_found: ['Profile not found', "This code doesn't match a profile on CERVICED any more."],
-  no_client_hat: [
-    'Open this on a client account',
-    "Profiles open on the client side of CERVICED, and this account doesn't have a client profile yet.",
-  ],
   failed: ["Couldn't open that profile", 'Check your connection and scan the code again.'],
 };
 
 export default function RootNavigation() {
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
+  // Faces of people you follow on provider cards: client hat, signed in only.
+  useCircleEnabledSync(isLoggedIn && activeMode === 'client' && hatState.owned.client);
   const { isDarkMode } = useTheme();
   const { showAlert, DialogHost } = useAppDialog();
 
@@ -139,8 +138,19 @@ export default function RootNavigation() {
     handledConnectReturn.current = connectReturn;
     void requestMode('provider').then(mode => {
       if (mode !== 'provider' || !navigationRef.isReady()) return;
+      // Usually the provider is still on the Payments screen they left for
+      // Stripe from (My Profile, Settings or Home all have one). Hand it the
+      // result there, so its X goes back to where they opened it. Moving them
+      // to the Profile tab's copy put Payments alone on a fresh stack, and X
+      // then fell through to the first tab, the calendar.
+      const current = navigationRef.getCurrentRoute() as { name: string; key: string } | undefined;
+      if (current?.name === 'Payments') {
+        navigationRef.dispatch({ ...CommonActions.setParams({ stripeReturn: connectReturn }), source: current.key });
+        return;
+      }
+      // initial: false keeps the Profile tab's root under Payments (see navigateNested).
       navigationRef.navigate('MainTabs', {
-        screen: 'Profile', params: { screen: 'Payments', params: { stripeReturn: connectReturn } },
+        screen: 'Profile', params: { screen: 'Payments', initial: false, params: { stripeReturn: connectReturn } },
       } as never);
     });
   }, [connectReturn, isNavReady, isLoggedIn, isLoading, pendingReactivation]);

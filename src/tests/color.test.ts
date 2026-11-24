@@ -1,5 +1,5 @@
 import { toArgbHex } from '../utils/color';
-import { clientLightTheme, clientDarkTheme } from '../constants/theme';
+import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 
 describe('toArgbHex', () => {
   it('converts the rgba() palette tokens Stripe rejects', () => {
@@ -38,5 +38,29 @@ describe('toArgbHex', () => {
         expect(toArgbHex(palette[token])).toMatch(/^#[0-9A-F]{8}$/);
       }
     }
+  });
+});
+
+describe('text on a solid accent fill', () => {
+  const channel = (value: number) => {
+    const c = value / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    return 0.2126 * channel(r!) + 0.7152 * channel(g!) + 0.0722 * channel(b!);
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi! + 0.05) / (lo! + 0.05);
+  };
+
+  it.each([
+    ['provider light', lightTheme],
+    ['provider dark', darkTheme],
+    ['client light', clientLightTheme],
+    ['client dark', clientDarkTheme],
+  ])('is readable on the %s palette', (_name, palette) => {
+    expect(contrast(palette.onAccent, palette.accent)).toBeGreaterThanOrEqual(4.5);
   });
 });

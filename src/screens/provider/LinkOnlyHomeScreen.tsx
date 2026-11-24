@@ -9,14 +9,19 @@
  *    publishes them on (logo, About, opening hours, a portfolio photo)
  *  - once live, tiles: Book taps this week (→ Analytics), new enquiries
  *    (→ Messages), saves (+ new this week), profile views and "Said they
- *    booked" (clients who answered Yes to "Did you book?"); and one fact
+ *    booked" (clients who answered Yes to "Did you book?"); join nudges
+ *    (clients who tapped Nudge on their profile) over the last 90 days,
+ *    always shown, even at 0, so they know clients can ask; and one fact
  *    from their own numbers from Becca
  *  - their whole week, one line per day, from the phone's calendar (DiaryCard)
  *  - once live, Profile strength: the next missing thing, the rest on a tap
  *  - their Book button's link, with Test it and Change link
  *  - once live, their most-saved photo, if anyone has saved one
  *  - shortcuts: Add work, Hours, Branding
- *  - Becca as a floating button, above the tab bar
+ *  - last, a quiet "Become a full member" card (BecomeFullMemberSheet)
+ *  - Becca as a floating button, above the tab bar, and beside it, once
+ *    clients have nudged them enough (joinNudgeBarCount), a bar that opens the
+ *    same sheet; closing it holds until another batch of nudges arrives
  *
  * No Announcements: the product owner removed them for link-only pros
  * (2026-10-19).
@@ -24,11 +29,14 @@
  * Product rules: docs/vault/Link-Only Providers.md. Design B (chosen
  * 2026-10-19): https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
  */
+import { policyImageUrls } from '../../features/providers/policyImages';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -47,12 +55,14 @@ import {
   type LinkOnlyDashboardExtras,
   type ProviderEnquirySummary,
 } from '../../services/databaseService';
-import { lastSevenDaysOfBookTaps, type DayBar } from '../../features/providers/linkOnlyAnalytics';
+import { lastSevenDaysOfBookTaps, sumLinkOnlyStats, type DayBar } from '../../features/providers/linkOnlyAnalytics';
 import {
   buildProfileStrength,
   busiestBookTapLine,
   compareWeeks,
   greetingFor,
+  joinNudgeBarCount,
+  JOIN_NUDGE_WINDOW_DAYS,
   remainingStepsLine,
   todayHoursLabel,
   trendLabel,
@@ -61,8 +71,8 @@ import {
 } from '../../features/providers/linkOnlyDashboard';
 import { displayExternalBookingUrl, openExternalBookingPage } from '../../features/providers/externalBookingLink';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
-import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV } from '../../utils/dateUtils';
-import type { DbProvider } from '../../types/database';
+import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV, dateToYMD } from '../../utils/dateUtils';
+import type { DbProvider, DbProviderDailyStat } from '../../types/database';
 import {
   buildLinkOnlyGoLiveSteps,
   fetchLinkOnlyGoLiveStatus,
@@ -70,6 +80,9 @@ import {
   type LinkOnlyGoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
 import { DiaryCard } from '../../features/providers/DiaryCard';
+import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
+import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS } from '../../constants/fullMembership';
+import { joinNudgeBarDismissedKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
 
@@ -112,6 +125,10 @@ export default function LinkOnlyHomeScreen() {
   const [hasRow, setHasRow] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
+  const [statRows, setStatRows] = useState<DbProviderDailyStat[]>([]);
+  // undefined = not read yet, so the nudge bar can't flash before we know.
+  const [nudgeBarDismissedYmd, setNudgeBarDismissedYmd] = useState<string | null | undefined>(undefined);
+  const [showFullMemberSheet, setShowFullMemberSheet] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,9 +152,11 @@ export default function LinkOnlyHomeScreen() {
           await Promise.all([
             (async () => {
               try {
-                // Two weeks, so this week can be compared with the last.
-                const [rows, savers] = await Promise.all([getMyProviderDailyStats(14), getMyProviderSaverCount()]);
+                // Long enough for the join-nudge count; the week tiles only
+                // read the last fortnight of it.
+                const [rows, savers] = await Promise.all([getMyProviderDailyStats(JOIN_NUDGE_WINDOW_DAYS), getMyProviderSaverCount()]);
                 if (!active) return;
+                setStatRows(rows);
                 setWeek({ comparison: compareWeeks(rows, today), bars: lastSevenDaysOfBookTaps(rows, today), savers });
                 setWeekFailed(false);
               } catch (error) {
@@ -173,6 +192,17 @@ export default function LinkOnlyHomeScreen() {
                 logger.error('[LinkOnlyHome] dashboard extras load failed', error);
               }
             })(),
+            (async () => {
+              if (!user?.id) return;
+              try {
+                const dismissed = await AsyncStorage.getItem(joinNudgeBarDismissedKey(user.id));
+                if (active) setNudgeBarDismissedYmd(dismissed);
+              } catch (error) {
+                // Unreadable storage just means the bar can show.
+                logger.warn('[LinkOnlyHome] nudge bar dismissal read failed', error);
+                if (active) setNudgeBarDismissedYmd(null);
+              }
+            })(),
           ]);
         } catch (error) {
           logger.error('[LinkOnlyHome] load failed', error);
@@ -180,7 +210,7 @@ export default function LinkOnlyHomeScreen() {
         }
       })();
       return () => { active = false; };
-    }, []),
+    }, [user?.id]),
   );
 
   const steps = status ? buildLinkOnlyGoLiveSteps(status) : [];
@@ -231,7 +261,7 @@ export default function LinkOnlyHomeScreen() {
       instagram: profile.instagram,
       policiesSet:
         buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours, { linkOnly: true }).length > 0 ||
-        !!profile.booking_policies?.policyImageUrl,
+        policyImageUrls(profile.booking_policies).length > 0,
       accessibilityNotes: profile.accessibility_notes,
       paymentMethods: profile.preferred_payment_methods,
     });
@@ -265,6 +295,31 @@ export default function LinkOnlyHomeScreen() {
       showToast("Your booking link didn't open. Check it in Business Info.", 'error');
     }
   }, [profile?.external_booking_url, showToast]);
+
+  // statRows covers JOIN_NUDGE_WINDOW_DAYS, so this is the 90-day total.
+  const joinNudgeTotal = useMemo(() => sumLinkOnlyStats(statRows).joinNudges, [statRows]);
+  const joinNudgesThisWeek = week?.comparison.thisWeek.joinNudges ?? 0;
+
+  const nudgeBarCount = useMemo(
+    () => (nudgeBarDismissedYmd === undefined ? null : joinNudgeBarCount(statRows, nudgeBarDismissedYmd)),
+    [statRows, nudgeBarDismissedYmd],
+  );
+
+  const openFullMemberSheet = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    setShowFullMemberSheet(true);
+  }, []);
+
+  const dismissNudgeBar = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    const today = dateToYMD(new Date());
+    setNudgeBarDismissedYmd(today);
+    if (!user?.id) return;
+    AsyncStorage.setItem(joinNudgeBarDismissedKey(user.id), today).catch(error => {
+      // Only means the bar may come back on the next visit.
+      logger.warn('[LinkOnlyHome] nudge bar dismissal save failed', error);
+    });
+  }, [user?.id]);
 
   const latest = enquiries?.latest;
   const enquiryPreview = latest?.message
@@ -301,7 +356,7 @@ export default function LinkOnlyHomeScreen() {
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
             </TouchableOpacity>
             {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
+              <LogoCircle uri={logoUrl} framing={profile?.logo_framing} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, styles.avatarEmpty]}>
                 <Text style={styles.avatarText}>{initials}</Text>
@@ -456,6 +511,32 @@ export default function LinkOnlyHomeScreen() {
                   sub="Clients who tapped Book"
                 />
               </View>
+
+              <TouchableOpacity
+                style={[styles.tile, styles.nudgeTile]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Clients are asking you to take bookings on CERVICED: ${week ? joinNudgeTotal : 0} in the last ${JOIN_NUDGE_WINDOW_DAYS} days. See the full CERVICED experience`}
+              >
+                <View style={styles.tileIcon}><Ionicons name="megaphone-outline" size={20} color={P.accent} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.nudgeTitle}>Clients are asking you to take bookings on CERVICED</Text>
+                  {weekFailed ? (
+                    <Text style={styles.tileSub}>Couldn't load your nudges.</Text>
+                  ) : week && joinNudgeTotal > 0 ? (
+                    <Text style={joinNudgesThisWeek > 0 ? styles.trend : styles.tileSub} numberOfLines={1}>
+                      {joinNudgesThisWeek > 0
+                        ? `+${joinNudgesThisWeek} this week`
+                        : `In the last ${JOIN_NUDGE_WINDOW_DAYS} days`}
+                    </Text>
+                  ) : (
+                    <Text style={styles.tileSub} numberOfLines={2}>They can tap Nudge on your profile to ask.</Text>
+                  )}
+                </View>
+                <Text style={[styles.tileNum, styles.nudgeNum]}>{week ? joinNudgeTotal : '–'}</Text>
+                <Ionicons name="chevron-forward" size={16} color={P.sub} />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -556,6 +637,33 @@ export default function LinkOnlyHomeScreen() {
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Branding'); }}
             />
           </View>
+
+          {/* Last on Home, on purpose: always there, never in the way. The
+              nudge bar below is the louder version, once clients ask. */}
+          {hasRow && (
+            <View style={styles.card}>
+              <View style={styles.linkHead}>
+                <View style={styles.tileIcon}><Ionicons name="calendar-outline" size={20} color={P.accent} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>Become a full member</Text>
+                  <Text style={styles.stepHint}>Keep the full price of every booking, and let CERVICED fill your diary.</Text>
+                </View>
+              </View>
+              <View style={styles.offerLine}>
+                <View style={styles.offerChip}><Text style={styles.offerChipText}>{FULL_MEMBER_FREE_MONTHS} MONTHS FREE</Text></View>
+              </View>
+              <TouchableOpacity style={styles.primary} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
+                <Text style={styles.primaryText}>Become a full member</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <Text style={styles.seeAll}>See the full CERVICED experience</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
 
@@ -568,6 +676,26 @@ export default function LinkOnlyHomeScreen() {
       >
         <Ionicons name="sparkles" size={24} color={P.onAccent} />
       </TouchableOpacity>
+
+      {nudgeBarCount != null && (
+        <View style={[styles.nudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE + 13 }]}>
+          <TouchableOpacity style={styles.nudgeBarMain} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
+            <Text style={styles.nudgeBarTitle} numberOfLines={1}>Become a full member</Text>
+            <Text style={styles.nudgeBarSub} numberOfLines={1}>{nudgeBarCount} nudges from clients · {FULL_MEMBER_FREE_LINE}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.nudgeBarClose}
+            onPress={dismissNudgeBar}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Hide"
+          >
+            <Ionicons name="close" size={16} color={P.accent} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <BecomeFullMemberSheet visible={showFullMemberSheet} onClose={() => setShowFullMemberSheet(false)} />
 
       <DialogHost />
     </ThemedBackground>
@@ -711,6 +839,9 @@ const createStyles = (P: HomePalette) =>
     tileRow: { flexDirection: 'row', gap: 8 },
     tile: { flex: 1, backgroundColor: P.card, borderRadius: 20, borderWidth: 1, borderColor: P.border, padding: 14, gap: 3 },
     wideTile: { flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 16 },
+    nudgeTile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    nudgeNum: { marginTop: 0 },
+    nudgeTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 18, fontWeight: '700', color: P.text },
     wideRight: { flex: 1, alignItems: 'flex-end', gap: 8 },
     wideNum: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50, color: P.text, marginTop: 2 },
     tileLoader: { marginVertical: 16, alignSelf: 'flex-start' },
@@ -746,5 +877,15 @@ const createStyles = (P: HomePalette) =>
     shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     shortcut: { height: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.card, flexDirection: 'row', alignItems: 'center', gap: 6 },
     shortcutLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: P.text },
+    offerLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    offerChip: { height: 26, paddingHorizontal: 10, borderRadius: 100, backgroundColor: P.accentDim, justifyContent: 'center' },
+    offerChipText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1, color: P.accent },
+    seeAll: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.accent, textAlign: 'center', paddingVertical: 4 },
+    // Sits left of the Becca button, at the same height.
+    nudgeBar: { position: 'absolute', left: 20, right: 86, height: 54, borderRadius: 100, backgroundColor: P.accent, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, shadowColor: '#26201E', shadowOpacity: 0.26, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+    nudgeBarMain: { flex: 1, justifyContent: 'center', height: '100%' },
+    nudgeBarTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.onAccent },
+    nudgeBarSub: { fontSize: 11, color: P.onAccent, opacity: 0.85, marginTop: 1 },
+    nudgeBarClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.onAccent, alignItems: 'center', justifyContent: 'center' },
     becca: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   });

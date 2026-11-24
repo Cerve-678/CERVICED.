@@ -8,18 +8,20 @@ import {
   Text,
   TouchableOpacity,
   View,
-  StatusBar,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import * as Haptics from 'expo-haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { signInWithAppleIdToken } from '../../services/databaseService';
+import { signInWithAppleIdToken, signInWithGoogleIdToken } from '../../services/databaseService';
 import { useAuth } from '../../contexts/AuthContext';
+import { env } from '../../utils/env';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { openLegalPage } from '../../utils/legalPage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useReducedMotion } from 'react-native-reanimated';
 import WelcomeIntro, { WELCOME_INTRO_TOP_MARGIN } from '../../components/WelcomeIntro';
@@ -40,10 +42,48 @@ export default function WelcomeScreen({ navigation }: Props) {
   // which used to surface a "Sign in failed" alert even though the FIRST
   // call's signInWithIdToken had already succeeded and logged the user in.
   const isAppleInFlightRef = useRef(false);
+  // Same re-entrancy guard as isAppleInFlightRef, for handleGoogleLogin below.
+  const isGoogleInFlightRef = useRef(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  const handleSocialLogin = (provider: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    Alert.alert('Coming soon', `${provider} login will be available soon.`);
+  const handleGoogleLogin = async () => {
+    if (isGoogleInFlightRef.current) return;
+    isGoogleInFlightRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      if (!env.googleSignInEnabled) {
+        Alert.alert('Not available', 'Google sign-in requires a development build.');
+        return;
+      }
+      // @react-native-google-signin/google-signin's native module isn't
+      // bundled in Expo Go — lazy-required the same way App.tsx/CartScreen
+      // guard the Stripe native module, so importing this file never
+      // crashes under Expo Go.
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({
+        webClientId: env.googleWebClientId,
+        ...(env.googleIosClientId ? { iosClientId: env.googleIosClientId } : {}),
+      });
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+      if (response.type === 'cancelled') return;
+      const idToken = response.data?.idToken;
+      if (!idToken) {
+        Alert.alert('Sign in failed', 'No identity token received from Google.');
+        return;
+      }
+      setIsGoogleLoading(true);
+      await signInWithGoogleIdToken(idToken);
+      setIsGoogleLoading(false);
+      // On success, AuthContext.onAuthStateChange handles navigation
+    } catch (e: any) {
+      if (!isLoggedIn) {
+        Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsGoogleLoading(false);
+      isGoogleInFlightRef.current = false;
+    }
   };
 
   const handleAppleLogin = async () => {
@@ -62,7 +102,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         return;
       }
       setIsAppleLoading(true);
-      await signInWithAppleIdToken(credential.identityToken);
+      await signInWithAppleIdToken(credential.identityToken, credential.fullName);
       setIsAppleLoading(false);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
@@ -143,7 +183,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20 }]}>
         {introState === 'playing' ? (
@@ -199,10 +239,19 @@ export default function WelcomeScreen({ navigation }: Props) {
 
           <TouchableOpacity
             style={[styles.outlineBtn, { borderColor: t.border }]}
-            onPress={() => handleSocialLogin('Google')}
+            onPress={handleGoogleLogin}
             activeOpacity={0.7}
+            disabled={isGoogleLoading}
+            accessibilityLabel="Continue with Google"
           >
-            <Text style={[styles.socialLabel, { color: t.text }]}>Continue with Google</Text>
+            {isGoogleLoading ? (
+              <ActivityIndicator color={t.text} />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={18} color={t.text} />
+                <Text style={[styles.socialLabel, { color: t.text }]}>Continue with Google</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <View style={styles.linksRow}>
@@ -226,9 +275,9 @@ export default function WelcomeScreen({ navigation }: Props) {
 
           <Text style={[styles.termsText, { color: t.sub }]}>
             By continuing, you agree to our{' '}
-            <Text style={[styles.termsLink, { color: t.accent }]}>Terms of Service</Text>
+            <Text style={[styles.termsLink, { color: t.accent }]} onPress={() => openLegalPage('terms')} accessibilityRole="link">Terms of Service</Text>
             {' '}and{' '}
-            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>.
+            <Text style={[styles.termsLink, { color: t.accent }]} onPress={() => openLegalPage('privacy')} accessibilityRole="link">Privacy Policy</Text>.
           </Text>
         </View>
       </View>
@@ -248,7 +297,7 @@ const styles = StyleSheet.create({
   primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
   primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
   appleBtn: { minHeight: 56, borderRadius: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  outlineBtn: { minHeight: 56, borderRadius: 100, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  outlineBtn: { minHeight: 56, borderRadius: 100, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   socialLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '700' },
   linksRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   linkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },

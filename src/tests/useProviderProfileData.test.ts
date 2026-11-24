@@ -6,25 +6,26 @@ import {
   getProviderBySlug,
   getProviderProfilePreviewBySlug,
   getProviderPortfolio,
+  isProviderTakingBookings,
   getProviderProfileViewerContext,
   getProviderReviews,
+  peekCachedProviderProfile,
   trackUserInteraction,
 } from "../services/databaseService";
 import { getUnclaimedProviderDetail } from "../services/providerClaimService";
 import userLearningService from "../services/userLearningService";
 import { mapProviderProfileData } from "../features/providers/profileMapper";
-import {
-  mapProviderReviews,
-  useProviderProfileData,
-} from "../features/providers/useProviderProfileData";
+import { useProviderProfileData } from "../features/providers/useProviderProfileData";
 
 jest.mock("../services/databaseService", () => ({
   getProviderActivePromotions: jest.fn(),
   getProviderBySlug: jest.fn(),
   getProviderProfilePreviewBySlug: jest.fn(),
   getProviderPortfolio: jest.fn(),
+  isProviderTakingBookings: jest.fn(),
   getProviderProfileViewerContext: jest.fn(),
   getProviderReviews: jest.fn(),
+  peekCachedProviderProfile: jest.fn(),
   trackUserInteraction: jest.fn(),
 }));
 
@@ -63,6 +64,7 @@ describe("useProviderProfileData", () => {
       (slug: string) => getProviderBySlug(slug),
     );
     (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(null);
+    (peekCachedProviderProfile as jest.Mock).mockReturnValue(undefined);
     (userLearningService.trackInteraction as jest.Mock).mockResolvedValue(
       undefined,
     );
@@ -74,6 +76,25 @@ describe("useProviderProfileData", () => {
     (AvailabilityService.getWeeklyOpeningHours as jest.Mock).mockReturnValue(
       pending(),
     );
+    (isProviderTakingBookings as jest.Mock).mockReturnValue(pending());
+  });
+
+  it("draws a cached profile on its first frame, with no loading skeleton", () => {
+    const mappedProfile = { id: "studio-a", profileTheme: "app" };
+    (peekCachedProviderProfile as jest.Mock).mockReturnValue({
+      id: "provider-1",
+      slug: "studio-a",
+      display_name: "Studio A",
+      service_category: "HAIR",
+    });
+    (getProviderBySlug as jest.Mock).mockReturnValue(pending());
+    (mapProviderProfileData as jest.Mock).mockReturnValue(mappedProfile);
+
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.provider).toBe(mappedProfile);
+    expect(result.current.providerDbId).toBe("provider-1");
   });
 
   it("renders the profile shell without waiting for secondary requests", async () => {
@@ -94,6 +115,23 @@ describe("useProviderProfileData", () => {
     expect(result.current.providerDbId).toBe("provider-1");
     expect(result.current.reviewsLoading).toBe(true);
     expect(result.current.viewerChecked).toBe(false);
+  });
+
+  it("recovers work photos when an initial portfolio request fails", async () => {
+    (getProviderBySlug as jest.Mock).mockResolvedValue({
+      id: "provider-1", slug: "studio-a", display_name: "Studio A", service_category: "HAIR",
+    });
+    (mapProviderProfileData as jest.Mock).mockReturnValue({ id: "studio-a" });
+    (getProviderPortfolio as jest.Mock)
+      .mockRejectedValueOnce(new Error("temporary network error"))
+      .mockResolvedValueOnce({ work: [{ id: "work-1", image_url: "https://example.com/work.jpg" }], venue: [] });
+
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+    await waitFor(() => expect(result.current.portfolioError).toBe(true));
+
+    await act(async () => { await result.current.reloadPortfolio(); });
+    expect(result.current.portfolioError).toBe(false);
+    expect(result.current.portfolio.work.map(item => item.id)).toEqual(["work-1"]);
   });
 
   it("paints the lightweight profile before its full catalogue arrives", async () => {
@@ -206,28 +244,37 @@ describe("useProviderProfileData", () => {
     );
     expect(result.current.provider?.id).toBe("studio-new");
   });
+  it("treats an offline provider opened by slug as not found, not a load failure", async () => {
+    // The cart, Home and Explore open profiles by slug. When that provider is
+    // no longer live, the unclaimed-listing fallback must not run: it matches
+    // providers.id (uuid), so a slug made the whole load fail.
+    (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue(null);
+    (getProviderBySlug as jest.Mock).mockResolvedValue(null);
+    (getUnclaimedProviderDetail as jest.Mock).mockRejectedValue(
+      new Error('invalid input syntax for type uuid: "studio-a"'),
+    );
 
-  it("maps review rows into display-safe values", () => {
-    expect(
-      mapProviderReviews([
-        {
-          id: "review-1",
-          user_id: "user-1",
-          provider_id: "provider-1",
-          rating: 5,
-          comment: null,
-          created_at: "2026-08-19T12:00:00.000Z",
-          user: { name: "   ", avatar_url: null },
-        },
-      ]),
-    ).toEqual([
-      {
-        id: "review-1",
-        name: "Anonymous",
-        rating: 5,
-        comment: "",
-        date: "19 Aug 2026",
-      },
-    ]);
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getUnclaimedProviderDetail).not.toHaveBeenCalled();
+    expect(result.current.loadFailed).toBe(false);
+    expect(result.current.provider).toBeNull();
+    expect(result.current.unclaimedProvider).toBeNull();
+  });
+
+  it("still opens an unclaimed listing by its id", async () => {
+    const id = "6f1c2b0a-3d4e-4f5a-8b6c-7d8e9f0a1b2c";
+    const listing = { id, displayName: "Unclaimed Studio" };
+    (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue(null);
+    (getProviderBySlug as jest.Mock).mockResolvedValue(null);
+    (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(listing);
+
+    const { result } = renderHook(() => useProviderProfileData(id));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getUnclaimedProviderDetail).toHaveBeenCalledWith(id);
+    expect(result.current.unclaimedProvider).toBe(listing);
+    expect(result.current.loadFailed).toBe(false);
   });
 });

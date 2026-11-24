@@ -42,9 +42,9 @@ describe('resolveDepositMode', () => {
 describe('resolveEditorDepositMode', () => {
   it('starts an unconfigured provider on the mode matching what clients already see', () => {
     // Opening Payments and pressing Save must not change the booking sheet
-    // for a provider who never set a deposit policy.
-    expect(resolveEditorDepositMode(null)).toBe('client_choice');
-    expect(resolveEditorDepositMode({})).toBe('client_choice');
+    // for a provider who never set a deposit policy: clients get no deposit.
+    expect(resolveEditorDepositMode(null)).toBe('full_only');
+    expect(resolveEditorDepositMode({})).toBe('full_only');
   });
 
   it('otherwise agrees with resolveDepositMode', () => {

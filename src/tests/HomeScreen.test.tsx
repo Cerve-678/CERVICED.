@@ -65,7 +65,19 @@ describe('HomeScreen', () => {
 
     expect(screen.getByText('CERVICED')).toBeTruthy();
     expect(screen.getByText('CHOOSE YOUR SERVICE')).toBeTruthy();
-    // Personalisation stays pending; the provider rails must still populate.
-    await waitFor(() => expect(screen.getAllByText('Test Salon').length).toBeGreaterThan(0));
+    // Personalisation stays pending; the provider rails must still populate,
+    // once Home stops holding them (HOME_REVEAL_MAX_WAIT_MS).
+    await waitFor(() => expect(screen.getAllByText('Test Salon').length).toBeGreaterThan(0), { timeout: 4000 });
+  });
+
+  it('holds the sections back until its reads land, instead of showing them one at a time', async () => {
+    render(<HomeScreen />);
+    // The provider list has landed, but the rails and ranking haven't, so
+    // nothing should be on screen yet to jump around when they do.
+    await waitFor(() => expect(jest.requireMock('../services/databaseService').getProviders).toHaveBeenCalled());
+    expect(screen.queryByText('Test Salon')).toBeNull();
+    // Trending and the rest never answer here, so Home shows what it has once
+    // its limit passes rather than holding the skeleton for ever.
+    await waitFor(() => expect(screen.getAllByText('Test Salon').length).toBeGreaterThan(0), { timeout: 4000 });
   });
 });

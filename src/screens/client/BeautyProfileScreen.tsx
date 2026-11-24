@@ -1,13 +1,16 @@
 // src/screens/client/BeautyProfileScreen.tsx
 //
-// Beauty Profile: a landing with two doors (Maintenance, My Profile), each a
-// full view swapped in by screen state. The views live in
-// src/features/beauty-profile/ and src/features/maintenance/; this file owns
-// the state they share — the profile draft and its single SAVE PROFILE
-// transaction, and the maintenance data.
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+// Beauty Profile: the "Hello" landing (BeautyProfileLanding: your look, a
+// card per area, the Maintenance schedule), plus full views swapped in by
+// screen state: one category's editor, every category, Maintenance and its
+// setup. The views live in src/features/beauty-profile/ and
+// src/features/maintenance/; this file owns the state they share — the
+// profile draft and its single SAVE PROFILE transaction, and the maintenance
+// data.
+import React, { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, PanResponder } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect, usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../i18n';
@@ -20,19 +23,22 @@ import { navigateNested } from '../../navigation/rootNavigate';
 import {
   type BeautyData,
   type CategoryKey,
-  type Gender,
   EMPTY_BEAUTY_DATA,
 } from '../../types/beautyProfile';
 import type { MaintenanceItem } from '../../types/maintenance';
 import { computeBeautyProfileStats } from '../../utils/beautyProfileStats';
+import { beautyProfileTodo, TODO_FIELD_CATEGORY, type BeautyTodoField } from '../../utils/beautyProfileTodo';
+import { beautyDataFromRow } from '../../features/beauty-profile/profileRow';
 import { getMaintenanceServiceType } from '../../constants/maintenanceServiceTypes';
-import { BeautyLanding } from '../../features/beauty-profile/BeautyLanding';
+import { BeautyProfileLanding } from '../../features/beauty-profile/BeautyProfileLanding';
 import { MyProfileView } from '../../features/beauty-profile/MyProfileView';
 import { MaintenanceView } from '../../features/maintenance/MaintenanceView';
 import { SetupFlow, type Step } from '../../features/maintenance/SetupFlow';
 import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../../utils/maintenanceSuggestions';
 import { useMaintenance } from '../../features/maintenance/useMaintenance';
 import type { ItemAction } from '../../features/maintenance/MaintenanceItemCard';
+import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 
 type BeautyView = 'landing' | 'maintenance' | 'setup' | 'profile';
 
@@ -69,6 +75,27 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   const [view, setView] = useState<BeautyView>(route.params?.openMaintenance ? 'maintenance' : 'landing');
   const focusItemId = route.params?.focusItemId;
   const maintenance = useMaintenance(user?.id ?? null);
+
+  // Follow requests waiting, for the Your circle strip. Refetched on each
+  // return so a request answered in Your circle clears the dot. A failure only
+  // loses the hint, so it's logged rather than shown.
+  const circleRequests = useSocialSettingsStore(s =>
+    s.ownerId === user?.id && s.settings ? s.settings.requests : 0,
+  );
+  const circleIsPrivate = useSocialSettingsStore(s =>
+    s.ownerId === user?.id && s.settings ? s.settings.isPrivate : null,
+  );
+  const circle = useMemo(() => ({ requests: circleRequests, isPrivate: circleIsPrivate }), [circleRequests, circleIsPrivate]);
+  // A category opened from a landing card goes back to the landing, not the tiles.
+  const [fromLanding, setFromLanding] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      useSocialSettingsStore.getState().load(user.id, true).catch((err: unknown) => {
+        logger.warn('[beauty-profile] could not load circle settings', err);
+      });
+    }, [user?.id]),
+  );
   const [rebookingId, setRebookingId] = useState<string | null>(null);
   // Setup opens on step 1, or straight on the suggestions from "Picked for you".
   const [setupStart, setSetupStart] = useState<Step>(1);
@@ -95,6 +122,12 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   const closeCategory = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSelectedCategory(null);
+    if (fromLanding) {
+      // Same as leaving My Profile: unsaved edits are dropped, not kept for later.
+      if (editing) { setDraft(saved); setEditing(false); }
+      setFromLanding(false);
+      setView('landing');
+    }
   };
 
   // ── Load ─────────────────────────────────────────────────────────────────
@@ -116,21 +149,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     try {
       const m = await getUserBeautyProfile(userId);
       if (requestId !== loadRequestRef.current || activeUserIdRef.current !== userId) return;
-      const profile: BeautyData = {
-        hairType: m?.hair_type ?? '', scalpCondition: m?.scalp_condition ?? '',
-        hairGoals: m?.hair_goals ?? [], treatmentHistory: m?.treatment_history ?? [],
-        skinType: m?.skin_type ?? '', skinTone: m?.skin_tone ?? '',
-        skinConcerns: m?.skin_concerns ?? [], sensitiveAreas: m?.sensitive_areas ?? [],
-        nailLength: m?.nail_length ?? '', nailShape: m?.nail_shape ?? '',
-        lashStyle: m?.lash_style ?? '', lashStatus: m?.lash_status ?? '',
-        browStyle: m?.brow_style ?? '', browCondition: m?.brow_condition ?? '',
-        makeupCoverage: m?.makeup_coverage ?? '', makeupFinish: m?.makeup_finish ?? '',
-        makeupEyes: m?.makeup_eyes ?? '', makeupLips: m?.makeup_lips ?? '',
-        styleVibe: m?.style_vibe ?? '', serviceInterests: m?.service_interests ?? [],
-        gender: (m?.gender as Gender | null) ?? null, has_kids: m?.has_kids ?? false,
-        allergies: m?.allergies ?? [], medicalNotes: m?.medical_notes ?? '',
-        photographyConsent: m?.photography_consent ?? true,
-      };
+      const profile = beautyDataFromRow(m);
       setProfileOwnerId(userId);
       setSaved(profile);
       setDraft(profile);
@@ -180,25 +199,32 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     } else {
       try {
         await updateUserBeautyProfile(userId, {
-          hair_type:           draftSnapshot.hairType            || null,
-          scalp_condition:     draftSnapshot.scalpCondition      || null,
+          hair_type:           toPickColumn(draftSnapshot.hairType),
+          scalp_condition:     toPickColumn(draftSnapshot.scalpCondition),
           hair_goals:          draftSnapshot.hairGoals,
-          skin_type:           draftSnapshot.skinType            || null,
+          skin_type:           toPickColumn(draftSnapshot.skinType),
           skin_tone:           draftSnapshot.skinTone            || null,
           skin_concerns:       draftSnapshot.skinConcerns,
           sensitive_areas:     draftSnapshot.sensitiveAreas,
-          nail_length:         draftSnapshot.nailLength          || null,
-          nail_shape:          draftSnapshot.nailShape           || null,
-          lash_style:          draftSnapshot.lashStyle           || null,
+          nail_length:         toPickColumn(draftSnapshot.nailLength),
+          nail_shape:          toPickColumn(draftSnapshot.nailShape),
+          nail_condition:      draftSnapshot.nailCondition,
+          nail_service:        draftSnapshot.nailService,
+          nail_style:          draftSnapshot.nailStyle,
+          nail_colours:        draftSnapshot.nailColours,
+          lash_style:          toPickColumn(draftSnapshot.lashStyle),
           lash_status:         draftSnapshot.lashStatus          || null,
-          brow_style:          draftSnapshot.browStyle           || null,
-          brow_condition:      draftSnapshot.browCondition       || null,
-          makeup_coverage:     draftSnapshot.makeupCoverage      || null,
-          makeup_finish:       draftSnapshot.makeupFinish        || null,
-          makeup_eyes:         draftSnapshot.makeupEyes          || null,
-          makeup_lips:         draftSnapshot.makeupLips          || null,
+          brow_style:          toPickColumn(draftSnapshot.browStyle),
+          brow_condition:      toPickColumn(draftSnapshot.browCondition),
+          makeup_coverage:     toPickColumn(draftSnapshot.makeupCoverage),
+          makeup_finish:       toPickColumn(draftSnapshot.makeupFinish),
+          makeup_eyes:         toPickColumn(draftSnapshot.makeupEyes),
+          makeup_lips:         toPickColumn(draftSnapshot.makeupLips),
           allergies:           draftSnapshot.allergies,
-          style_vibe:          draftSnapshot.styleVibe           || null,
+          style_vibe:          toPickColumn(draftSnapshot.styleVibe),
+          style_aesthetics:    draftSnapshot.styleAesthetics,
+          style_occasions:     draftSnapshot.styleOccasions,
+          style_routine:       draftSnapshot.styleRoutine || null,
           medical_notes:       draftSnapshot.medicalNotes        || null,
           photography_consent: draftSnapshot.photographyConsent,
           treatment_history:   draftSnapshot.treatmentHistory,
@@ -240,6 +266,26 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   // Every number on My Profile comes from here; recomputed only when the
   // draft changes.
   const stats = useMemo(() => computeBeautyProfileStats(draft), [draft]);
+
+  // What's still to do, from what is actually SAVED (not the draft) — the same
+  // rule as the red "!" on the Settings row, so the two always agree.
+  const todo = useMemo(
+    () => beautyProfileTodo(saved, { dob: user?.dob, hasClientProfile: user?.hasClientProfile }),
+    [saved, user?.dob, user?.hasClientProfile],
+  );
+  // Opens ready to answer — the card promises a fix, not a read-only view.
+  const openTodoField = (field: BeautyTodoField) => {
+    openCategoryFromLanding(TODO_FIELD_CATEGORY[field]);
+  };
+
+  // From a landing card (or a to-do card): straight into that category, ready to answer.
+  const openCategoryFromLanding = (key: CategoryKey) => {
+    setDraft(saved);
+    setEditing(true);
+    setFromLanding(true);
+    setView('profile');
+    setSelectedCategory(key);
+  };
 
   // ── Maintenance actions ───────────────────────────────────────────────────
 
@@ -289,6 +335,66 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     }
   }, [maintenance, findProvider, navigation, showAlert, showConfirm, t]);
 
+  // ── Back inside the screen ───────────────────────────────────────────────
+  // All profile, a category, Maintenance and setup are views of
+  // this one screen, so a back-swipe (or Android back) would leave Beauty
+  // Profile altogether. While one is open, back goes one step instead, the
+  // same step as that view's own back button. usePreventRemove catches the
+  // header back and Android back. It can't hold iOS's native swipe: that
+  // gesture has already popped the screen, so the stack showed Settings and
+  // then pushed Beauty Profile back (owner, 2026-11-17). So while a view is
+  // open the native swipe is off, and an edge swipe of our own steps back.
+  const setupBackRef = useRef<(() => void) | null>(null);
+  const innerOpen = view !== 'landing' || selectedCategory !== null;
+  // Anything that isn't a plain back (a tab re-tap, sign-out, a hat switch)
+  // still leaves: close the views, then let it through once that has landed.
+  const [leaving, setLeaving] = useState<NavigationAction | null>(null);
+  const stepBack = () => {
+    if (view === 'setup') { setupBackRef.current?.(); return; }
+    if (selectedCategory !== null) { closeCategory(); return; }
+    if (view === 'profile' && editing) handleCancel();
+    setFromLanding(false);
+    setView('landing');
+  };
+  usePreventRemove(innerOpen && leaving === null, ({ data }) => {
+    const { type } = data.action;
+    if (type === 'GO_BACK' || type === 'POP') { stepBack(); return; }
+    setLeaving(data.action);
+  });
+  useLayoutEffect(() => {
+    navigation.setOptions({ gestureEnabled: !innerOpen });
+  }, [innerOpen, navigation]);
+  // The edge swipe that stands in for it: from the left edge, rightwards,
+  // far enough, steps back one view. Read through a ref so the responder,
+  // made once, always steps from the view that's open now.
+  const stepBackRef = useRef(stepBack);
+  stepBackRef.current = stepBack;
+  const innerOpenRef = useRef(innerOpen);
+  innerOpenRef.current = innerOpen;
+  const edgeSwipe = useRef(PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (event, gesture) =>
+      innerOpenRef.current
+      && event.nativeEvent.pageX - gesture.dx <= EDGE_SWIPE_START
+      && gesture.dx > 12
+      && Math.abs(gesture.dy) < Math.abs(gesture.dx) * 0.6,
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dx > EDGE_SWIPE_DISTANCE || gesture.vx > 0.5) {
+        Haptics.selectionAsync().catch(() => {});
+        stepBackRef.current();
+      }
+    },
+    onPanResponderTerminationRequest: () => true,
+  })).current;
+  useEffect(() => {
+    if (!leaving) return;
+    // A frame later, so the prevention above has been switched off first.
+    const id = setTimeout(() => {
+      navigation.dispatch(leaving);
+      setLeaving(null);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [leaving, navigation]);
+
   // ── Loading ───────────────────────────────────────────────────────────────
 
   if (fetching || profileOwnerId !== (user?.id ?? null)) {
@@ -331,17 +437,19 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           editing={editing}
           saving={saving}
           selectedCategory={selectedCategory}
-          onBack={() => { if (editing) handleCancel(); setView('landing'); }}
+          onBack={() => { if (editing) handleCancel(); setFromLanding(false); setView('landing'); }}
           onOpenCategory={openCategory}
           onCloseCategory={closeCategory}
           onToggleEdit={toggleEdit}
           onSave={handleSave}
+          categoryBackLabel={fromLanding ? t('profile.forYou.beauty.title') : undefined}
         />
       );
       break;
     case 'maintenance':
       content = (
         <MaintenanceView
+          userId={user?.id ?? null}
           state={maintenance}
           focusItemId={focusItemId}
           busyItemId={rebookingId}
@@ -363,32 +471,48 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           onClose={() => setView(maintenance.items.length > 0 ? 'maintenance' : 'landing')}
           onDone={() => setView('maintenance')}
           startStep={setupStart}
+          backRef={setupBackRef}
         />
       );
       break;
     default:
       content = (
-        <BeautyLanding
+        <BeautyProfileLanding
+          firstName={(user?.name ?? '').trim().split(/\s+/)[0] ?? ''}
           profile={draft}
           stats={stats}
           maintenance={maintenance}
+          circle={circle}
           onBack={() => navigation.goBack()}
+          onEditCategory={openCategoryFromLanding}
+          onOpenAllProfile={() => { setFromLanding(false); setSelectedCategory(null); setView('profile'); }}
           onOpenMaintenance={() => setView('maintenance')}
           onOpenSetup={() => openSetup(1)}
-          onOpenProfile={() => { setSelectedCategory(null); setView('profile'); }}
-          onOpenHealth={() => { setView('profile'); setSelectedCategory('health'); }}
+          onOpenCircle={() => navigation.navigate('Circle')}
+          onBook={item => { void handleItemAction(item, item.kind === 'service' && item.providerId ? 'rebook' : 'find'); }}
+          busyItemId={rebookingId}
+          todo={todo}
+          onOpenTodoField={openTodoField}
+          onOpenAccountDetails={() => navigation.navigate('ProfileInfo')}
+          onFindIdea={idea => navigateNested('Home', 'Search', { initialQuery: idea.query })}
         />
       );
   }
 
   return (
     <>
-      {content}
+      <View style={styles.bg} {...edgeSwipe.panHandlers}>
+        {content}
+      </View>
       {/* Rendered last so dialogs layer above every view. */}
       <DialogHost />
     </>
   );
 }
+
+/** How close to the left edge a back swipe has to start, and how far it has to go. */
+const EDGE_SWIPE_START = 28;
+const EDGE_SWIPE_DISTANCE = 70;
 
 const styles = StyleSheet.create({
   bg:          { flex: 1 },

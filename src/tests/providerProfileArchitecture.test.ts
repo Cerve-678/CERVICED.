@@ -1,11 +1,19 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readDatabaseLayer } from "./databaseLayerSource";
 
 describe("ProviderProfileScreen data architecture", () => {
   const source = readFileSync(
     join(__dirname, "../screens/client/ProviderProfileScreen.tsx"),
     "utf8",
   );
+
+  it("keeps a provider-only viewer out of the client-only flows", () => {
+    expect(source).toContain('hatState.active === "provider" && !isOwnProvider');
+    expect(source).toContain("if (isOwnProvider || viewingOtherAsProvider) {");
+    // Every way into a booking: Book, Quick Book, multi-select, the link-only page.
+    expect(source.match(/if \(refuseBookingAsProvider\(\)\) return;/g)).toHaveLength(4);
+  });
 
   it("uses the progressive hook instead of restoring the blocking loader", () => {
     expect(source).toContain("useProviderProfileData(providerId, viewerOwnershipHint)");
@@ -23,7 +31,7 @@ describe("ProviderProfileScreen data architecture", () => {
       "utf8",
     );
 
-    expect(source).toContain("const { myProviderId, myProviderIdStatus } = useAuth()");
+    expect(source).toContain("const { myProviderId, myProviderIdStatus, hatState } = useAuth()");
     expect(source).toContain('myProviderIdStatus === "resolved" ? myProviderId : undefined');
     expect(source).toContain("const canBookProvider = shouldShowBookingCta({");
     expect(auth).toContain("getProviderOwnershipForUserId");
@@ -33,6 +41,12 @@ describe("ProviderProfileScreen data architecture", () => {
   });
 
   it("keeps state-independent profile sections outside the screen component", () => {
+    // The page under the hero is drawn by the shared ProviderPageSheet.
+    const page = readFileSync(
+      join(__dirname, "../features/providers/page/ProviderPageSheet.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("<ProviderPageSheet");
     for (const section of [
       "ProviderSpecialitiesSection",
       "ProviderReviewPreviewSection",
@@ -41,10 +55,12 @@ describe("ProviderProfileScreen data architecture", () => {
       "ProviderPortfolioSection",
       "ProviderAdditionalInfoSection",
     ]) {
-      expect(source).toContain(`<${section}`);
+      expect(page).toContain(`<${section}`);
     }
-    expect(source).not.toContain("portfolioColumns.map(");
-    expect(source).not.toContain("reviews.slice(0, 5).map(");
+    for (const file of [source, page]) {
+      expect(file).not.toContain("portfolioColumns.map(");
+      expect(file).not.toContain("reviews.slice(0, 5).map(");
+    }
   });
 
   it("caps inline media and virtualizes the full portfolio", () => {
@@ -149,10 +165,7 @@ describe("ProviderProfileScreen data architecture", () => {
   });
 
   it("resolves an owned provider id deterministically and does not swallow the error", () => {
-    const db = readFileSync(
-      join(__dirname, "../services/databaseService.ts"),
-      "utf8",
-    );
+    const db = readDatabaseLayer();
     const fn = db.slice(
       db.indexOf("export async function getProviderIdForUserId"),
       db.indexOf("export async function getProviderBrandingByUserId"),

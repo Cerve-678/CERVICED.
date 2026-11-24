@@ -3354,8 +3354,9 @@ BEGIN
       r.user_id,
       'announcement',
       COALESCE(r.display_name, 'Your provider') || ' — Checking In',
-      'How are you getting on after your ' || r.service_name_snapshot ||
-        '? If you have any questions or need aftercare advice, just send a message.',
+      'How are you getting on after your ' || COALESCE(r.service_name_snapshot, 'appointment') ||
+        '? If you have a moment, leave ' || COALESCE(r.display_name, 'them') ||
+        ' some personal feedback on your visit.',
       'low',
       TRUE,
       r.booking_id,
@@ -3778,10 +3779,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Sending to existing upcoming bookings is the provider's choice at save
+-- (migration 20261106113000): the screen sets send_to_upcoming, older builds
+-- leave it at its TRUE default.
+ALTER TABLE public.info_packs
+  ADD COLUMN IF NOT EXISTS send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE;
+
 DROP TRIGGER IF EXISTS on_info_pack_created ON public.info_packs;
 CREATE TRIGGER on_info_pack_created
   AFTER INSERT ON public.info_packs
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_info_pack();
+  FOR EACH ROW
+  WHEN (NEW.send_to_upcoming)
+  EXECUTE FUNCTION public.handle_new_info_pack();
 
 -- ───────────────────────────────────────────────────────────
 -- STEP 5b: Notify the provider when a client completes an intake form

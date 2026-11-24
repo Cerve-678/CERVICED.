@@ -24,7 +24,8 @@
  * Both must be written. See the load path below for the same precedence order.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,8 +39,19 @@ import {
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
   updateProviderRequestSettings,
+  mergeProviderAutomationSettings,
 } from '../../services/databaseService';
-import { lastBookableDate, nextReleaseMoment, toReleaseDay } from '../../utils/bookingHorizon';
+import {
+  DEFAULT_RELEASE_TIME,
+  lastBookableDate,
+  nextReleaseMoment,
+  parseBookingWindowDays,
+  releaseSettingsPatch,
+  releaseTimeLabel,
+  rollingWindowExplainer,
+  toReleaseDay,
+  toReleaseTime,
+} from '../../utils/bookingHorizon';
 import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
 import {
   Card, ChipGroup, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
@@ -51,11 +63,25 @@ import {
   REQUEST_WINDOW_OPTS,
 } from '../../features/business-details/options';
 import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
+import { CalendarSyncCard } from '../../features/providers/CalendarSyncCard';
+import { useAuth } from '../../contexts/AuthContext';
+
+// The two ways a provider can limit how far ahead clients book.
+type HorizonMode = 'rolling' | 'monthly';
+const HORIZON_MODE_OPTS: { value: HorizonMode; label: string; sub: string }[] = [
+  { value: 'rolling', label: 'A set time ahead', sub: 'Clients can always book up to a fixed time from today' },
+  { value: 'monthly', label: 'A month at a time', sub: 'Next month opens for booking on the same day each month' },
+];
 
 export default function SchedulingScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
+  // Calendar sync blocks booking times here, so it's for providers who take
+  // bookings in CERVICED. A link-only provider can reach this screen from
+  // Profile, but their calendar stays on the phone (DiaryCard on their Home).
+  const { myBookingMode } = useAuth();
 
   const [providerId, setProviderId] = useState<string | null>(null);
 
@@ -68,10 +94,24 @@ export default function SchedulingScreen({ navigation }: any) {
   // Booking rules (moved from ProviderAutomationsScreen)
   const [bufferMins, setBufferMins]             = useState('0');
   const [bookingWindowDays, setBookingWindowDays] = useState('60');
-  // Read-only here. Set = monthly release, which replaces the rolling window
-  // below (still saved, so clearing the release day restores it). Its only
-  // editor is InfoRegScreen (Edit Profile) — see utils/bookingHorizon.
+  // Monthly release. Edited here AND in Edit Profile (InfoRegScreen): both
+  // write one stored value (automation_settings.scheduleReleaseDay, merged
+  // in on save), which drives the booking limit (utils/bookingHorizon,
+  // provider_last_bookable_date), the profile pill and the release message.
+  // It replaces the rolling window, which stays saved so switching back
+  // restores it. `releaseDay` survives a switch to 'rolling' so switching
+  // back keeps the day picked. `loadedReleaseDay` is what was stored when
+  // this screen opened: the save writes the day only if it changed, so an
+  // unrelated save here never puts back an older day.
+  const [horizonMode, setHorizonMode] = useState<HorizonMode>('rolling');
   const [releaseDay, setReleaseDay] = useState<number | null>(null);
+  const [releasePickerOpen, setReleasePickerOpen] = useState(false);
+  const [loadedReleaseDay, setLoadedReleaseDay] = useState<number | null>(null);
+  // The time it opens (automation_settings.scheduleReleaseTime, UK time).
+  // Same written-only-if-changed rule as the day.
+  const [releaseTime, setReleaseTime] = useState(DEFAULT_RELEASE_TIME);
+  const [loadedReleaseTime, setLoadedReleaseTime] = useState(DEFAULT_RELEASE_TIME);
+  const activeReleaseDay = horizonMode === 'monthly' ? releaseDay : null;
   const [minBookingNoticeHrs, setMinNotice]     = useState('0');
   const [slotIntervalMins, setSlotInterval]     = useState('60');
   const [maxBookingsPerDay, setMaxPerDay]       = useState('unlimited');
@@ -118,7 +158,13 @@ export default function SchedulingScreen({ navigation }: any) {
           setAllowBeyondWindow(profile.allow_beyond_window_requests ?? false);
           setRequestBefore(profile.request_window_before_mins == null ? 'any' : String(profile.request_window_before_mins));
           setRequestAfter(profile.request_window_after_mins == null ? 'any' : String(profile.request_window_after_mins));
-          setReleaseDay(toReleaseDay(profile.automation_settings?.scheduleReleaseDay));
+          const savedReleaseDay = toReleaseDay(profile.automation_settings?.scheduleReleaseDay);
+          setReleaseDay(savedReleaseDay);
+          setLoadedReleaseDay(savedReleaseDay);
+          const savedReleaseTime = toReleaseTime(profile.automation_settings?.scheduleReleaseTime);
+          setReleaseTime(savedReleaseTime);
+          setLoadedReleaseTime(savedReleaseTime);
+          setHorizonMode(savedReleaseDay != null ? 'monthly' : 'rolling');
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
         // the real answer (it's what gets enforced), user_metadata is only a
@@ -149,6 +195,17 @@ export default function SchedulingScreen({ navigation }: any) {
     setList(list.includes(val) ? list.filter(x => x !== val) : [...list, val]);
   }
 
+  // Only the release keys that changed here. Merged server-side so no other
+  // automation_settings key is touched.
+  const saveReleaseChanges = useCallback(async () => {
+    const patch = releaseSettingsPatch(
+      { day: loadedReleaseDay, time: loadedReleaseTime },
+      { day: activeReleaseDay, time: releaseTime },
+    );
+    if (!providerId || !patch) return;
+    await mergeProviderAutomationSettings(providerId, patch.set, patch.remove);
+  }, [providerId, loadedReleaseDay, loadedReleaseTime, activeReleaseDay, releaseTime]);
+
   const handleSave = useCallback(async () => {
     if (!providerId) { flash('No provider profile found', 'error'); return; }
 
@@ -176,7 +233,8 @@ export default function SchedulingScreen({ navigation }: any) {
         }),
 
         updateProviderScheduleSettings(providerId, {
-          booking_window_days:    parseInt(bookingWindowDays, 10)   || 60,
+          // Not `|| 60`: 0 is "Any time", and that used to save as 60 days.
+          booking_window_days:    parseBookingWindowDays(bookingWindowDays),
           slot_interval_mins:     parseInt(slotIntervalMins, 10)    || 60,
           buffer_mins:            parseInt(bufferMins, 10)          || 0,
           min_booking_notice_hrs: parseInt(minBookingNoticeHrs, 10) || 0,
@@ -195,6 +253,8 @@ export default function SchedulingScreen({ navigation }: any) {
           request_window_before_mins: requestBefore === 'any' ? null : parseInt(requestBefore, 10),
           request_window_after_mins:  requestAfter  === 'any' ? null : parseInt(requestAfter, 10),
         }),
+
+        saveReleaseChanges(),
       ]);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -206,21 +266,33 @@ export default function SchedulingScreen({ navigation }: any) {
       setSaving(false);
     }
   }, [
+    saveReleaseChanges,
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
     allowBeyondWindow, requestBefore, requestAfter, navigation,
   ]);
 
+  const chooseHorizonMode = (value: string) => {
+    const mode: HorizonMode = value === 'monthly' ? 'monthly' : 'rolling';
+    setHorizonMode(mode);
+    // First time on monthly: start from today's date and open the picker,
+    // so there's never a "monthly" choice with no day behind it.
+    if (mode === 'monthly' && releaseDay == null) {
+      setReleaseDay(new Date().getDate());
+      setReleasePickerOpen(true);
+    }
+  };
+
   // What a monthly release means right now, in dates — the wall clients hit.
   const releaseStatus = useMemo(() => {
-    if (releaseDay == null) return null;
+    if (activeReleaseDay == null) return null;
     const now = new Date();
-    const openUntil = lastBookableDate({ schedule_release_day: releaseDay }, now);
-    const next = nextReleaseMoment(releaseDay, now);
+    const openUntil = lastBookableDate({ schedule_release_day: activeReleaseDay, schedule_release_time: releaseTime }, now);
+    const next = nextReleaseMoment(activeReleaseDay, now, releaseTime);
     if (!openUntil) return null;
     return `Clients can book up to ${formatShortDayDate(openUntil)}. The next month opens ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
-  }, [releaseDay]);
+  }, [activeReleaseDay, releaseTime]);
 
   if (loading) {
     return (
@@ -234,7 +306,7 @@ export default function SchedulingScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={[s.header, { borderBottomColor: C.border }]}>
           <Text style={[s.headerTitle, { color: C.text }]}>Scheduling & Availability</Text>
@@ -280,6 +352,8 @@ export default function SchedulingScreen({ navigation }: any) {
             <Ionicons name="chevron-forward" size={18} color={C.sub} style={{ opacity: 0.5 }} />
           </TouchableOpacity>
 
+          {myBookingMode !== 'external' && <CalendarSyncCard C={C} />}
+
           <Card
             title="Availability"
             sub="The shape of your typical week. Your actual bookable slots come from Working Hours above."
@@ -317,19 +391,37 @@ export default function SchedulingScreen({ navigation }: any) {
 
             <View style={{ height: 18 }} />
             <SectionLabel text="How far ahead clients can book" />
-            {releaseDay != null ? (
-              // A monthly release replaces the rolling window; it's set in
-              // Edit Profile, so here it's only explained.
-              <View style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.border }]}>
-                <Ionicons name="calendar-outline" size={15} color={C.accent} />
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={[st.releaseDayText, { color: C.text }]}>Monthly release on the {ordinalSuffix(releaseDay)}</Text>
-                  {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
-                  <Text style={[st.releaseDayHint, { color: C.sub }]}>Change or remove it in Edit Profile.</Text>
-                </View>
-              </View>
+            <RadioGroup options={HORIZON_MODE_OPTS} value={horizonMode} onChange={chooseHorizonMode} />
+            <View style={{ height: 10 }} />
+            {activeReleaseDay != null ? (
+              <>
+                <Text style={[st.windowExplainer, { color: C.sub }]}>{RELEASE_DAY_EXPLAINER}</Text>
+                <TouchableOpacity
+                  style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.border }]}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setReleasePickerOpen(true); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Release day, the ${ordinalSuffix(activeReleaseDay)} of every month at ${releaseTimeLabel(releaseTime)}. Change`}
+                >
+                  <Ionicons name="calendar-outline" size={15} color={C.accent} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[st.releaseDayText, { color: C.text }]}>Release day: the {ordinalSuffix(activeReleaseDay)} of every month at {releaseTimeLabel(releaseTime)}</Text>
+                    {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
+                    <Text style={[st.releaseDayHint, { color: C.sub }]}>
+                      Days after that are greyed out for clients, and tapping one tells them the date it opens.
+                    </Text>
+                    <Text style={[st.releaseDayHint, { color: C.sub }]}>It's the same setting as in Edit Profile, so changing it here changes it there too.</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={C.sub} style={{ opacity: 0.6 }} />
+                </TouchableOpacity>
+              </>
             ) : (
-              <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+              <>
+                <Text style={[st.windowExplainer, { color: C.sub }]}>
+                  {rollingWindowExplainer(parseBookingWindowDays(bookingWindowDays))}
+                </Text>
+                <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+              </>
             )}
 
             <View style={{ height: 18 }} />
@@ -368,7 +460,7 @@ export default function SchedulingScreen({ navigation }: any) {
             />
             <ToggleRow
               label="Further ahead than you take bookings"
-              sub={releaseDay != null
+              sub={activeReleaseDay != null
                 ? "Clients can ask for a date in a month you haven't opened yet"
                 : bookingWindowDays === '0'
                   ? "You take bookings any time ahead, so there's nothing for this to relax"
@@ -402,6 +494,20 @@ export default function SchedulingScreen({ navigation }: any) {
           <SaveButton saving={saving} onPress={handleSave} />
         </ScrollView>
       </SafeAreaView>
+
+      <ReleaseDayPicker
+        visible={releasePickerOpen}
+        value={releaseDay ?? new Date().getDate()}
+        time={releaseTime}
+        onSelectTime={setReleaseTime}
+        accentColor={C.accent}
+        cardColor={C.card}
+        textColor={C.text}
+        subColor={C.sub}
+        borderColor={C.border}
+        onSelect={setReleaseDay}
+        onClose={() => setReleasePickerOpen(false)}
+      />
     </View>
   );
 }
@@ -417,4 +523,5 @@ const st = StyleSheet.create({
   },
   releaseDayText: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 13 },
   releaseDayHint: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17 },
+  windowExplainer: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17, marginBottom: 8 },
 });

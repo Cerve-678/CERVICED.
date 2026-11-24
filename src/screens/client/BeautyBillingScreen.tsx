@@ -5,8 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  StatusBar,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
@@ -46,7 +46,7 @@ export default function BeautyBillingScreen({ navigation }: any) {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.statusBar} />
+        <FocusAwareStatusBar barStyle={theme.statusBar} />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 

@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
     // Load the booking with the service role (we need private payment fields).
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, provider_id, payment_intent_id, amount_paid, service_charge')
+      .select('id, provider_id, payment_intent_id, amount_paid, service_charge, payment_status')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -123,11 +123,17 @@ Deno.serve(async (req: Request) => {
     if (!booking.payment_intent_id || Number(booking.amount_paid) <= 0) {
       return json({ error: 'This booking has no captured payment to refund.' }, 409);
     }
+    // Held on the card, never taken (a request): there is nothing to refund.
+    // Declining it releases the hold through settle-held-payment instead.
+    if (booking.payment_status === 'authorised' || booking.payment_status === 'not_charged') {
+      return json({ status: 'not_charged' }, 200);
+    }
     const requestId = typeof body.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.requestId)
       ? body.requestId
       : null;
     let alreadyRefundedPence = 0;
     let pendingRefund = false;
+    const succeededRefunds: Stripe.Refund[] = [];
     for await (const r of stripe.refunds.list({ payment_intent: booking.payment_intent_id, limit: 100 })) {
       if (r.metadata?.booking_id !== booking.id) continue;
       // Same request retried (double tap, network retry): hand back the
@@ -141,6 +147,7 @@ Deno.serve(async (req: Request) => {
       if (r.status === 'succeeded' || r.status === 'pending' || r.status === 'requires_action') {
         alreadyRefundedPence += r.amount;
         if (r.status !== 'succeeded') pendingRefund = true;
+        else succeededRefunds.push(r);
       }
     }
     // Known limit: two DIFFERENT requests landing at the same instant could
@@ -166,7 +173,13 @@ Deno.serve(async (req: Request) => {
     const request = body.amountPence === undefined || body.amountPence === null ? 'full' : Number(body.amountPence);
     const plan = planRefund({ amountPaidPence: paidPence, alreadyRefundedPence, providerHeldPence, request });
     if (!plan.ok) {
-      if (request === 'full' && alreadyRefundedPence >= paidPence) return json({ status: 'already_refunded' }, 200);
+      if (request === 'full' && alreadyRefundedPence >= paidPence) {
+        // Stripe already refunded it all, but our records may not say so (the
+        // refund went out and its write failed). Record what Stripe has, so the
+        // booking stops looking owed (process_unsent_refunds, the daily email).
+        for (const r of succeededRefunds) await reconcileRefund(admin, stripe, r);
+        return json({ status: 'already_refunded' }, 200);
+      }
       return json({ error: plan.error }, 409);
     }
 

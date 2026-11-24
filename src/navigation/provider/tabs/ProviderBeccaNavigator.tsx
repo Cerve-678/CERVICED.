@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import BeccaScreen from "../../../screens/shared/BeccaScreen";
 import NotificationsScreen from "../../../screens/shared/NotificationsScreen";
 import ProviderBookingDetailScreen from "../../../screens/provider/ProviderBookingDetailScreen";
-import DevSettingsScreen from "../../../screens/shared/DevSettingsScreen";
 import ProviderScheduleScreen from "../../../screens/provider/ProviderScheduleScreen";
 import SchedulingScreen from "../../../screens/provider/SchedulingScreen";
 import AddBookingScreen from "../../../screens/provider/AddBookingScreen";
@@ -12,9 +11,12 @@ import ProviderInboxScreen from "../../../screens/provider/ProviderInboxScreen";
 import ProviderConversationScreen from "../../../screens/provider/ProviderConversationScreen";
 import ProviderPromotionsScreen from "../../../screens/provider/ProviderPromotionsScreen";
 import ProviderInfoPackScreen from "../../../screens/provider/ProviderInfoPackScreen";
+import ProviderIntakeFormScreen from "../../../screens/provider/ProviderIntakeFormScreen";
 import ProviderAnalyticsScreen from "../../../screens/provider/ProviderAnalyticsScreen";
 import ProviderBookingHistoryScreen from "../../../screens/provider/ProviderBookingHistoryScreen";
 import ProviderAutomationsScreen from "../../../screens/provider/ProviderAutomationsScreen";
+import PaymentsScreen from "../../../screens/provider/PaymentsScreen";
+import PoliciesScreen from "../../../screens/provider/PoliciesScreen";
 import { ProviderBeccaStackParamList } from "../../types";
 
 const ProviderBeccaStack =
@@ -58,12 +60,6 @@ export default function ProviderBeccaNavigator() {
         name="Notifications"
         component={NotificationsScreen}
         options={{ headerShown: false, presentation: "formSheet" }}
-      />
-
-      <ProviderBeccaStack.Screen
-        name="DevSettings"
-        component={DevSettingsScreen}
-        options={{ headerShown: false, presentation: "fullScreenModal" }}
       />
 
       {/* ── Becca's own copies of her chip destinations ──────────────────── */}
@@ -119,6 +115,14 @@ export default function ProviderBeccaNavigator() {
         options={{ headerShown: false, presentation: "card" }}
       />
 
+      {/* BookingDetail (above) opens a booking's forms and offers to create
+          one; without this route those taps had nowhere to go from Becca. */}
+      <ProviderBeccaStack.Screen
+        name="ProviderIntakeForm"
+        component={ProviderIntakeFormScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
       <ProviderBeccaStack.Screen
         name="Analytics"
         component={ProviderAnalyticsScreen}
@@ -134,6 +138,18 @@ export default function ProviderBeccaNavigator() {
       <ProviderBeccaStack.Screen
         name="Automations"
         component={ProviderAutomationsScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      <ProviderBeccaStack.Screen
+        name="Payments"
+        component={PaymentsScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      <ProviderBeccaStack.Screen
+        name="Policies"
+        component={PoliciesScreen}
         options={{ headerShown: false, presentation: "card" }}
       />
     </ProviderBeccaStack.Navigator>

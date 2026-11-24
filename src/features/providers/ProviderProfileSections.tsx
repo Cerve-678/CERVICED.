@@ -3,38 +3,53 @@ import {
   FlatList,
   Modal,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import TabIcon from "../../components/TabIcon";
+import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
-import type { ProviderReviewItem } from "./useProviderProfileData";
+import type { ProviderReviewItem } from "./reviewPresentation";
+import { HalftoneScreen } from "./heroes/GazetteHero";
+import { BulldogClip, CALLING_CARD_PAPER } from "./heroes/CallingCardHero";
+import {
+  PageSection,
+  PageSectionHeading,
+  pourBandStyle,
+  pourPalette,
+  sectionInk,
+  showsDividerAbove,
+  usePourPalette,
+  type PageStylePalette,
+} from "./ProfilePageStyle";
+import { plateMarkEdges } from "./heroes/EmbossedHero";
+import { SectionDivider } from "./pageParts";
+import { normalizeExternalBookingUrl } from "./externalBookingLink";
+import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
+/** The feature grid (Ledger) holds five: one big, four small. */
+const FEATURE_PHOTO_LIMIT = 5;
+const PORTFOLIO_WALL_LIMIT = 3;
+/** Capsule's skyline: two rows of four capsules. */
+const CAPSULE_PHOTO_LIMIT = 8;
+/** Each capsule's shape (width ÷ height) in turn, so the tops step up and
+ *  down while the feet stay level, as on the canvas (120, 150, 104, 136 tall). */
+const CAPSULE_PHOTO_SHAPES = [0.6, 0.48, 0.7, 0.54] as const;
+const CAPSULE_GAP = 8;
+/** Riviera's prints lean a little each way, as if dropped on a table. */
+const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
 const COLUMN_GAP = 12;
 
-interface SectionPalette {
-  text: string;
-  sub: string;
-  border: string;
-  separator: string;
-  background: string;
-  cardBackground: string;
-  accent: string;
-  blurTint: "dark" | "light";
-  blurIntensity: number;
-  highlightColors: [string, string];
-}
+type SectionPalette = PageStylePalette;
 
 /** A link-only profile's own Specialities section. Link-only profiles carry
  *  no price list, so specialities are the main signal of what they do and get
@@ -70,7 +85,7 @@ export const ProviderSpecialitiesSection = React.memo(function ProviderSpecialit
 export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPreviewSection({
   reviews,
   loading,
-  palette,
+  palette: rawPalette,
   onSeeAll,
 }: {
   reviews: ProviderReviewItem[];
@@ -78,60 +93,59 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
   palette: SectionPalette;
   onSeeAll: () => void;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "reviews");
+  const ink = sectionInk(palette);
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Reviews</Text>
+    <PageSection section="reviews" palette={palette}>
       {loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: palette.sub }]}>Loading reviews…</Text>
+        <Text style={[styles.bodyText, { color: ink.sub }]}>Loading reviews…</Text>
       ) : null}
       {!loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: palette.sub }]}>No reviews yet.</Text>
+        <Text style={[styles.bodyText, { color: ink.sub }]}>No reviews yet.</Text>
       ) : null}
       {reviews.slice(0, 5).map(review => (
-        <View key={review.id} style={[styles.review, { borderBottomColor: palette.separator }]}>
+        <View key={review.id} style={[styles.review, { borderBottomColor: ink.separator }]}>
           <View style={styles.reviewHeader}>
-            <Text style={[styles.reviewer, { color: palette.text }]}>{review.name}</Text>
+            <Text style={[styles.reviewer, { color: ink.text }]}>{review.name}</Text>
             <View style={styles.stars}>
               {[1, 2, 3, 4, 5].map(star => (
                 <TabIcon
                   key={star}
                   name="star"
                   size={12}
-                  color={star <= review.rating ? "#FFD700" : palette.border}
+                  color={star <= review.rating ? "#FFD700" : ink.border}
                 />
               ))}
             </View>
-            <Text style={[styles.reviewDate, { color: palette.sub }]}>{review.date}</Text>
+            <Text style={[styles.reviewDate, { color: ink.sub }]}>{review.date}</Text>
           </View>
           {review.comment ? (
-            <Text style={[styles.bodyText, { color: palette.sub }]}>{review.comment}</Text>
+            <Text style={[styles.bodyText, { color: ink.sub }]}>{review.comment}</Text>
           ) : null}
         </View>
       ))}
       <TouchableOpacity style={styles.textButton} onPress={onSeeAll} activeOpacity={0.6}>
-        <Text style={[styles.textButtonLabel, { color: palette.text }]}>See All Reviews</Text>
+        <Text style={[styles.textButtonLabel, { color: ink.text }]}>See All Reviews</Text>
       </TouchableOpacity>
-    </BlurView>
+    </PageSection>
   );
 });
 
 export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHoursSection({
   openingHours,
   loading = false,
-  palette,
+  palette: rawPalette,
 }: {
   openingHours: WeeklyOpeningHoursDay[] | null;
   loading?: boolean;
   palette: SectionPalette;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "hours");
   if (loading) {
     return (
-      <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }]}>
+      <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }, palette.squareCards && styles.square]}>
         <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
         <View style={[styles.loadingLine, { backgroundColor: palette.separator }]} />
         <View style={[styles.loadingLine, styles.loadingLineShort, { backgroundColor: palette.separator }]} />
@@ -139,39 +153,34 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
     );
   }
   if (!openingHours || openingHours.length === 0) return null;
+  const ink = sectionInk(palette);
   const today = new Date().getDay();
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
+    <PageSection section="hours" palette={palette}>
       {openingHours.map((day, index) => (
         <View
           key={day.dayOfWeek}
           style={[
             styles.hoursRow,
-            { borderBottomColor: palette.separator },
+            { borderBottomColor: ink.separator },
             index === openingHours.length - 1 && styles.lastRow,
           ]}
         >
-          <Text style={[styles.hoursLabel, { color: day.dayOfWeek === today ? palette.accent : palette.sub }]}>
+          <Text style={[styles.hoursLabel, { color: day.dayOfWeek === today ? palette.accent : ink.sub }]}>
             {day.label}
           </Text>
-          <Text style={[styles.hoursValue, { color: day.isOpen ? palette.text : palette.sub }]}>
+          <Text style={[styles.hoursValue, { color: day.isOpen ? ink.text : ink.sub }]}>
             {day.isOpen ? day.hours : "Closed"}
           </Text>
         </View>
       ))}
-    </BlurView>
+    </PageSection>
   );
 });
 
 export const ProviderContactSection = React.memo(function ProviderContactSection({
   contact,
-  palette,
+  palette: rawPalette,
   onOpenLink,
   onOpenPublicLink,
   onGetInTouch,
@@ -181,8 +190,6 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
     /** Set only when `location` is a full address the provider made public
      *  ("Always visible"); the area alone isn't worth a map pin. */
     locationMapUrl: string | null;
-    /** Public "How to get there" — shown full-width under Location. */
-    locationNote: string;
     phone: string;
     whatsapp: string;
     email: string;
@@ -194,57 +201,43 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onOpenPublicLink: (url: string) => void;
   onGetInTouch: () => void;
 }) {
-  type ContactRow = { label: string; value: string; url: string | null; publicLink: boolean; stacked?: boolean | undefined };
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "contact");
+  const ink = sectionInk(palette);
+  type ContactRow = { label: string; value: string; url: string | null; publicLink: boolean };
+  // Providers type their website themselves, often without https://.
+  const websiteUrl = normalizeExternalBookingUrl(contact.website);
   const rows = ([
     contact.location
       ? { label: "Location", value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
-      : null,
-    contact.locationNote
-      ? { label: "How to get there", value: contact.locationNote, url: null, publicLink: false, stacked: true }
       : null,
     contact.phone ? { label: "Phone", value: "Message ›", url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
     contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
     contact.email ? { label: "Email", value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
     contact.instagram ? { label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
-    contact.website ? { label: "Website", value: "Visit ›", url: contact.website, publicLink: true } : null,
+    websiteUrl ? { label: "Website", value: "Visit ›", url: websiteUrl, publicLink: true } : null,
   ] as (ContactRow | null)[]).filter((row): row is ContactRow => row != null);
 
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Contact</Text>
+    <PageSection section="contact" palette={palette}>
       {rows.map(row => {
-        // A few sentences of directions don't fit the right-aligned value
-        // column, so they sit under their label at full width.
-        if (row.stacked) {
-          return (
-            <View key={row.label} style={[styles.contactRowStacked, { borderBottomColor: palette.separator }]}>
-              <Text style={[styles.hoursLabel, { color: palette.sub }]}>{row.label}</Text>
-              <Text style={[styles.infoText, { color: palette.text, marginTop: 4 }]}>{row.value}</Text>
-            </View>
-          );
-        }
         const content = (
           <>
-            <Text style={[styles.hoursLabel, { color: palette.sub }]}>{row.label}</Text>
-            <Text style={[styles.contactValue, { color: palette.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
+            <Text style={[styles.hoursLabel, { color: ink.sub }]}>{row.label}</Text>
+            <Text style={[styles.contactValue, { color: ink.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
           </>
         );
         return row.url ? (
           <TouchableOpacity
             key={row.label}
-            style={[styles.contactRow, { borderBottomColor: palette.separator }]}
+            style={[styles.contactRow, { borderBottomColor: ink.separator }]}
             onPress={() => (row.publicLink ? onOpenPublicLink(row.url!) : onOpenLink(row.url!))}
             activeOpacity={0.75}
           >
             {content}
           </TouchableOpacity>
         ) : (
-          <View key={row.label} style={[styles.contactRow, { borderBottomColor: palette.separator }]}>
+          <View key={row.label} style={[styles.contactRow, { borderBottomColor: ink.separator }]}>
             {content}
           </View>
         );
@@ -256,7 +249,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
       >
         <Text style={styles.contactButtonText}>Get In Touch</Text>
       </TouchableOpacity>
-    </BlurView>
+    </PageSection>
   );
 });
 
@@ -264,37 +257,37 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   groups,
   qualifications,
   goodToKnow,
+  howToGetThere,
   venueItems,
-  palette,
+  palette: rawPalette,
   onOpenImage,
 }: {
   groups: { label: string; chips: string[] }[];
   qualifications: string;
   goodToKnow: string;
+  /** Public directions to the venue — sits beside the venue photos. */
+  howToGetThere: string;
   venueItems: DbPortfolioItem[];
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "info");
   const venueImages = useMemo(
     () => venueItems.map(item => ({ uri: item.image_url })),
     [venueItems],
   );
-  if (groups.length === 0 && !qualifications && !goodToKnow && venueItems.length === 0) return null;
+  const ink = sectionInk(palette);
+  if (groups.length === 0 && !qualifications && !goodToKnow && !howToGetThere && venueItems.length === 0) return null;
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Additional Information</Text>
+    <PageSection section="info" palette={palette}>
       {groups.map((group, index) => (
         <View key={group.label} style={[styles.infoBlock, index === 0 && styles.infoBlockFirst]}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>{group.label}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>{group.label}</Text>
           <View style={styles.chipRow}>
             {group.chips.map(chip => (
               <View key={chip} style={[styles.chip, { borderColor: `${palette.accent}55`, backgroundColor: `${palette.accent}18` }]}>
-                <Text style={[styles.chipText, { color: palette.text }]}>{chip}</Text>
+                <Text style={[styles.chipText, { color: ink.text }]}>{chip}</Text>
               </View>
             ))}
           </View>
@@ -302,19 +295,25 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
       ))}
       {qualifications ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Qualifications</Text>
-          <Text style={[styles.infoText, { color: palette.text }]}>{qualifications}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>Qualifications</Text>
+          <Text style={[styles.infoText, { color: ink.text }]}>{qualifications}</Text>
         </View>
       ) : null}
       {goodToKnow ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Good to know</Text>
-          <Text style={[styles.infoText, { color: palette.text }]}>{goodToKnow}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>Good to know</Text>
+          <Text style={[styles.infoText, { color: ink.text }]}>{goodToKnow}</Text>
+        </View>
+      ) : null}
+      {howToGetThere ? (
+        <View style={styles.infoBlock}>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>How to get there</Text>
+          <Text style={[styles.infoText, { color: ink.text }]}>{howToGetThere}</Text>
         </View>
       ) : null}
       {venueItems.length > 0 ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Venue</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>Venue</Text>
           <FlatList
             data={venueItems}
             horizontal
@@ -338,50 +337,121 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
           />
         </View>
       ) : null}
-    </BlurView>
+    </PageSection>
+  );
+});
+
+/** The provider's own sections (Key Information, FAQs, Aftercare,
+ *  Disclaimer, Custom sections), each its own section under Additional Information,
+ *  in a fixed order. A Custom section is headed with the name the provider
+ *  gave it. Written on Policies & Info. */
+export const ProviderOwnSections = React.memo(function ProviderOwnSections({
+  sections,
+  palette,
+  providerName,
+}: {
+  sections: OwnSections;
+  palette: SectionPalette;
+  /** For the "Written by" line under Aftercare and Disclaimer. */
+  providerName: string;
+}) {
+  return (
+    <>
+      {filledOwnSections(sections).map(kind => {
+        // Latte: each of these on its own band of the pour.
+        const own = pourPalette(palette, kind);
+        const ink = sectionInk(own);
+        return kind === "custom" ? (
+        // No ids to key by: the list only changes when the provider saves,
+        // and then the whole profile reloads.
+        (sections.custom ?? []).map((item, index) => (
+          <PageSection key={`custom-${index}`} section="custom" title={item.title} palette={own}>
+            <Text style={[styles.infoText, { color: ink.text }]}>{item.body}</Text>
+          </PageSection>
+        ))
+      ) : (
+        <PageSection key={kind} section={kind} palette={own}>
+          {kind === "faq" ? (
+            (sections.faq ?? []).map((item, index) => (
+              <View
+                key={`${index}-${item.question}`}
+                style={[styles.faqItem, index > 0 && [styles.faqItemNext, { borderTopColor: ink.separator }]]}
+              >
+                <Text style={[styles.faqQuestion, { color: ink.text }]}>{item.question}</Text>
+                <Text style={[styles.infoText, { color: ink.sub }]}>{item.answer}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.infoText, { color: ink.text }]}>{sections[kind]}</Text>
+          )}
+          {ownSectionByline(kind, providerName) ? (
+            <Text style={[styles.ownByline, { color: ink.sub }]}>{ownSectionByline(kind, providerName)}</Text>
+          ) : null}
+        </PageSection>
+      );
+      })}
+    </>
   );
 });
 
 type PortfolioTile = DbPortfolioItem & { tileHeight: number; globalIndex: number };
 
-function tileHeight(item: DbPortfolioItem, width: number): number {
+function tileHeight(item: DbPortfolioItem, width: number, min = 140, max = 300): number {
   const ratio = item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
-  return Math.min(Math.max(width / ratio, 140), 300);
+  return Math.min(Math.max(width / ratio, min), max);
 }
+
+/** Pinboard's pins: three narrow columns, kept short so the board stays small. */
+const PIN_COLUMNS = 3;
+const PIN_GAP = 8;
+const PIN_MIN_HEIGHT = 90;
+const PIN_MAX_HEIGHT = 170;
 
 export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSection({
   items,
   loading = false,
-  palette,
+  loadError = false,
+  onRetry,
+  palette: rawPalette,
   onOpenImage,
   interactiveImages = true,
 }: {
   items: DbPortfolioItem[];
   loading?: boolean;
+  loadError?: boolean;
+  onRetry?: (() => void) | undefined;
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
   interactiveImages?: boolean;
 }) {
+  // Latte: the section's band of the pour, and the ink that reads on it.
+  const palette = usePourPalette(rawPalette, "portfolio");
   const [showAll, setShowAll] = useState(false);
   // Measured per render rather than captured at module load, so the two-column
   // maths stays right after a rotation or in split-screen.
   const { width: screenWidth } = useWindowDimensions();
-  const inlineColumnWidth = (screenWidth - 40 - COLUMN_GAP) / 2;
+  const pins = palette.pageStyle?.photoLayout === "pins";
+  const columnCount = pins ? PIN_COLUMNS : 2;
+  const columnGap = pins ? PIN_GAP : COLUMN_GAP;
+  const inlineColumnWidth = (screenWidth - 40 - columnGap * (columnCount - 1)) / columnCount;
   const modalColumnWidth = (screenWidth - 52) / 2;
   const images = useMemo(() => items.map(item => ({ uri: item.image_url })), [items]);
   const columns = useMemo(() => {
-    const result: PortfolioTile[][] = [[], []];
-    const heights = [0, 0];
+    const result: PortfolioTile[][] = Array.from({ length: columnCount }, () => []);
+    const heights: number[] = Array.from({ length: columnCount }, () => 0);
     items.slice(0, INLINE_PORTFOLIO_LIMIT).forEach((item, globalIndex) => {
-      const height = tileHeight(item, inlineColumnWidth);
-      const column = heights[0]! <= heights[1]! ? 0 : 1;
+      const height = pins
+        ? tileHeight(item, inlineColumnWidth, PIN_MIN_HEIGHT, PIN_MAX_HEIGHT)
+        : tileHeight(item, inlineColumnWidth);
+      // The shortest column takes the next photo (the first, on a tie).
+      const column = heights.indexOf(Math.min(...heights));
       result[column]!.push({ ...item, tileHeight: height, globalIndex });
-      heights[column]! += height + COLUMN_GAP;
+      heights[column]! += height + columnGap;
     });
     return result;
-  }, [items, inlineColumnWidth]);
+  }, [items, inlineColumnWidth, pins, columnCount, columnGap]);
 
-  if (loading) {
+  if (loading && items.length === 0) {
     return (
       <View style={styles.portfolioSection}>
         <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
@@ -394,7 +464,59 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
     );
   }
 
+  if (items.length === 0 && loadError) {
+    return (
+      <View style={styles.portfolioSection}>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        <Text style={[styles.portfolioLoadError, { color: palette.sub }]}>Work photos could not be loaded.</Text>
+        {onRetry ? (
+          <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry loading portfolio">
+            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>Try again</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
   if (items.length === 0) return null;
+
+  // Custom's Stamps: each photo a perforated postage stamp.
+  const stamps = !!palette.pageStyle?.stampPhotos;
+  // Embossed: each photo sits in a plate mark pressed into the page, like a print.
+  const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
+  // Calling Card: each photo a cream-bordered print pinned by an accent clip.
+  const clipped = !!palette.pageStyle?.clippedPhotos;
+  // Gazette: each photo square in a fine ink frame, under a newsprint dot screen.
+  const halftone = !!palette.pageStyle?.halftonePhotos;
+
+  // Novel sets each photo on a page with its caption in italic under it.
+  const plates = !!palette.pageStyle?.pagePhotos;
+  // Posy: three across, each with a round arched top.
+  const arches = palette.pageStyle?.photoLayout === "arches";
+  // Riviera: three across as white-bordered prints, each tilted a little.
+  const polaroids = palette.pageStyle?.photoLayout === "polaroids";
+  // Feature (Ledger): one big photo beside two small ones, then two more under them.
+  const feature = palette.pageStyle?.photoLayout === "feature";
+  const portfolioWall = palette.pageStyle?.photoLayout === "portfolioWall";
+  // Muse: one row of tall photos that scrolls sideways, every photo in it.
+  const swipe = palette.pageStyle?.photoLayout === "swipe";
+  // Poster: two across as white-bordered prints, each held on by a strip of tape.
+  const taped = palette.pageStyle?.photoLayout === "taped";
+  // Capsule: four across as tall capsules at different heights, feet level.
+  const capsules = palette.pageStyle?.photoLayout === "capsules";
+  const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
+    <TouchableOpacity
+      key={item.id}
+      activeOpacity={0.88}
+      onPress={() => onOpenImage(images, index)}
+      disabled={!interactiveImages}
+      style={[styles.featureTile, style]}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+    >
+      <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+    </TouchableOpacity>
+  );
+  const divider = palette.pageStyle?.divider && showsDividerAbove(palette.pageStyle, "portfolio") ? palette.pageStyle.divider : null;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -402,25 +524,191 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   };
 
   return (
-    <View style={styles.portfolioSection}>
+    <View style={[styles.portfolioSection, pourBandStyle(palette)]}>
+      {divider ? <SectionDivider divider={divider} accent={palette.accent} /> : null}
       <View style={styles.portfolioHeading}>
-        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
-        {items.length > INLINE_PORTFOLIO_LIMIT ? (
+        {/* Classic's Portfolio title has always sat on the page in Bakbak, not
+            inside a card, so it keeps its own Text; a page style draws its
+            own heading here. */}
+        {palette.pageStyle && palette.pageStyle.heading !== "plain" ? (
+          <View style={styles.portfolioStyledHeading}>
+            <PageSectionHeading section="portfolio" palette={palette} />
+          </View>
+        ) : (
+          <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        )}
+        {!swipe && items.length > (portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : capsules ? CAPSULE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
-      <View style={styles.columns}>
+      {portfolioWall ? (
+        <View style={styles.portfolioWall}>
+          {items.slice(0, PORTFOLIO_WALL_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+              style={[styles.portfolioWallTile, index === 1 && styles.portfolioWallMiddle, { backgroundColor: palette.cardBackground }]}
+            >
+              <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : capsules ? (
+        <View style={styles.capsuleRow}>
+          {items.slice(0, CAPSULE_PHOTO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={[styles.capsuleTile, { width: (screenWidth - 40 - CAPSULE_GAP * 3) / 4, aspectRatio: CAPSULE_PHOTO_SHAPES[index % CAPSULE_PHOTO_SHAPES.length], backgroundColor: palette.separator }]}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+            >
+              <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : taped ? (
+        <View style={styles.tapedGrid}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={[styles.tapedPrint, { transform: [{ rotate: index % 2 === 0 ? "-2.5deg" : "2deg" }] }, index % 2 === 1 && styles.tapedLower]}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+            >
+              <View style={styles.tapedPhoto}>
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+              </View>
+              <View style={[styles.tapedStrip, { transform: [{ rotate: index % 2 === 0 ? "4deg" : "-5deg" }] }]} pointerEvents="none" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : swipe ? (
+        <>
+          {/* A list, not a ScrollView: the whole portfolio is in this row, so
+              only the photos near the screen are drawn. */}
+          <FlatList
+            data={items}
+            horizontal
+            keyExtractor={item => item.id}
+            showsHorizontalScrollIndicator={false}
+            style={styles.swipeRow}
+            contentContainerStyle={styles.swipeContent}
+            nestedScrollEnabled
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={5}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => onOpenImage(images, index)}
+                disabled={!interactiveImages}
+                style={styles.swipeTile}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={item.caption || `Portfolio photo ${index + 1} of ${items.length}`}
+              >
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+              </TouchableOpacity>
+            )}
+          />
+          {items.length > 2 ? <Text style={[styles.swipeHint, { color: palette.sub }]}>Swipe for more</Text> : null}
+        </>
+      ) : feature ? (
+        <View style={styles.featureGrid}>
+          <View style={styles.featureRow}>
+            {items[0] ? featureTile(items[0], 0, items.length > 1 ? styles.featureBig : styles.featureOnly) : null}
+            {items.length > 1 ? (
+              <View style={styles.featureSide}>
+                {items.slice(1, 3).map((item, i) => featureTile(item, i + 1, styles.featureSmall))}
+              </View>
+            ) : null}
+          </View>
+          {items.length > 3 ? (
+            <View style={styles.featureRow}>
+              {items.slice(3, 5).map((item, i) => featureTile(item, i + 3, styles.featureSmall))}
+            </View>
+          ) : null}
+        </View>
+      ) : polaroids ? (
+        <View style={styles.polaroidGrid}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={[styles.polaroid, { transform: [{ rotate: POLAROID_TILTS[index % POLAROID_TILTS.length]! }] }, index % 3 === 1 && styles.polaroidRaised]}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+            >
+              <View style={styles.polaroidPhoto}>
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : arches ? (
+        <View style={styles.archGrid}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={styles.archTile}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+            >
+              <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+      <View style={[styles.columns, clipped && styles.clippedColumns, pins && styles.pinColumns]}>
         {columns.map((column, columnIndex) => (
-          <View key={columnIndex} style={styles.column}>
-            {column.map(item => (
+          <View key={columnIndex} style={[styles.column, clipped && styles.clippedColumn, pins && styles.pinColumn]}>
+            {column.map((item, rowIndex) => (
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.88}
                 onPress={() => onOpenImage(images, item.globalIndex)}
                 disabled={!interactiveImages}
-                style={styles.portfolioTile}
+                style={
+                  stamps
+                    ? [
+                        styles.stampTile,
+                        // The dotted border in the page's own colour reads as the perforations.
+                        { borderColor: palette.background, transform: [{ rotate: item.globalIndex % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                      ]
+                    : plate
+                      ? [styles.plateTile, plate]
+                      : halftone
+                        ? [styles.halftoneTile, { borderColor: palette.text }]
+                      : plates
+                        ? [styles.bookPlateTile, { backgroundColor: palette.cardBackground }]
+                      : clipped
+                        ? [
+                            styles.clippedPrint,
+                            // A slight, alternating tilt, as if pinned by hand.
+                            { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                          ]
+                        : pins
+                          ? [styles.pinTile, { backgroundColor: palette.cardBackground }]
+                        : palette.pageStyle?.roundedPhotos
+                          ? [styles.portfolioTile, styles.roundedTile]
+                          : styles.portfolioTile
+                }
               >
                 <Image
                   source={{ uri: item.image_url }}
@@ -429,18 +717,30 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   transition={0}
                   recyclingKey={item.id}
                 />
-                {item.caption ? (
-                  <View style={styles.captionWrap}>
+                {halftone ? <HalftoneScreen /> : null}
+                {plates ? (
+                  item.caption ? (
+                    <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>{item.caption}</Text>
+                  ) : null
+                ) : pins && item.caption ? (
+                  <Text style={[styles.pinCaption, { color: palette.text }]} numberOfLines={2}>{item.caption}</Text>
+                ) : item.caption ? (
+                  <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
                   </View>
                 ) : null}
+                {clipped ? <BulldogClip width={40} colour={palette.accent} style={styles.clippedClip} /> : null}
               </TouchableOpacity>
             ))}
           </View>
         ))}
       </View>
+      )}
 
       <Modal visible={showAll} animationType="slide" onRequestClose={() => setShowAll(false)}>
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <SafeAreaView style={[styles.modal, { backgroundColor: palette.background }]}>
           <View style={styles.modalHeader}>
             <View>
@@ -489,6 +789,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
             )}
           />
         </SafeAreaView>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
     </View>
   );
@@ -500,14 +802,7 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12 },
-  card: {
-    padding: 22,
-    borderRadius: 26,
-    marginBottom: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  highlight: { ...StyleSheet.absoluteFill },
+  square: { borderRadius: 0 },
   cardTitle: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   bodyText: { fontFamily: "Jura-VariableFont_wght", fontSize: 12, lineHeight: 18, marginTop: 7 },
   review: { marginBottom: 15, paddingBottom: 15, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -535,10 +830,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 16,
   },
-  contactRowStacked: {
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   contactValue: { flex: 1, textAlign: "right", fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12 },
   contactButton: { minHeight: 46, borderRadius: 15, alignItems: "center", justifyContent: "center", marginTop: 18 },
   contactButtonText: { color: "#fff", fontFamily: "BakbakOne-Regular", fontSize: 13 },
@@ -546,6 +837,10 @@ const styles = StyleSheet.create({
   infoBlockFirst: { marginTop: 0 },
   infoLabel: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, marginBottom: 7, textTransform: "uppercase", letterSpacing: 0.5 },
   infoText: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, lineHeight: 19 },
+  ownByline: { fontFamily: "Jura-VariableFont_wght", fontSize: 12, fontWeight: "600", marginTop: 10 },
+  faqItem: { paddingVertical: 2 },
+  faqItemNext: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  faqQuestion: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 13, lineHeight: 19, marginBottom: 4 },
   venueStrip: { gap: 10, paddingRight: 8 },
   venueTile: { width: 150, height: 105, borderRadius: 14, overflow: "hidden" },
   venueImage: { width: "100%", height: "100%" },
@@ -554,10 +849,85 @@ const styles = StyleSheet.create({
   loadingLine: { height: 12, borderRadius: 6, width: "100%" },
   loadingLineShort: { width: "68%" },
   portfolioHeading: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  portfolioStyledHeading: { flexShrink: 1, paddingTop: 16 },
   portfolioSeeAll: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12 },
+  portfolioLoadError: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, marginTop: 10, marginBottom: 8 },
   columns: { flexDirection: "row", gap: COLUMN_GAP },
+  // Posy: three arched photos to a row. A corner radius past half the side is
+  // drawn at half, so 999 gives a full round top whatever the tile's width.
+  // Muse: the row runs to the sheet's right edge, so the next photo peeks in.
+  swipeRow: { marginRight: -20 },
+  swipeContent: { gap: 8, paddingRight: 20 },
+  swipeTile: { width: 140, height: 188, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.06)" },
+  swipeHint: { fontSize: 11, marginTop: 8, textAlign: "center" },
+  // Feature (Ledger): a big photo two rows tall, then square-ish small ones beside and under it.
+  featureGrid: { gap: 6 },
+  featureRow: { flexDirection: "row", gap: 6 },
+  featureSide: { flex: 1, gap: 6 },
+  featureTile: { overflow: "hidden", borderRadius: 2, backgroundColor: "rgba(0,0,0,0.06)" },
+  featureBig: { flex: 1, height: 236 },
+  featureOnly: { flex: 1, height: 300 },
+  featureSmall: { flex: 1, height: 115 },
+  portfolioWall: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 8 },
+  portfolioWallTile: { flex: 1, height: 164, borderRadius: 10, overflow: "hidden" },
+  portfolioWallMiddle: { height: 204 },
+  // Riviera: white prints with a deep bottom border, a soft shadow under each.
+  polaroidGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 14, paddingVertical: 6 },
+  polaroid: {
+    width: "31%", backgroundColor: "#FFFFFF", padding: 5, paddingBottom: 20,
+    shadowColor: "#000000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 3,
+  },
+  polaroidRaised: { marginTop: -6 },
+  polaroidPhoto: { width: "100%", aspectRatio: 0.88, overflow: "hidden", backgroundColor: "#EEEEEE" },
+  capsuleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", columnGap: CAPSULE_GAP, rowGap: 10 },
+  capsuleTile: { borderRadius: 999, overflow: "hidden" },
+  // Retreat and Storefront: three arched photos to a row. alignItems must not
+  // be the default stretch: on a phone (Yoga) a stretched tile takes its
+  // height from the row, which starts at 0, instead of from its aspectRatio,
+  // so every photo drew 0pt tall and the portfolio vanished. The browser
+  // sizes it either way, which is why it only showed on the device.
+  archGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", rowGap: 10 },
+  tapedGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 22, paddingTop: 12, paddingBottom: 8, paddingHorizontal: 4 },
+  tapedPrint: { width: "46%", padding: 6, paddingBottom: 18, backgroundColor: "#FFFDF9", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  tapedLower: { marginTop: 14 },
+  tapedPhoto: { width: "100%", aspectRatio: 0.86, overflow: "hidden", backgroundColor: "#EEEEEE" },
+  tapedStrip: { position: "absolute", top: -9, alignSelf: "center", width: 56, height: 18, backgroundColor: "rgba(238,232,220,0.85)" },
+  archTile: { width: "31.5%", aspectRatio: 0.68, overflow: "hidden", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  pinColumns: { gap: PIN_GAP },
+  pinColumn: { gap: PIN_GAP },
+  pinTile: {
+    borderRadius: 14, overflow: "hidden",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
+  pinCaption: { fontFamily: "HankenGrotesk-Medium", fontSize: 11, lineHeight: 15, paddingHorizontal: 8, paddingVertical: 7 },
+  // Lounge, Soft Focus and Bow: rounder, softer photos.
+  roundedTile: { borderRadius: 24 },
+  halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },
+  bookPlateTile: { borderRadius: 2, padding: 5, paddingBottom: 0 },
+  plateCaption: { fontFamily: "IMFellEnglish-Italic", fontSize: 13, lineHeight: 18, paddingVertical: 6, textAlign: "center" },
+  // Calling Card: room above each row for the clips, and the print's cream border.
+  clippedColumns: { paddingTop: 14 },
+  clippedColumn: { gap: COLUMN_GAP + 18 },
+  clippedPrint: {
+    backgroundColor: CALLING_CARD_PAPER,
+    padding: 6,
+    paddingBottom: 18,
+    borderRadius: 1,
+    shadowColor: "#14040A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  clippedCaption: { left: 6, right: 6, bottom: 18 },
+  clippedClip: { position: "absolute", top: -14, alignSelf: "center" },
+  stampTile: {
+    padding: 6, borderWidth: 4, borderStyle: "dotted", backgroundColor: "#FBF6EE",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 6, elevation: 2,
+  },
+  plateTile: { padding: 7, borderWidth: 1.5, borderRadius: 1, overflow: "hidden" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,

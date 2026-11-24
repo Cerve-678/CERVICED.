@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (relative: string): string =>
   fs.readFileSync(path.join(__dirname, '..', relative), 'utf8');
@@ -66,7 +67,7 @@ describe('provider management performance contracts', () => {
   });
 
   it('bounds owner promotion and nested service collections', () => {
-    const source = read('services/databaseService.ts');
+    const source = readDatabaseLayer();
     const promotions = source.slice(
       source.indexOf('export async function getMyPromotions'),
       source.indexOf('export interface UpsertPromotionInput'),
@@ -103,7 +104,9 @@ describe('provider management performance contracts', () => {
     expect(source).toContain('scrollRef.current?.scrollToEnd');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
     expect(source).toContain('Issue a refund');
-    expect(source).toContain('>Cancel</Text>');
+    // The way out stays on screen: "Cancel", or "Go back" once the provider
+    // has tapped the refund button and is confirming.
+    expect(source).toContain(`{confirming ? 'Go back' : 'Cancel'}</Text>`);
   });
 
   it('saves the full weekly schedule through one atomic RPC', () => {

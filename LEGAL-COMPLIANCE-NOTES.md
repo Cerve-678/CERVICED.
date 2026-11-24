@@ -11,6 +11,14 @@ Business context as understood from the code: **Cerviced Ltd**, UK-based
 (£ pricing), a two-sided marketplace app connecting clients with independent
 beauty/wellness providers. Some data collected is health-adjacent.
 
+**2026-11-03: the in-app Terms screen is gone.** Every Terms link in the app
+(sign-in, settings, Help Centre, checkout, a provider agreeing at publish or in
+Policies, the Terms-changed notice) now opens `cerviced.co/legal`, built from
+`waitlist/legal/index.html`. That page is the only copy of the Terms. The
+mentions of `TermsScreen` below describe the old in-app text and are kept as
+history. The in-app Privacy Policy in About (`AboutScreen.tsx`) is still
+separate from the website's and still says privacy@cerviced.app.
+
 ---
 
 ## 1. Missing Privacy Policy
@@ -216,6 +224,30 @@ built** and is a distinct, payment-sensitive feature:
 Until then, the app reads the provider's policy only to *display* it and to
 *warn* the client they're inside the notice window — it does not act on it
 financially.
+
+**Updated 2026-11-02 — late-cancel charge is now a provider-set amount (PR #266, not yet live).**
+"Half the price" became a £ amount the provider types, capped by the server at
+half the service price, and at the deposit if that's all the client paid.
+Questions to raise, not resolved:
+- The Terms and legal site still say the most a provider can keep is the deposit
+  or half the price. That stays true, but neither mentions a provider-set amount.
+- The client sees "£20 kept, at most half the price" on the profile and booking,
+  not the exact figure for their own booking before they tick to agree.
+- `bookings.policy_snapshot` comes from the client's checkout payload, and
+  `apply-cancellation-refund` reads the penalty from it. A tampered snapshot could
+  lower or remove a late-cancel charge. This predates the custom amount.
+
+**Added 2026-11-03 — non-refundable deposits (user-directed, PR #261's
+replacement on `feat/non-refundable-deposit-v2`).** A provider can require one:
+it's kept whenever the client cancels, even well before the notice window.
+CERVICED refunds its own fee when the deposit is the only thing kept. The user
+chose to ship without a solicitor's review. Still open: whether keeping a
+deposit on a cancellation made well in advance is fair under the Consumer
+Rights Act 2015 (the amount against the provider's real loss), and whether the
+Consumer Contracts Regulations 2013 give a cooling-off right on these bookings
+(there is no stated position). Terms clauses 10, 13 and 31 carry wording that
+is **not lawyer-reviewed**, and Provider Terms have no re-consent step
+(section 10).
 
 ## 7. Reviews and user-generated content
 
@@ -474,6 +506,16 @@ See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
    in-app messages). Free for now; before it is switched on it needs Terms
    wording for price, trial length, auto-renewal, cancellation and refunds, and
    the App Store / Play billing rules for in-app subscriptions.
+4. **"Become a full member" shows a price (2026-11-02).** Link-only Home and
+   the switch sheet said "£25.99 a month, 2 months free on us" (the price was
+   taken off every screen on 2026-11-06; "2 months free" still shows), but nothing is
+   charged and the Terms don't mention a provider subscription. A stated price
+   and free period reads as a promise: before anyone is billed, the Terms need
+   the price, that the free months start the day they go live again
+   (decided 2026-11-02, recorded in `providers.full_member_free_from`),
+   auto-renewal, cancellation and refunds, and whether App Store / Play billing rules apply (a subscription
+   sold inside the app). Until then, providers who switched were told a price
+   that may change, which is worth checking with a solicitor.
 
 **Not changed unilaterally** — flagged for the product owner.
 
@@ -592,17 +634,20 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
 **Open before launch:**
 - `[company number]` and `[registered address]` placeholders in clause 1.
 - The app's deletion grace is still 1 day for testing. The Terms say 30.
+- **Deletion can now take longer than 30 days (2026-11-12).** An account isn't deleted while money on it is still moving (a held payout, an open refund request, a debt, a refund processing); the job waits and retries daily. The Terms and Privacy wording promise deletion after 30 days, so they may need to say "or once any payments are settled". A provider with an unsettled debt has no future payouts to clear it, so their deletion can wait indefinitely until someone settles it by hand. Raise both with the solicitor (UK GDPR erasure vs. keeping what's needed to settle money); not reworded here.
+- **Settled money records are still erased with the account** (payouts, refunds, fee charges, tips). UK accounting and tax rules usually expect transaction records to be kept for years, which is a lawful reason to keep them after a deletion request. Keeping them, anonymised, is a product and legal decision for the user, not built.
 - Clause 4 describes Search order as featured-then-rating (main today). Update
   it when ranked search ships, and say so if featuring is ever paid.
 - No in-app report button for reviews: clause 13 routes reports to the support
   inbox (§7).
 - Things to put to a solicitor: 16 as the contracting age (§5); provider-set
   cancellation terms under the CRA 2015 (§6); the foreseeable-loss liability
-  clause; holds up to 30 days and chargeback recovery from future payouts in
-  shared Terms rather than a signed provider agreement; the provider indemnity;
+  clause; chargeback recovery from future payouts in shared Terms rather
+  than a signed provider agreement; the provider indemnity;
   who is data controller for client health information passed to providers
   (§2); PECR separation of marketing and booking notifications (§8).
 - No re-consent: existing users aren't asked to accept the new Terms (§10).
+- **Payouts changed 2026-11-10 and the Terms haven't:** provider Terms (cerviced.co/legal, "Payout period" and "Payouts") say CERVICED holds a provider's share for "the payout period you choose", then Stripe pays it "on its own schedule". Now CERVICED always holds 24 hours, and the provider chooses their Stripe bank schedule (daily, weekly, monthly; monthly by default). The 30-day hold question is gone with it. Wording is the user's call, not drafted here. Existing providers are moved to monthly the first time they open Payments, with **no advance notice**: the user decided on 2026-11-10 that this isn't a change needing the Provider Terms' 15-day notice. The legal review flagged it as arguable (Provider Terms §12 and §34, "significant change"); raise it with the solicitor along with the Terms wording. Nothing records that a provider was told.
 - The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).
 
 ## 20. PayPal at checkout (2026-10-19)
@@ -704,3 +749,348 @@ a late cancellation.
   year), a sixth of every fee is VAT. Not a Terms question, but it changes
   what the fee earns. Ask an accountant. (Assumes the fee is VAT-inclusive; confirm.)
 - **Not lawyer-reviewed**, like the rest of this list.
+
+## 23. Following people and "Show where I go" (2026-11-08)
+
+Being built on `feat/follow-people-backend` (migration `20261108220000`, applied
+live 2026-11-08), with the client screens on `feat/follow-people-find`. Clients can follow other clients. People who follow you and are
+approved see your face on the cards of providers you've recommended or
+booked with. Raised by `cerviced-legal-flagger` on 2026-11-08. These are the
+user's decisions:
+
+- **"Show where I go" is on by default for adults.** It is one switch: off
+  means you appear on no cards at all, recommends included. For under-18s it
+  starts off.
+- **There is no choice screen at sign-up.** A one-time notice comes after the
+  client's first completed booking. Their bookings don't show anyone anything
+  until they've seen it. Recommends are a deliberate tap, so they show before
+  the notice.
+- **Follows need approval by default.** An open account accepts everyone, and
+  every follower of an open account sees where they go. Under-18s are always
+  private.
+- **Contacts are matched on unverified numbers.** `users.phone` is typed in
+  and never checked, and 0 of 18 accounts are verified. So someone can enter
+  a friend's number and appear in their friends' contacts as a match. The user
+  chose this over SMS verification.
+- **Clients can hide any provider.** Aesthetics visits never show unless the
+  client recommends that provider.
+- **Cards never name a service,** only that someone recommends or has been and
+  how many times.
+
+**Gaps to raise (not resolved):**
+- **Art. 25 (data protection by default).** Booking history is shared by
+  default with no choice at sign-up. The flagger rated a two-button choice at
+  sign-up as most defensible. The user chose the post-booking notice instead.
+  Record the reasoning in a DPIA.
+- **No DPIA.** Sharing behaviour and uploading contact hashes is likely
+  high-risk under Art. 35. A one-page DPIA is needed before launch, and it
+  must cover 16–17 year olds.
+- **Children's Code.** Under-18s get default-off, always-private and are not
+  findable by phone. Open questions: should adults be able to follow a 16 or
+  17 year old at all, and does a request from an adult need extra friction?
+- **Special-category inference.** A provider's name alone can reveal health
+  or sex life (laser, medical aesthetics, intimate waxing). Mitigations are
+  Aesthetics hidden unless recommended, plus a per-provider hide. Waxing
+  isn't a separate category, so intimate waxing under BROWS/AESTHETICS etc. is
+  not auto-hidden.
+- **Hashing is not anonymisation.** UK mobiles are a small space, so
+  `match_contact_hashes` can be brute-forced into a "who is on CERVICED"
+  oracle. Hashes are compared in-query and never stored. Edge, Supabase and
+  Sentry logs must not capture the request body. Privacy text must say all
+  of this, plus the "findable by number" switch.
+- **Privacy Policy and Terms say nothing about this yet.** Both need text
+  before launch: what is shared and with whom, the default, contact
+  matching, blocking, retention and deletion. (There is no search by name
+  since 2026-11-09, see below.) That means
+  `waitlist/legal/index.html` and the in-app About text, which still names the
+  dead privacy@ address (§13). Provider Terms should say clients can show
+  they've visited.
+- **Store requirements.** iOS needs an `NSContactsUsageDescription`, with
+  wording to be decided by the user. Android needs `READ_CONTACTS` and an
+  update to the Data safety form. The App Store privacy label needs Contacts
+  added, plus booking history shared with other users.
+- **Accuracy.** "Has been" counts completed bookings, which are
+  auto-completed (§12), so a visit that didn't happen can still show.
+- **Deletion.** Removing the client hat deletes every follow, block,
+  recommend, hide and setting by trigger. Account deletion cascades. During
+  the 30-day grace period the person disappears from cards, search and
+  matching straight away.
+- **Reporting.** There is no report route for harassment, impersonation or a
+  stranger following a minor. Decide whether support@cerviced.co covers it
+  at launch.
+- **Age is self-declared.** `users.dob` can be edited by its owner (the
+  `users_owner_update` policy), so a 16-year-old could change it and unlock
+  open accounts and phone matching. Unknown age counts as under 18.
+  Someone who joined under 18 keeps "Show where I go" off after turning 18
+  until they switch it on.
+- **Security review mitigations (2026-11-08).** Contact matching is limited
+  to 3000 numbers a day and 20 checks an hour per account, at most 1000 per
+  call. A number on two accounts matches neither. Follow requests are limited to 100 a day, and a declined
+  request can't be re-sent for 30 days; the decline is never shown. All of
+  this is client-hat only. Open question: should "findable by phone
+  number" default to off? Both the security review and the legal flagger
+  suggest it. It is on now so the feature works.
+- **Contacts only, no name search (user decision 2026-11-09).** People can
+  only be found through phone contacts. The name search box was removed and
+  `search_people` is dropped by migration 20261109240000. So "findable by
+  phone number" is now the only way anyone finds you: with it off (and
+  always for under-18s), nobody can find you, though people you follow
+  still see you in Followers with a Follow back button. This makes the
+  findable-default question above more consequential than it was.
+- **Raised on the client screens (`feat/follow-people-find`, 2026-11-08).**
+  These are not resolved:
+  - **"Never which service you had" is literally true, but the provider's name
+    can still say a lot** (see Special-category inference above). The copy
+    used to say "never what you had done", which claimed more than this.
+  - **Turning the switch on counts as the notice.** If someone turns Show where
+    I go on in Your circle, that marks the notice seen, so their visits count.
+    Without this, an under-18 who opts in later would never have visits shown.
+    Under-18s now get a confirm first (decided 2026-11-08). Still open: is
+    the switch's own subtitle enough for adults?
+  - **Dismissing the notice.** It is marked seen only when the client taps
+    "Got it" or "Turn it off". Swiping it away hides it for that session.
+  - **The "Findable by phone number" switch was hidden** until contacts
+    matching was built. It is back on `feat/follow-people-contacts`, where
+    contacts matching now exists. The server default is still on for adults.
+- **Decided by the user on 2026-11-08 (`feat/follow-people-decisions`,
+  migration `20261109130000`, APPLIED live 2026-11-09):**
+  - **Visits count only from the notice onwards.** Only appointments that end
+    after the client saw the notice (or turned Show where I go on) count. Past
+    bookings are never shared. The notice now says "From now on… Appointments
+    you've already had aren't shown." That is true now the migration is
+    applied.
+  - **Under-18s get a confirm** before Show where I go turns on.
+  - **Blocks can be undone** from a Blocked list in Your circle. The block
+    confirm now says where.
+- **Contacts matching built (`feat/follow-people-contacts`, 2026-11-08).**
+  - iOS `NSContactsUsageDescription`, chosen by the user on 2026-11-08: "Find
+    friends who are already on CERVICED. Your address book is never saved."
+    It gives the reason, which App Store review (guideline 5.1.1) expects. It
+    replaced an earlier line that said "scrambles", which promised more than
+    unsalted hashing gives.
+  - Android requests `READ_CONTACTS` only; `WRITE_CONTACTS` is blocked.
+  - The permission is asked only when the client taps "Allow contacts" in Your
+    circle.
+  - Only hashes leave the phone. At most 3000 numbers are checked per day.
+    Nothing is kept on the device or logged.
+  - **Matches show only the account's own name,** under an "On CERVICED"
+    heading. The user decided on 2026-11-08 not to show the name the client
+    saved, so a fake account can't borrow it to look confirmed.
+  - **Since 2026-11-09 (PR #407) contact names ARE read**, on the phone only,
+    to list everyone not on CERVICED with an Invite button (opens a text
+    message). Names are held in memory for the session and are never sent,
+    stored or logged; the server still only gets hashes. To raise: whether the
+    Privacy text, the App Store label and Play Data safety need to mention
+    on-device name reading (Apple generally treats on-device-only processing
+    as not "collected", but this hasn't been checked by a lawyer).
+  - Still open: the App Store privacy label (Contacts), the Play Data safety
+    form, and the Privacy text above.
+
+## 24. Becca keeps the questions she didn't understand (2026-11-10)
+
+`becca_misses` (`20261110170000_becca_misses.sql`, branch
+`feat/becca-learns-from-misses`) keeps a question Becca missed for 90 days,
+linked to the account, with what the person ended up choosing. A weekly review
+(`/review-becca-misses`, run with Claude, so Anthropic processes the rows)
+turns them into new phrases. User decisions 2026-11-10: 90 days; never keep a
+question about health. Privacy Policy sections 3 (lawful basis), 5 (Becca),
+6 (Anthropic's purpose) and 8 (retention) were updated in the same change.
+
+What's done:
+- Questions that mention health or another Art. 9 subject (religion,
+  sexuality, gender identity), or a child's details, are dropped server-side
+  before anything is stored. Emails, phone numbers, street addresses,
+  postcodes and @handles are blanked. The policy says the check isn't
+  perfect rather than promising "never", and the review deletes any that slip
+  through (asking the user first).
+- Rows go when the person deletes a Becca chat, that hat's profile or the
+  account (trigger on `becca_chat_sessions`, plus the `auth.users` cascade),
+  and after 90 days regardless.
+
+To raise (not lawyer-reviewed):
+- **No written Legitimate Interests Assessment.** The basis is legitimate
+  interest. A one-page LIA (purpose, necessity, balancing) is expected by the
+  ICO and should cover 16-17 year old users (Children's Code), free text
+  linked to the account, and the imperfect keyword filter.
+- **Objection requests need a step.** Section 9 offers the right to object.
+  Act on one with `DELETE FROM public.becca_misses WHERE user_id = '<id>'`.
+  There's no in-app switch to opt out of this log; consider one.
+- **Necessity of unresolved rows.** Rows that resolved nowhere teach no
+  phrase; they're kept for "what Becca can't do yet" themes. Whether that
+  justifies keeping them linked to the account is a balancing call.
+- **Special category leak route.** A sensitive question the filter misses
+  sits in the table until the next weekly review. See section 2 above.
+- **Becca chat history** (`becca_chat_messages`) already keeps everything
+  typed, unfiltered, while the account is open. That predates this change and
+  is the larger exposure.
+- **Section 5 still says messages go to NVIDIA,** but the AI router is off in
+  production (user's call: switch on only after a scorecard). It overstates,
+  which is the safe direction; recheck when the router changes.
+
+## 25. Late cancellation charge on deposit bookings, and same-month reschedules (2026-11-13)
+
+Branch `feat/late-cancel-half-top-up`. At the user's direction, **not
+lawyer-reviewed**:
+
+- **What changed:** the late-cancel Custom £ amount is replaced by one "Half the
+  price" option. A client who paid only a deposit and cancels inside the notice
+  period loses the deposit, and the provider may now also charge the client's
+  saved card the rest up to half the price (half of service + add-ons, minus the
+  deposit), within 24 hours of the appointment's end. Until now the app only
+  ever kept part of what had been paid; this is the first charge **after a
+  cancellation**, not just after an appointment.
+- **Wording (user chose a separate tick box, option C):** fee terms version
+  `2026-11-13-late-cancel` in `src/constants/feeTerms.ts`: new heading, a
+  late-cancellation paragraph in the body, and `LATE_CANCEL_CONSENT_LINE`. The
+  cancel sheet says "Late cancellation: you'll lose your £X deposit and may be
+  charged up to £Y more." (the user's chosen wording 2). cerviced.co/legal Client
+  Terms §12, §13 and §16, Provider Terms §8 and the Privacy payments line were
+  updated to match.
+- **Raise:** whether deposit + charge up to half the price is a genuine
+  pre-estimate of loss rather than a penalty under the Consumer Rights Act 2015
+  (Schedule 2 grey list para 5 / 6: disproportionate sums on cancellation),
+  especially for long-notice bookings where the slot can be re-sold; whether
+  the checkout tick box is a sufficient mandate for this merchant-initiated
+  charge; and whether a 24h-after-appointment window is reasonable when the
+  cancel may be days earlier.
+- **Same-month reschedules:** providers can require a client's new date to stay
+  in the booking's calendar month. Raise whether restricting a move this way,
+  combined with a late-cancel charge, leaves a client who can't make any date
+  that month with only a charged cancellation.
+- **Raised by the legal-flagger review (2026-11-13), for the solicitor:**
+  - SCA / merchant-initiated transaction rules for a variable "up to £Y"
+    off-session charge after a cancellation: is an exemption claimed, does the
+    mandate need the ceiling and timing stated, and who carries a chargeback on
+    it (provider, Cerviced as collecting agent, or both).
+  - The right test: CRA 2015 s.62 fairness and Schedule 2 paras 5-6, plus CMA
+    guidance on cancellation charges (for consumers), rather than "genuine
+    pre-estimate"; Cavendish v Makdessi for the penalty rule.
+  - The saved card can't be removed until the charge window closes, which now
+    runs to 24 hours after a cancelled appointment, possibly weeks after the
+    cancel. Is that consistent with UK GDPR withdrawal and erasure, and should
+    the Privacy text say so?
+  - No notice or re-acceptance is asked of existing users for this material
+    change (CRA Sch 2 para 11, variation of terms). Bookings already made carry
+    no late cancellation amount, so none can be charged; future bookings are
+    agreed at checkout. Providers whose saved Custom policy was turned into
+    Half (0 at authoring) weren't asked.
+  - Agreement to the late cancellation fee is a condition of booking (the
+    tick box blocks checkout); confirm "performing our contract" is the right
+    lawful basis framing.
+  - How the Consumer Contracts Regulations 14-day cancellation right interacts
+    with a pre-paid deposit for an appointment inside 14 days (the leisure
+    services exemption may or may not cover a salon appointment).
+  - Providers contracting with consumers carry their own unfair-terms risk for
+    the Half policy they choose; the Provider Terms don't tell them so.
+
+## 26. Refund requests close five days after the appointment (2026-11-13)
+
+The owner's rule: "client has five days after the day of the appointment to
+request for a refund". In-app refund requests close at the end of the fifth
+UK day after the appointment day (`request_booking_refund()`, migration
+`20261113190000`; `REFUND_REQUEST_DAYS` in the app). Complaints, emailing
+support, a provider refunding on their own, requests already open, and
+chargebacks are not limited. Terms: Client Terms §15, Fees policy §9,
+Provider Terms §10, Complaints §1. Not lawyer-reviewed. Same untested area as
+section 6.
+
+Owner's answers (2026-11-13): applies only to bookings made after the
+migration is applied (`refund_request_window_starts_at()`), so earlier
+bookings keep the open-ended rule, as Client Terms §34 promises; no Terms
+notice is sent; the five days apply to every reason, including a wrong
+charge.
+
+To raise (not lawyer-reviewed):
+- **Notice (owner chose none).** Client Terms §34 promises notice before a
+  significant change, and Provider Terms §12 promises providers 15 days'
+  notice; §10 changed. Only the page's "Last updated" date moves.
+- **Billing errors (owner chose five days for all).** "I was charged the
+  wrong amount" is one of the request reasons. A wrong or duplicate charge is
+  a payment-services question as well as a consumer one; "statutory rights"
+  alone may not cover it.
+- **Consumer Rights Act.** The Act's remedies against the provider have no
+  five-day limit. The in-app channel is not the remedy itself, and each place
+  that closes it says statutory rights are unaffected; whether the overall
+  refund/complaint structure is fair under Part 2 is unchecked.
+- **Late/no-show fees** have their own 7-day dispute route (Client Terms §16),
+  decided by the provider; the page does not say which route applies to a fee
+  after day 5.
+- **No-show Half (2026-11-13, live since 2026-11-16):** the no-show
+  Custom £ fee is replaced by "Half the price": deposit kept, plus the rest up
+  to half the price charged to the saved card on a deposit-only booking. One
+  live provider's £25 fee was converted without them choosing it. Raise the
+  same CRA proportionality question as the late cancellation charge.
+
+## 27. A waitlist slot is paid for within 15 minutes (2026-11-12)
+
+Before this, confirming a held waitlist slot booked it with £0 paid: no
+deposit, no fee, no saved card for late or no-show fees, and no recorded
+agreement to the provider's policies. Now it goes through the normal checkout
+(consent recorded server-side at the hold, §11). Decided by the user on
+2026-11-10: the client has 15 minutes from the offer, the clock keeps running
+while they pay, and missing it or passing takes them off that waitlist.
+
+What the copy now says (Terms §17 Waitlists, the join pop-up, the held card in
+Bookings, the "slot has gone" notice):
+- the 15-minute deadline, that deposit and fee apply, and that missing it
+  loses their place;
+- the booking is made when payment goes through;
+- a payment caught by the clock is cancelled or refunded in full (done by
+  `reconcile-checkouts`, which sends its own `payment_not_completed` notice).
+
+Still for a lawyer:
+- Whether a 15-minute window, running during payment (including 3D Secure),
+  is a fair term under the Consumer Rights Act 2015.
+- Cooling-off (Consumer Contracts Regulations 2013) for a waitlist booking,
+  often near-term and made under time pressure. Same open question as §6,
+  more likely to come up here.
+- Providers weren't asked to re-agree to the changed waitlist behaviour
+  (their own offer is now a hold, not an unpaid booking). Same as §10.
+- The Terms page goes live when merged to main, ahead of the app build that
+  follows it. Older builds can't confirm a held slot at all once the
+  migration drops `claim_waitlist_hold` (they show an error), so they never
+  book against the old rule; nobody has ever been offered a waitlist slot.
+
+## 28. A bank dispute is charged only to the booking it is about (2026-11-16)
+
+One checkout can pay several providers. Before this, a chargeback on that
+payment took money back from every provider in it and froze all their unpaid
+payouts for good, even if CERVICED won. Now CERVICED matches the disputed
+amount to the booking(s) it concerns (an admin picks when it can't tell),
+only those providers are affected, and a won dispute is paid back
+(`fix/dispute-per-booking`, migration `20261115090000`). How the money
+moves is in `docs/PAYMENTS_AND_LOGIC.md` §2.7.
+
+Owner's choices (2026-11-16): Provider Terms promise the payback on a win,
+"within a reasonable time" (1A + 1B), and say how CERVICED decides which
+booking a dispute concerns, that other payouts on the payment may wait while
+it does, and how to challenge it (2A). The owner asked for no gaps, so
+Provider Terms §9 now has a "Bank disputes" part covering: who decides the
+outcome (the bank), the provider's duty to give information for the
+response, how the booking is chosen, holding every payout on the payment
+until then, open / lost / won outcomes (including cancelling a debt and
+returning amounts taken from later payouts), CERVICED paying Stripe's
+dispute fee, and a support route for a provider who disagrees.
+
+To raise (not lawyer-reviewed):
+- **Notice (owner chose none, 2026-11-16: "we are still building up").**
+  Provider Terms §12 promises 15 days' notice of a change. The owner's view is
+  that no notice is needed while the provider base is still being built.
+  Holding *every* payout on a payment, and the duty to give information, are
+  new; only the page's "Last updated" date moved. Worth confirming with a
+  lawyer whether §12 already binds the providers who are live today.
+- **Holding innocent providers' money.** The hold has no fixed time limit
+  ("as soon as reasonably practicable"). Whether an open-ended hold of a
+  provider whose booking wasn't disputed is fair, and how it sits with
+  CERVICED being a commercial agent collecting on their behalf.
+- **CERVICED choosing the booking.** CERVICED makes a decision that moves
+  money between providers, with only an internal review by support. Whether
+  that needs a stated timescale, or an outside route.
+- **Corrections are manual.** A wrong pick can only be put right by hand
+  (the system refuses a second, different answer). The Terms promise to
+  return the money, so support must actually do it.
+- **What the provider sees (fixed 2026-11-16, `fix/dispute-payback-shown`).**
+  The payout list now says "Paid back · dispute won" after a win, and "On
+  hold · bank dispute" while one is open, instead of "Returned" throughout.
+  Needs an app build. A fee won back says "being paid back" because support
+  does it by hand.

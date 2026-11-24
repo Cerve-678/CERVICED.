@@ -7,8 +7,9 @@
  * it's now focused sub-screens, each owning its own save:
  *
  *   BusinessInfoScreen      — name, links, emails, external booking, → T&Cs
- *   ServicesPricingScreen   — specialties, clientele, pricing, style
- *   AboutYouScreen          — credentials, patch test, cities covered, access
+ *   ServicesPricingScreen   — specialties, pricing, style, products
+ *   AboutYouScreen          — who you work with, credentials, patch test,
+ *                             languages, access
  *   SchedulingScreen        — availability, booking rules, → working hours
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
@@ -24,7 +25,8 @@
  * Shared form primitives live in src/features/business-details/.
  */
 import React from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -63,7 +65,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
   return (
     <View style={[st.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={[st.header, { borderBottomColor: C.border }]}>
           <Text style={[st.headerTitle, { color: C.text }]}>Business Details</Text>
@@ -91,21 +93,21 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="pricetags-outline"
             title="Services & Pricing"
-            subtitle="Specialties, clientele, pricing & style"
+            subtitle="Specialties, pricing, style & products you use"
             onPress={() => navigation.navigate('ServicesPricing')}
             C={C}
           />
           <NavRow
             icon="document-text-outline"
-            title="Policies"
-            subtitle="Cancellations, reschedules, no-shows & refunds"
+            title="Policies & Info"
+            subtitle="Cancellations, reschedules, no-shows, refunds & what's on your profile"
             onPress={() => navigation.navigate('Policies')}
             C={C}
           />
           <NavRow
             icon="shield-checkmark-outline"
             title="About You"
-            subtitle="Credentials, patch test policy, cities covered & accessibility"
+            subtitle="Areas you cover, who you work with, credentials, patch test policy, languages & accessibility"
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />
