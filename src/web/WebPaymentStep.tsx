@@ -358,6 +358,8 @@ function PayPhase({
   const elementsOptions = useMemo<StripeElementsOptions | null>(() => {
     if (!plan || fees === null) return null;
     const dark = isDarkColor(tokens.bg);
+    // allowedPaymentMethodTypes, not paymentMethodTypes: the current Stripe.js
+    // refuses the old name, and the form then never appears.
     // Must match the payment create-payment-intent makes: card only (Apple
     // Pay and Google Pay ride on card; PayPal isn't offered on the web),
     // authorised now and captured by the server, and saved for later only
@@ -367,7 +369,7 @@ function PayPhase({
       currency: 'gbp',
       amount: sheetAmountPence(plan, checkout.amountDue),
       captureMethod: 'manual',
-      paymentMethodTypes: ['card'],
+      allowedPaymentMethodTypes: ['card'],
       ...(hasFees ? { setupFutureUsage: 'off_session' as const } : {}),
       appearance: {
         theme: dark ? 'night' : 'stripe',
@@ -512,6 +514,18 @@ function PayForm({
   const [payError, setPayError] = useState<string | null>(null);
   const payingRef = useRef(false);
 
+  // Stripe's React wrapper swallows an error thrown while it sets the form up
+  // (a rejected option left it on "Loading" for good, with no load error), so
+  // don't wait for ever.
+  useEffect(() => {
+    if (ready) return;
+    const timer = setTimeout(() => {
+      logger.error('[WebPaymentStep] Stripe’s card form wasn’t ready after 20 seconds');
+      setPayError('We couldn’t load the card form. Refresh the page and try again.');
+    }, 20_000);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
   const pay = async () => {
     if (!stripe || !elements || payingRef.current || !canPay) return;
     payingRef.current = true;
@@ -602,7 +616,7 @@ function PayForm({
       <View style={styles.stripeForm}>
         <PaymentElement
           options={{ layout: 'tabs', wallets: { applePay: 'auto', googlePay: 'auto', link: 'never' } }}
-          onReady={() => setReady(true)}
+          onReady={() => { setReady(true); setPayError(null); }}
           onLoadError={({ error }) => {
             // Without this the form just never appears and Pay stays grey.
             logger.error('[WebPaymentStep] Stripe’s card form failed to load:', error);

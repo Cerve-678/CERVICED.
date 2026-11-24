@@ -86,8 +86,8 @@ Curated: [[Payments]] · **210 files**
 - `src/services/bookingService.ts` _(103)_
 - `src/components/MultiBookingSheet.tsx` _(99)_
 - `src/features/bookings/receipt.ts` _(98)_
+- `src/web/WebPaymentStep.tsx` _(97)_
 - `src/services/database/checkout.ts` _(95)_
-- `src/web/WebPaymentStep.tsx` _(91)_
 - `src/features/bookings/paymentPresentation.ts` _(85)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(73)_
 - `src/services/database/edgeFunctions.ts` _(61)_
