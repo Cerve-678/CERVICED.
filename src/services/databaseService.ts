@@ -568,11 +568,15 @@ export {
   replaceMyProviderMessageTemplates,
   searchUnclaimedProviders,
   getUnclaimedProviderDetail,
+  requestProviderClaim,
+  getLatestProviderClaimRequest,
 } from "./database/providerAccount";
 export type {
   ProviderMessageTemplate,
   UnclaimedProviderSearchRow,
   UnclaimedProviderDetailRow,
+  ProviderClaimStatus,
+  ProviderClaimRequestRow,
 } from "./database/providerAccount";
 export {
   getOrCreateConversation,
@@ -604,8 +608,6 @@ export type {
   DbBeccaMessage,
 } from "./database/becca";
 export {
-  requestProviderClaimVerification,
-  claimUnclaimedProviderProfile,
   invokeSendAccountEmail,
   invokeSendSupportRequest,
   lookupPostcodeAddresses,

@@ -15,8 +15,8 @@ Live counts of the codebase. The generated detail notes below refresh on every c
 | Routes | 99 | [[Routes (generated)]] | [[Screens & Navigation]] |
 | Screen flow | 85 | [[Screen Flow (generated)]] | [[Screens & Navigation]] |
 | Nav edges | 167 | [[Navigation Graph (generated)]] | [[Screens & Navigation]] |
-| DB objects | 295 | [[Database Objects (generated)]] | [[Data Layer — Supabase]] |
-| Functions | 4299 | [[Function Index (generated)]] | — |
+| DB objects | 294 | [[Database Objects (generated)]] | [[Data Layer — Supabase]] |
+| Functions | 4305 | [[Function Index (generated)]] | — |
 | Feature map | 11 | [[Feature Map (generated)]] | — |
 | Code TODOs | 1 | [[TODO Backlog (generated)]] | — |
 

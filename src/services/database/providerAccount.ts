@@ -4,7 +4,7 @@
 import { supabase } from "../../lib/supabase";
 import type { BusinessType, ServiceCategory } from "../../types/database";
 import type { AddressReleasePolicy } from "../../features/business-details/options";
-import { sanitizeIlikeTerm } from "./account";
+import { invalidateOwnProviderIds, sanitizeIlikeTerm } from "./account";
 
 // ─────────────────────────────────────────────────────────
 // PROVIDERS — additional writes
@@ -220,10 +220,12 @@ export async function replaceMyProviderMessageTemplates(
 
 // ─────────────────────────────────────────────────────────
 // CLAIMABLE PROVIDER PROFILES
-//   Search/preview for the pre-signup "claim your business" flow — see
-//   providerClaimService.ts and src/screens/auth/ClaimProviderScreen.tsx.
-//   Everything else about the claim flow (OTP send, claim_provider_profile
-//   RPC) goes through Edge Functions / .rpc(), not this file.
+//   Search/preview for the pre-signup "claim your business" flow, and the
+//   claim request a signed-in account makes afterwards — see
+//   providerClaimService.ts, src/screens/auth/ClaimProviderScreen.tsx and
+//   supabase/migrations/20261024100000_listing_claims_checked_by_instagram.sql.
+//   Claims are proven by a code in the listing's Instagram bio and approved
+//   by hand; nothing in the app can approve one.
 // ─────────────────────────────────────────────────────────
 
 export interface UnclaimedProviderSearchRow {
@@ -233,11 +235,12 @@ export interface UnclaimedProviderSearchRow {
   location_text: string | null;
   logo_url: string | null;
   scraped_fields: string[];
+  instagram: string | null;
 }
 
 /**
  * Search unclaimed (is_claimed = false), scraped provider listings by
- * business name or location text.
+ * business name, location text or Instagram handle.
  *
  * Unclaimed rows (is_claimed = false) are always has_gone_live = false by
  * construction — they've never been onboarded. This intentionally skips
@@ -249,16 +252,18 @@ export interface UnclaimedProviderSearchRow {
 export async function searchUnclaimedProviders(
   query: string,
 ): Promise<UnclaimedProviderSearchRow[]> {
-  const safeQuery = sanitizeIlikeTerm(query.trim());
+  // Owners often type their handle with the @ — the imported handles are
+  // stored without one.
+  const safeQuery = sanitizeIlikeTerm(query.trim()).replace(/^@+\s*/, "");
   if (safeQuery.length < 2) return [];
   const { data, error } = await supabase
     .from("providers")
     .select(
-      "id, display_name, service_category, location_text, logo_url, scraped_fields",
+      "id, display_name, service_category, location_text, logo_url, scraped_fields, instagram",
     )
     .eq("is_claimed", false)
     .or(
-      `display_name.ilike.%${safeQuery}%,location_text.ilike.%${safeQuery}%`,
+      `display_name.ilike.%${safeQuery}%,location_text.ilike.%${safeQuery}%,instagram.ilike.%${safeQuery}%`,
     )
     .limit(20);
 
@@ -269,8 +274,6 @@ export async function searchUnclaimedProviders(
 export interface UnclaimedProviderDetailRow extends UnclaimedProviderSearchRow {
   about_text: string | null;
   phone: string | null;
-  email: string | null;
-  instagram: string | null;
   website: string | null;
 }
 
@@ -285,7 +288,7 @@ export async function getUnclaimedProviderDetail(
   const { data, error } = await supabase
     .from("providers")
     .select(
-      "id, display_name, service_category, location_text, logo_url, scraped_fields, about_text, phone, email, instagram, website",
+      "id, display_name, service_category, location_text, logo_url, scraped_fields, instagram, about_text, phone, website",
     )
     .eq("id", id)
     .eq("is_claimed", false)
@@ -293,4 +296,56 @@ export async function getUnclaimedProviderDetail(
 
   if (error) throw error;
   return data;
+}
+
+export type ProviderClaimStatus = "pending" | "approved" | "rejected" | "withdrawn";
+
+export interface ProviderClaimRequestRow {
+  id: string;
+  provider_id: string | null;
+  listing_name: string;
+  instagram_handle: string;
+  bio_code: string;
+  status: ProviderClaimStatus;
+  created_at: string;
+  decided_at: string | null;
+}
+
+const PROVIDER_CLAIM_COLUMNS =
+  "id, provider_id, listing_name, instagram_handle, bio_code, status, created_at, decided_at";
+
+/** Opens (or returns the already-open) claim on a listing for the signed-in
+ *  account, with the code to put in the listing's Instagram bio. */
+export async function requestProviderClaim(
+  providerId: string,
+): Promise<ProviderClaimRequestRow> {
+  const { data, error } = await supabase.rpc("request_provider_claim", {
+    p_provider_id: providerId,
+  });
+  if (error) throw error;
+  const row = data as ProviderClaimRequestRow | null;
+  if (!row || typeof row.bio_code !== "string") {
+    throw new Error("Invalid claim response.");
+  }
+  return row;
+}
+
+/** The account's most recent claim, whatever its status, or null. RLS only
+ *  ever returns the caller's own rows. */
+export async function getLatestProviderClaimRequest(
+  userId: string,
+): Promise<ProviderClaimRequestRow | null> {
+  const { data, error } = await supabase
+    .from("provider_claim_requests")
+    .select(PROVIDER_CLAIM_COLUMNS)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as ProviderClaimRequestRow | null;
+  // An approval made server-side may have attached a listing to this
+  // account since ownership was last memoised.
+  if (row?.status === "approved") invalidateOwnProviderIds();
+  return row;
 }
