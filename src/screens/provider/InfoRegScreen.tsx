@@ -69,7 +69,7 @@ import type { ProviderRegistrationData, ServiceImageDraft } from '../../services
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
 import { transferFromAcuity } from '../../services/acuityTransferService';
-import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
+import { loadListingClaim, isClaimGuardError, displayHandle, type ProviderClaim } from '../../services/providerClaimService';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderRelease } from '../../services/databaseService';
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
@@ -3131,10 +3131,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // palette token the sheet above is built from.
   const chromeText = chromeTheme.text;
 
-  // Set when a pending "claim your business" code (from ClaimProviderScreen)
-  // fails to confirm here — expired, already used, or wrong by the time the
-  // signup wizard finished. Surfaced as a banner below so the provider isn't
-  // left with a silently-blank, unclaimed profile and no explanation.
+  // The account's claim on an imported listing (from ClaimProviderScreen):
+  // while open, the banner below carries the code to put in the listing's
+  // Instagram bio; once decided, it says how it went for a week. claimError
+  // is set when the claim couldn't be opened at all.
+  const [claim, setClaim] = useState<ProviderClaim | null>(null);
+  const [claimDismissed, setClaimDismissed] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
 
   // Render an existing provider's last saved profile as soon as AsyncStorage
@@ -3178,29 +3180,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       setIsLoadingProvider(false);
     });
 
-    // If this account just came through the "claim your business" flow
-    // (ClaimProviderScreen), attach it to the unclaimed row *before* loading
-    // provider data below — once claimed, that same loadProviderFromSupabase
-    // call picks up every scraped field (services included) for free, no
-    // separate prefill path needed. Best-effort: an expired/already-used
-    // code just means the provider sets up their profile from scratch.
-    // Set when this load attaches a listing — see the claimed-row prefill below.
+    // "Claim your business" (ClaimProviderScreen): open the claim now the
+    // account exists, or show the one already open. The listing is only
+    // linked once someone at CERVICED has seen the code in its Instagram bio
+    // and approved it server-side; once that has happened, the profile load
+    // below already returns the listing's row.
+    // Set when the listing was approved onto this account in the last week
+    // (loadListingClaim drops older decisions) — see the claimed-row prefill.
     let claimedListing = false;
-    getPendingClaim()
-      .then(pending => {
-        if (!pending) return;
-        return claimProviderProfile(pending.providerId, pending.code)
-          .then(() => { claimedListing = true; })
-          .catch(err => {
-            logger.warn('claimProviderProfile failed:', err?.message ?? err);
-            setClaimError(
-              "We couldn't confirm your business claim — the code may have expired or been entered wrong. " +
-              'You can retry from Settings, or just continue setting up your profile below.'
-            );
-          })
-          .finally(() => clearPendingClaim());
+    loadListingClaim(userId)
+      .then(found => {
+        if (cancelled) return;
+        setClaim(found);
+        claimedListing = found?.status === 'approved';
       })
-      .catch(() => {})
+      .catch(err => {
+        logger.warn('Opening the listing claim failed:', err?.message ?? err);
+        if (cancelled) return;
+        setClaimError(
+          isClaimGuardError(err)
+            ? err.message
+            : "We couldn't open your claim on that listing just now. We'll try again next time you open this screen.",
+        );
+      })
       .finally(() => {
         loadProviderFromSupabase(userId)
           .then(data => {
@@ -4660,9 +4662,43 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           </View>
 
           {claimError && (
-            <View style={styles.claimErrorBanner}>
-              <Text style={styles.claimErrorText}>{claimError}</Text>
+            <View style={styles.claimBanner}>
+              <Text style={[styles.claimBannerText, { flex: 1 }]}>{claimError}</Text>
               <TouchableOpacity onPress={() => { tapSelect(); setClaimError(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color="#7A4B00" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {claim && !claimDismissed && (
+            <View style={styles.claimBanner}>
+              <View style={{ flex: 1 }}>
+                {claim.status === 'pending' ? (
+                  <>
+                    <Text style={styles.claimBannerTitle}>Confirm @{displayHandle(claim.instagramHandle)} is yours</Text>
+                    <Text style={styles.claimBannerText}>Add this code to your Instagram bio:</Text>
+                    <Text style={styles.claimBannerCode} selectable>{claim.bioCode}</Text>
+                    <Text style={styles.claimBannerText}>
+                      We'll check it and link the listing to your account, usually within a day. You can take the code out once it's confirmed.
+                    </Text>
+                  </>
+                ) : claim.status === 'approved' ? (
+                  <>
+                    <Text style={styles.claimBannerTitle}>@{displayHandle(claim.instagramHandle)} is confirmed as yours</Text>
+                    <Text style={styles.claimBannerText}>
+                      We saw your code, so the listing is now part of your account. You can take {claim.bioCode} out of your bio.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.claimBannerTitle}>We couldn't confirm @{displayHandle(claim.instagramHandle)}</Text>
+                    <Text style={styles.claimBannerText}>
+                      So the listing hasn't been linked to your account. If it is your business, email support@cerviced.co and we'll look again.
+                    </Text>
+                  </>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => { tapSelect(); setClaimDismissed(true); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={16} color="#7A4B00" />
               </TouchableOpacity>
             </View>
@@ -6492,9 +6528,9 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 20,
     color: P.text,
   },
-  claimErrorBanner: {
+  claimBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginHorizontal: 20,
     marginBottom: 12,
@@ -6505,14 +6541,27 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderWidth: 1,
     borderColor: 'rgba(255, 193, 7, 0.4)',
   },
-  claimErrorText: {
-    flex: 1,
+  claimBannerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    color: '#7A4B00',
+    marginBottom: 4,
+    marginRight: 8,
+  },
+  claimBannerText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     color: '#7A4B00',
     marginRight: 8,
+  },
+  claimBannerCode: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    letterSpacing: 1,
+    color: '#7A4B00',
+    marginVertical: 6,
   },
   scrollContent: {
     padding: 20,

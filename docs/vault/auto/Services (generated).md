@@ -116,7 +116,7 @@ _no named exports_
 `cancelOwnBooking` · `claimCartBookingSlots` · `disputeNoShow` · `getProviderCheckoutMetadata` · `getProviderDepositPoliciesByDisplayNames` · `holdCartBookingSlots` · `markProviderNoShow` · `providerCancelGroupBooking` · `providerCancelOwnBooking` · `releaseCartBookingSlots` · `updateBookingGroupInfo` · `updateBookingStatus` · `updateGroupBookingStatus`
 
 ### `src/services/database/edgeFunctions.ts`
-`acceptCheckoutFees` · `cancelBookingFeeRequest` · `chargeBookingFee` · `claimUnclaimedProviderProfile` · `confirmBookingFeePayment` · `createCheckoutPaymentIntent` · `disputeBookingFee` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `getBookingFeeCharges` · `getBookingFeeTerms` · `getCheckoutFees` · `getCheckoutHoldPlan` · `getCheckoutOutcome` · `getFeeChargeCandidates` · `getMyBookingLateCancelFee` · `getMyRequestCardHolds` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `keepDisputedBookingFee` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `refundBookingFee` · `requestCardHoldStep` · `requestProviderClaimVerification` · `startBookingFeePayment`
+`acceptCheckoutFees` · `cancelBookingFeeRequest` · `chargeBookingFee` · `confirmBookingFeePayment` · `createCheckoutPaymentIntent` · `disputeBookingFee` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `getBookingFeeCharges` · `getBookingFeeTerms` · `getCheckoutFees` · `getCheckoutHoldPlan` · `getCheckoutOutcome` · `getFeeChargeCandidates` · `getMyBookingLateCancelFee` · `getMyRequestCardHolds` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `keepDisputedBookingFee` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `refundBookingFee` · `requestCardHoldStep` · `startBookingFeePayment`
 
 ### `src/services/database/eventPlans.ts`
 `getEventPlanDetails` · `getMyEventPlans`
@@ -143,7 +143,7 @@ _no named exports_
 `deletePromotion` · `getActivePromotions` · `getMyPromotions` · `getMyProviderServices` · `getProviderActivePromotions` · `getProviderIdsWithActivePromotions` · `patchPromotion` · `togglePromotion` · `upsertPromotion` · `validatePromoCode`
 
 ### `src/services/database/providerAccount.ts`
-`getMyProviderMessageTemplates` · `getProviderSpecialties` · `getUnclaimedProviderDetail` · `replaceMyProviderMessageTemplates` · `replaceMyProviderSpecialties` · `searchUnclaimedProviders` · `updateMyServiceCategory` · `updateProviderBranding` · `updateProviderContactDetails`
+`getLatestProviderClaimRequest` · `getMyProviderMessageTemplates` · `getProviderSpecialties` · `getUnclaimedProviderDetail` · `replaceMyProviderMessageTemplates` · `replaceMyProviderSpecialties` · `requestProviderClaim` · `searchUnclaimedProviders` · `updateMyServiceCategory` · `updateProviderBranding` · `updateProviderContactDetails`
 
 ### `src/services/database/providerDetails.ts`
 `getBookedClientContact` · `getConsultationRequiredProviderIds` · `getConsultationServiceIds` · `getLiveProviderIds` · `getMobileProviderDisplayNames` · `getMyBookedClientContact` · `getProviderConsultationService` · `getProviderContactByDisplayName` · `getProviderIdsWithBookingHistory` · `getProviderLocationsByDisplayNames` · `getProviderLocationsByIds` · `hasBookingHistoryWithProvider` · `mapIntakeForm` · `setMyBookedClientContact`
@@ -188,7 +188,7 @@ _no named exports_
 `handleNotificationTap`
 
 ### `src/services/providerClaimService.ts`
-`claimProviderProfile` · `clearPendingClaim` · `getPendingClaim` · `getUnclaimedProviderDetail` · `requestClaimVerification` · `savePendingClaim` · `searchUnclaimedProviders`
+`clearPendingClaim` · `displayHandle` · `getLatestClaim` · `getPendingClaim` · `getUnclaimedProviderDetail` · `isClaimGuardError` · `isClaimWorthShowing` · `loadListingClaim` · `mapProviderClaim` · `parsePendingClaim` · `requestClaim` · `savePendingClaim` · `searchUnclaimedProviders`
 
 ### `src/services/ProviderDataService.ts`
 `getAvailableProviders` · `getAvailableSlotCount` · `getProviderById` · `getProviderByName` · `getProvidersByService` · `isProviderFullyBooked`
