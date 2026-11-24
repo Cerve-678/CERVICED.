@@ -93,7 +93,9 @@ export default function ActivityCentreScreen({ navigation }: Props) {
     getBookingById(target.bookingId)
       .then(direct => {
         if (direct?.status === 'on_hold') {
-          navigation.navigate('Bookings', { openBookingId: target.bookingId }, { pop: true });
+          // The ticket with its countdown, on the provider's page, the same
+          // place the "slot opened" notification opens.
+          navigation.navigate('ProviderProfile', { providerId: direct.provider_id, source: 'activity', openWaitlistHoldId: target.bookingId });
         } else {
           showAlert('This slot has gone', `Its ${WAITLIST_HOLD_MINUTES} minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from Bookings.`);
           void refresh();

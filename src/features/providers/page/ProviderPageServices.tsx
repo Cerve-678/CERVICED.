@@ -222,7 +222,7 @@ export interface ProviderPageServicesProps {
   onEditAddOns: (service: ServiceData) => void;
   /** service.dbId → the viewer's place on that service's waitlist. */
   waitlistPlaces: Record<string, MyWaitlistPlace>;
-  /** A held waitlist slot opens its ticket in Bookings, where it's paid for. */
+  /** A held waitlist slot opens its ticket and countdown on this page. */
   onOpenHeldPlace: (place: MyWaitlistPlace) => void;
   /** Opens the client's ticket for that waitlist place (Leave is on it). */
   onOpenWaitlistPlace: (place: MyWaitlistPlace) => void;
@@ -815,8 +815,8 @@ export function ProviderPageServices({
                   {(() => {
                     const wEntry = waitlistPlaces[service.dbId];
                     // Held: the slot is theirs for WAITLIST_HOLD_MINUTES. The chip
-                    // opens its ticket in Bookings, where it's paid for. No ✕
-                    // while held: they pass on it from the ticket instead.
+                    // opens its ticket and countdown here; Confirm & pay goes to
+                    // the Cart, and Pass it on is on the ticket.
                     if (wEntry?.status === "notified") {
                       return (
                         <TouchableOpacity

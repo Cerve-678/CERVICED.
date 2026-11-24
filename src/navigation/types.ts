@@ -31,7 +31,7 @@ export type RootStackParamList = {
 // Home Stack
 export type HomeStackParamList = {
   HomeMain: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean; openWaitlistHoldId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -64,7 +64,7 @@ export type HomeStackParamList = {
 // Explore Stack
 export type ExploreStackParamList = {
   ExploreMain: { category?: string };
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean; openWaitlistHoldId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -79,7 +79,7 @@ export type ExploreStackParamList = {
 // Becca Stack
 export type BeccaStackParamList = {
   BeccaMain: { conversationId?: string };
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean; openWaitlistHoldId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -150,7 +150,7 @@ export type ProviderBeccaStackParamList = {
 // Cart Stack
 export type CartStackParamList = {
   CartMain: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean; openWaitlistHoldId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -210,7 +210,7 @@ export type ProfileStackParamList = {
   /** Admin accounts only: "Not on CERVICED yet" listings clients nudged to join. */
   AdminListingNudges: undefined;
   Points: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean; openWaitlistHoldId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;

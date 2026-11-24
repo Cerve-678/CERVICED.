@@ -7,10 +7,10 @@ tags: [screen, provider]
 **Registered route(s):** `MyPublicProfile`, `ProviderProfile`, `PublicProviderProfile`
 
 ## → Navigates to
+- `Cart` _(navigator / dynamic)_
 - [[ProviderChatScreen\|ProviderChat]]
 - [[BookingsScreen\|Bookings]]
 - [[CartScreen\|CartMain]]
-- `Cart` _(navigator / dynamic)_
 - `ClaimProvider` _(navigator / dynamic)_
 
 ## Map
