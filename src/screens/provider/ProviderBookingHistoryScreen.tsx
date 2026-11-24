@@ -43,7 +43,7 @@ import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { placeInLineLabel, holdEndLabel, nextWaitingFor, firstNameOf, waitlistDatesLabel } from '../../features/bookings/waitlist';
+import { placeInLineLabel, holdEndLabel, nextWaitingFor, firstNameOf, waitlistDatesLabel, isOutsideHoursRefusal } from '../../features/bookings/waitlist';
 import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
 import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
 
@@ -662,27 +662,43 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   // The provider picks a time for a waiting client. It's offered as a
   // 10-minute hold the client confirms and pays for (decided 2026-11-10),
   // never booked in with nothing paid.
-  const handleConfirmInvite = useCallback(async () => {
+  const handleConfirmInvite = useCallback(async (outsideHours = false) => {
     if (!inviteModal.entry || !inviteDate || !inviteTime) return;
     setInviting(true);
+    const entry = inviteModal.entry;
+    const bookingTime = `${String(inviteTime.getHours()).padStart(2, '0')}:${String(inviteTime.getMinutes()).padStart(2, '0')}`;
     try {
-      const entry = inviteModal.entry;
-      const bookingTime = `${String(inviteTime.getHours()).padStart(2, '0')}:${String(inviteTime.getMinutes()).padStart(2, '0')}`;
-      await providerOfferWaitlistSlot(entry.id, dateToYMD(inviteDate), bookingTime);
+      await providerOfferWaitlistSlot(entry.id, dateToYMD(inviteDate), bookingTime, outsideHours);
       setInviteModal({ visible: false, entry: null });
       setInviteDate(null);
       setInviteTime(null);
       await fetchWaitlist();
     } catch (err: unknown) {
-      // The database says why (taken, outside your hours, inside your
-      // notice); anything technical becomes the fallback.
-      Alert.alert(
-        "Couldn't hold that time",
-        toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot'),
-      );
+      if (!outsideHours && isOutsideHoursRefusal(err)) {
+        // Their own diary, their call: the same as booking someone in by
+        // hand. Asked first, then sent again with the override.
+        const who = firstNameOf(entry.user_name_snapshot) ?? 'them';
+        Alert.alert(
+          'Outside your hours',
+          `${formatShortDate(dateToYMD(inviteDate))} at ${formatTime12(bookingTime)} runs outside your working hours. Offer it to ${who} anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Offer anyway', onPress: () => { void handleConfirmInviteRef.current(true); } },
+          ],
+        );
+      } else {
+        // The database says why (taken, inside your notice, a day off);
+        // anything technical becomes the fallback.
+        Alert.alert(
+          "Couldn't hold that time",
+          toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot'),
+        );
+      }
     }
     setInviting(false);
   }, [inviteModal.entry, inviteDate, inviteTime, fetchWaitlist]);
+  const handleConfirmInviteRef = useRef(handleConfirmInvite);
+  handleConfirmInviteRef.current = handleConfirmInvite;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1073,7 +1089,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[wl.confirmBtn, { backgroundColor: P.accent, opacity: (!inviteDate || !inviteTime || inviting) ? 0.5 : 1 }]}
-                  onPress={handleConfirmInvite}
+                  onPress={() => { void handleConfirmInvite(); }}
                   disabled={!inviteDate || !inviteTime || inviting}
                   activeOpacity={0.8}
                 >
