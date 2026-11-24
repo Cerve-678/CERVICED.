@@ -3486,7 +3486,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
       return next;
     });
-  const openBookings = () => navigation.navigate("Bookings" as never);
+  // Bookings opens the held slot's ticket from its booking id, the same way
+  // a "slot opened" notification does.
+  const openHeldPlace = (place: MyWaitlistPlace) =>
+    navigation.navigate("Bookings", place.holdBookingId ? { openBookingId: place.holdBookingId } : undefined);
   const openWaitlistJoin = (service: ServiceData) => {
     setWaitlistNotes("");
     setWaitlistModal({ visible: true, service });
@@ -3536,7 +3539,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       onToggleServiceSelected={toggleServiceSelected}
       onEditAddOns={setAddOnPickerService}
       waitlistPlaces={userWaitlistMap}
-      onOpenHeldPlace={openBookings}
+      onOpenHeldPlace={openHeldPlace}
       onLeaveWaitlist={setLeaveConfirmEntry}
       onJoinWaitlist={openWaitlistJoin}
     />

@@ -55,6 +55,17 @@ export function offeredSlotLabel(date: string | null, time: string | null): stri
   return when ? `${formatShortDayDate(date)} · ${when}` : formatShortDayDate(date);
 }
 
+/** "2:00pm – 4:00pm" for a held slot, or just "2:00pm" when its length isn't known. */
+export function heldTimeRangeLabel(time: string | null, durationMinutes: number | null): string | null {
+  const start = formatTime12Safe(time);
+  if (!start || !time || !durationMinutes || durationMinutes <= 0) return start;
+  const [h = NaN, m = NaN] = time.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return start;
+  const endMinutes = h * 60 + m + durationMinutes;
+  const end = formatTime12Safe(`${String(Math.floor(endMinutes / 60) % 24).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`);
+  return end ? `${start} – ${end}` : start;
+}
+
 /** "2:15pm": when a hold ended or ends, in the client's own clock. */
 export function holdEndLabel(expiresAt: string | null): string | null {
   if (!expiresAt) return null;

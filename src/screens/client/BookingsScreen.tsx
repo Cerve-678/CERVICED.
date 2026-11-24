@@ -46,6 +46,7 @@ import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard';
 import { WaitlistDatesSheet } from '../../features/bookings/WaitlistDatesSheet';
+import { WaitlistTicket, type WaitlistTicketService } from '../../features/bookings/WaitlistTicket';
 import { buildWaitlistHoldCartItem, holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
@@ -237,6 +238,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [datesError, setDatesError] = useState<string | null>(null);
   // Opened from a "slot opened" notification after the hold had ended.
   const [goneNotice, setGoneNotice] = useState<MyWaitlistPlace | null>(null);
+  // The waitlist ticket on screen, by place id so a reload shows its latest
+  // state. A held ticket also shows today's price and length.
+  const [ticketPlaceId, setTicketPlaceId] = useState<string | null>(null);
+  const [ticketService, setTicketService] = useState<WaitlistTicketService | null>(null);
 
   // "Booked elsewhere" entries — the client's own notes of bookings made on a
   // link-only provider's page. Reloaded on focus, since they're added from a
@@ -415,6 +420,33 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setDatesSheetPlace(place);
   }, []);
 
+  const openWaitlistTicket = useCallback((place: MyWaitlistPlace) => {
+    setTicketPlaceId(place.id);
+    setTicketService(null);
+    if (place.status !== 'notified') return;
+    getRebookableService(place.providerId, place.serviceName)
+      .then(live => {
+        if (live) setTicketService({ price: live.price, durationMinutes: live.durationMinutes });
+      })
+      // The ticket shows the slot without its price and end time.
+      .catch((error: unknown) => logger.warn('[Bookings] held service failed to load for the ticket', error));
+  }, []);
+  const closeWaitlistTicket = useCallback(() => setTicketPlaceId(null), []);
+  const ticketPlace = useMemo(
+    () => (ticketPlaceId ? waitlistPlaces.find(place => place.id === ticketPlaceId) ?? null : null),
+    [ticketPlaceId, waitlistPlaces],
+  );
+  // The dialog host sits outside the ticket's Modal, so the ticket closes
+  // before anything that asks or alerts.
+  const handleTicketConfirmAndPay = useCallback((place: MyWaitlistPlace) => {
+    setTicketPlaceId(null);
+    void handleConfirmAndPay(place);
+  }, [handleConfirmAndPay]);
+  const handleTicketPass = useCallback((place: MyWaitlistPlace) => {
+    setTicketPlaceId(null);
+    handlePassWaitlist(place);
+  }, [handlePassWaitlist]);
+
   const handleSaveWaitlistDates = useCallback(async (place: MyWaitlistPlace, dates: string[] | null) => {
     setWaitlistBusyId(place.id);
     setDatesError(null);
@@ -433,6 +465,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // confirm raised while the sheet is up would never be seen.
   const handleLeaveFromDatesSheet = useCallback((place: MyWaitlistPlace) => {
     setDatesSheetPlace(null);
+    setTicketPlaceId(null);
     showConfirm(
       'Leave this waitlist?',
       `You'll lose your place in line for ${place.serviceName} with ${place.providerName}.`,
@@ -1248,8 +1281,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           .then(async direct => {
             if (direct?.status === 'on_hold' && direct.waitlist_entry_id) {
               handledFromWaitlist();
-              await loadWaitlist();
+              const places = await loadWaitlist();
               mainScrollRef.current?.scrollToOffset({ offset: 0, animated: true });
+              const held = places.find(place => place.holdBookingId === bookingId);
+              if (held) openWaitlistTicket(held);
               return;
             }
             if (!direct) {
@@ -1285,7 +1320,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
-  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert, loadWaitlist]);
+  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert, loadWaitlist, openWaitlistTicket]);
 
   // ✅ Update selectedBooking ONLY when modal is visible and booking state changes
   // Use ref to track last update to prevent infinite loops
@@ -1487,12 +1522,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       busy={waitlistBusyId === place.id}
       onConfirmAndPay={handleConfirmAndPay}
       onPass={handlePassWaitlist}
-      onChangeDates={handleOpenWaitlistDates}
+      onOpen={openWaitlistTicket}
       onRejoin={handleRejoinWaitlist}
       onDismiss={handleDismissWaitlist}
       onHoldEnded={handleWaitlistHoldEnded}
     />
-  ), [waitlistNow, waitlistBusyId, handleConfirmAndPay, handlePassWaitlist, handleOpenWaitlistDates, handleRejoinWaitlist, handleDismissWaitlist, handleWaitlistHoldEnded]);
+  ), [waitlistNow, waitlistBusyId, handleConfirmAndPay, handlePassWaitlist, openWaitlistTicket, handleRejoinWaitlist, handleDismissWaitlist, handleWaitlistHoldEnded]);
 
   const handleExternalBookingPress = useCallback((entry: ClientExternalBookingWithProvider) => {
     navigation.navigate('ExternalBookingDetail', { externalBookingId: entry.id });
@@ -2347,14 +2382,30 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </Modal>
 
-        <WaitlistDatesSheet
-          place={datesSheetPlace}
-          busy={!!datesSheetPlace && waitlistBusyId === datesSheetPlace.id}
-          error={datesError}
-          onClose={() => setDatesSheetPlace(null)}
-          onSave={(place, dates) => { void handleSaveWaitlistDates(place, dates); }}
+        {/* ─── A waitlist place's ticket: its place in line, or a held slot's
+            countdown with Confirm & pay. Change dates opens on top of it, so
+            the dates sheet is rendered inside the ticket's Modal. ─── */}
+        <WaitlistTicket
+          place={ticketPlace}
+          nowMs={waitlistNow}
+          busy={!!ticketPlace && waitlistBusyId === ticketPlace.id}
+          service={ticketService}
+          onClose={closeWaitlistTicket}
+          onConfirmAndPay={handleTicketConfirmAndPay}
+          onPass={handleTicketPass}
+          onChangeDates={handleOpenWaitlistDates}
           onLeave={handleLeaveFromDatesSheet}
-        />
+          onHoldEnded={handleWaitlistHoldEnded}
+        >
+          <WaitlistDatesSheet
+            place={datesSheetPlace}
+            busy={!!datesSheetPlace && waitlistBusyId === datesSheetPlace.id}
+            error={datesError}
+            onClose={() => setDatesSheetPlace(null)}
+            onSave={(place, dates) => { void handleSaveWaitlistDates(place, dates); }}
+            onLeave={handleLeaveFromDatesSheet}
+          />
+        </WaitlistTicket>
 
         {/* ─── Rating Modal — the "Rate" button on the Today map view set
             showRatingModal/rating/reviewText but nothing rendered a modal, so

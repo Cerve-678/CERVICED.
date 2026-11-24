@@ -3,6 +3,7 @@ import { join } from 'path';
 import {
   buildWaitlistHoldCartItem,
   formatCountdown,
+  heldTimeRangeLabel,
   holdSecondsLeft,
   placeInLineLabel,
   sortWaitlistPlaces,
@@ -10,6 +11,7 @@ import {
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
 import type { MyWaitlistPlace, RebookableService } from '../services/databaseService';
+import { formatTime12Safe } from '../utils/dateUtils';
 
 const NOW = new Date('2026-11-10T14:00:00Z').getTime();
 
@@ -49,6 +51,12 @@ describe('how a waitlist place reads', () => {
     expect(waitlistDatesLabel(null)).toBe('Any day');
     expect(waitlistDatesLabel(['2026-11-18', '2026-11-30'])).toBe('18 – 30 Nov');
     expect(waitlistDatesLabel(['2026-11-18'])).toBe('18 Nov onward');
+  });
+
+  it('gives a held slot its start and end time, or just the start', () => {
+    expect(heldTimeRangeLabel('14:00:00', 120)).toBe(`${formatTime12Safe('14:00')} – ${formatTime12Safe('16:00')}`);
+    expect(heldTimeRangeLabel('14:00', null)).toBe(formatTime12Safe('14:00'));
+    expect(heldTimeRangeLabel(null, 60)).toBeNull();
   });
 
   it('counts down whole seconds and never below zero', () => {
