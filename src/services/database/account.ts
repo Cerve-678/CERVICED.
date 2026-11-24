@@ -257,6 +257,26 @@ export async function verifySignupOtp(
   return { ...summarizeAuthSession(data.session), authSession: data.session };
 }
 
+/** Emails a 6-digit sign-in code (the website's sign-in). A new email gets a
+ * real CERVICED account, created when the code is entered, so its bookings,
+ * receipts and reminders work like the app's. Entered with verifySignupOtp. */
+export async function sendEmailSignInCode(email: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true },
+  });
+  if (error) throw error;
+}
+
+/** The signed-in account's id and email, or null when signed out. */
+export async function getSignedInAccount(): Promise<{ id: string; email: string } | null> {
+  const { data, error } = await getSessionUser();
+  if (error) throw error;
+  const user = data.user;
+  if (!user) return null;
+  return { id: user.id, email: user.email ?? "" };
+}
+
 export async function resendSignupOtp(email: string): Promise<void> {
   const { error } = await supabase.auth.resend({ type: "signup", email });
   if (error) throw error;
