@@ -1,5 +1,6 @@
-import type { AddToCartParams } from "../../contexts/CartContext";
-import type { MyWaitlistPlace, RebookableService } from "../../services/databaseService";
+import type { MyWaitlistPlace, ProviderDepositPolicy } from "../../services/databaseService";
+import { BookingService } from "../../services/bookingService";
+import { toDepositPolicy } from "../cart/pricing";
 import {
   formatDayRangeShortMonth,
   formatShortDayDate,
@@ -9,7 +10,7 @@ import {
 
 /**
  * The client side of the waitlist: how a place reads, how long a held slot
- * has left, and the cart item that pays for it.
+ * has left, and what paying for it charges.
  *
  * A held slot is a 10-minute on_hold booking. It's paid for through the
  * normal checkout (prepare_checkout with waitlist_hold_id), and the 15
@@ -94,46 +95,16 @@ export function sortWaitlistPlaces(places: MyWaitlistPlace[], nowMs: number): My
   });
 }
 
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${h > 0 ? `${h}h ` : ""}${m > 0 ? `${m}m` : ""}`.trim() || "1h";
-}
-
 /**
- * The cart item for a held slot: its fixed date and time, today's price, and
- * the hold it pays for. The cart doesn't let the time change, and checkout
- * sends waitlist_hold_id so the server reuses the held row.
+ * What the card is charged for a held slot's service, by the Cart's rule:
+ * the provider's live deposit policy decides deposit or full price, since a
+ * waitlist place never offered the client a choice.
  */
-export function buildWaitlistHoldCartItem(args: {
-  holdBookingId: string;
-  holdExpiresAt: string;
-  bookingDate: string;
-  bookingTime: string;
-  providerId: string;
-  providerImage: string | null;
-  live: RebookableService;
-}): AddToCartParams {
-  const { live } = args;
-  return {
-    providerName: live.providerDisplayName,
-    providerDisplayName: live.providerDisplayName,
-    providerSlug: live.providerSlug,
-    providerId: args.providerId,
-    providerImage: args.providerImage ? { uri: args.providerImage } : null,
-    providerService: live.categoryName || live.name,
-    service: {
-      id: live.id,
-      name: live.name,
-      price: live.price,
-      duration: durationLabel(live.durationMinutes),
-      description: live.name,
-      addOns: [],
-    },
-    quantity: 1,
-    forceNewInstance: true,
-    selectedDate: args.bookingDate,
-    selectedTime: args.bookingTime.slice(0, 5),
-    waitlistHold: { bookingId: args.holdBookingId, expiresAt: args.holdExpiresAt },
-  };
+export function waitlistCheckoutCharge(
+  price: number,
+  policy: ProviderDepositPolicy | undefined,
+): { charged: number; isDeposit: boolean; leftToPay: number } {
+  const isDeposit = policy && !policy.depositAvailable ? false : !!policy?.depositOnly;
+  const charged = isDeposit ? BookingService.calculateDeposit(price, toDepositPolicy(policy)) : price;
+  return { charged, isDeposit, leftToPay: isDeposit ? Math.max(0, price - charged) : 0 };
 }

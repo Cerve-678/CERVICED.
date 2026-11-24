@@ -30,7 +30,7 @@ describe('toArgbHex', () => {
   });
 
   it('converts every client palette token fed to the Payment Sheet', () => {
-    // The appearance config in CartScreen's StripePaymentModal reads exactly
+    // The appearance config in StripePaymentSheet reads exactly
     // these tokens; any of them growing an unparseable format breaks checkout.
     const used = ['accent', 'bg', 'surface', 'border', 'sub', 'onAccent'] as const;
     for (const palette of [clientLightTheme, clientDarkTheme]) {
