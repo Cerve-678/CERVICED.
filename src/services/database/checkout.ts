@@ -3,7 +3,7 @@
 // ../databaseService, never from this file directly.
 import { supabase } from "../../lib/supabase";
 import type { DbBooking } from "../../types/database";
-import { resolveDepositMode } from "../../utils/depositPolicy";
+import { depositNoteForClients, resolveDepositMode } from "../../utils/depositPolicy";
 
 // ─────────────────────────────────────────────────────────
 // CART CHECKOUT SLOT HOLDS
@@ -299,6 +299,9 @@ export interface ProviderDepositPolicy {
   /** Provider requires the deposit — client has no "pay in full" choice.
    *  Only meaningful when depositAvailable is true. */
   depositOnly: boolean;
+  /** The provider's own "Note to clients" about their deposit, shown in the
+   *  booking sheet. Only set while they take a deposit. */
+  depositNote?: string | null;
 }
 
 type ProviderCheckoutMetadata = {
@@ -459,6 +462,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
         // but no provider control could ever produce: both buttons, shown
         // side by side, because the provider chose to offer both.
         depositOnly: mode === "deposit_required",
+        depositNote: depositNoteForClients(policies),
       };
     } else {
       // No deposit policy saved at all: no deposit offered.

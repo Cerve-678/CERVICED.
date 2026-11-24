@@ -51,3 +51,18 @@ export function resolveDepositMode(policies: StoredDepositPolicy | null | undefi
 export function resolveEditorDepositMode(policies: StoredDepositPolicy | null | undefined): DepositMode {
   return resolveDepositMode(policies) ?? 'full_only';
 }
+
+/**
+ * The "Note to clients" a provider writes under their deposit on Payments,
+ * as the booking sheet shows it. Only while they actually take a deposit
+ * (the same rule as the deposit button), so a note left over from before
+ * they switched deposits off never reaches a client.
+ */
+export function depositNoteForClients(
+  policies: (StoredDepositPolicy & { depositAmount?: unknown; depositNote?: unknown }) | null | undefined,
+): string | null {
+  const mode = resolveDepositMode(policies);
+  if (!mode || mode === 'full_only' || !policies?.depositAmount) return null;
+  const note = typeof policies.depositNote === 'string' ? policies.depositNote.trim() : '';
+  return note || null;
+}
