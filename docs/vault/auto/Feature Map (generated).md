@@ -303,7 +303,7 @@ Curated: [[Contexts]] · **251 files**
 - `src/services/biometricService.ts` _(29)_
 - `src/services/database/services.ts` _(28)_
 - `src/services/database/adminMoney.ts` _(23)_
-- `src/web/WebAccountStep.tsx` _(21)_
+- `src/web/WebAccountStep.tsx` _(23)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `src/services/databaseService.ts` _(20)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_

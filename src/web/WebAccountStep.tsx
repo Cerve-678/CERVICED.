@@ -133,12 +133,21 @@ export function WebAccountStep({ tokens, accentColor, onReadyChange }: WebAccoun
     if (code.length !== 6) { setError('Enter the 6-digit code from the email.'); return; }
     setBusy(true);
     setError(null);
+    let session: Awaited<ReturnType<typeof verifySignupOtp>>;
     try {
-      const session = await verifySignupOtp(step.email, code);
-      await continueSignedIn({ id: session.userId, email: session.email ?? step.email });
+      session = await verifySignupOtp(step.email, code);
     } catch (err) {
       logger.error('[WebAccountStep] confirming the sign-in code failed:', err);
       setError(authErrorMessage(err, 'verify'));
+      setBusy(false);
+      return;
+    }
+    try {
+      await continueSignedIn({ id: session.userId, email: session.email ?? step.email });
+    } catch (err) {
+      // The code worked and they're signed in; only reading the account failed.
+      logger.error('[WebAccountStep] opening the account after sign-in failed:', err);
+      setError('You’re signed in, but we couldn’t open your account. Refresh the page to carry on.');
     } finally {
       setBusy(false);
     }
@@ -172,15 +181,17 @@ export function WebAccountStep({ tokens, accentColor, onReadyChange }: WebAccoun
 
   const signOut = async () => {
     setBusy(true);
+    setError(null);
     try {
       await signOutCurrentSession();
-    } catch (err) {
-      logger.error('[WebAccountStep] signing out failed:', err);
-    } finally {
-      setBusy(false);
-      setError(null);
       setCode('');
       setStep({ kind: 'email' });
+    } catch (err) {
+      // Still signed in, so stay on this step rather than pretend it worked.
+      logger.error('[WebAccountStep] signing out failed:', err);
+      setError('We couldn’t sign you out. Please try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -211,14 +222,17 @@ export function WebAccountStep({ tokens, accentColor, onReadyChange }: WebAccoun
 
   if (step.kind === 'ready') {
     return (
-      <View style={[styles.card, { backgroundColor: tokens.surface }]}>
-        <View style={styles.cardText}>
-          <Text style={[styles.label, { color: tokens.sub }]}>BOOKING AS</Text>
-          <Text style={[styles.strong, { color: tokens.text }]}>{step.account.name}</Text>
-          <Text style={[styles.body, { color: tokens.sub }]}>{step.account.email}</Text>
+      <>
+        <View style={[styles.card, { backgroundColor: tokens.surface }]}>
+          <View style={styles.cardText}>
+            <Text style={[styles.label, { color: tokens.sub }]}>BOOKING AS</Text>
+            <Text style={[styles.strong, { color: tokens.text }]}>{step.account.name}</Text>
+            <Text style={[styles.body, { color: tokens.sub }]}>{step.account.email}</Text>
+          </View>
+          {link('Not you?', () => void signOut())}
         </View>
-        {link('Not you?', () => void signOut())}
-      </View>
+        {errorLine}
+      </>
     );
   }
 
@@ -230,6 +244,7 @@ export function WebAccountStep({ tokens, accentColor, onReadyChange }: WebAccoun
           {step.email} can’t book yet. Add a client profile in the CERVICED app, or use a different email.
         </Text>
         {link('Use a different email', () => void signOut())}
+        {errorLine}
       </View>
     );
   }
