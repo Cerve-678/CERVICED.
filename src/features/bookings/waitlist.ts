@@ -166,3 +166,14 @@ export function firstNameOf(name: string | null | undefined): string | null {
   const first = name?.trim().split(/\s+/)[0];
   return first ? first : null;
 }
+
+/**
+ * Whether a refused offer was refused only for falling outside the
+ * provider's own hours (or past a service's latest start), which the
+ * provider can choose to override. Read from the database guard's words.
+ */
+export function isOutsideHoursRefusal(error: unknown): boolean {
+  const e = error as { code?: unknown; message?: unknown } | null;
+  if (e?.code !== "P0001" || typeof e.message !== "string") return false;
+  return /outside the provider's working hours|has to start by/i.test(e.message);
+}

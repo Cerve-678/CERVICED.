@@ -10,6 +10,7 @@ import {
   buildWaitlistHoldCartItem,
   nextWaitingFor,
   firstNameOf,
+  isOutsideHoursRefusal,
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
 import type { MyWaitlistPlace, RebookableService } from '../services/databaseService';
@@ -226,5 +227,15 @@ describe("who a freed slot goes to next", () => {
     expect(firstNameOf('Jo Martin')).toBe('Jo');
     expect(firstNameOf('  ')).toBeNull();
     expect(firstNameOf(null)).toBeNull();
+  });
+});
+
+describe('a provider offering a time outside their hours', () => {
+  it('is asked only when the refusal is about their own hours', () => {
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: "This appointment is outside the provider's working hours" })).toBe(true);
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: 'This service has to start by 3:30pm' })).toBe(true);
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: 'Provider is unavailable on this date' })).toBe(false);
+    expect(isOutsideHoursRefusal({ code: '42501', message: "outside the provider's working hours" })).toBe(false);
+    expect(isOutsideHoursRefusal(null)).toBe(false);
   });
 });

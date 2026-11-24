@@ -5,7 +5,7 @@
 
 #generated
 
-**4362 functions** across **641 files**.
+**4363 functions** across **641 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -177,7 +177,7 @@
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · **minutesOfDay** · **tipWindowClosesAt**
 - `useClientActivity.ts` — activity · allBookings · refresh · todoCounts · **useClientActivity**
-- `waitlist.ts` — **buildWaitlistHoldCartItem** · durationLabel · **firstNameOf** · **formatCountdown** · **heldTimeRangeLabel** · **holdEndLabel** · **holdSecondsLeft** · inOrder · **nextWaitingFor** · **offeredSlotLabel** · **placeInLineLabel** · **sortWaitlistPlaces** · **waitlistCardState** · **waitlistDatesLabel**
+- `waitlist.ts` — **buildWaitlistHoldCartItem** · durationLabel · **firstNameOf** · **formatCountdown** · **heldTimeRangeLabel** · **holdEndLabel** · **holdSecondsLeft** · inOrder · **isOutsideHoursRefusal** · **nextWaitingFor** · **offeredSlotLabel** · **placeInLineLabel** · **sortWaitlistPlaces** · **waitlistCardState** · **waitlistDatesLabel**
 - `WaitlistDatesSheet.tsx` — createStyles · openPicker · save · styles · **WaitlistDatesSheet**
 - `WaitlistPlaceCard.tsx` — createStyles · styles
 - `WaitlistTicket.tsx` — createStyles · HoldRing · placeNumber · queueDots · row · styles · tick · ticketCut · **WaitlistTicket**
