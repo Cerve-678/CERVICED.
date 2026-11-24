@@ -5,7 +5,7 @@
 
 #generated
 
-**4366 functions** across **642 files**.
+**4367 functions** across **642 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -177,7 +177,7 @@
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · **minutesOfDay** · **tipWindowClosesAt**
 - `useClientActivity.ts` — activity · allBookings · refresh · todoCounts · **useClientActivity**
-- `waitlist.ts` — **firstNameOf** · **formatCountdown** · **heldTimeRangeLabel** · **holdEndLabel** · **holdSecondsLeft** · inOrder · **nextWaitingFor** · **offeredSlotLabel** · **placeInLineLabel** · **sortWaitlistPlaces** · **waitlistCardState** · **waitlistCheckoutCharge** · **waitlistDatesLabel**
+- `waitlist.ts` — **firstNameOf** · **formatCountdown** · **heldTimeRangeLabel** · **holdEndLabel** · **holdSecondsLeft** · inOrder · **isOutsideHoursRefusal** · **nextWaitingFor** · **offeredSlotLabel** · **placeInLineLabel** · **sortWaitlistPlaces** · **waitlistCardState** · **waitlistCheckoutCharge** · **waitlistDatesLabel**
 - `WaitlistDatesSheet.tsx` — createStyles · openPicker · save · styles · **WaitlistDatesSheet**
 - `WaitlistPaySheet.tsx` — closeAll · createStyles · lines · onContinue · prepare · release · styles · **WaitlistPaySheet**
 - `WaitlistPlaceCard.tsx` — createStyles · styles
