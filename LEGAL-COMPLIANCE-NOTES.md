@@ -1097,10 +1097,11 @@ To raise (not lawyer-reviewed):
 
 ## 29. Businesses listed before they join ("Not on CERVICED yet") (2026-10-19)
 
-**What it is:** client Search shows unclaimed directory listings: about 521
+**What it is:** client Search shows unclaimed directory listings: 515
 London beauty businesses imported from a third party's public directory
 (Gina's Maintenance Directory), plus the booking link from each business's
-Instagram bio (`supabase/import_gina_directory_listings.sql`; not yet run).
+Instagram bio (`supabase/import_gina_directory_listings.sql`, run on
+2026-11-24: 515 listings, six businesses listed twice kept once).
 Each shows the Instagram handle as its name, area, category and links, with a
 grey initial instead of a logo. They can't be booked in the app. The owner can
 claim a listing (Instagram bio code, approved by hand) and anyone can email
