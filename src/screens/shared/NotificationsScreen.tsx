@@ -207,6 +207,8 @@ const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'b
  * booking detail is still the destination of its View Booking button.
  */
 const opensSomewhere = (n: { type: string; actionable: boolean; bookingId?: string | undefined }, isProvider: boolean): boolean =>
+  // A Terms change has no button: tapping the notification opens the Terms.
+  n.type === 'terms_updated' ? false :
   n.actionable || n.type === 'follow_request' ||
   (isProvider && n.type === 'booking_confirmed' && !!n.bookingId);
 // Providers need a direct route to act on an incoming booking and to inspect a
@@ -1187,7 +1189,16 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               to its own bounds, which would cut off the unread row's shadow. */}
           <GestureTouchableOpacity
             activeOpacity={0.8}
-            onPress={() => { hapticLight(); showFullMessage(item); }}
+            onPress={() => {
+              hapticLight();
+              // "Tap to read what's changed": the Terms open straight away.
+              if (item.type === 'terms_updated') {
+                markAsRead(item.id);
+                openLegalPage('terms');
+              } else {
+                showFullMessage(item);
+              }
+            }}
             style={styles.notificationItem}
           >
             <View
