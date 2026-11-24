@@ -598,7 +598,6 @@ export default function ServiceEditorSheet({
                     placeholderTextColor={palette.sub}
                     returnKeyType="done"
                     autoCapitalize="none"
-                    autoCorrect={false}
                     accessibilityLabel="Add your own tag"
                     style={[styles.input, styles.ownTagInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
                   />

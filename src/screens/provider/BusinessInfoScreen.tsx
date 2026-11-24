@@ -403,6 +403,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   changed. Locked for 14 days after each change — the note
                   says when it reopens rather than just refusing. */}
               <Field
+                noSuggestions
                 label="Business Name"
                 value={businessName}
                 onChange={setBusinessName}
@@ -417,8 +418,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
             {/* Contact & links — the handles and addresses clients and Cerviced
                 reach the business through. */}
             <Card title="Contact & Links" sub="Your links and email addresses — how clients and Cerviced reach you.">
-              <Field label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
-              <Field label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
+              <Field noSuggestions label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
+              <Field noSuggestions label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
               {/* Two emails, and the old labels had them backwards. `business_email`
                   on `users` is the account/business address — it is never rendered
                   on the public profile; it's what Cerviced writes to and what
@@ -559,6 +560,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             {isLinkOnly && (
               <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
                 <Field
+                  noSuggestions
                   label="Booking Link"
                   value={externalBookingUrl}
                   onChange={setExternalBookingUrl}
