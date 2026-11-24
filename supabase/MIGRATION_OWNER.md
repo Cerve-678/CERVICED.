@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-24 (the "slot opened" notification leads with the time)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124140000 | `waitlist_slot_push_wording` | **APPLIED 2026-11-24** on the user's go-ahead ("do the notification wording then merge"), via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124130000`, no unapplied migration above it on any open PR (re-checked at apply time). md5 guard on live `offer_waitlist_slot` matched (`c046664d…`). Forced-rollback dry run first: new title "Fri 20 Nov, 2:00pm is yours for 10 min", old title gone, hold insert unchanged, live max and md5 unchanged afterwards. Verified live: version recorded (live max); `offer_waitlist_slot` md5 `5565406e…`, the dry run's. Only the client notification's title and message change. |
+
 ### Applied 2026-11-24 (clients nudge "Not on CERVICED yet" listings to join)
 
 | Recorded version | Name | Verified live |
