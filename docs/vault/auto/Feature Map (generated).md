@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **428 files**
 ## Notifications
 Curated: [[Notifications]] · **217 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(369)_
+- `src/screens/shared/NotificationsScreen.tsx` _(370)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/database/notifications.ts` _(118)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(107)_
