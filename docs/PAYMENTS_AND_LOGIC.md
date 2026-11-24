@@ -336,15 +336,10 @@ received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 **Waitlist slots** are paid for through this same checkout. When a slot
 opens and the provider has **Auto** on, the next client in line gets it held
 for 10 minutes (an `on_hold` booking); with Auto off the provider is told and
-offers it from Bookings (since 18 November, `20261118150000`). "Confirm & pay"
-opens a payment sheet on the slot's waitlist ticket, not the Cart
-(`WaitlistPaySheet`, on branch `feat/waitlist-pay-on-ticket`, not yet in a
-build; until then it puts the slot in the cart at its fixed time). The sheet
-asks what the Cart's Booking Summary asks (the same Terms tick, the
-provider's safety notice, a mobile provider's address, missing name, phone
-or date of birth), charges a deposit only when the provider takes deposits
-only (the Cart's rule), sends `policy_snapshot: null` like a Cart hold, then
-opens the same Stripe sheet the Cart uses (`StripePaymentSheet`). `prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
+offers it from Bookings (since 18 November, `20261118150000`). "Confirm & pay" on the slot's waitlist ticket
+puts that slot in the cart at its fixed time and opens the Cart, like any
+booking (the user's call, 24 November, undoing the same day's pay-on-ticket
+sheet). `prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
 database like any item, and the checkout can't outlast the hold: the 10
 minutes keep running while the client pays. Nothing is booked until
 `finalize_checkout` captures the payment. If the time runs out or the client
@@ -1429,6 +1424,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 10 Nov | A waitlist slot is paid for at checkout like any booking: 15-minute hold, the clock keeps running while paying, missing it or passing takes the client off that waitlist. "Offer automatically" rolls a lapsed slot to the next person; off, it opens to everyone and the provider can offer it. A provider's own offer is a hold too | Confirming used to book with £0 paid: no deposit, fee, saved card or policy agreement. The user's call, 10 November 2026 |
 | 18 Nov | Waitlist **Auto** decides the first hold as well as the roll-on: with it off, a freed slot goes back to the provider to offer. Holds are 10 minutes, not 15. Closing when full works with the waitlist on, and the waitlist alone gets a slot freed while closed | The owner's call, 18 November 2026: "Enable waitlist" is the manual waitlist and Auto the automatic hold |
 | 24 Nov | A held waitlist slot is paid for on its own ticket: Confirm & pay opens the payment sheet there instead of sending the client to the Cart. Same checkout, same agreement, same Stripe sheet; only where it opens changes | The user's call, 24 November 2026 (idea A's ticket with idea B's checkout) |
+| 24 Nov (later) | Undone: Confirm & pay on the ticket goes to the Cart and checks out like any booking. The ticket opens from the client's "2nd in line" chip on the provider's page as well as from Bookings | The user's call, 24 November 2026: "it should use cart like normal to checkout" |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |

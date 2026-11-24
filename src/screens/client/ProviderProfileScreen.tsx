@@ -80,6 +80,7 @@ import {
   getMyWaitlist,
   joinWaitlist,
   leaveWaitlist,
+  updateMyWaitlistDates,
   type MyWaitlistPlace,
   setProviderFollowNotify,
   recordProviderStat,
@@ -136,6 +137,8 @@ import { ListingInitialBadge } from "../../components/ListingInitialBadge";
 import { JoinNudgeBar, JoinNudgeSideToast } from "../../components/JoinNudgeBar";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
 import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
+import { WaitlistTicket } from "../../features/bookings/WaitlistTicket";
+import { WaitlistDatesSheet } from "../../features/bookings/WaitlistDatesSheet";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -1557,6 +1560,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [leaveConfirmEntry, setLeaveConfirmEntry] =
     useState<MyWaitlistPlace | null>(null);
+  // The client's waitlist ticket, opened from their "2nd in line" chip, by
+  // place id so a reload shows its latest state; and its Change dates sheet.
+  const [ticketPlaceId, setTicketPlaceId] = useState<string | null>(null);
+  const [ticketNow, setTicketNow] = useState(() => Date.now());
+  const [datesSheetPlace, setDatesSheetPlace] = useState<MyWaitlistPlace | null>(null);
+  const [datesBusy, setDatesBusy] = useState(false);
+  const [datesError, setDatesError] = useState<string | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -2253,6 +2263,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const handleJoinWaitlist = useCallback(async () => {
     if (!provider || !providerDbId || !currentUserId || !waitlistModal.service)
       return;
+    // "Date range" with no dates used to join for any date without saying so.
+    if (waitlistDateMode === "range" && !waitlistDateFrom) {
+      setWaitlistError("Pick the first day you can do, or choose Anytime.");
+      return;
+    }
     Keyboard.dismiss();
     setWaitlistJoining(true);
     try {
@@ -2307,6 +2322,40 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Alert.alert("Error", "Could not leave waitlist.");
     }
   }, []);
+
+  const ticketPlace = useMemo(
+    () => (ticketPlaceId ? Object.values(userWaitlistMap).find((place) => place.id === ticketPlaceId) ?? null : null),
+    [ticketPlaceId, userWaitlistMap],
+  );
+  const openWaitlistTicket = useCallback((place: MyWaitlistPlace) => {
+    setTicketNow(Date.now());
+    setTicketPlaceId(place.id);
+  }, []);
+  const closeWaitlistTicket = useCallback(() => {
+    setDatesSheetPlace(null);
+    setTicketPlaceId(null);
+  }, []);
+  // Leave asks first. The ticket and its dates sheet close before the
+  // confirm opens: iOS shows one Modal at a time, and a second can't present
+  // while the first is still sliding away.
+  const leaveFromTicket = useCallback((place: MyWaitlistPlace) => {
+    setDatesSheetPlace(null);
+    setTicketPlaceId(null);
+    setTimeout(() => setLeaveConfirmEntry(place), 350);
+  }, []);
+  const saveWaitlistDates = useCallback(async (place: MyWaitlistPlace, dates: string[] | null) => {
+    setDatesBusy(true);
+    setDatesError(null);
+    try {
+      await updateMyWaitlistDates(place.id, dates);
+      setDatesSheetPlace(null);
+      await loadWaitlistMap();
+    } catch (error) {
+      setDatesError(toUserMessage(error, "Couldn't save your dates. Try again.", "ProviderProfile.saveWaitlistDates"));
+    } finally {
+      setDatesBusy(false);
+    }
+  }, [loadWaitlistMap]);
 
   const handleConfirmLeave = useCallback(async () => {
     if (!leaveConfirmEntry) return;
@@ -3530,7 +3579,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       onEditAddOns={setAddOnPickerService}
       waitlistPlaces={userWaitlistMap}
       onOpenHeldPlace={openHeldPlace}
-      onLeaveWaitlist={setLeaveConfirmEntry}
+      onOpenWaitlistPlace={openWaitlistTicket}
       onJoinWaitlist={openWaitlistJoin}
     />
   );
@@ -4188,11 +4237,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 onSubmitEditing={Keyboard.dismiss}
               />
 
-              {waitlistError && (
+              {waitlistError ? (
                 <Text style={[styles.waitlistErrorText, { color: "#FF3B30" }]}>
                   {waitlistError}
                 </Text>
-              )}
+              ) : waitlistDateMode === "range" && !waitlistDateFrom ? (
+                // Join stays off until there's a first day to wait for.
+                <Text style={[styles.waitlistErrorText, { color: OP.sub }]}>
+                  Pick the first day you can do, or choose Anytime.
+                </Text>
+              ) : null}
 
               {/* Action buttons */}
               <View style={styles.waitlistPopupActions}>
@@ -4215,11 +4269,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     styles.waitlistPopupConfirmBtn,
                     {
                       backgroundColor: adaptiveAccentColor,
-                      opacity: waitlistJoining ? 0.6 : 1,
+                      opacity: waitlistJoining || (waitlistDateMode === "range" && !waitlistDateFrom) ? 0.5 : 1,
                     },
                   ]}
                   onPress={handleJoinWaitlist}
-                  disabled={waitlistJoining}
+                  disabled={waitlistJoining || (waitlistDateMode === "range" && !waitlistDateFrom)}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.waitlistJoinConfirmText}>
@@ -4230,6 +4284,33 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             </View>
           </KeyboardDismissView>
         </Modal>
+
+        {/* The client's waitlist ticket, from their "2nd in line" chip: place
+            in line, dates, Change dates and Leave. A held slot is paid for
+            from Bookings, so its buttons hand over there (to the Cart from
+            its ticket). Change dates opens on top, so the dates sheet is
+            rendered inside the ticket's Modal. */}
+        <WaitlistTicket
+          place={ticketPlace}
+          nowMs={ticketNow}
+          busy={datesBusy}
+          service={null}
+          onClose={closeWaitlistTicket}
+          onConfirmAndPay={(place) => { closeWaitlistTicket(); openHeldPlace(place); }}
+          onPass={(place) => { closeWaitlistTicket(); openHeldPlace(place); }}
+          onChangeDates={(place) => { setDatesError(null); setDatesSheetPlace(place); }}
+          onLeave={leaveFromTicket}
+          onHoldEnded={() => { setTicketNow(Date.now()); void loadWaitlistMap(); }}
+        >
+          <WaitlistDatesSheet
+            place={datesSheetPlace}
+            busy={datesBusy}
+            error={datesError}
+            onClose={() => setDatesSheetPlace(null)}
+            onSave={(place, dates) => { void saveWaitlistDates(place, dates); }}
+            onLeave={leaveFromTicket}
+          />
+        </WaitlistTicket>
 
         {/* Waitlist Leave Confirmation Modal */}
         <Modal

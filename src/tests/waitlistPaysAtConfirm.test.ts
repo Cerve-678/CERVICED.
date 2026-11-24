@@ -7,12 +7,13 @@ import {
   placeInLineLabel,
   sortWaitlistPlaces,
   waitlistCardState,
-  waitlistCheckoutCharge,
+  buildWaitlistHoldCartItem,
   nextWaitingFor,
   firstNameOf,
+  isOutsideHoursRefusal,
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
-import type { MyWaitlistPlace } from '../services/databaseService';
+import type { MyWaitlistPlace, RebookableService } from '../services/databaseService';
 import { formatTime12Safe } from '../utils/dateUtils';
 
 const NOW = new Date('2026-11-10T14:00:00Z').getTime();
@@ -97,15 +98,25 @@ describe('which card a place shows', () => {
 });
 
 describe('paying for a held slot', () => {
-  it('charges the full price unless the provider takes deposits only', () => {
-    expect(waitlistCheckoutCharge(65, undefined)).toEqual({ charged: 65, isDeposit: false, leftToPay: 0 });
-    expect(waitlistCheckoutCharge(65, { depositAvailable: false, depositOnly: false, depositType: 'percentage', depositAmount: 0 }))
-      .toEqual({ charged: 65, isDeposit: false, leftToPay: 0 });
-  });
+  const live: RebookableService = {
+    id: 's1', name: 'Classic Full Set', price: 65, durationMinutes: 120, categoryName: 'Lashes',
+    providerSlug: 'studio-ren', providerDisplayName: 'Studio Ren', addOns: [],
+  };
 
-  it("charges a deposit-only provider's deposit and leaves the rest for the appointment", () => {
-    expect(waitlistCheckoutCharge(65, { depositAvailable: true, depositOnly: true, depositType: 'fixed', depositAmount: 20 }))
-      .toEqual({ charged: 20, isDeposit: true, leftToPay: 45 });
+  it('goes into the cart at its fixed time, carrying the hold', () => {
+    const item = buildWaitlistHoldCartItem({
+      holdBookingId: 'b1', holdExpiresAt: '2026-11-10T14:15:00Z',
+      bookingDate: '2026-11-20', bookingTime: '14:00:00',
+      providerId: 'p1', providerImage: 'https://x/logo.png', live,
+    });
+    expect(item).toMatchObject({
+      providerId: 'p1',
+      selectedDate: '2026-11-20',
+      selectedTime: '14:00',
+      service: { id: 's1', price: 65, duration: '2h' },
+      waitlistHold: { bookingId: 'b1', expiresAt: '2026-11-10T14:15:00Z' },
+      forceNewInstance: true,
+    });
   });
 });
 
@@ -186,29 +197,13 @@ describe('the migration keeps waitlist slots paid for', () => {
   });
 });
 
-describe('a held slot is paid for on its ticket', () => {
-  const SHEET = readFileSync(join(__dirname, '../features/bookings/WaitlistPaySheet.tsx'), 'utf8');
+describe('a held slot is paid for through the Cart', () => {
   const BOOKINGS = readFileSync(join(__dirname, '../screens/client/BookingsScreen.tsx'), 'utf8');
 
-  it('checks out the held row with the same agreement the Cart asks for', () => {
-    expect(SHEET).toContain('waitlist_hold_id: held.holdId');
-    expect(SHEET).toContain('policy_accepted: agreed');
-    expect(SHEET).toContain('safety_ack: agreed');
-    expect(SHEET).toContain("and each provider's cancellation policy");
-  });
-
-  it('asks for missing details first and pays through the shared Stripe sheet', () => {
-    expect(SHEET).toContain('holdForDetails(');
-    expect(SHEET).toContain('<StripePaymentSheet');
-  });
-
-  it('hands the checkout back when the client leaves without paying, but not mid-payment', () => {
-    expect(SHEET).toContain('if (checkout && !inFlightRef.current) release(checkout.batchId);');
-  });
-
-  it('no longer sends the client to the Cart', () => {
-    expect(BOOKINGS).not.toContain("navigate('Cart' as never);\n    } catch (error) {\n      showAlert(\"Couldn't open checkout\"");
-    expect(BOOKINGS).toContain('<WaitlistPaySheet');
+  it('puts the held slot in the cart and opens the Cart from its ticket', () => {
+    expect(BOOKINGS).toContain('addToCart(buildWaitlistHoldCartItem({');
+    expect(BOOKINGS).toContain("navigation.getParent()?.navigate('Cart' as never);");
+    expect(BOOKINGS).toContain('onConfirmAndPay={handleTicketConfirmAndPay}');
   });
 });
 
@@ -232,5 +227,15 @@ describe("who a freed slot goes to next", () => {
     expect(firstNameOf('Jo Martin')).toBe('Jo');
     expect(firstNameOf('  ')).toBeNull();
     expect(firstNameOf(null)).toBeNull();
+  });
+});
+
+describe('a provider offering a time outside their hours', () => {
+  it('is asked only when the refusal is about their own hours', () => {
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: "This appointment is outside the provider's working hours" })).toBe(true);
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: 'This service has to start by 3:30pm' })).toBe(true);
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: 'Provider is unavailable on this date' })).toBe(false);
+    expect(isOutsideHoursRefusal({ code: '42501', message: "outside the provider's working hours" })).toBe(false);
+    expect(isOutsideHoursRefusal(null)).toBe(false);
   });
 });
