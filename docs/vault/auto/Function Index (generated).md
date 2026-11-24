@@ -5,7 +5,7 @@
 
 #generated
 
-**4372 functions** across **643 files**.
+**4373 functions** across **643 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -614,7 +614,7 @@
 - `cropRect.ts` — axis · clamp · **clampView** · **fitContain** · **fitCropInside** · **moveCrop** · **moveHandle** · **pinchView** · **toImageCrop** · **visiblePhoto**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDayOrdinalShortMonth** · **formatDayRangeShortMonth** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **assignOverlapColumns** · closeGroup · **resolveTimelineRange**
-- `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
+- `depositPolicy.ts` — **depositNoteForClients** · isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `displaySettings.ts` — **clampTextScale** · **displaySettingStorageKey** · **fontFamilyForChoice** · **isFontChoiceKey** · **isLanguageCode** · **isRegionCode** · **labelForTextScale** · **resolveStoredDisplaySettings** · **snapTextScaleToStep**
 - `distance.ts` — **formatDistance** · **formatMiles** · **getDistanceKm** · toRadians
 - `exploreSeen.ts` — **exploreSeenNow** · **loadExploreSeen** · **markSeen** · **pruneSeen** · **recordExploreSeen** · **resetExploreSeen**

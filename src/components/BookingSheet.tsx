@@ -1014,6 +1014,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
                   </Text>
                 )}
+                {/* The provider's own "Note to clients" from Payments, in their words. */}
+                {!!depositPolicy?.depositNote && (
+                  <Text style={[styles.depositNoteText, { color: tokens.sub }]}>{depositPolicy.depositNote}</Text>
+                )}
               </View>
 
               {/* Promo entry only on the add flow (from the provider profile) —
@@ -1540,6 +1544,7 @@ const styles = StyleSheet.create({
   paymentButtons: { flexDirection: 'row', gap: 10 },
   paymentOptionButton: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: 'transparent', paddingVertical: 12, alignItems: 'center' },
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
+  depositNoteText: { fontSize: 13, lineHeight: 18, marginTop: 8 },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
   footer: {
