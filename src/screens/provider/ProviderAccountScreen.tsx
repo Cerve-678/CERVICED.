@@ -31,7 +31,9 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getCurrentRefreshToken, getProviderDisplayNameByUserId } from '../../services/databaseService';
+import { getCurrentRefreshToken, getProviderDisplayNameByUserId, providerHasBookingsToDo } from '../../services/databaseService';
+import { TodoMark } from '../../components/TodoMark';
+import { logger } from '../../utils/logger';
 import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
@@ -119,14 +121,19 @@ interface CarouselCardProps {
   subtitle: string;
   onPress: () => void;
   P: typeof LIGHT;
+  /** A red "!" in the corner: something on that screen is left to do. */
+  todo?: boolean;
 }
 
-const CarouselCard = React.memo(({ icon, title, subtitle, onPress, P }: CarouselCardProps) => (
+const CarouselCard = React.memo(({ icon, title, subtitle, onPress, P, todo }: CarouselCardProps) => (
   <TouchableOpacity
     style={[styles.carouselCard, { backgroundColor: P.card, borderColor: P.border }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
+    accessibilityRole="button"
+    accessibilityLabel={todo ? `${title}, something to do` : title}
   >
+    {todo && <View style={styles.ccTodo}><TodoMark size={16} /></View>}
     <View style={[styles.ccIcon, { backgroundColor: P.iconBg }]}>
       <Icon name={icon} size={16} color={P.accent} />
     </View>
@@ -184,6 +191,19 @@ export default function ProviderAccountScreen({ navigation }: any) {
     })();
     return () => { cancelled = true; };
   }, []));
+
+  // Booking History gets a "!" while its To Do tab has anything in it.
+  // Re-read on focus, so answering a request there clears it on the way back.
+  const [bookingsToDo, setBookingsToDo] = useState(false);
+  useFocusEffect(useCallback(() => {
+    if (isLinkOnly) return;
+    let cancelled = false;
+    providerHasBookingsToDo()
+      .then(has => { if (!cancelled) setBookingsToDo(has); })
+      // Leave the mark as it was; the card still opens the list.
+      .catch((error: unknown) => logger.warn('[ProviderAccount] booking to-dos failed to load', error));
+    return () => { cancelled = true; };
+  }, [isLinkOnly]));
 
   // Re-fetch the live public-profile name every time Settings is focused, so
   // edits made in Edit Profile (which write providers.display_name, not
@@ -413,7 +433,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <View style={styles.carousel}>
                 <CarouselCard key="payouts" icon="payment" title={t('providerAccount.myBusiness.payouts.title')} subtitle={t('providerAccount.myBusiness.payouts.sub')} onPress={() => navigation.navigate('Payments')} P={P} />
                 <CarouselCard key="inbox" icon="email" title={t('providerAccount.myBusiness.inbox.title')} subtitle={t('providerAccount.myBusiness.inbox.sub')} onPress={() => navigation.navigate('ProviderInbox')} P={P} />
-                <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} />
+                <CarouselCard key="booking-history" icon="stack" title={t('providerAccount.myBusiness.history.title')} subtitle={t('providerAccount.myBusiness.history.sub')} onPress={() => navigation.navigate('BookingHistory')} P={P} todo={bookingsToDo} />
               </View>
             </View>
             </>)}
@@ -800,6 +820,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // .ep-cc-icon: 32x32, radius 11.
+  ccTodo: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
   ccIcon: {
     width: 32,
     height: 32,
