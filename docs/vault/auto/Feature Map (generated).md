@@ -120,7 +120,7 @@ Curated: [[Booking Flow]] · **427 files**
 - `src/screens/provider/ProviderHomeScreen.tsx` _(255)_
 - `src/screens/client/RescheduleScreen.tsx` _(207)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(202)_
-- `src/services/database/bookings.ts` _(186)_
+- `src/services/database/bookings.ts` _(193)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/shared/NotificationsScreen.tsx` _(143)_
@@ -234,13 +234,13 @@ Curated: [[Booking Flow]] · **88 files**
 - `src/types/database.ts` _(15)_
 - `supabase/booking_cancellation_actor_aware_fix.sql` _(13)_
 - `src/screens/shared/NotificationsScreen.tsx` _(12)_
+- `src/services/database/bookings.ts` _(12)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(12)_
 - `src/features/bookings/WaitlistDatesSheet.tsx` _(11)_
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
 - `src/components/WaitlistHoldCountdown.tsx` _(9)_
 - `src/services/database/providers.ts` _(8)_
 - `src/services/notificationTapHandler.ts` _(8)_
-- `src/screens/client/ActivityCentreScreen.tsx` _(7)_
 - … +58 more
 
 ## Reschedule / cancel

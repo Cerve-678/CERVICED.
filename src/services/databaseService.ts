@@ -229,6 +229,7 @@ export {
   getGroupBookingSiblings,
   getProviderConversations,
   getProviderUnreadConversationCount,
+  providerHasBookingsToDo,
   getProviderEnquirySummary,
   getUserConversations,
   subscribeToUserConversationChanges,
