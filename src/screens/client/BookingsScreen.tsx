@@ -47,7 +47,8 @@ import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard';
 import { WaitlistDatesSheet } from '../../features/bookings/WaitlistDatesSheet';
 import { WaitlistTicket, type WaitlistTicketService } from '../../features/bookings/WaitlistTicket';
-import { buildWaitlistHoldCartItem, holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
+import { useWaitlistHoldActions } from '../../features/bookings/useWaitlistHoldActions';
+import { holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { TodoMark } from '../../components/TodoMark';
@@ -290,46 +291,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [loadWaitlist]);
 
   // The cart line paying for a hold, if the client already started checkout.
-  const removeHoldFromCart = useCallback((holdBookingId: string | null) => {
-    if (!holdBookingId) return;
-    cartItems
-      .filter(item => item.waitlistHold?.bookingId === holdBookingId)
-      .forEach(item => removeFromCart(item.id));
-  }, [cartItems, removeFromCart]);
-
-  // Confirm & pay: the held slot goes into the cart at its fixed time and the
-  // client pays for it like any booking. The 15 minutes keep running.
-
-  const handlePassWaitlist = useCallback((place: MyWaitlistPlace) => {
-    const holdId = place.holdBookingId;
-    if (!holdId) return;
-    const slot = offeredSlotLabel(place.offeredDate, place.offeredTime) ?? 'this slot';
-    showConfirm(
-      `Pass on ${slot}?`,
-      "It'll be offered to someone else, and you'll come off this waitlist. You can rejoin afterwards.",
-      [
-        { text: 'Keep it', style: 'cancel' },
-        {
-          text: 'Pass it on',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setWaitlistBusyId(place.id);
-              try {
-                await declineWaitlistHold(holdId);
-                removeHoldFromCart(holdId);
-                await loadWaitlist();
-              } catch (error) {
-                showAlert("Couldn't pass it on", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.passWaitlist'));
-              } finally {
-                setWaitlistBusyId(null);
-              }
-            })();
-          },
-        },
-      ],
-    );
-  }, [loadWaitlist, removeHoldFromCart, showAlert, showConfirm]);
+  // Confirm & pay (to the Cart) and Pass it on, shared with the ticket on the
+  // provider's page that the "slot opened" notification opens.
+  const openCart = useCallback(() => navigation.getParent()?.navigate('Cart' as never), [navigation]);
+  const { confirmAndPay: handleConfirmAndPay, passOnHold: handlePassWaitlist, removeHoldFromCart } = useWaitlistHoldActions({
+    showAlert, showConfirm, setBusyId: setWaitlistBusyId, openCart, reload: loadWaitlist, context: 'BookingsScreen',
+  });
 
   // A hold whose time ran out before the sweep reached it still counts as
   // held on the server. Rejoin and Dismiss end it first (decline_waitlist_hold
@@ -405,40 +372,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     () => (ticketPlaceId ? waitlistPlaces.find(place => place.id === ticketPlaceId) ?? null : null),
     [ticketPlaceId, waitlistPlaces],
   );
-  // Confirm & pay checks out through the Cart like any booking (the user's
-  // call, 2026-11-24): the held slot goes in at its fixed time and carries
-  // the hold, so prepare_checkout reuses that row.
-  const handleConfirmAndPay = useCallback(async (place: MyWaitlistPlace) => {
-    if (!place.holdBookingId) return;
-    setWaitlistBusyId(place.id);
-    try {
-      const hold = await getBookingById(place.holdBookingId);
-      if (!hold || hold.status !== 'on_hold' || !hold.hold_expires_at) {
-        showAlert('This slot has gone', "Its time ran out before you could pay, so you've come off this waitlist. You can rejoin.");
-        await loadWaitlist();
-        return;
-      }
-      const live = await getRebookableService(hold.provider_id, hold.service_name_snapshot);
-      if (!live || live.id !== hold.service_id) {
-        showAlert("Can't book this right now", `${place.providerName} isn't taking bookings for ${place.serviceName} at the moment.`);
-        return;
-      }
-      addToCart(buildWaitlistHoldCartItem({
-        holdBookingId: hold.id,
-        holdExpiresAt: hold.hold_expires_at,
-        bookingDate: hold.booking_date,
-        bookingTime: hold.booking_time,
-        providerId: hold.provider_id,
-        providerImage: hold.provider_logo_snapshot,
-        live,
-      }));
-      navigation.getParent()?.navigate('Cart' as never);
-    } catch (error) {
-      showAlert("Couldn't open checkout", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.confirmAndPayWaitlist'));
-    } finally {
-      setWaitlistBusyId(null);
-    }
-  }, [addToCart, loadWaitlist, navigation, showAlert]);
   // The ticket closes first: the Cart opens over Bookings, and the dialog
   // host sits outside the ticket's Modal.
   const handleTicketConfirmAndPay = useCallback((place: MyWaitlistPlace) => {

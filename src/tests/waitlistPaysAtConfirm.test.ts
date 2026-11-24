@@ -198,12 +198,36 @@ describe('the migration keeps waitlist slots paid for', () => {
 });
 
 describe('a held slot is paid for through the Cart', () => {
+  const HOOK = readFileSync(join(__dirname, '../features/bookings/useWaitlistHoldActions.ts'), 'utf8');
   const BOOKINGS = readFileSync(join(__dirname, '../screens/client/BookingsScreen.tsx'), 'utf8');
+  const PROFILE = readFileSync(join(__dirname, '../screens/client/ProviderProfileScreen.tsx'), 'utf8');
 
-  it('puts the held slot in the cart and opens the Cart from its ticket', () => {
-    expect(BOOKINGS).toContain('addToCart(buildWaitlistHoldCartItem({');
-    expect(BOOKINGS).toContain("navigation.getParent()?.navigate('Cart' as never);");
-    expect(BOOKINGS).toContain('onConfirmAndPay={handleTicketConfirmAndPay}');
+  it('puts the held slot in the cart and opens the Cart', () => {
+    expect(HOOK).toContain('addToCart(buildWaitlistHoldCartItem({');
+    expect(HOOK).toContain('openCart();');
+  });
+
+  it('does it the same way from Bookings and from the provider page', () => {
+    expect(BOOKINGS).toContain('useWaitlistHoldActions({');
+    expect(PROFILE).toContain('useWaitlistHoldActions({');
+  });
+});
+
+describe('the "slot opened" notification opens the ticket on the provider page', () => {
+  const TAP = readFileSync(join(__dirname, '../services/notificationTapHandler.ts'), 'utf8');
+  const LIST = readFileSync(join(__dirname, '../screens/shared/NotificationsScreen.tsx'), 'utf8');
+  const ACTIVITY = readFileSync(join(__dirname, '../screens/client/ActivityCentreScreen.tsx'), 'utf8');
+  const PROFILE = readFileSync(join(__dirname, '../screens/client/ProviderProfileScreen.tsx'), 'utf8');
+
+  it('sends a push tap, the in-app list and the Activity Centre there with the hold', () => {
+    expect(TAP).toContain("openWaitlistHoldId: booking_id");
+    expect(LIST).toContain("openWaitlistHoldId: bookingId");
+    expect(ACTIVITY).toContain("openWaitlistHoldId: target.bookingId");
+  });
+
+  it('opens that hold\'s ticket, or says the slot has gone', () => {
+    expect(PROFILE).toContain('place.holdBookingId === openWaitlistHoldId');
+    expect(PROFILE).toContain('"This slot has gone"');
   });
 });
 

@@ -139,6 +139,8 @@ import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../featu
 import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
 import { WaitlistTicket } from "../../features/bookings/WaitlistTicket";
 import { WaitlistDatesSheet } from "../../features/bookings/WaitlistDatesSheet";
+import { useWaitlistHoldActions } from "../../features/bookings/useWaitlistHoldActions";
+import { durationToMinutes } from "../../features/cart/presentation";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -1567,6 +1569,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [datesSheetPlace, setDatesSheetPlace] = useState<MyWaitlistPlace | null>(null);
   const [datesBusy, setDatesBusy] = useState(false);
   const [datesError, setDatesError] = useState<string | null>(null);
+  // Set once the client's waitlist places have been read for this page, so
+  // a "slot opened" notification can tell a held slot from one that's gone.
+  const [waitlistLoaded, setWaitlistLoaded] = useState(false);
+  const [holdBusyId, setHoldBusyId] = useState<string | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -1791,6 +1797,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           map[place.serviceId ?? "__any__"] = place;
         });
       setUserWaitlistMap(map);
+      setWaitlistLoaded(true);
     } catch (error) {
       logger.warn("[ProviderProfile] waitlist places failed to load", error);
     }
@@ -2335,6 +2342,44 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     setDatesSheetPlace(null);
     setTicketPlaceId(null);
   }, []);
+  // A held slot's price and length, for its ticket, from this page's own
+  // services.
+  const ticketService = useMemo(() => {
+    if (!provider || !ticketPlace?.serviceId) return null;
+    const match = Object.values(provider.categories).flat().find((service) => service.dbId === ticketPlace.serviceId);
+    return match ? { price: match.price, durationMinutes: durationToMinutes(match.duration) } : null;
+  }, [provider, ticketPlace?.serviceId]);
+  // Confirm & pay (to the Cart) and Pass it on, the same as from Bookings.
+  const openCart = useCallback(() => navigation.getParent()?.navigate("Cart" as never), [navigation]);
+  const { confirmAndPay, passOnHold } = useWaitlistHoldActions({
+    showAlert, showConfirm, setBusyId: setHoldBusyId, openCart, reload: loadWaitlistMap, context: "ProviderProfile",
+  });
+  // The dialog host sits outside the ticket's Modal, so the ticket closes
+  // before anything that asks or alerts.
+  const confirmAndPayFromTicket = useCallback((place: MyWaitlistPlace) => {
+    closeWaitlistTicket();
+    void confirmAndPay(place);
+  }, [closeWaitlistTicket, confirmAndPay]);
+  const passFromTicket = useCallback((place: MyWaitlistPlace) => {
+    closeWaitlistTicket();
+    setTimeout(() => passOnHold(place), 350);
+  }, [closeWaitlistTicket, passOnHold]);
+  // Arriving from a "slot opened" notification (or the Activity Centre) with
+  // the hold's booking id: open its ticket and countdown here, or say it has
+  // gone if its time ran out first.
+  const holdParamHandled = useRef<string | null>(null);
+  const openWaitlistHoldId = route.params?.openWaitlistHoldId;
+  useEffect(() => {
+    if (!openWaitlistHoldId || !waitlistLoaded || holdParamHandled.current === openWaitlistHoldId) return;
+    holdParamHandled.current = openWaitlistHoldId;
+    const held = Object.values(userWaitlistMap).find((place) => place.holdBookingId === openWaitlistHoldId);
+    if (held) {
+      openWaitlistTicket(held);
+    } else {
+      showAlert("This slot has gone", `Its ${WAITLIST_HOLD_MINUTES} minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from here.`);
+    }
+    navigation.setParams({ openWaitlistHoldId: undefined } as never);
+  }, [openWaitlistHoldId, waitlistLoaded, userWaitlistMap, openWaitlistTicket, showAlert, navigation]);
   // Leave asks first. The ticket and its dates sheet close before the
   // confirm opens: iOS shows one Modal at a time, and a second can't present
   // while the first is still sliding away.
@@ -3525,10 +3570,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
       return next;
     });
-  // Bookings opens the held slot's ticket from its booking id, the same way
-  // a "slot opened" notification does.
-  const openHeldPlace = (place: MyWaitlistPlace) =>
-    navigation.navigate("Bookings", place.holdBookingId ? { openBookingId: place.holdBookingId } : undefined);
   const openWaitlistJoin = (service: ServiceData) => {
     setWaitlistNotes("");
     setWaitlistModal({ visible: true, service });
@@ -3578,7 +3619,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       onToggleServiceSelected={toggleServiceSelected}
       onEditAddOns={setAddOnPickerService}
       waitlistPlaces={userWaitlistMap}
-      onOpenHeldPlace={openHeldPlace}
+      onOpenHeldPlace={openWaitlistTicket}
       onOpenWaitlistPlace={openWaitlistTicket}
       onJoinWaitlist={openWaitlistJoin}
     />
@@ -4293,11 +4334,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <WaitlistTicket
           place={ticketPlace}
           nowMs={ticketNow}
-          busy={datesBusy}
-          service={null}
+          busy={datesBusy || (!!ticketPlace && holdBusyId === ticketPlace.id)}
+          service={ticketService}
           onClose={closeWaitlistTicket}
-          onConfirmAndPay={(place) => { closeWaitlistTicket(); openHeldPlace(place); }}
-          onPass={(place) => { closeWaitlistTicket(); openHeldPlace(place); }}
+          onConfirmAndPay={confirmAndPayFromTicket}
+          onPass={passFromTicket}
           onChangeDates={(place) => { setDatesError(null); setDatesSheetPlace(place); }}
           onLeave={leaveFromTicket}
           onHoldEnded={() => { setTicketNow(Date.now()); void loadWaitlistMap(); }}

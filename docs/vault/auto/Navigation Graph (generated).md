@@ -5,7 +5,7 @@
 
 #generated
 
-**167 edges** across **49 screens**. Node-graph version: [[Screen Flow (generated)]].
+**168 edges** across **49 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -14,6 +14,7 @@
 graph LR
   ActivityCentreScreen --> BookingDetailScreen
   ActivityCentreScreen --> BookingsScreen
+  ActivityCentreScreen --> ProviderProfileScreen
   AddBookingScreen --> ProviderHome
   AdminCreatedAccountsScreen --> AdminCreateAccountScreen
   AuthScreen --> Home
@@ -194,7 +195,7 @@ graph LR
 - `auth/SignUpStep4Screen` → `SignUpStep5`
 - `auth/SignUpStep5Screen` → `EmailVerification`, `Login`
 - `auth/WelcomeScreen` → `ClaimProvider`, `Login`, `SignUpStep1`
-- `client/ActivityCentreScreen` → `client/BookingDetailScreen`, `client/BookingsScreen`
+- `client/ActivityCentreScreen` → `client/BookingDetailScreen`, `client/BookingsScreen`, `client/ProviderProfileScreen`
 - `client/BeautyBillingScreen` → `client/BeautyProfileScreen`, `client/PaymentMethodsScreen`, `client/SubscriptionScreen`
 - `client/BeautyProfileScreen` → `client/BookingsScreen`, `client/CircleScreen`, `client/MessagesScreen`, `client/ProfileInfoScreen`, `client/ProviderProfileScreen`
 - `client/BookingDetailScreen` → `Cart`, `client/ClientIntakeFormScreen`, `client/ProviderChatScreen`, `client/RescheduleScreen`

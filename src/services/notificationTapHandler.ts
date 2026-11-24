@@ -152,6 +152,13 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // A slot held for the client: their ticket with its countdown opens on the
+  // provider's page, where Confirm & pay sends it to the Cart.
+  if (type === 'waitlist_slot_available' && booking_id && !isProvider && provider_id) {
+    navigateNested('Home', 'ProviderProfile', { providerId: provider_id, source: 'notification', openWaitlistHoldId: booking_id });
+    return;
+  }
+
   if (type === 'waitlist_slot_available' && !booking_id) {
     if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
     else navigateNested('Home', 'Bookings', {});

@@ -756,7 +756,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // Older-style waitlist notifications (or the provider's manual "Schedule
       // & Invite", which books outright rather than holding) have no booking_id
       // — fall back to the provider profile so there's still somewhere to go.
-      if (notification.bookingId) {
+      if (notification.bookingId && notification.providerId) {
+        // A slot held for the client (only a client's carries the hold): their ticket with its countdown opens on
+        // the provider's page, where Confirm & pay sends it to the Cart.
+        const bookingId = notification.bookingId;
+        const providerId = notification.providerId;
+        defer(() => {
+          dismissThenNavigate(() =>
+            navigateNested('Home', 'ProviderProfile', { providerId, source: 'notification', openWaitlistHoldId: bookingId })
+          );
+        }, 300);
+      } else if (notification.bookingId) {
         const bookingId = notification.bookingId;
         defer(() => {
           dismissThenNavigate(() =>

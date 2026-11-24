@@ -9,6 +9,7 @@ tags: [screen, client]
 ## → Navigates to
 - [[BookingDetailScreen\|BookingDetail]]
 - [[BookingsScreen\|Bookings]]
+- [[ProviderProfileScreen\|ProviderProfile]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
