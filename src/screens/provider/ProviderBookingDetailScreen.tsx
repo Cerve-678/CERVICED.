@@ -35,6 +35,7 @@ import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { dueByLabel, isOverdue } from '../../features/intake-forms/formDeadline';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { useAppDialog } from '../../components/AppDialog';
@@ -148,6 +149,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
+  // No bottom nav on a booking, from any tab, as on the client's booking
+  // details (owner, 2026-11-24).
+  useHideTabBar();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // Deliberately NOT wired to BookingContext: that cache is the client hat's
   // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
