@@ -20,7 +20,6 @@ import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
 import { capsuleServiceSurface, GlossShine } from "../ProfilePageStyle";
-import { moodboardTag } from "../heroes/MoodboardHero";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 
@@ -305,10 +304,9 @@ export function ProviderPageServices({
   // Storefront: two across, each photo standing in a soft arched frame.
   const serviceArches = pageStyle.serviceLayout === "archTiles";
   const serviceTwoUp = serviceTiles || serviceArches;
-  // Moodboard: no photos; a small outlined tag of the service type (LASH,
-  // BROW), the name in a serif and the price in light type, a hairline under.
+  // Moodboard: no photos; the name in a serif and the price in light type, a
+  // hairline under. No service-type tag (owner, 2026-11-24).
   const serviceTagged = pageStyle.serviceLayout === "taggedRows";
-  const serviceTag = serviceTagged ? moodboardTag(selectedServiceType) : "";
   const serviceNoPhoto = serviceMenu || servicePills || serviceTagged;
   const serviceStacked = serviceTwoUp || servicePhotoCards;
   // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
@@ -578,11 +576,6 @@ export function ProviderPageServices({
                     </View>
                   ) : serviceTagged ? (
                     <View style={styles.taggedRow}>
-                      {serviceTag ? (
-                        <View style={[styles.taggedTag, { borderColor: SV.border }]}>
-                          <Text style={[styles.taggedTagText, { color: SV.sub }]} numberOfLines={1}>{serviceTag}</Text>
-                        </View>
-                      ) : null}
                       <Text style={[styles.taggedName, { color: SV.text }]}>{service.name}</Text>
                       <Text style={[styles.taggedPrice, { color: SV.text }]}>£{service.price}</Text>
                     </View>
@@ -1165,8 +1158,6 @@ const styles = StyleSheet.create({
   captionPillButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 999, shadowOpacity: 0, elevation: 0 },
   captionPillButtonText: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 3, textTransform: "uppercase" },
   taggedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  taggedTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  taggedTagText: { fontFamily: "Jost-Light", fontSize: 9, letterSpacing: 2 },
   taggedName: { flex: 1, fontFamily: "InstrumentSerif-Regular", fontSize: 19, lineHeight: 24 },
   taggedPrice: { fontFamily: "Jost-Light", fontSize: 15 },
   // Posy: two tiles across, each a column of photo, details and Book.

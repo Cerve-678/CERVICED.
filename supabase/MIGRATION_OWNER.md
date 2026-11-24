@@ -56,6 +56,17 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-24 (the address reaches a client on time, in summer and for last-minute bookings)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124220000 | `address_release_timing` | **APPLIED 2026-11-24** on the user's "apply and merge all", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row, straight after 20261124210000. Lock `(none)` on main, no unapplied migration above it on any open PR. md5 guards matched on live `is_address_released` (`5873f964…`), `auto_release_address` (`a3e51cbb…`) and `process_address_release_notifications` (`e9e4525f…`). Forced-rollback dry run first: 2pm on 1 July → 13:00 UTC, 23½ h away inside "day before", 30 h away not, schedule `*/10`, live unchanged afterwards. Verified live: version recorded (live max); md5s now `551ac5ec…`, `9613cf94…`, `7f3ee201…`; `address-release-notifications` runs `*/10 * * * *`. Times are read as Europe/London (was UTC, an hour late in BST); a booking confirmed after its timed release moment is released and notified at once. PR #753. |
+### Applied 2026-11-24 (the provider's waitlist-joined notification says who and what for)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124210000 | `waitlist_joined_wording` | **APPLIED 2026-11-24** on the user's "apply and merge all", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124200000`, no unapplied migration above it on any open PR. md5 guard on live `notify_provider_waitlist_joined()` matched (`d9ca6152…`). Forced-rollback dry run first, with a temporary waitlist join: "Awa Jatta is on your waitlist for Wax & Tint" / "1st in line.", live unchanged afterwards. Verified live: version recorded; md5 `91f97f83…`, the dry run's. Only the title and message change. PR #750. |
+
 ### Applied 2026-11-24 (tell savers and bell followers when a closed schedule opens again)
 
 | Recorded version | Name | Verified live |

@@ -327,7 +327,7 @@ export type ServiceLayout =
   | 'tiles'      // two across: the photo on top, then the name, length and price, Book under them (Posy)
   | 'photoCards' // one across: a wide photo on top, then the name and price beside Book (Riviera)
   | 'pillMenu'   // no photos: each name in a filled accent pill, the price and length beside it (Poster)
-  | 'taggedRows' // no photos: a small outlined tag of the service type, the name in a serif, the price in light type, a hairline between rows (Moodboard)
+  | 'taggedRows' // no photos: the name in a serif, the price in light type, a hairline between rows (Moodboard)
   | 'spotlight'  // a row each: the photo in a round plate, the name in condensed caps, the price, "Book now" on the right (Hibiscus)
   | 'archTiles'  // two across, each photo standing in a soft arched frame, the name and price under (Storefront)
   | 'menu';      // a printed menu: no photos, the name, a dotted leader and the price, its length under (Muse)

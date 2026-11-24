@@ -322,10 +322,9 @@ function MiniProfile({
           </>
         );
       case 'taggedRows':
-        // Moodboard: a tag, the name, the price.
+        // Moodboard: the name, the price.
         return (
           <View style={mini.menuLine}>
-            <View style={[mini.taggedTag, { borderColor: withAlpha(ink, 0.35) }]} />
             <View style={[mini.bar, { flex: 1, backgroundColor: line }]} />
             <View style={[mini.bar, mini.menuPrice, { backgroundColor: line }]} />
           </View>
@@ -1446,7 +1445,6 @@ const mini = StyleSheet.create({
   captionRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   captionCaps: { fontFamily: 'Jost-Light', fontSize: 6, letterSpacing: 1.6 },
   captionRule: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
-  taggedTag: { width: 12, height: 6, borderRadius: 999, borderWidth: 0.8 },
   collageHero: { flex: 1, alignSelf: 'stretch' },
   collagePrint: { position: 'absolute', backgroundColor: '#FFFFFF', padding: 2, paddingBottom: 6, shadowColor: '#3C2819', shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
   collagePhoto: { flex: 1 },
