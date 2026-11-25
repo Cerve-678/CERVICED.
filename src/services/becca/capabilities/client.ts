@@ -30,6 +30,7 @@ import {
   getProviderContactByDisplayName,
   getBookedClientContact,
   getProviderReschedulePolicyByDisplayName,
+  getProviderReschedulePolicyById,
   getSavedPortfolioIds,
   getUserBeautyProfile,
   validatePromoCode,
@@ -47,6 +48,7 @@ import {
   searchPortfolio,
   getProviderBySlug,
   getProviderCancellationPolicy,
+  getProviderCancellationPolicyById,
   getBookingCancelNoticeHours,
   getProviderIdByDisplayName,
   getProviderLocationsByDisplayNames,
@@ -273,8 +275,12 @@ const bookingDetails: Capability = {
     const booking = entities.booking!.value;
     const [bookingNoticeResult, cancellationResult, rescheduleResult] = await Promise.allSettled([
       getBookingCancelNoticeHours(booking.id),
-      getProviderCancellationPolicy(booking.providerName),
-      getProviderReschedulePolicyByDisplayName(booking.providerName),
+      booking.providerId
+        ? getProviderCancellationPolicyById(booking.providerId)
+        : getProviderCancellationPolicy(booking.providerName),
+      booking.providerId
+        ? getProviderReschedulePolicyById(booking.providerId)
+        : getProviderReschedulePolicyByDisplayName(booking.providerName),
     ]);
 
     // A zero cancellation notice can also mean the policy lookup was
@@ -296,8 +302,8 @@ const bookingDetails: Capability = {
           : `Up to ${reschedulePolicy.maxReschedules} change${reschedulePolicy.maxReschedules === 1 ? "" : "s"}`}${
           reschedulePolicy.rescheduleNoticeHours > 0
             ? ` with ${reschedulePolicy.rescheduleNoticeHours}h notice`
-            : ", including on the day"
-        }${reschedulePolicy.sameMonthOnly ? ", to another day in the same month" : ""}`
+            : ", with no advance notice before the appointment starts"
+        }${reschedulePolicy.sameMonthOnly ? ", with a requested date in the same calendar month" : ""}`
       : "Open the booking to check the latest rescheduling terms";
 
     const ticket = bookingTicket(booking);
@@ -315,7 +321,11 @@ const bookingDetails: Capability = {
           { title: "Rescheduling", detail: reschedule },
         ],
       },
-      work: ["Found your booking", `Read ${possessive(booking.providerName)} cancellation and rescheduling policies`],
+      work: [
+        "Found your booking",
+        ...(bookingNotice != null || cancellationResult.status === "fulfilled" ? ["Read cancellation notice"] : []),
+        ...(reschedulePolicy ? ["Read rescheduling policy"] : []),
+      ],
       layout: "cardFirst",
       suggestions: [
         navChip("view", "View booking", "BookingDetail", { bookingId: booking.id }),
@@ -528,7 +538,10 @@ const cancelBooking: Capability = {
     // the booking screen remains the source of truth.
     let policyNote = "";
     try {
-      const hours = await getProviderCancellationPolicy(target.providerName);
+      const frozenHours = await getBookingCancelNoticeHours(target.id);
+      const hours = frozenHours ?? (target.providerId
+        ? await getProviderCancellationPolicyById(target.providerId)
+        : await getProviderCancellationPolicy(target.providerName));
       if (hours > 0) policyNote = `\n\n${target.providerName} asks for ${hours}h notice to cancel free of charge.`;
     } catch {
       // Policy is a nicety here — never block the route to the screen that
@@ -2121,7 +2134,15 @@ const providerDeposit: Capability = {
     ];
 
     const work = [`Read ${possessive(provider.displayName)} deposit policy`];
-    if (!policy || !policy.depositAvailable) {
+    if (!policy) {
+      return {
+        text: `I couldn't check ${provider.displayName}'s deposit options right now. Their booking screen will show the current payment choices.`,
+        suggestions: [navChip("profile", "View provider profile", "ProviderProfile", {
+          providerId: provider.slug, source: "becca",
+        })],
+      };
+    }
+    if (!policy.depositAvailable) {
       return {
         text: oneOf(
           `**${provider.displayName}** doesn’t offer a deposit option in checkout.`,
@@ -2177,12 +2198,8 @@ const providerBookingTiming: Capability = {
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
 
-    // Resolve to the real UUID first. getProviderSchedulingConstraints falls
-    // back to 60 days / 0 hours when its lookup finds nothing, and a
-    // display-name match is fragile (case, punctuation, a renamed business) —
-    // so passing a name that misses returned those defaults, which Becca then
-    // stated as this provider's actual policy. Same reasoning as
-    // getProviderReschedulePolicyById being preferred over its name sibling.
+    // Resolve to the real UUID first. A display-name match is fragile after
+    // a business rename; never use another provider's booking rules.
     const providerDbId = await resolveProviderDbId(provider);
     if (!providerDbId) {
       return {
@@ -3282,9 +3299,17 @@ const reschedulePolicy: Capability = {
   ],
   needs: [{ kind: "provider", required: false }],
   async run({ entities, bookings }): Promise<CapabilityResult> {
+    const upcomingProviders = [...new Set(sortUpcoming(bookings).map((booking) => booking.providerName))];
+    if (!entities.booking && !entities.provider && upcomingProviders.length > 1) {
+      return {
+        text: "Which provider's rescheduling policy do you mean?",
+        suggestions: upcomingProviders.slice(0, 3).map((provider, index) =>
+          askChip(`provider-${index}`, provider, `${provider} reschedule policy`)),
+      };
+    }
     const name =
-      entities.provider?.value.displayName ??
       entities.booking?.value.providerName ??
+      entities.provider?.value.displayName ??
       sortUpcoming(bookings)[0]?.providerName;
 
     if (!name) {
@@ -3294,7 +3319,11 @@ const reschedulePolicy: Capability = {
       };
     }
 
-    const policy = await getProviderReschedulePolicyByDisplayName(name);
+    const booking = entities.booking?.value;
+    const providerId = booking?.providerId ?? entities.provider?.value.dbId;
+    const policy = providerId
+      ? await getProviderReschedulePolicyById(providerId)
+      : await getProviderReschedulePolicyByDisplayName(name);
     const times =
       policy.maxReschedules === null
         ? "as many times as you need"
@@ -3302,21 +3331,27 @@ const reschedulePolicy: Capability = {
     const notice =
       policy.rescheduleNoticeHours > 0
         ? `, with at least ${policy.rescheduleNoticeHours}h notice`
-        : ", right up to the day";
+        : ", with no advance notice required before the appointment starts";
+    const monthRule = policy.sameMonthOnly
+      ? " A new date you request must be in the same calendar month as the original booking."
+      : "";
+    const used = booking && policy.maxReschedules !== null && booking.rescheduleRequest?.rescheduleCount != null
+      ? ` ${booking.rescheduleRequest.rescheduleCount} of ${policy.maxReschedules} moves have been used on this booking.`
+      : "";
 
     return {
       text: oneOf(
-        `With **${name}** you can move a booking ${times}${notice}.`,
-        `**${name}** lets you move a booking ${times}${notice}.`,
-        `You can move a booking with **${name}** ${times}${notice}.`,
-      ),
+        `With **${name}** you can request to move a booking ${times}${notice}.`,
+        `**${name}** allows reschedule requests ${times}${notice}.`,
+        `You can request a move with **${name}** ${times}${notice}.`,
+      ) + monthRule + used + " After a successful move, you must wait 24 hours before requesting another. The other person has 45 minutes to reply or choose a new time, ending sooner if the appointment starts. If the request expires, the original booking stays in place.",
       headline: {
         value: policy.maxReschedules === null
           ? "No limit"
           : `${policy.maxReschedules} move${policy.maxReschedules !== 1 ? "s" : ""}`,
         label: policy.rescheduleNoticeHours > 0
           ? `per booking, with ${policy.rescheduleNoticeHours}h notice`
-          : "per booking, right up to the day",
+          : "per booking, no advance notice",
       },
       work: [`Opened ${possessive(name)} policies`, "Read the rescheduling rules"],
       suggestions: [askChip("resched", "Move a booking", "Reschedule my booking")],

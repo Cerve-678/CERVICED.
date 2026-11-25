@@ -43,7 +43,7 @@ Curated: [[Address Release]] · **127 files**
 Curated: [[Availability & Slots]] · **248 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
-- `src/services/database/availability.ts` _(179)_
+- `src/services/database/availability.ts` _(182)_
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
 - `src/screens/client/SearchScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
@@ -94,8 +94,8 @@ Curated: [[Payments]] · **210 files**
 - `src/types/database.ts` _(59)_
 - `src/features/providers/goLiveStatus.ts` _(54)_
 - `src/utils/depositPolicy.ts` _(51)_
+- `src/services/becca/capabilities/client.ts` _(48)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
-- `src/services/becca/capabilities/client.ts` _(46)_
 - `src/features/bookings/bookingSupportRequest.ts` _(42)_
 - `src/screens/provider/PoliciesScreen.tsx` _(42)_
 - `src/utils/policyDisplay.ts` _(42)_
@@ -112,8 +112,8 @@ Curated: [[Booking Flow]] · **434 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(649)_
+- `src/services/becca/capabilities/client.ts` _(618)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(607)_
-- `src/services/becca/capabilities/client.ts` _(601)_
 - `src/screens/client/BookingDetailScreen.tsx` _(520)_
 - `src/screens/client/BookingsScreen.tsx` _(436)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
@@ -250,8 +250,8 @@ Curated: [[Booking Flow]] · **253 files**
 - `src/screens/client/BookingDetailScreen.tsx` _(245)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
+- `src/services/becca/capabilities/client.ts` _(166)_
 - `src/screens/client/RescheduleScreen.tsx` _(164)_
-- `src/services/becca/capabilities/client.ts` _(149)_
 - `src/services/database/reschedule.ts` _(138)_
 - `src/screens/client/CartScreen.tsx` _(117)_
 - `src/screens/provider/PoliciesScreen.tsx` _(90)_
@@ -274,7 +274,7 @@ Curated: [[Booking Flow]] · **253 files**
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
 - `supabase/fix_provider_no_show_status.sql` _(42)_
 - `src/types/booking.ts` _(41)_
-- `src/types/database.ts` _(39)_
+- `src/services/becca/capabilities/provider.ts` _(40)_
 - … +223 more
 
 ## Auth

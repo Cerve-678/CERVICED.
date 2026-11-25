@@ -929,16 +929,18 @@ export function mapCancellationPolicyRow(
   return noticeMap[data?.booking_policies?.cancelNotice ?? "none"] ?? 0;
 }
 
-/** Fetch a provider's cancellation notice window by display name. Returns 0 (anytime) on error. */
+/** Fetch a provider's cancellation notice window by display name. */
 export async function getProviderCancellationPolicy(
   displayName: string,
 ): Promise<number> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("cancellation_notice_hours, booking_policies")
     .eq("display_name", displayName)
     .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`Provider cancellation policy unavailable for ${displayName}`);
   return mapCancellationPolicyRow(data);
 }
 
@@ -946,11 +948,13 @@ export async function getProviderCancellationPolicy(
 export async function getProviderCancellationPolicyById(
   providerId: string,
 ): Promise<number> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("cancellation_notice_hours, booking_policies")
     .eq("id", providerId)
     .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`Provider cancellation policy unavailable for ${providerId}`);
   return mapCancellationPolicyRow(data);
 }
 
@@ -1038,9 +1042,11 @@ export async function getProviderSchedulingConstraints(
   const query = supabase
     .from("providers")
     .select(`${BOOKING_HORIZON_COLUMNS}, min_booking_notice_hrs`);
-  const { data } = UUID_RE.test(providerIdOrDisplayName)
+  const { data, error } = UUID_RE.test(providerIdOrDisplayName)
     ? await query.eq("id", providerIdOrDisplayName).maybeSingle()
     : await query.eq("display_name", providerIdOrDisplayName).eq("is_claimed", true).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`Provider booking rules unavailable for ${providerIdOrDisplayName}`);
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
     scheduleReleaseDay: toReleaseDay((data as any)?.schedule_release_day),

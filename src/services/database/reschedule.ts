@@ -366,12 +366,14 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
 export async function getProviderReschedulePolicyByDisplayName(
   displayName: string,
 ): Promise<ProviderReschedulePolicy> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("booking_policies")
     .eq("display_name", displayName)
     .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`Provider policy unavailable for ${displayName}`);
   return mapReschedulePolicyRow(data);
 }
 
@@ -379,11 +381,13 @@ export async function getProviderReschedulePolicyByDisplayName(
 export async function getProviderReschedulePolicyById(
   providerId: string,
 ): Promise<ProviderReschedulePolicy> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("booking_policies")
     .eq("id", providerId)
     .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`Provider policy unavailable for ${providerId}`);
   return mapReschedulePolicyRow(data);
 }
 
