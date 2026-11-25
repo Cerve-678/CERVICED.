@@ -5,7 +5,7 @@
 
 #generated
 
-**4380 functions** across **644 files**.
+**4408 functions** across **648 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -192,7 +192,8 @@
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**
 
-### `src/features/cart/` (7)
+### `src/features/cart/` (8)
+- `checkoutIntent.ts` — **buildCheckoutIntentItem**
 - `checkoutOutcome.ts` — **settledFromBatch** · **settledFromCaptureStatus** · **waitForCheckoutOutcome**
 - `platformFee.ts` — **calculatePlatformFee** · **calculatePlatformFeePence** · **splitPlatformFeePence** · **toPence**
 - `presentation.ts` — **describeReserveFailure** · **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · slotStartMs · **to24hMinutes** · toLabel
@@ -668,8 +669,8 @@
 - `validation.ts` — **getPasswordStrength**
 - `withTimeout.ts` — **withTimeout**
 
-### `src/web/` (10)
-- `ProviderWebPage.tsx` — additionalInfo · changeBooking · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openBookingSheet · openContact · openImages · openReviews · openUrl · pickContact · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType · submitBookingSheet
+### `src/web/` (13)
+- `ProviderWebPage.tsx` — additionalInfo · changeBooking · closeCheckout · contactDetails · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · jumpTargets · noop · openBookingSheet · openContact · openImages · openReviews · openUrl · pickContact · policyPages · **ProviderWebPage** · ProviderWebPageContent · renderServices · savedPolicyEdges · scrollToSection · serviceCountsByType · submitBookingSheet
 - `SiteApp.tsx` — page · SiteApp · SitePage
 - `SiteMessagePage.tsx` — colours · savedSiteTheme · **SiteMessagePage**
 - `sitePath.ts` — **parseSitePath**
@@ -677,8 +678,11 @@
 - `WebAccountStep.tsx` — authErrorMessage · button · continueSignedIn · fieldError · link · sendCode · signOut · submitCode · submitDetails · submitEmail · **WebAccountStep**
 - `WebBlurView.tsx` — **BlurView** · webBackdropFilter
 - `webBooking.ts` — **sheetInitialFrom** · **summarizeWebBooking**
+- `webCheckout.ts` — **bookedMoneyLine** · **depositIsNonRefundable** · **dueNowLine** · **feeGroups** · **isRequestCheckout** · **serviceNeedsSafetyAck** · **sheetAmountPence** · **unsettledMessage** · **webCheckoutItem** · **webPayButtonLabel**
 - `WebCheckoutSheet.tsx` — summary · tokens · **WebCheckoutSheet**
 - `webFonts.ts` — **declareAppFontsForBrowser** · **fontFaceCss** · fontUri
+- `WebPaymentStep.tsx` — backToReview · button · groups · holdTime · markInFlight · pay · PayForm · PayPhase · release · setInFlight · settle · stripePromise · termsToggle · tick · **WebPaymentStep**
+- `webStripe.ts` — **getWebStripe**
 
 ### `src/web/dev/` (2)
 - `PageStylePreview.tsx` — noop · **PageStylePreview** · palette · provider · renderServices · serviceCountsByType

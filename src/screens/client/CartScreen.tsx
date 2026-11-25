@@ -41,6 +41,7 @@ import {
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
   listSavedCards, type CheckoutHoldPlan } from '../../services/databaseService';
 import { checkoutSuccessMessage } from '../../features/cart/requestHolds';
+import { buildCheckoutIntentItem } from '../../features/cart/checkoutIntent';
 import { RequestHoldChecks } from '../../features/cart/RequestHoldChecks';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
@@ -3898,57 +3899,25 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                             const isMobileItem = checkoutSnapshot.mobileProviderNames.includes(
                               item.providerDisplayName ?? item.providerName,
                             );
-                            return {
-                              provider_id: item.providerId,
-                              service_id: item.serviceId,
-                              booking_date: booking.selectedDate,
-                              booking_time: booking.selectedTime,
-                              add_on_ids: (item.addOns ?? []).map(addOn => String(addOn.id)),
-                              use_deposit: Boolean(booking.isDepositOnly),
+                            // Built by the same helper the website uses, so
+                            // the two send prepare_checkout the same request.
+                            // The tick above is the one agreement: the Terms,
+                            // each provider's policy and any safety info.
+                            return buildCheckoutIntentItem({
+                              providerId: item.providerId,
+                              serviceId: item.serviceId,
+                              date: booking.selectedDate,
+                              time: booking.selectedTime,
+                              addOnIds: (item.addOns ?? []).map(addOn => addOn.id),
+                              useDeposit: Boolean(booking.isDepositOnly),
                               notes: booking.notes,
-                              // Only a mobile provider's item carries the client's
-                              // address. prepare_checkout rejects a mobile item
-                              // without one and writes it onto the held row, so it
-                              // reaches the provider after accept exactly as on the
-                              // live route. The area is the account's chosen one,
-                              // like the claim path; the DB derives it if absent.
-                              ...(isMobileItem && clientAddress.trim()
-                                ? { client_address: clientAddress.trim(), client_area: user?.clientArea ?? null }
-                                : {}),
-                              // The single Terms checkbox above folds in
-                              // safety acknowledgement when relevant — it
-                              // can't be checked while it's required and
-                              // unread, so agreedToPolicy IS the ack here.
-                              // prepare_checkout re-derives whether each
-                              // service actually needs this and rejects
-                              // if missing, regardless of this value.
-                              safety_ack: agreedToPolicy,
-                              // The same checkbox, as consent to the Terms and
-                              // the provider's policy. The snapshot is the copy
-                              // this cart showed; the server freezes its own live
-                              // copy and refuses if the money terms differ.
-                              policy_accepted: agreedToPolicy,
-                              policy_snapshot: item.policySnapshot ?? null,
-                              // The code whose discount the review screen
-                              // showed. prepare_checkout re-validates it and
-                              // works the discount out itself.
-                              ...(item.appliedPromoCode ? { promo_code: item.appliedPromoCode } : {}),
-                              // Set when the client accepted the out-of-hours
-                              // confirmation in the booking sheet. The ack
-                              // travels with it because prepare_checkout
-                              // requires one whenever the flag is set, and
-                              // this checkbox is a different agreement (the
-                              // Cerviced-wide terms) from the one that was
-                              // shown then.
-                              ...(booking.emergencyRequest
-                                ? { emergency: true, emergency_ack: true }
-                                : {}),
-                              // A held waitlist slot: the server reuses that row
-                              // and keeps its own 15 minutes running.
-                              ...(item.waitlistHold
-                                ? { waitlist_hold_id: item.waitlistHold.bookingId }
-                                : {}),
-                            };
+                              agreed: agreedToPolicy,
+                              policySnapshot: item.policySnapshot,
+                              mobileAddress: isMobileItem ? { address: clientAddress, area: user?.clientArea ?? null } : null,
+                              promoCode: item.appliedPromoCode ?? null,
+                              emergency: Boolean(booking.emergencyRequest),
+                              waitlistHoldId: item.waitlistHold?.bookingId ?? null,
+                            });
                           });
                           const prepared = await prepareCheckout(intent);
                           setServerCheckoutBatchId(prepared.checkoutBatchId);
