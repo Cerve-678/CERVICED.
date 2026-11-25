@@ -109,9 +109,16 @@ export default function SchedulingScreen({ navigation }: any) {
   const [loadedReleaseDay, setLoadedReleaseDay] = useState<number | null>(null);
   // The time it opens (automation_settings.scheduleReleaseTime, UK time).
   // Same written-only-if-changed rule as the day.
-  const [releaseTime, setReleaseTime] = useState(DEFAULT_RELEASE_TIME);
+  // null = not chosen yet. Switching to "A month at a time" starts with no day
+  // and no time, and Save waits until both are picked, so a release day is
+  // never saved by accident from a prefilled value.
+  const [releaseTime, setReleaseTime] = useState<string | null>(null);
   const [loadedReleaseTime, setLoadedReleaseTime] = useState(DEFAULT_RELEASE_TIME);
-  const activeReleaseDay = horizonMode === 'monthly' ? releaseDay : null;
+  const release = horizonMode === 'monthly' && releaseDay != null && releaseTime != null
+    ? { day: releaseDay, time: releaseTime }
+    : null;
+  const activeReleaseDay = release?.day ?? null;
+  const releaseMissing = horizonMode === 'monthly' && release == null;
   const [minBookingNoticeHrs, setMinNotice]     = useState('0');
   const [slotIntervalMins, setSlotInterval]     = useState('60');
   const [maxBookingsPerDay, setMaxPerDay]       = useState('unlimited');
@@ -162,7 +169,8 @@ export default function SchedulingScreen({ navigation }: any) {
           setReleaseDay(savedReleaseDay);
           setLoadedReleaseDay(savedReleaseDay);
           const savedReleaseTime = toReleaseTime(profile.automation_settings?.scheduleReleaseTime);
-          setReleaseTime(savedReleaseTime);
+          // Only a provider who already has a release day has a time in use.
+          setReleaseTime(savedReleaseDay != null ? savedReleaseTime : null);
           setLoadedReleaseTime(savedReleaseTime);
           setHorizonMode(savedReleaseDay != null ? 'monthly' : 'rolling');
         }
@@ -200,14 +208,20 @@ export default function SchedulingScreen({ navigation }: any) {
   const saveReleaseChanges = useCallback(async () => {
     const patch = releaseSettingsPatch(
       { day: loadedReleaseDay, time: loadedReleaseTime },
-      { day: activeReleaseDay, time: releaseTime },
+      { day: activeReleaseDay, time: release?.time ?? loadedReleaseTime },
     );
     if (!providerId || !patch) return;
     await mergeProviderAutomationSettings(providerId, patch.set, patch.remove);
-  }, [providerId, loadedReleaseDay, loadedReleaseTime, activeReleaseDay, releaseTime]);
+  }, [providerId, loadedReleaseDay, loadedReleaseTime, activeReleaseDay, release?.time]);
 
   const handleSave = useCallback(async () => {
     if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (releaseMissing) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      flash('Choose your release day and time before saving', 'error');
+      setReleasePickerOpen(true);
+      return;
+    }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -266,7 +280,7 @@ export default function SchedulingScreen({ navigation }: any) {
       setSaving(false);
     }
   }, [
-    saveReleaseChanges,
+    saveReleaseChanges, releaseMissing,
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
@@ -276,24 +290,22 @@ export default function SchedulingScreen({ navigation }: any) {
   const chooseHorizonMode = (value: string) => {
     const mode: HorizonMode = value === 'monthly' ? 'monthly' : 'rolling';
     setHorizonMode(mode);
-    // First time on monthly: fill in today's date at the default time
-    // (releaseTime already holds it), so there's never a "monthly" choice
-    // with no day behind it and nothing to pick before saving. The Release
-    // day row underneath opens the picker to change either.
-    if (mode === 'monthly' && releaseDay == null) {
-      setReleaseDay(new Date().getDate());
+    // Nothing is filled in for them: open the picker so they choose the day
+    // and time themselves. Until they do, Save stops and says so.
+    if (mode === 'monthly' && (releaseDay == null || releaseTime == null)) {
+      setReleasePickerOpen(true);
     }
   };
 
   // What a monthly release means right now, in dates — the wall clients hit.
   const releaseStatus = useMemo(() => {
-    if (activeReleaseDay == null) return null;
+    if (!release) return null;
     const now = new Date();
-    const openUntil = lastBookableDate({ schedule_release_day: activeReleaseDay, schedule_release_time: releaseTime }, now);
-    const next = nextReleaseMoment(activeReleaseDay, now, releaseTime);
+    const openUntil = lastBookableDate({ schedule_release_day: release.day, schedule_release_time: release.time }, now);
+    const next = nextReleaseMoment(release.day, now, release.time);
     if (!openUntil) return null;
     return `Clients can book up to ${formatShortDayDate(openUntil)}. The next month opens ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
-  }, [activeReleaseDay, releaseTime]);
+  }, [release?.day, release?.time]);
 
   if (loading) {
     return (
@@ -394,7 +406,7 @@ export default function SchedulingScreen({ navigation }: any) {
             <SectionLabel text="How far ahead clients can book" />
             <RadioGroup options={HORIZON_MODE_OPTS} value={horizonMode} onChange={chooseHorizonMode} />
             <View style={{ height: 10 }} />
-            {activeReleaseDay != null ? (
+            {release ? (
               <>
                 <Text style={[st.windowExplainer, { color: C.sub }]}>{RELEASE_DAY_EXPLAINER}</Text>
                 <TouchableOpacity
@@ -402,16 +414,34 @@ export default function SchedulingScreen({ navigation }: any) {
                   onPress={() => { Haptics.selectionAsync().catch(() => {}); setReleasePickerOpen(true); }}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`Release day, the ${ordinalSuffix(activeReleaseDay)} of every month at ${releaseTimeLabel(releaseTime)}. Change`}
+                  accessibilityLabel={`Release day, the ${ordinalSuffix(release.day)} of every month at ${releaseTimeLabel(release.time)}. Change`}
                 >
                   <Ionicons name="calendar-outline" size={15} color={C.accent} />
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={[st.releaseDayText, { color: C.text }]}>Release day: the {ordinalSuffix(activeReleaseDay)} of every month at {releaseTimeLabel(releaseTime)}</Text>
+                    <Text style={[st.releaseDayText, { color: C.text }]}>Release day: the {ordinalSuffix(release.day)} of every month at {releaseTimeLabel(release.time)}</Text>
                     {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
                     <Text style={[st.releaseDayHint, { color: C.sub }]}>
                       Days after that are greyed out for clients, and tapping one tells them the date it opens.
                     </Text>
                     <Text style={[st.releaseDayHint, { color: C.sub }]}>It's the same setting as in Edit Profile, so changing it here changes it there too.</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={C.sub} style={{ opacity: 0.6 }} />
+                </TouchableOpacity>
+              </>
+            ) : releaseMissing ? (
+              <>
+                <Text style={[st.windowExplainer, { color: C.sub }]}>{RELEASE_DAY_EXPLAINER}</Text>
+                <TouchableOpacity
+                  style={[st.releaseDayRow, { backgroundColor: C.surface, borderColor: C.accent, borderStyle: 'dashed' }]}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setReleasePickerOpen(true); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose your release day and time. Needed before you can save"
+                >
+                  <Ionicons name="calendar-outline" size={15} color={C.accent} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[st.releaseDayText, { color: C.text }]}>Choose your release day and time</Text>
+                    <Text style={[st.releaseDayHint, { color: C.sub }]}>You need to pick both before you can save.</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={C.sub} style={{ opacity: 0.6 }} />
                 </TouchableOpacity>
@@ -461,7 +491,7 @@ export default function SchedulingScreen({ navigation }: any) {
             />
             <ToggleRow
               label="Further ahead than you take bookings"
-              sub={activeReleaseDay != null
+              sub={horizonMode === 'monthly'
                 ? "Clients can ask for a date in a month you haven't opened yet"
                 : bookingWindowDays === '0'
                   ? "You take bookings any time ahead, so there's nothing for this to relax"
@@ -498,7 +528,7 @@ export default function SchedulingScreen({ navigation }: any) {
 
       <ReleaseDayPicker
         visible={releasePickerOpen}
-        value={releaseDay ?? new Date().getDate()}
+        value={releaseDay}
         time={releaseTime}
         onSelectTime={setReleaseTime}
         accentColor={C.accent}
