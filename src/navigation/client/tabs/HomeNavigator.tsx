@@ -17,6 +17,7 @@ import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScre
 import OffersScreen from '../../../screens/client/OffersScreen';
 import { HomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 
@@ -24,7 +25,7 @@ export default function HomeNavigator() {
   const { theme } = useTheme();
 
   return (
-    <HomeStack.Navigator>
+    <HomeStack.Navigator screenLayout={readableScreenLayout}>
       {/* Main home screen - no header */}
       <HomeStack.Screen
         name="HomeMain"

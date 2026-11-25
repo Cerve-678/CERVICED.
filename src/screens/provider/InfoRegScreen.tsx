@@ -11,7 +11,6 @@ import {
   StatusBar,
   FlatList,
   Dimensions,
-  useWindowDimensions,
   Alert,
   TextInput,
   Modal,
@@ -173,6 +172,7 @@ import {
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
+import { useContentWidth } from '../../components/ReadableWidth';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -756,7 +756,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   const styles = useScreenStyles();
   const chrome = useChrome();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const kind = inferCategoryKind(categoryName, fallbackKind);
   const allTemplates = SERVICE_TEMPLATES_BY_CATEGORY[kind] ?? SERVICE_TEMPLATES_BY_CATEGORY.OTHER;
   const meta = CATEGORY_META[kind];
@@ -2237,7 +2237,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const styles = useScreenStyles();
   const chrome = useChrome();
   const insets = useSafeAreaInsets();
-  const { width: previewScreenWidth } = useWindowDimensions();
+  const { width: previewScreenWidth } = useContentWidth();
   // SafeAreaView top inset is unreliable inside an RN Modal, so pad the header
   // by the real window inset directly to keep the PREVIEW badge clear of the
   // translucent status bar rather than riding up into it.
@@ -2854,7 +2854,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // editing an existing profile (see chromeTheme below, computed once
   // isEditMode/providerData are known). The status bar follows that too: see
   // statusBarStyle next to chromeTheme.
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useContentWidth();
   const { user, myBookingMode } = useAuth();
   // Link-only providers (own booking page) only fill in Identity, About &
   // Portfolio and Contact here. Mode comes from the providers row once it
@@ -8948,7 +8948,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
 // load, so the tile grids below still divide the real screen width after a
 // rotation or in split-screen.
 const useScreenStyles = () => {
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useContentWidth();
   const theme = useContext(InfoRegChromeContext);
   return useMemo(() => makeStyles(theme, screenWidth, screenHeight), [theme, screenWidth, screenHeight]);
 };

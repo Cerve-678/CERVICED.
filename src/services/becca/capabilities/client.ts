@@ -3898,7 +3898,7 @@ const appNavigation: Capability = {
     "payment methods", "payment method", "my card", "my cards", "add a card",
     "my cart", "my basket", "open cart", "open basket", "checkout", "check out",
     "edit my profile", "edit profile", "my account", "account details", "profile details",
-    "my subscription", "manage subscription", "my points", "loyalty points",
+    "my points", "loyalty points",
     "help centre", "help center", "report a problem", "report problem",
     "terms and conditions", "terms", "about the app", "about cerviced",
   ],
@@ -3918,9 +3918,7 @@ const appNavigation: Capability = {
         ? { screen: "NotificationsSettings", title: "Notification settings", text: "I’ll open your notification settings." }
         : message.includes("payment") || message.includes("card")
           ? { screen: "PaymentMethods", title: "Payment methods", text: "I’ll open your saved payment methods." }
-          : message.includes("subscription")
-            ? { screen: "Subscription", title: "Subscription", text: "I’ll open your subscription settings." }
-            : message.includes("point")
+          : message.includes("point")
               ? { screen: "Points", title: "My points", text: "I’ll open your points." }
               : message.includes("report")
                 ? { screen: "ReportProblem", title: "Report a problem", text: "I’ll open the problem report form." }

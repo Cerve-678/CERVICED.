@@ -5,9 +5,9 @@
 
 #generated
 
-**4418 functions** across **649 files**.
+**4441 functions** across **653 files**.
 
-### `src/components/` (69)
+### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -59,6 +59,7 @@
 - `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chargeableByBooking · chooseInterval · chooseSchedule · date · EmptyState · feesByBooking · feesToCharge · handleRefunded · load · loadMore · money · Notice · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
+- `ReadableWidth.tsx` — **readableScreenLayout** · **ReadableWidth** · **useContentWidth** · **useReadableBackdrop**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
 - `SafeArea.tsx` — **SafeAreaView** · value · **WindowControlsInsetProvider**
@@ -367,6 +368,11 @@
 - `ProviderPageServices.tsx` — dotWindow · **ProviderPageServices** · ServiceDescription
 - `ProviderPageSheet.tsx` — cheapest · footer · **ProviderPageSheet**
 
+### `src/features/safety/` (3)
+- `reportContext.ts` — **reportDeviceContext**
+- `useChatSafety.ts` — confirmBlock · confirmReportMessage · confirmReportPerson · later · openChatMenu · sendReport · setBlocked · unblock · **useChatSafety**
+- `useReportReview.ts` — sendReport · **useReportReview**
+
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
 - `contacts.ts` — **buildInviteList** · **cachedContacts** · **collectContactNumbers** · core · **findContactsOnCerviced** · **getContactsAccess** · has · **hashNormalisedNumber** · **inviteContact** · **isContactsLimitError** · numberHas · **rememberContacts** · **requestContactsAccess** · **savedNameLine** · **savedNamesByNumber** · **searchContacts**
@@ -436,9 +442,8 @@
 - `SignUpStep5Screen.tsx` — curatedSpecialtyOptions · finishHatSwitch · handleComplete · onLayoutFor · renderSection · scrollTo · selectArea · selectFrequency · selectReferral · SignUpStep5Screen · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
-### `src/screens/client/` (24)
+### `src/screens/client/` (22)
 - `ActivityCentreScreen.tsx` — ActivityCentreScreen · doneSection · onRefresh · openItem · pillMessages · renderList · sectionHead · tile · timeline
-- `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — BeautyProfileScreen · circle · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openCategoryFromLanding · openSetup · openTodoField · pickedCount · stats · stepBack · todo · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · cancelRefund · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · showRecommendError · tick
 - `BookingsScreen.tsx` — applyLocation · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · closeWaitlistTicket · confirmRebook · createStyles · endLeftoverHold · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handledFromWaitlist · handleDismissWaitlist · handleExternalBookingPress · handleLeaveFromDatesSheet · handleOpenWaitlistDates · handleRatingSubmit · handleRebook · handleRejoinWaitlist · handleSaveWaitlistDates · handleTicketConfirmAndPay · handleTicketPass · handleTipSubmit · handleWaitlistHoldEnded · hasBookingBeenRated · hasBookingBeenTipped · heldWaitlistPlaces · isMessagingAvailable · isTipClosed · listItems · loadWaitlist · mapBookings · onRefresh · openActivityCentre · openCart · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · openWaitlistTicket · otherWaitlistPlaces · pastBookingsFiltered · pastCategories · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · renderWaitlistPlace · resolveMissingPins · retryLoadBookings · routeCoordinates · sortedWaitlistPlaces · startLocationUpdates · styles · ticketPlace · to · toggleFilter · virtualizedListRows
@@ -459,7 +464,6 @@
 - `ProviderProfileScreen.tsx` — additionalInfo · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · closeWaitlistTicket · confirmAndPayFromTicket · contactDetails · contactOptions · continueToLinkOnlyBooking · formatDate · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroBell · heroPhotoCaptions · heroPhotoFrames · heroPhotoItems · heroPhotoUris · hideSuccessMessage · jumpTargets · jumpToServices · leaveFromTicket · loadWaitlistMap · notificationColors · notificationMessage · nudge · openBookingSheet · openCart · openFullLogo · openHeroPhoto · openImageViewer · openInstagram · openLink · openLinkOnlyBooking · openOffersPanel · openPolicyImage · openSheets · openWaitlistJoin · openWaitlistTicket · passFromTicket · policyPages · pressPinnedBook · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderInlineServices · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · saveWaitlistDates · scaleStyle · scrollToSection · selectedServicesFlat · selectedTotal · serviceCountsByType · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · ticketPlace · ticketService · toggleSelectMode · toggleServiceExpanded · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · maxPickerDate · minPickerDate · monthLabel · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen · shownDateOptions
 - `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · loadListingCards · mapDbToCardData · mapListingToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
-- `SubscriptionScreen.tsx` — SubscriptionScreen
 - `UserProfileScreen.tsx` — handleBiometricToggle · handleLogout · UserProfileScreen
 
 ### `src/screens/provider/` (33)
@@ -514,9 +518,10 @@
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
 
-### `src/services/` (19)
+### `src/services/` (20)
 - `acuityTransferService.ts` — invoke · **transferFromAcuity**
 - `addressLookupService.ts` — **findAddressesByPostcode** · **resolvePostcodeAddress**
+- `appleSignInRevocation.ts` — **accountUsesAppleSignIn** · **revokeAppleSignInForDeletion** · **shouldRevokeAppleSignIn** · trades
 - `authProfileSnapshot.ts` — **clearAuthProfileSnapshot** · **readAuthProfileSnapshot** · **saveAuthProfileSnapshot**
 - `AvailabilityService.ts` — findBackToBackSlotsForDate · firstOpen · offer · rather
 - `biometricService.ts` — **authenticateWithBiometrics** · **disableBiometric** · **enableBiometric** · **getBiometricLabel** · **getBiometricRefreshToken** · **isBiometricAvailable** · **isBiometricEnabled** · **updateBiometricToken**
@@ -564,12 +569,12 @@
 - `becca.ts` — **clearBeccaSessions** · **createBeccaSession** · **deleteBeccaSession** · **getBeccaMessages** · **getBeccaSessions** · **recordBeccaMiss** · **setPushTokenIfChanged** · **updateBeccaSession** · **upsertBeccaMessage**
 - `bookings.ts` — **addMyExternalBooking** · getBookedConversationUserIds · **getBookingById** · **getBookingUserId** · **getBookingWithAddOnsById** · **getGroupBookingSiblings** · **getMyBookings** · **getMyExternalBooking** · **getMyExternalBookings** · **getMyLatestCompletedBooking** · **getMyUpcomingBookedSpans** · **getOlderBookings** · **getOlderProviderBookings** · **getProviderBookings** · **getProviderBookingsByDate** · **getProviderBookingsByDateRange** · **getProviderConversations** · **getProviderEnquirySummary** · **getProviderIdByDisplayName** · **getProviderRecentBookings** · **getProviderUnreadConversationCount** · **getProviderUpcomingBookings** · **getSlotsTaken** · **getUserConversations** · **isSlotTaken** · mapExternalBookingRow · **providerHasBookingsToDo** · **removeMyExternalBooking** · **subscribeToProviderBookingChanges** · **subscribeToProviderBookingDetailChanges** · **subscribeToUserConversationChanges**
 - `checkout.ts` — **cancelOwnBooking** · **claimCartBookingSlots** · **disputeNoShow** · **getProviderCheckoutMetadata** · **getProviderDepositPoliciesByDisplayNames** · **holdCartBookingSlots** · **markProviderNoShow** · **providerCancelGroupBooking** · **providerCancelOwnBooking** · **releaseCartBookingSlots** · **updateBookingGroupInfo** · **updateBookingStatus** · **updateGroupBookingStatus**
-- `edgeFunctions.ts` — **acceptCheckoutFees** · bookingFeeAction · calls · **cancelBookingFeeRequest** · **chargeBookingFee** · **confirmBookingFeePayment** · **createCheckoutPaymentIntent** · day · **disputeBookingFee** · **extractProviderProfileFromUrl** · **finalizeCheckoutPaymentIntent** · **getBookingFeeCharges** · **getBookingFeeTerms** · **getCheckoutFees** · **getCheckoutHoldPlan** · **getCheckoutOutcome** · **getFeeChargeCandidates** · **getMyBookingLateCancelFee** · **getMyRequestCardHolds** · **invokeBeccaAi** · **invokeSendAccountEmail** · **invokeSendSupportRequest** · **keepDisputedBookingFee** · **lookupPostcodeAddress** · **lookupPostcodeAddresses** · mapBookingFeeTerms · **refundBookingFee** · **requestCardHoldStep** · **startBookingFeePayment**
+- `edgeFunctions.ts` — **acceptCheckoutFees** · bookingFeeAction · calls · **cancelBookingFeeRequest** · **chargeBookingFee** · **confirmBookingFeePayment** · **createCheckoutPaymentIntent** · day · **disputeBookingFee** · **extractProviderProfileFromUrl** · **finalizeCheckoutPaymentIntent** · **getBookingFeeCharges** · **getBookingFeeTerms** · **getCheckoutFees** · **getCheckoutHoldPlan** · **getCheckoutOutcome** · **getFeeChargeCandidates** · **getMyBookingLateCancelFee** · **getMyRequestCardHolds** · **invokeBeccaAi** · **invokeSendAccountEmail** · **invokeSendSupportRequest** · **keepDisputedBookingFee** · **lookupPostcodeAddress** · **lookupPostcodeAddresses** · mapBookingFeeTerms · **refundBookingFee** · **reportContent** · **requestCardHoldStep** · **revokeAppleSignIn** · **startBookingFeePayment**
 - `eventPlans.ts` — **getEventPlanDetails** · **getMyEventPlans**
 - `forms.ts` — **createIntakeForm** · **deleteLibraryForm** · **getBookingIdsWithLibraryForm** · **getIntakeFormByBooking** · **getIntakeFormById** · **getIntakeFormsByBooking** · **getMyProviderIntakeForms** · **getMyProviderTermsText** · **getPendingIntakeFormsForMe** · **getProviderFormLibrary** · **getProviderTerms** · getSentFormsOnBookings · **hasMyProviderTermsForm** · mapLibraryForm · notifyClientIntakeFormSent · **saveFormToLibrary** · **saveMyProviderTermsText** · **sendLibraryFormToBookings** · **sendLibraryFormToClient** · **submitIntakeFormAnswers** · **updateLibraryForm**
 - `infoPacks.ts` — **attachInfoPackToBooking** · **createInfoPack** · **deleteInfoPack** · **getInfoPackDeliveries** · **getInfoPacksByBooking** · **getMyActivity** · **getMyBookingActionItems** · **getProviderInfoPacksByUserId** · mapBookingInfoPack · **markInfoPackViewed** · **updateInfoPack**
 - `maintenance.ts` — addDaysYMD · **addMaintenanceItems** · **deleteMaintenanceItem** · **getMaintenanceBookingContext** · **getMaintenanceItems** · **getMaintenanceRebookTarget** · **getMaintenanceSettings** · **getUpcomingMaintenanceCoverage** · mapMaintenanceItem · requireSessionUserId · **saveMaintenanceSettings** · **updateMaintenanceItem** · **upsertUserAfterVerification**
-- `messaging.ts` — **getConversationMessages** · **getOrCreateConversation** · **markConversationReadByProvider** · **markConversationReadByUser** · **sendConversationQuickReply** · **sendProviderMessage** · **subscribeToConversationMessages** · **updateConversationLastMessage**
+- `messaging.ts` — **getConversationBlockState** · **getConversationMessages** · **getOrCreateConversation** · **markConversationReadByProvider** · **markConversationReadByUser** · **sendConversationQuickReply** · **sendProviderMessage** · **setConversationBlock** · **subscribeToConversationMessages** · **updateConversationLastMessage**
 - `notifications.ts` — **countProviderBookingsOnDate** · **countProviderBookingsOnDates** · **deleteNotification** · **getLiveServiceDescriptions** · **getMyBookmarkCount** · **getMyNotifications** · **getMyProviderAchievements** · **getMyServiceBookingRows** · **getMyUnseenFullyBooked** · **getNotificationPreferences** · **getProviderBookingCapSettings** · **getProviderBookingCapSettingsForProviders** · **getProviderNotificationPreferences** · **getSpecialityUses** · **getUnreadNotificationCount** · **insertProviderNotification** · **markAllNotificationsRead** · **markFullyBookedSeen** · **markNotificationRead** · mergeNotificationPreferences · only · pickPreferences · readStoredNotificationPreferences · **saveNotificationPreferences** · **saveProviderNotificationPreferences** · **setMaintenanceRemindersOptIn** · **subscribeToNotificationChanges** · **updateProviderMaxBookingsPerDay**
 - `portfolio.ts` — **addItemToCollection** · **addPortfolioItem** · **createCollection** · **deleteCollection** · **deletePortfolioItem** · **getDiscoverFeedTotal** · **getDiscoverServices** · **getExplorePortfolioItems** · **getMyCollections** · **getPortfolioItems** · **getProviderIdsByServiceAudience** · **getProviderPortfolio** · **getSavedPortfolioDetails** · **getSavedPortfolioIds** · mapCollectionRow · **removeItemFromCollection** · **savePortfolioItemToDb** · **searchPortfolio** · **setHeroPhotoFrames** · **setHeroPortfolioPhotos** · toCollectionColor · toPortfolioItem · toPortfolioItems · **unsavePortfolioItemFromDb** · **updateCollection**
 - `promotions.ts` — **deletePromotion** · **getActivePromotions** · **getMyPromotions** · **getMyProviderServices** · **getProviderActivePromotions** · **getProviderIdsWithActivePromotions** · **patchPromotion** · **togglePromotion** · **upsertPromotion** · **validatePromoCode**
@@ -662,7 +667,7 @@
 - `slotsRowText.ts` — **slotsPillText**
 - `spreadApart.ts` — **spreadApart**
 - `stripeConnectReturn.ts` — **parseStripeConnectReturn**
-- `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
+- `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarPillWidth** · **tabBarRect**
 - `textAppearanceStore.ts` — **getTextAppearance** · **setTextAppearance** · **subscribeTextAppearance**
 - `textInputSuggestions.ts` — **suggestionProps**
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**

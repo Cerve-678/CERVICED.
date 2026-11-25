@@ -5,7 +5,7 @@
 
 #generated
 
-**70 service modules.** Curated overview: [[Services]].
+**71 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
@@ -15,6 +15,9 @@
 
 ### `src/services/api.ts`
 `api`
+
+### `src/services/appleSignInRevocation.ts`
+`accountUsesAppleSignIn` · `revokeAppleSignInForDeletion` · `shouldRevokeAppleSignIn`
 
 ### `src/services/authProfileSnapshot.ts`
 `AUTH_PROFILE_SNAPSHOT_MAX_AGE_MS` · `clearAuthProfileSnapshot` · `readAuthProfileSnapshot` · `saveAuthProfileSnapshot`
@@ -116,7 +119,7 @@ _no named exports_
 `cancelOwnBooking` · `claimCartBookingSlots` · `disputeNoShow` · `getProviderCheckoutMetadata` · `getProviderDepositPoliciesByDisplayNames` · `holdCartBookingSlots` · `markProviderNoShow` · `providerCancelGroupBooking` · `providerCancelOwnBooking` · `releaseCartBookingSlots` · `updateBookingGroupInfo` · `updateBookingStatus` · `updateGroupBookingStatus`
 
 ### `src/services/database/edgeFunctions.ts`
-`acceptCheckoutFees` · `cancelBookingFeeRequest` · `chargeBookingFee` · `confirmBookingFeePayment` · `createCheckoutPaymentIntent` · `disputeBookingFee` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `getBookingFeeCharges` · `getBookingFeeTerms` · `getCheckoutFees` · `getCheckoutHoldPlan` · `getCheckoutOutcome` · `getFeeChargeCandidates` · `getMyBookingLateCancelFee` · `getMyRequestCardHolds` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `keepDisputedBookingFee` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `refundBookingFee` · `requestCardHoldStep` · `startBookingFeePayment`
+`acceptCheckoutFees` · `cancelBookingFeeRequest` · `chargeBookingFee` · `confirmBookingFeePayment` · `createCheckoutPaymentIntent` · `disputeBookingFee` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `getBookingFeeCharges` · `getBookingFeeTerms` · `getCheckoutFees` · `getCheckoutHoldPlan` · `getCheckoutOutcome` · `getFeeChargeCandidates` · `getMyBookingLateCancelFee` · `getMyRequestCardHolds` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `keepDisputedBookingFee` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `refundBookingFee` · `reportContent` · `requestCardHoldStep` · `revokeAppleSignIn` · `startBookingFeePayment`
 
 ### `src/services/database/eventPlans.ts`
 `getEventPlanDetails` · `getMyEventPlans`
@@ -131,7 +134,7 @@ _no named exports_
 `addMaintenanceItems` · `deleteMaintenanceItem` · `getMaintenanceBookingContext` · `getMaintenanceItems` · `getMaintenanceRebookTarget` · `getMaintenanceSettings` · `getUpcomingMaintenanceCoverage` · `saveMaintenanceSettings` · `updateMaintenanceItem` · `upsertUserAfterVerification`
 
 ### `src/services/database/messaging.ts`
-`getConversationMessages` · `getOrCreateConversation` · `markConversationReadByProvider` · `markConversationReadByUser` · `sendConversationQuickReply` · `sendProviderMessage` · `subscribeToConversationMessages` · `updateConversationLastMessage`
+`getConversationBlockState` · `getConversationMessages` · `getOrCreateConversation` · `markConversationReadByProvider` · `markConversationReadByUser` · `sendConversationQuickReply` · `sendProviderMessage` · `setConversationBlock` · `subscribeToConversationMessages` · `updateConversationLastMessage`
 
 ### `src/services/database/notifications.ts`
 `countProviderBookingsOnDate` · `countProviderBookingsOnDates` · `DEFAULT_NOTIF_PREFS` · `DEFAULT_PROVIDER_NOTIF_PREFS` · `deleteNotification` · `getLiveServiceDescriptions` · `getMyBookmarkCount` · `getMyNotifications` · `getMyProviderAchievements` · `getMyServiceBookingRows` · `getMyUnseenFullyBooked` · `getNotificationPreferences` · `getProviderBookingCapSettings` · `getProviderBookingCapSettingsForProviders` · `getProviderNotificationPreferences` · `getSpecialityUses` · `getUnreadNotificationCount` · `insertProviderNotification` · `markAllNotificationsRead` · `markFullyBookedSeen` · `markNotificationRead` · `saveNotificationPreferences` · `saveProviderNotificationPreferences` · `setMaintenanceRemindersOptIn` · `subscribeToNotificationChanges` · `updateProviderMaxBookingsPerDay`

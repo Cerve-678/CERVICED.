@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
-import { View, Animated, ScrollView, StyleSheet, RefreshControl, useWindowDimensions, Platform } from 'react-native';
+import { View, Animated, ScrollView, StyleSheet, RefreshControl, Platform } from 'react-native';
 import { spacing } from '../constants/PlatformDimensions';
 import { useTheme } from '../contexts/ThemeContext';
+import { useContentWidth } from './ReadableWidth';
 
 // How far apart two cards' bottom edges have to be before they stop reading
 // as "level", expressed as a fraction of column width. Separation beyond this
@@ -99,7 +100,7 @@ function MasonryGridInner<T>(
       scrollRef.current?.scrollTo({ y: 0, animated });
     },
   }), []);
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   // Defaults to the width-derived count; an explicit prop still overrides it.
   const numColumns = numColumnsProp ?? masonryColumnsForWidth(screenWidth);
   const columnWidth = (screenWidth - contentPadding * 2 - columnGap * (numColumns - 1)) / numColumns;

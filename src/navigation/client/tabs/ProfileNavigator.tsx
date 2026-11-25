@@ -10,7 +10,6 @@ import CircleScreen from '../../../screens/client/CircleScreen';
 import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import NotificationsSettingsScreen from '../../../screens/client/NotificationsSettingsScreen';
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
-import SubscriptionScreen from '../../../screens/client/SubscriptionScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
@@ -35,6 +34,7 @@ import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import { ProfileStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -42,7 +42,7 @@ export default function ProfileNavigator() {
   const { theme, palette } = useTheme();
 
   return (
-    <ProfileStack.Navigator>
+    <ProfileStack.Navigator screenLayout={readableScreenLayout}>
       <ProfileStack.Screen
         name="ProfileMain"
         component={UserProfileScreen}
@@ -86,11 +86,6 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="PaymentMethods"
         component={PaymentMethodsScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
-        name="Subscription"
-        component={SubscriptionScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen

@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **127 files**
 - … +97 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **249 files**
+Curated: [[Availability & Slots]] · **248 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -71,10 +71,10 @@ Curated: [[Availability & Slots]] · **249 files**
 - `src/services/database/services.ts` _(26)_
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
 - `src/utils/logger.ts` _(25)_
-- … +219 more
+- … +218 more
 
 ## Payments
-Curated: [[Payments]] · **211 files**
+Curated: [[Payments]] · **210 files**
 - `src/screens/client/CartScreen.tsx` _(471)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/features/cart/StripePaymentSheet.tsx` _(182)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **211 files**
 - `supabase/provider_reminder_jobs.sql` _(34)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(33)_
-- … +181 more
+- … +180 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **434 files**
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **434 files**
 - … +404 more
 
 ## Notifications
-Curated: [[Notifications]] · **220 files**
+Curated: [[Notifications]] · **221 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(368)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **220 files**
 - `src/services/becca/capabilities/provider.ts` _(26)_
 - `src/services/databaseService.ts` _(26)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(25)_
-- … +190 more
+- … +191 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **108 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **92 files**
 - … +62 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **250 files**
+Curated: [[Booking Flow]] · **253 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(245)_
@@ -275,11 +275,11 @@ Curated: [[Booking Flow]] · **250 files**
 - `supabase/fix_provider_no_show_status.sql` _(42)_
 - `src/types/booking.ts` _(41)_
 - `src/types/database.ts` _(39)_
-- … +220 more
+- … +223 more
 
 ## Auth
-Curated: [[Contexts]] · **256 files**
-- `src/contexts/AuthContext.tsx` _(205)_
+Curated: [[Contexts]] · **257 files**
+- `src/contexts/AuthContext.tsx` _(216)_
 - `src/services/database/account.ts` _(158)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(148)_
 - `src/screens/auth/LoginScreen.tsx` _(140)_
@@ -302,14 +302,14 @@ Curated: [[Contexts]] · **256 files**
 - `src/screens/auth/WelcomeScreen.tsx` _(29)_
 - `src/screens/shared/ChangePasswordScreen.tsx` _(29)_
 - `src/services/biometricService.ts` _(29)_
+- `src/services/appleSignInRevocation.ts` _(27)_
 - `src/services/database/adminMoney.ts` _(23)_
 - `src/web/WebAccountStep.tsx` _(23)_
+- `src/services/databaseService.ts` _(21)_
 - `supabase/becca_chat_tables.sql` _(21)_
-- `src/services/databaseService.ts` _(20)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
-- `src/utils/userFacingError.ts` _(17)_
-- … +226 more
+- … +227 more
 
 ## Becca / AI
 Curated: [[Services]] · **68 files**
