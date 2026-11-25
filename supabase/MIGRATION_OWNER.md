@@ -62,6 +62,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261125140000 | `declined_payment_tells_client` | **APPLIED 2026-11-25** on the user's "do the fix for the gap then merge" / "ok go on", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock taken on this branch; live max `20261125110000` (#769's, which touches nothing here); md5 guard on live `record_checkout_outcome(uuid,text)` matched (`30c5228a…`). Forced-rollback dry run first: 'declined' notifies once, a repeat records nothing, 'not_charged' still replaces it, 'abandoned' stays silent. Verified live: version recorded (live max); md5 `87d6dd42…`, the dry run's; outcome check allows 'declined'; anon/authenticated can't execute. `reconcile-checkouts` deployed straight after. PR fix/declined-payment-told-and-freed. |
 
+### Applied 2026-11-25 (a declined or unanswered request is emailed "Request declined")
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261125110000 | `request_declined_or_expired_email` | **APPLIED 2026-11-25** on the user's "merge when done", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261125100000`, no unapplied migration on any open PR. md5 guard on live `queue_booking_confirmation_email()` matched (`39f0893d…`). Forced-rollback dry run first: pending → cancelled with no signed-in user queued 1 email, `declined_at` set. `send-booking-confirmation` deployed straight before. Verified live: version recorded (live max); md5 `a0cd1f04…`, the dry run's; anon/authenticated can't execute; trigger enabled. PR #769. |
+
 ### Applied 2026-11-25 (a request is emailed "Request sent", and "Booking confirmed" once accepted)
 
 | Recorded version | Name | Verified live |
