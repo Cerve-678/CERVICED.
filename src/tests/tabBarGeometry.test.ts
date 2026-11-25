@@ -62,7 +62,7 @@ describe('tab bar geometry — iOS pill', () => {
     expect(rectFor(0)).toEqual(rectFor(48));
   });
 
-  it('on an iPad, is capped to the readable column and centred, not the display width', () => {
+  it('on an iPad, is capped and centred, not the display width', () => {
     for (const ipadWidth of [744, 1032, 1376]) {
       const rect = tabBarRect(false, ipadWidth, 1032, 20);
       expect(rect.width).toBe(tabBarPillWidth(ipadWidth));

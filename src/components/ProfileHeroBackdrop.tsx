@@ -4,11 +4,10 @@
 // the client profile, My Profile, the InfoReg preview and Branding's own
 // preview can never draw the same finish differently.
 import React, { useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { blend, isDarkColor, SHEET_OPTIONS, type HeroFinish } from '../constants/providerThemes';
-import { useContentWidth } from './ReadableWidth';
 
 /** Where Split's hard edge falls along the diagonal. */
 const SPLIT_AT = 0.58;
@@ -85,7 +84,7 @@ export default function ProfileHeroBackdrop({
 
   // Until it has been measured, assume the full screen, which is how the
   // profiles draw it, so they get it right from the first frame.
-  const window = useContentWidth();
+  const window = useWindowDimensions();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;

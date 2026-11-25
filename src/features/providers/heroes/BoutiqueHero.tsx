@@ -13,10 +13,9 @@
 // put the panel in their branding and dropped the Add to basket bar.
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
-import { useContentWidth } from '../../../components/ReadableWidth';
 
 /** The panel's ink on their card colour. The stars, years and slots under the
  *  name are inked the same way by the profile (detailsSitOnCard, cardInk). */
@@ -54,7 +53,7 @@ export function BoutiqueHero({
   details: React.ReactNode;
   tick: React.ReactNode;
 }) {
-  const { width } = useContentWidth();
+  const { width } = useWindowDimensions();
   const topHeight = Math.round(width * TOP_RATIO);
   const ink = cardInk(cardColour);
 

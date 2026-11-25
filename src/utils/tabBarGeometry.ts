@@ -49,8 +49,8 @@ export function tabBarContentHeight(isAndroid: boolean): number {
  */
 /**
  * Width of the floating iOS pill: inset from both sides, but never wider than
- * the readable column, so on an iPad it sits centred under the screen's
- * content instead of running the width of the display.
+ * READABLE_MAX_WIDTH, so on an iPad it sits centred at the bottom instead of
+ * stretching four icons across the width of the display.
  */
 export function tabBarPillWidth(screenWidth: number): number {
   return Math.min(screenWidth, READABLE_MAX_WIDTH) - TAB_BAR_SIDE_MARGIN * 2;

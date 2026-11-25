@@ -7,7 +7,7 @@
 // style sees no change.
 
 import React, { useMemo, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle, useWindowDimensions } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,7 +33,6 @@ import { SectionDivider } from "./pageParts";
 import { capsuleTones } from "./heroes/CapsuleHero";
 import { LATTE_OVERLAP, latteBand, latteGlass, latteInk, latteShade } from "./heroes/LatteHero";
 import { GlowText } from "./heroes/NeonHero";
-import { useContentWidth } from '../../components/ReadableWidth';
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -1459,7 +1458,7 @@ export function AccentBandSection({
   waves?: boolean;
   children: React.ReactNode;
 }) {
-  const { width } = useContentWidth();
+  const { width } = useWindowDimensions();
   const ink = onAccentInk(palette.accent);
   return (
     <View style={bandStyles.wrap}>

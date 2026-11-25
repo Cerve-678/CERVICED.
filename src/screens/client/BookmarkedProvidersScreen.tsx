@@ -9,6 +9,7 @@ import {
   Platform,
   Animated,
   Easing,
+  useWindowDimensions,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
@@ -29,7 +30,6 @@ import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { masonryColumnsForWidth } from '../../components/MasonryGrid';
-import { useContentWidth } from '../../components/ReadableWidth';
 import { logger } from '../../utils/logger';
 
 
@@ -222,9 +222,9 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   // Two columns on a phone, more as the screen widens (an iPad, or one turned
   // sideways), so the cards stay card-sized instead of growing to fill two.
-  const { width: contentWidth } = useContentWidth();
-  const gridColumns = masonryColumnsForWidth(contentWidth);
-  const gridCardWidth = (contentWidth - GRID_SIDE_PADDING * 2 - GRID_GAP * (gridColumns - 1)) / gridColumns;
+  const { width: windowWidth } = useWindowDimensions();
+  const gridColumns = masonryColumnsForWidth(windowWidth);
+  const gridCardWidth = (windowWidth - GRID_SIDE_PADDING * 2 - GRID_GAP * (gridColumns - 1)) / gridColumns;
 
   const renderProviderCard: ListRenderItem<Provider> = useCallback(({ item, index }) => (
     <BookmarkGridCard

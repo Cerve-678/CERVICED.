@@ -8,7 +8,6 @@ import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvide
 import CartScreen from '../../../screens/client/CartScreen';
 import { ExploreStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ExploreStack = createNativeStackNavigator<ExploreStackParamList>();
 
@@ -16,7 +15,7 @@ export default function ExploreNavigator() {
   const { theme } = useTheme();
 
   return (
-    <ExploreStack.Navigator screenLayout={readableScreenLayout}>
+    <ExploreStack.Navigator>
       <ExploreStack.Screen
         name="ExploreMain"
         component={ExploreScreen}
