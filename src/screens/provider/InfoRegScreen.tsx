@@ -173,6 +173,7 @@ import {
   type BusinessType,
 } from '../../features/business-details/options';
 import { useContentWidth } from '../../components/ReadableWidth';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -7506,7 +7507,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Bottom-sheet modals (template picker, add category)
-  templateSheet: {
+  templateSheet: { ...readableSheet,
     height: '82%',
     marginTop: 'auto',
     borderTopLeftRadius: 28,
@@ -7726,7 +7727,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 16,
     fontWeight: 'bold',
   },
-  modalContent: {
+  modalContent: { ...readableDialog,
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,

@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { CITY_AREA_NAMES, COUNTY_TOWNS, getCityAreaData, searchPlaces, type PlaceMatch } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { samePlace } from '../utils/providerCity';
+import { readableSheet } from '../constants/readableWidth';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
   placeholder: { color: '#8B8B95' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.38)' },
-  sheet: { height: '82%', backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
+  sheet: { ...readableSheet, height: '82%', backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: '#D1D1D6', marginTop: 10, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   headingWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },

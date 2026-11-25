@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { UK_CITIES } from '../constants/ukCities';
 import { getCityAreaData, searchPlaces, COUNTY_TOWNS, type CityAreaData } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { readableSheet } from '../constants/readableWidth';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -328,7 +329,7 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { ...readableSheet, height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 0.5 },

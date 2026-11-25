@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { readableSheet } from '../constants/readableWidth';
 
 // The animated "how it works" sheet behind the Info Packs and Forms welcomes.
 // Each welcome supplies only its stage (what is drawn) and its story steps; the
@@ -227,7 +228,7 @@ export function HowItWorksSheet({
 
 const st = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { ...readableSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   heading: { fontSize: 22, textAlign: 'center', marginBottom: 14 },
   headingFallback: { fontWeight: '700', letterSpacing: -0.3 },

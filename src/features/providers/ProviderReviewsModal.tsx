@@ -10,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { ProviderReviewItem } from "./reviewPresentation";
+import { readableDialog } from '../../constants/readableWidth';
 
 interface ProviderReviewsModalProps {
   isVisible: boolean;
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  modalContent: {
+  modalContent: { ...readableDialog,
     flex: 1,
     paddingHorizontal: 20,
   },

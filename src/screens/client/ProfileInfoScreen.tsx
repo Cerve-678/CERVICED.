@@ -28,6 +28,7 @@ import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { readableSheet } from '../../constants/readableWidth';
 
 // Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
 // encoded as the picker's maximumDate so the UI can't select an invalid date at all.
@@ -339,7 +340,7 @@ const styles = StyleSheet.create({
   dobText: { fontSize: 15 },
   pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
   pickerDoneLabel: { fontSize: 15, fontWeight: '700' },

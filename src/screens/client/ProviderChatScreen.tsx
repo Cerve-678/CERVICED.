@@ -44,6 +44,7 @@ import { logger } from "../../utils/logger";
 import { toUserMessageAllowingDbGuard } from "../../utils/userFacingError";
 import { useAppDialog } from "../../components/AppDialog";
 import { useChatSafety } from "../../features/safety/useChatSafety";
+import { readableSheet } from '../../constants/readableWidth';
 
 type Props = NativeStackScreenProps<HomeStackParamList, "ProviderChat">;
 
@@ -923,7 +924,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.4)",
   },
-  modalCard: {
+  modalCard: { ...readableSheet,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,

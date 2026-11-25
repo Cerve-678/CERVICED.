@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { normalizeTerm, matchesSpeciality } from '../utils/fuzzyMatch';
+import { readableSheet } from '../constants/readableWidth';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string; onAccent: string;
@@ -230,7 +231,7 @@ const styles = StyleSheet.create({
   countPillText: { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { ...readableSheet, height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 0.5 },

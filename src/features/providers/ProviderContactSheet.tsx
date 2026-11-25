@@ -8,6 +8,7 @@ import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 
 import type { ProviderContactOption } from './contactOptions';
+import { readableSheet } from '../../constants/readableWidth';
 
 export interface ProviderContactSheetColors {
   surface: string;
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
-  sheet: {
+  sheet: { ...readableSheet,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,

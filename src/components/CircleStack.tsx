@@ -26,6 +26,7 @@ import {
 } from '../features/social/presentation';
 import type { CirclePerson } from '../features/social/types';
 import TabIcon from './TabIcon';
+import { readableSheet } from '../constants/readableWidth';
 
 const FACE = 20;
 const OVERLAP = 7;
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
   },
   moreText: { color: '#FFFFFF', fontSize: 8, fontWeight: '700' },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: {
+  sheet: { ...readableSheet,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 20,

@@ -61,6 +61,7 @@ import { StepProgress } from './BookingSheet';
 import { AddOnPickerModal } from './AddOnPickerModal';
 import { durationWithAddOns, type ChosenAddOn } from '../features/bookings/addOnTime';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { readableSheet } from '../constants/readableWidth';
 
 /** Mirrors the single-service sheet's three shared steps. Add-ons are no
  *  longer a step here at all — they're decided per-service at selection
@@ -1330,7 +1331,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  sheet: { ...readableSheet, flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -1378,7 +1379,7 @@ const styles = StyleSheet.create({
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
   termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  termsSheet: { ...readableSheet, height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,

@@ -42,6 +42,7 @@ import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import CloseScheduleSection from '../../features/providers/CloseScheduleSection';
 import { navigateAfterDismiss, openProviderBookingOnCalendar } from '../../navigation/rootNavigate';
 import { toReleaseDay } from '../../utils/bookingHorizon';
+import { readableSheet } from '../../constants/readableWidth';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -871,7 +872,7 @@ const s = StyleSheet.create({
   // never leaks through the sheet — the sheet's own background covers everything below it.
   pickerModalWrap: { flex: 1, flexDirection: 'column' },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
   pickerHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerLabel:   { fontSize: 15, fontWeight: '600' },
   pickerDone:    { fontSize: 15, fontWeight: '700' },

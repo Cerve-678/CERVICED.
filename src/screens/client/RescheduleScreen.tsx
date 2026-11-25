@@ -31,6 +31,7 @@ import {
 import { logger, reportError } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { readableSheet } from '../../constants/readableWidth';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -1051,7 +1052,7 @@ const st = StyleSheet.create({
   customTimeConfirmText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
   pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
   pickerDoneLabel: { fontSize: 15, fontWeight: '700' },

@@ -6,6 +6,7 @@ import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import type { DeviceCalendar } from '../../services/deviceCalendarService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { readableSheet } from '../../constants/readableWidth';
 
 export interface ChooserPalette {
   bg: string;
@@ -79,7 +80,7 @@ export function CalendarChooserSheet({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingTop: 10, gap: 10, maxHeight: '80%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingTop: 10, gap: 10, maxHeight: '80%' },
   grabber: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 6 },
   sheetTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20 },
   body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19 },

@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { tabBarClearance } from '../utils/tabBarGeometry';
+import { readableAbsoluteSheet } from '../constants/readableWidth';
 
 // The toast is anchored to the bottom edge, and the floating tab bar is an
 // overlay the Tab.Navigator draws on top of every nested screen — so a toast
@@ -240,8 +241,7 @@ const dlgSt = StyleSheet.create({
     maxHeight: '85%',
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    ...readableAbsoluteSheet(0),
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',

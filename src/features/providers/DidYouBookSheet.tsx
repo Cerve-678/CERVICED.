@@ -34,6 +34,7 @@ import {
   formatTime12,
 } from '../../utils/dateUtils';
 import { EXTERNAL_BOOKING_DISCLAIMER } from '../bookings/externalBookings';
+import { readableSheet } from '../../constants/readableWidth';
 
 export interface DidYouBookResult {
   bookingDate: string;
@@ -354,7 +355,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   keyboardAvoidingView: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
   // A defined height gives the details ScrollView a real viewport. Without
   // one it measures at its content height, so the final button can be pushed
   // beneath the bottom edge on smaller devices.

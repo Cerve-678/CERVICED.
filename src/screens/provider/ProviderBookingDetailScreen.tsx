@@ -98,6 +98,7 @@ import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
 import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -3853,7 +3854,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  pickerSheet: {
+  pickerSheet: { ...readableSheet,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -4099,7 +4100,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  dialog: {
+  dialog: { ...readableDialog,
     width: '100%',
     borderRadius: 14,
     overflow: 'hidden',

@@ -7,6 +7,7 @@ import type { ProviderAvailabilityStatus } from '../../services/databaseService'
 import { BUSINESS_TYPE_META } from '../business-details/options';
 import { BUSINESS_TYPE_ICON } from './profilePresentation';
 import TabIcon from '../../components/TabIcon';
+import { readableSheet } from '../../constants/readableWidth';
 
 // ── Availability colour/label — real status from get_providers_availability,
 // resolved asynchronously per-card (see providersWithAvailability in
@@ -190,7 +191,7 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet: {
+  sheet: { ...readableSheet,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
