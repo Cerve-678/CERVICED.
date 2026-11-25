@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center' },
   topBar: { width: '100%', maxWidth: PAGE_WIDTH, height: TOP_BAR_HEIGHT, backgroundColor: '#FFFFFF', paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   wordmark: { color: '#5C4033', fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 1 },
-  openApp: { color: '#5C4033', fontFamily: 'JosefinSans_600SemiBold', fontSize: 15 },
+  openApp: { color: '#5C4033', fontFamily: 'BakbakOne-Regular', fontSize: 15 },
   page: { width: '100%', maxWidth: PAGE_WIDTH, flex: 1, overflow: 'hidden' },
   backdropPhoto: { opacity: 0.88 },
   flex: { flex: 1 },

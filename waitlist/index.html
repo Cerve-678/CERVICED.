@@ -14,7 +14,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Josefin+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;500;600;700&display=swap">
 <style>
 /* ── Tokens ─────────────────────────────────────────────────────────────
    Values are the app's provider-hat palette (DESIGN_SYSTEM.md → L / D).
@@ -82,15 +82,15 @@ body{
   margin:0;
   background:var(--bg);
   color:var(--text);
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-family:'Jura','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   font-size:17px;
   line-height:1.6;
   overflow-x:hidden;
   -webkit-font-smoothing:antialiased;
 }
 h1,h2,h3,.display,.label,button,.btn{
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-weight:700;
+  font-family:'Bakbak One','Haettenschweiler','Arial Narrow',Impact,sans-serif;
+  font-weight:400;
 }
 h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-0.005em;line-height:1.05;}
 p{margin:0;}
@@ -110,7 +110,7 @@ a{color:var(--accent-text);}
 }
 .wordmark{
   font-family:'Bakbak One',sans-serif;
-  font-size:20px;letter-spacing:0.08em;text-transform:uppercase;
+  font-size:20px;letter-spacing:0.26em;text-transform:uppercase;
   color:var(--text);text-decoration:none;
 }
 
@@ -154,9 +154,8 @@ a{color:var(--accent-text);}
 }
 .cart-head .label{color:var(--sub);}
 .cart-head .count{
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;
+  font-family:'Bakbak One',sans-serif;font-size:11px;
   letter-spacing:0.14em;text-transform:uppercase;color:var(--secondary-text);
-  font-weight:700;
 }
 .row{
   display:grid;grid-template-columns:38px 1fr auto 24px;gap:14px;align-items:center;
@@ -170,7 +169,7 @@ a{color:var(--accent-text);}
 .rm{
   border:0;background:transparent;cursor:pointer;padding:0;
   width:24px;height:24px;border-radius:50%;
-  color:var(--sub);font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:19px;line-height:1;
+  color:var(--sub);font-family:'Jura',sans-serif;font-size:19px;line-height:1;
   opacity:.45;transition:opacity .18s ease,background .18s ease,color .18s ease;
 }
 .rm:hover{opacity:1;background:var(--accent-dim);color:var(--accent-text);}
@@ -179,11 +178,11 @@ a{color:var(--accent-text);}
   display:inline-flex;align-items:center;gap:7px;cursor:pointer;
   padding:8px 13px;border-radius:999px;
   background:transparent;border:1px dashed var(--border);color:var(--sub);
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;
+  font-family:'Jura',sans-serif;font-size:13px;
   transition:border-color .2s ease,color .2s ease,background .2s ease,transform .18s ease;
 }
 .chip:hover{border-style:solid;border-color:var(--accent);color:var(--accent-text);background:var(--accent-dim);transform:translateY(-1px);}
-.chip .plus{font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:var(--accent-text);font-weight:700;}
+.chip .plus{font-family:'Bakbak One',sans-serif;font-size:13px;color:var(--accent-text);}
 .chip .cp{font-variant-numeric:tabular-nums;opacity:.7;}
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .7s ease,transform .7s cubic-bezier(.22,.68,.35,1);}
 .reveal.is-in{opacity:1;transform:none;}
@@ -193,8 +192,7 @@ a{color:var(--accent-text);}
   width:38px;height:38px;border-radius:12px;
   background:var(--secondary);color:var(--secondary-text);
   display:grid;place-items:center;
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;letter-spacing:0.04em;
-  font-weight:700;
+  font-family:'Bakbak One',sans-serif;font-size:13px;letter-spacing:0.04em;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .avatar{background:var(--accent-dim);}
@@ -203,9 +201,8 @@ a{color:var(--accent-text);}
 .svc{font-size:15px;line-height:1.3;color:var(--text);}
 .who{font-size:12.5px;color:var(--sub);letter-spacing:0.01em;}
 .price{
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;
+  font-family:'Bakbak One',sans-serif;font-size:15px;
   font-variant-numeric:tabular-nums;color:var(--text);
-  font-weight:700;
 }
 .cart-total{
   display:flex;align-items:center;justify-content:space-between;
@@ -213,14 +210,13 @@ a{color:var(--accent-text);}
   border-top:1.5px solid var(--border);
   opacity:0;animation:rise .55s cubic-bezier(.22,.68,.35,1) .68s forwards;
 }
-.cart-total .k{font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--sub);font-weight:700;}
-.cart-total .v{font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:26px;font-variant-numeric:tabular-nums;font-weight:700;}
+.cart-total .k{font-family:'Bakbak One',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--sub);}
+.cart-total .v{font-family:'Bakbak One',sans-serif;font-size:26px;font-variant-numeric:tabular-nums;}
 .cart-cta{
   margin-top:14px;padding:13px;border-radius:14px;text-align:center;
   background:var(--accent);color:var(--on-accent);
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
+  font-family:'Bakbak One',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
   opacity:0;animation:rise .55s cubic-bezier(.22,.68,.35,1) .82s forwards;
-  font-weight:700;
 }
 .cart-note{
   margin-top:12px;text-align:center;font-size:12px;color:var(--sub);
@@ -285,9 +281,8 @@ section{padding:72px 0;border-top:1px solid var(--sep);}
 .fields{display:flex;flex-direction:column;gap:18px;}
 .field{display:flex;flex-direction:column;gap:7px;}
 .field label{
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-family:'Bakbak One',sans-serif;
   font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--sub);
-  font-weight:700;
 }
 .field .hint{font-size:12.5px;color:var(--sub);}
 input[type="text"],input[type="email"],select{
@@ -324,9 +319,8 @@ select{appearance:none;cursor:pointer;}
 .sitenav a.join{
   padding:8px 16px;border-radius:999px;
   background:var(--accent);color:var(--on-accent);
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-family:'Bakbak One',sans-serif;font-weight:400;
   font-size:12px;letter-spacing:0.12em;text-transform:uppercase;
-  font-weight:700;
 }
 .sitenav a.join:hover{color:var(--on-accent);opacity:0.9;}
 section[id]{scroll-margin-top:24px;}
@@ -371,9 +365,8 @@ section[id]{scroll-margin-top:24px;}
 }
 
 .pill{
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+  font-family:'Bakbak One',sans-serif;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
   padding:5px 10px;border-radius:999px;background:var(--accent-dim);color:var(--accent-text);white-space:nowrap;
-  font-weight:700;
 }
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px 32px;}
 .point{min-width:0;}
@@ -407,7 +400,7 @@ section[id]{scroll-margin-top:24px;}
   background:var(--card);border:1.5px solid var(--accent);border-radius:22px;box-shadow:var(--shadow);
   padding:18px 20px;display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;
 }
-.booked .when{grid-row:span 2;font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-transform:uppercase;font-size:12px;letter-spacing:0.12em;color:var(--sub);text-align:center;line-height:1.15;font-weight:700;}
+.booked .when{grid-row:span 2;font-family:'Bakbak One',sans-serif;text-transform:uppercase;font-size:12px;letter-spacing:0.12em;color:var(--sub);text-align:center;line-height:1.15;}
 .booked .when b{display:block;font-weight:400;font-size:26px;letter-spacing:0;color:var(--text);}
 .booked .svc{font-size:15.5px;}
 .booked .meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;}
@@ -432,9 +425,8 @@ section[id]{scroll-margin-top:24px;}
 .faces{display:flex;align-items:center;}
 .face{
   width:30px;height:30px;border-radius:50%;display:grid;place-items:center;position:relative;
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10.5px;letter-spacing:0.03em;
+  font-family:'Bakbak One',sans-serif;font-size:10.5px;letter-spacing:0.03em;
   background:var(--secondary);color:var(--secondary-text);border:2px solid var(--card);margin-left:-8px;
-  font-weight:700;
 }
 .face:first-child{margin-left:0;}
 .face:nth-child(1){z-index:4;} .face:nth-child(2){z-index:3;} .face:nth-child(3){z-index:2;} .face:nth-child(4){z-index:1;}
@@ -445,8 +437,7 @@ section[id]{scroll-margin-top:24px;}
 .circle-rows .who{font-size:13px;}
 .rec{
   align-self:flex-start;margin-top:auto;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);color:var(--accent-text);
-  font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
-  font-weight:700;
+  font-family:'Bakbak One',sans-serif;font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
 }
 
 .areas{display:flex;flex-wrap:wrap;gap:6px;}
@@ -461,8 +452,8 @@ section[id]{scroll-margin-top:24px;}
 .due{background:var(--card);border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
 .due-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
 .due-top .svc{font-size:15px;}
-.count-n{font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:22px;font-variant-numeric:tabular-nums;color:var(--text);line-height:1;font-weight:700;}
-.count-n small{font-family:'Josefin Sans','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:var(--sub);margin-left:3px;}
+.count-n{font-family:'Bakbak One',sans-serif;font-size:22px;font-variant-numeric:tabular-nums;color:var(--text);line-height:1;}
+.count-n small{font-family:'Jura',sans-serif;font-size:12px;color:var(--sub);margin-left:3px;}
 .due-acts{display:flex;gap:6px;flex-wrap:wrap;}
 .due-acts span{padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);color:var(--sub);}
 .due-acts span:first-child{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
