@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/safety-language-filter (Claude, 2026-11-25) — 20261125170000_refuse_blocked_language, written + dry-run OK, NOT applied
 ```
 
 ### Applied 2026-11-25 (block stops messages; report a message, review or person)

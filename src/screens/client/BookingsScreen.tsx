@@ -778,8 +778,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
         }, 100);
       }, 2000);
-    } catch {
-      Alert.alert('Error', 'Failed to submit rating.');
+    } catch (err) {
+      Alert.alert('Rating Not Saved', toUserMessageAllowingDbGuard(err, 'Failed to submit rating.', 'BookingsScreen.submitRating'));
       setIsLoading(false);
     }
   }, [selectedBooking, rating, reviewText, reviewAnonymous, user, recommendAfterRating]);

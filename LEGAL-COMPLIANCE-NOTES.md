@@ -256,6 +256,17 @@ confirming there's a moderation/reporting path for defamatory or abusive
 reviews, since marketplace platforms carry some responsibility for
 user-generated content moderation under UK online safety expectations.
 
+**Status 2026-11-25 (App Store guideline 1.2):** the path now exists. Report a
+message, a review or a person in the app, and block someone from messaging
+you (#781). A database language filter refuses slurs and abuse in messages,
+reviews, names, descriptions, promotions, Info Packs and announcements
+(migration `20261125170000_refuse_blocked_language`; the word list is the
+`blocked_terms` table, editable by an admin without a release). Client Terms
+§23 and Community Guidelines §8 now state zero tolerance and a **24-hour
+review of reports** (wording chosen by the user). Still to raise with
+counsel: the 24-hour promise is operational, so support@cerviced.co must be
+read daily, weekends included; and photos are not filtered, only reportable.
+
 ## 8. Marketing vs transactional notifications
 
 Push notifications (booking confirmations, reminders, promotions) should keep
