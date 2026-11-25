@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-25 (a request is emailed "Request sent", and "Booking confirmed" once accepted)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261125100000 | `request_sent_email_then_confirmed` | **APPLIED 2026-11-25** on the user's "go on", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124230000`, no unapplied migration above it on any open PR, 0 pending requests. md5 guard on live `queue_booking_confirmation_email()` matched (`301271b3…`). Forced-rollback dry run first. `send-booking-confirmation` deployed straight before (reads `status`, sends "Request sent" while pending). Verified live: version recorded (live max); md5 `39f0893d…`, the dry run's; anon/authenticated can't execute; trigger enabled. PR #766. |
+
 ### Applied 2026-11-24 (the Terms notice points to the website instead of "Tap to read")
 
 | Recorded version | Name | Verified live |
