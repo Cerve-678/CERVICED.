@@ -314,7 +314,6 @@ export {
   getMyProviderAchievements,
   saveProviderNotificationPreferences,
   setMaintenanceRemindersOptIn,
-  getMyBookmarkCount,
   getMyServiceBookingRows,
   getSpecialityUses,
   getLiveServiceDescriptions,

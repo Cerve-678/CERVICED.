@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { forgetCachedReads, getProviderBookings, getMyProviderReviews, getMyBookmarkCount, getProviderTipsByBooking } from '../../services/databaseService';
+import { forgetCachedReads, getProviderBookings, getMyProviderReviews, getMyProviderSaverCount, getProviderTipsByBooking } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -927,7 +927,9 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     try {
       const [r, fc] = await Promise.all([
         getMyProviderReviews(),
-        getMyBookmarkCount(),
+        // Not a count of bookmarks rows: RLS shows a provider only their own
+        // saves, which read as 0. The server function counts every client.
+        getMyProviderSaverCount(),
       ]);
       setReviews(r);
       setFollowerCount(fc);

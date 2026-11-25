@@ -353,29 +353,6 @@ export async function setMaintenanceRemindersOptIn(enabled: boolean): Promise<vo
   await saveNotificationPreferences({ ...current, maintenanceReminders: enabled });
 }
 
-/** Count how many users have bookmarked the currently logged-in provider */
-export async function getMyBookmarkCount(): Promise<number> {
-  const {
-    data: { user },
-  } = await getSessionUser();
-  if (!user) return 0;
-  const { data: providerRow } = await supabase
-    .from("providers")
-    .select("id")
-    .eq("user_id", user.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!providerRow) return 0;
-  const { count, error } = await supabase
-    .from("bookmarks")
-    .select("id", { count: "exact", head: true })
-    .eq("provider_id", providerRow.id);
-  if (error) throw error;
-  return count ?? 0;
-}
-
 /** The provider's own bookings by service and date, from `sinceDaysAgo` on, for
  *  the dashboard's graphs.
  *
