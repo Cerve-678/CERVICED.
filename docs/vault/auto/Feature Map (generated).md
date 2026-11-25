@@ -312,7 +312,7 @@ Curated: [[Contexts]] · **255 files**
 - … +225 more
 
 ## Becca / AI
-Curated: [[Services]] · **67 files**
+Curated: [[Services]] · **68 files**
 - `src/screens/shared/BeccaScreen.tsx` _(110)_
 - `src/services/becca/engine.ts` _(61)_
 - `src/services/becca/capabilities/client.ts` _(53)_
@@ -343,7 +343,7 @@ Curated: [[Services]] · **67 files**
 - `src/navigation/provider/tabs/ProviderHomeNavigator.tsx` _(6)_
 - `src/services/becca/capabilities/shared.ts` _(6)_
 - `src/i18n/catalogs/fr.ts` _(5)_
-- … +37 more
+- … +38 more
 
 ## Cart & checkout
 Curated: [[Payments]] · **119 files**

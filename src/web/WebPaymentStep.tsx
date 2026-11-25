@@ -65,13 +65,15 @@ import {
 import { getWebStripe } from './webStripe';
 
 /** Reasons to get the app, under Booked. Each one is a real feature of the
- *  client app: appointment reminders, Beauty Maintenance, the waitlist, and
- *  Your Providers + Explore. */
+ *  client app: Becca, the Beauty Profile, Beauty Maintenance reminders, the
+ *  provider bell (new slots released) and Explore. Explore doesn't tailor
+ *  itself to the client, so it isn't called "recommended for you". */
 const APP_BENEFITS = [
-  'Get a reminder before every appointment',
-  'Know when you’re due to rebook, from your lashes to your nails',
-  'Join a waitlist when your favourite is fully booked',
-  'Save your providers and discover new ones near you',
+  'Ask Becca, your beauty assistant, anything',
+  'Save your Beauty Profile so every provider knows your preferences',
+  'Get Maintenance reminders when you’re due to rebook',
+  'Be the first to know when your provider releases new slots',
+  'Find inspiration and new providers on Explore',
 ] as const;
 
 type Phase =
