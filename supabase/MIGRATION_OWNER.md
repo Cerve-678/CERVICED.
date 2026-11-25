@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-25 (a declined payment nobody saw now tells the client)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261125140000 | `declined_payment_tells_client` | **APPLIED 2026-11-25** on the user's "do the fix for the gap then merge" / "ok go on", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock taken on this branch; live max `20261125110000` (#769's, which touches nothing here); md5 guard on live `record_checkout_outcome(uuid,text)` matched (`30c5228a…`). Forced-rollback dry run first: 'declined' notifies once, a repeat records nothing, 'not_charged' still replaces it, 'abandoned' stays silent. Verified live: version recorded (live max); md5 `87d6dd42…`, the dry run's; outcome check allows 'declined'; anon/authenticated can't execute. `reconcile-checkouts` deployed straight after. PR fix/declined-payment-told-and-freed. |
+
 ### Applied 2026-11-25 (a request is emailed "Request sent", and "Booking confirmed" once accepted)
 
 | Recorded version | Name | Verified live |

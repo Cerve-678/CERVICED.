@@ -5,7 +5,7 @@
 
 #generated
 
-**4411 functions** across **648 files**.
+**4416 functions** across **649 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -192,12 +192,13 @@
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**
 
-### `src/features/cart/` (8)
+### `src/features/cart/` (9)
 - `checkoutIntent.ts` — **buildCheckoutIntentItem**
 - `checkoutOutcome.ts` — **settledFromBatch** · **settledFromCaptureStatus** · **waitForCheckoutOutcome**
 - `platformFee.ts` — **calculatePlatformFee** · **calculatePlatformFeePence** · **splitPlatformFeePence** · **toPence**
 - `presentation.ts` — **describeReserveFailure** · **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · slotStartMs · **to24hMinutes** · toLabel
 - `pricing.ts` — **getCartAddOnsSummary** · **getCartItemFullPrice** · **resolveDepositPolicyArg** · **toDepositPolicy**
+- `releaseEarlierPayments.ts` — isApprovedRefusal · **releaseEarlierPayments**
 - `RequestHoldChecks.tsx` — confirm · **RequestHoldChecks** · updateHold
 - `requestHolds.ts` — **checkoutSuccessMessage** · count · **holdCheckPrompt** · **holdNeedsCheck** · **holdPlanNote** · **holdResultLine** · money · **payButtonLabel**
 - `StripePaymentSheet.tsx` — handleClose · handlePayment · lateCancelFees · showCards · timestamp · visitFees
@@ -578,7 +579,7 @@
 - `registration.ts` — connectAction · **getConnectLink** · **getConnectStatus** · **getHeldPayoutPence** · **getMyProviderAddOns** · getOwnBankDisputeStates · **getPayoutSchedule** · **getProviderBookingPolicies** · **getProviderFeeEarnings** · **getProviderFinance** · **getProviderLogoUrlByUserId** · **getProviderPayouts** · **getProviderRegistrationCore** · **getProviderRegistrationDetails** · **getProviderRegistrationRecord** · **getProviderServiceDescriptionSnapshots** · **getProviderServicePositions** · **getProviderTipEarnings** · **getProviderTipsByBooking** · **insertProviderRegistrationRow** · **listUserStorageObjectPaths** · **promoteUserToProvider** · **providerSlugExists** · readPayoutSchedule · **refundProviderBooking** · **removeStorageObjects** · **replaceProviderAddOns** · **replaceProviderServiceCatalog** · **saveProviderBookingPolicies** · **setPayoutSchedule** · **updateProviderRegistrationRow** · **uploadPublicStorageObject**
 - `reschedule.ts` — **confirmGroupReschedule** · **confirmRescheduleOwnBooking** · **declineGroupRescheduleOffer** · **declineRescheduleOffer** · **getActiveRescheduleRequest** · **getActiveRescheduleRequestsForBookings** · **getBookingCancelNoticeHours** · **getProviderBookingDetailMetadata** · **getProviderBookingPoliciesById** · **getProviderNoShowGraceMinutes** · **getProviderReschedulePolicyByDisplayName** · **getProviderReschedulePolicyById** · **insertBookingUserNotification** · mapReschedulePolicyRow · **providerInitiateGroupReschedule** · **rejectRescheduleRequest** · **requestRescheduleOwnBooking** · **respondToRescheduleRequest** · **upsertProviderRescheduleRequest**
 - `reviews.ts` — **confirmBookingTipPayment** · **getBookingReviewStates** · **getBookingTip** · **getMyProviderReviews** · **getProviderBookingTip** · **getProviderReviews** · **hasReviewedBooking** · **startBookingTipPayment** · **submitReview**
-- `services.ts` — **cancelCheckout** · **cancelScheduledAnnouncement** · **countProviderPortfolioItems** · **countProviderServices** · **createMyService** · **getClientBookingHistory** · **getClientReliabilityStats** · **getClientReliabilityStatsBatch** · **getMyAnnouncementFollowers** · **getMyPromotionManagerCore** · **getMyServiceCatalogue** · **getProviderClientele** · **getRebookableService** · **getServiceDescriptionHistory** · **getServiceDurationsByIds** · **getServiceIdsByNames** · **getServiceSafetyFlags** · **markScheduledNotifSent** · myServiceOptionalColumns · **prepareCheckout** · **providerCreateManualBooking** · **queueScheduledAnnouncement** · **saveServiceDescriptionDraft** · **sendAnnouncement** · **sendPromotionNotificationsToClients** · **sendPromoToClient** · **sendProviderClientNotifications** · **sendRebookPrompt** · **setMyServiceActive** · **updateMyService**
+- `services.ts` — **cancelCheckout** · **cancelScheduledAnnouncement** · **countProviderPortfolioItems** · **countProviderServices** · **createMyService** · **getClientBookingHistory** · **getClientReliabilityStats** · **getClientReliabilityStatsBatch** · **getMyAnnouncementFollowers** · **getMyEarlierCheckoutPayments** · **getMyPromotionManagerCore** · **getMyServiceCatalogue** · **getProviderClientele** · **getRebookableService** · **getServiceDescriptionHistory** · **getServiceDurationsByIds** · **getServiceIdsByNames** · **getServiceSafetyFlags** · hhmm · **markScheduledNotifSent** · myServiceOptionalColumns · **prepareCheckout** · **providerCreateManualBooking** · **queueScheduledAnnouncement** · **saveServiceDescriptionDraft** · **sendAnnouncement** · **sendPromotionNotificationsToClients** · **sendPromoToClient** · **sendProviderClientNotifications** · **sendRebookPrompt** · **setMyServiceActive** · slotKey · **updateMyService**
 - `social.ts` — **addBookmark** · assertNotOwnProvider · **blockPerson** · **getBookmarkedProviders** · **getCircleForProviders** · **getMyFollowerCount** · **getMyPeople** · **getMyProviderSharing** · **getMyRecommendedProviders** · **getMySocialSettings** · **getProviderFollowerCount** · **isProviderBookmarked** · **isUuid** · mapPerson · mapSocialSettings · **markWhereIGoNoticeSeen** · **matchContactHashes** · **removeBookmark** · **removeFollower** · **requestFollow** · **respondFollowRequest** · **setProviderFollowNotify** · **setProviderHidden** · **setProviderRecommendation** · **unblockPerson** · **unfollowPerson** · **updateMySocialSettings**
 - `users.ts` — **clearSeenTours** · **getSeenTours** · **getUserBasicInfo** · **getUserBeautyProfile** · **getUserBusinessInfo** · **getUserDisplayName** · **getUserProfileById** · **getUserSignupPrefillInfo** · **markTourSeen** · **updateMyStagedProviderAnswers** · **updateUserBeautyProfile** · **updateUserBusinessInfo** · **updateUserContactDetails** · **updateUserDob** · **upgradeUserToProvider**
 - `waitlist.ts` — **declineWaitlistHold** · **dismissReleasedWaitlistSlot** · **getMyWaitlist** · **getProviderReleasedWaitlistSlots** · **getProviderWaitlist** · **joinWaitlist** · **leaveWaitlist** · **providerOfferReleasedWaitlistSlot** · **providerOfferWaitlistSlot** · **providerRemoveWaitlistEntry** · **updateMyWaitlistDates**

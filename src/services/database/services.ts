@@ -394,6 +394,70 @@ export async function cancelCheckout(checkoutBatchId: string): Promise<void> {
   if (error) throw error;
 }
 
+/** One of the client's own earlier checkouts whose payment reached Stripe. */
+export interface EarlierCheckoutPayment {
+  checkoutBatchId: string;
+  paymentIntentId: string;
+}
+
+/** The client's own unfinished checkouts that a payment was started for and
+ *  that hold the same time (provider, date and start time) as one this
+ *  checkout books: an earlier attempt at the same slot, which would make the
+ *  new one say it's taken. prepare_checkout releases such a checkout itself
+ *  only when no payment was started (it can't ask Stripe whether the card was
+ *  approved), so these are left for the caller to cancel through
+ *  finalize-payment-intent, which can. Matching the exact start time, not just
+ *  the day, keeps it off a payment the same client is making for another time
+ *  on another phone or on the website. */
+export async function getMyEarlierCheckoutPayments(
+  slots: ReadonlyArray<{ providerId: string; date: string; time: string }>,
+): Promise<EarlierCheckoutPayment[]> {
+  if (slots.length === 0) return [];
+  const { data: session, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const userId = session.session?.user.id;
+  if (!userId) return [];
+  // Explicitly the caller's own, not only by RLS: what this returns gets
+  // cancelled, so a widened read policy must not widen it.
+  const { data: batches, error } = await supabase
+    .from("checkout_batches")
+    .select("id, payment_intent_id")
+    .eq("user_id", userId)
+    .eq("status", "prepared")
+    .not("payment_intent_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  if (!batches?.length) return [];
+
+  const { data: held, error: heldError } = await supabase
+    .from("bookings")
+    .select("hold_batch_id, provider_id, booking_date, booking_time")
+    .eq("user_id", userId)
+    .in("hold_batch_id", batches.map(batch => batch.id))
+    .eq("status", "on_hold")
+    .limit(200);
+  if (heldError) throw heldError;
+
+  const slotKey = (providerId: string, date: string, time: string) =>
+    `${providerId}|${date}|${hhmm(time)}`;
+  const wanted = new Set(slots.map(slot => slotKey(slot.providerId, slot.date, slot.time)));
+  const overlapping = new Set(
+    (held ?? [])
+      .filter(row => wanted.has(slotKey(String(row.provider_id), String(row.booking_date), String(row.booking_time))))
+      .map(row => String(row.hold_batch_id)),
+  );
+  return batches
+    .filter(batch => overlapping.has(String(batch.id)))
+    .map(batch => ({ checkoutBatchId: String(batch.id), paymentIntentId: String(batch.payment_intent_id) }));
+}
+
+/** '9:30', '09:30' or '09:30:00' → '09:30'. */
+function hhmm(time: string): string {
+  const [hours = '', minutes = ''] = time.split(':');
+  return `${hours.padStart(2, '0')}:${minutes.slice(0, 2)}`;
+}
+
 /** Creates a confirmed, unpaid appointment for one of this provider's existing
  * app clients. The database performs the provider ownership, service, hours,
  * capacity and overlap checks in one transaction. */

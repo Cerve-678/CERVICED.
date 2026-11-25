@@ -20,7 +20,10 @@ import { escapeHtml } from '../_shared/escapeHtml.ts';
 //   - never paid, hold over            → cancel the payment, mark abandoned
 //                                        (nothing was taken, nothing is said,
 //                                        unless the card was approved just as
-//                                        it was cancelled);
+//                                        it was cancelled). If the bank had
+//                                        refused an attempt, mark it declined
+//                                        and tell the client it didn't go
+//                                        through: nobody else saw it fail;
 //   - still processing at the bank     → leave it for the next run;
 //   - approved, captured or cancelled  → settleCheckout, which books it, or
 //                                        cancels or refunds it and tells the
@@ -89,7 +92,14 @@ Deno.serve(async (req: Request) => {
           await stripe.paymentIntents.cancel(intent.id, {}, { idempotencyKey: `checkout_cancel_${batch.id}` });
           // Read back after cancelling: a bank check can finish in the gap, and
           // an approved card then deserves an explanation.
-          const outcome = await outcomeOfCancelledIntent(stripe, intent.id);
+          // A refused attempt nobody saw (the app was closed by the time the
+          // bank answered): tell the client it didn't go through, rather than
+          // leaving them to wonder. Walked away from without an attempt
+          // refused, it stays 'abandoned' and silent. (A client who saw the
+          // decline on the sheet and left it open past the hold is told
+          // again; rare, and still true.)
+          const cancelled = await outcomeOfCancelledIntent(stripe, intent.id);
+          const outcome = cancelled === 'abandoned' && intent.last_payment_error ? 'declined' : cancelled;
           const { error: recordError } = await admin.rpc('record_checkout_outcome', {
             p_checkout_batch_id: batch.id, p_outcome: outcome,
           });

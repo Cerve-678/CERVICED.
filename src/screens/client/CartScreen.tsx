@@ -38,8 +38,10 @@ import {
   ProviderDepositPolicy,
   validatePromoCode,
   getServiceSafetyFlags,
-  prepareCheckout, cancelCheckout, getMyLastClientAddress,
+  prepareCheckout, cancelCheckout, getMyLastClientAddress, getMyEarlierCheckoutPayments,
   listSavedCards, type CheckoutHoldPlan } from '../../services/databaseService';
+import { cancelPaymentIntent } from '../../services/stripeService';
+import { releaseEarlierPayments } from '../../features/cart/releaseEarlierPayments';
 import { checkoutSuccessMessage } from '../../features/cart/requestHolds';
 import { buildCheckoutIntentItem } from '../../features/cart/checkoutIntent';
 import { RequestHoldChecks } from '../../features/cart/RequestHoldChecks';
@@ -3941,6 +3943,22 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               waitlistHoldId: item.waitlistHold?.bookingId ?? null,
                             });
                           });
+                          // An earlier payment for these times that failed
+                          // with the app closed still holds them, and would
+                          // make this one say they're taken: cancel it first.
+                          const earlier = await releaseEarlierPayments(
+                            intent.map(entry => ({ providerId: entry.provider_id, date: entry.booking_date, time: entry.booking_time })),
+                            {
+                              find: getMyEarlierCheckoutPayments,
+                              cancel: cancelPaymentIntent,
+                              onError: error => logger.error('[CartScreen] could not release an earlier payment', error),
+                            },
+                          );
+                          if (earlier === 'still_paying') {
+                            setShowBookingSummaryModal(false);
+                            showAlert('Your last payment is still going through', "We'll let you know as soon as it's settled. Please don't pay again in the meantime.");
+                            return;
+                          }
                           const prepared = await prepareCheckout(intent);
                           setServerCheckoutBatchId(prepared.checkoutBatchId);
                           setPaymentTotal(prepared.amountDue);
