@@ -13,6 +13,10 @@ import type { Stripe } from '@stripe/stripe-js';
 let stripePromise: Promise<Stripe | null> | null = null;
 
 export function getWebStripe(): Promise<Stripe | null> {
+  // Bracket form because tsconfig's noPropertyAccessFromIndexSignature needs
+  // it; babel-preset-expo's inline-env-vars inlines a string-literal key the
+  // same as dot access, so the website build still gets the key.
+  // eslint-disable-next-line expo/no-dynamic-env-var
   const key = process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
   if (!key) return Promise.reject(new Error('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set'));
   stripePromise ??= loadStripe(key);
