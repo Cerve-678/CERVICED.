@@ -75,9 +75,9 @@ Curated: [[Availability & Slots]] · **248 files**
 
 ## Payments
 Curated: [[Payments]] · **210 files**
-- `src/screens/client/CartScreen.tsx` _(439)_
+- `src/screens/client/CartScreen.tsx` _(458)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
-- `src/features/cart/StripePaymentSheet.tsx` _(163)_
+- `src/features/cart/StripePaymentSheet.tsx` _(180)_
 - `src/components/BookingSheet.tsx` _(118)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
@@ -111,7 +111,7 @@ Curated: [[Payments]] · **210 files**
 Curated: [[Booking Flow]] · **433 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(701)_
-- `src/screens/client/CartScreen.tsx` _(635)_
+- `src/screens/client/CartScreen.tsx` _(643)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(607)_
 - `src/services/becca/capabilities/client.ts` _(601)_
 - `src/screens/client/BookingDetailScreen.tsx` _(520)_
@@ -129,12 +129,12 @@ Curated: [[Booking Flow]] · **433 files**
 - `src/services/AvailabilityService.ts` _(141)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/services/becca/engine.ts` _(132)_
+- `src/features/cart/StripePaymentSheet.tsx` _(126)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `src/services/database/registration.ts` _(116)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
-- `src/features/cart/StripePaymentSheet.tsx` _(110)_
 - `src/services/database/infoPacks.ts` _(110)_
 - `src/services/database/reschedule.ts` _(109)_
 - `src/types/booking.ts` _(109)_
@@ -253,7 +253,7 @@ Curated: [[Booking Flow]] · **249 files**
 - `src/screens/client/RescheduleScreen.tsx` _(164)_
 - `src/services/becca/capabilities/client.ts` _(149)_
 - `src/services/database/reschedule.ts` _(138)_
-- `src/screens/client/CartScreen.tsx` _(110)_
+- `src/screens/client/CartScreen.tsx` _(112)_
 - `src/screens/provider/PoliciesScreen.tsx` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
@@ -263,13 +263,13 @@ Curated: [[Booking Flow]] · **249 files**
 - `src/screens/provider/InfoRegScreen.tsx` _(67)_
 - `src/services/database/edgeFunctions.ts` _(64)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
+- `src/features/cart/StripePaymentSheet.tsx` _(61)_
 - `src/services/bookingService.ts` _(60)_
 - `src/screens/client/BookingsScreen.tsx` _(59)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(58)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/components/IssueRefundSheet.tsx` _(54)_
-- `src/features/cart/StripePaymentSheet.tsx` _(51)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
 - `supabase/fix_provider_no_show_status.sql` _(42)_
@@ -347,9 +347,9 @@ Curated: [[Services]] · **68 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **119 files**
-- `src/screens/client/CartScreen.tsx` _(434)_
+- `src/screens/client/CartScreen.tsx` _(447)_
+- `src/features/cart/StripePaymentSheet.tsx` _(96)_
 - `src/web/WebPaymentStep.tsx` _(84)_
-- `src/features/cart/StripePaymentSheet.tsx` _(79)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(67)_
 - `src/services/database/services.ts` _(50)_

@@ -327,6 +327,19 @@ only shows if the client is still on the Cart (the notification tells them
 otherwise). Before, leaving during "Confirming your payment…" released the
 card they had just approved and dropped the booking.
 
+If that payment then fails (the card is declined, or Apple Pay or Google Pay
+won't start), nothing has been authorised, so since 23 November the app cancels
+the payment and the checkout straight away and tells the client "Payment didn't
+go through" over whatever screen they're on. Before, the decline only reached
+the closed payment sheet, the checkout stayed held, and the database counts the
+client's own hold as busy, so paying again was refused with "That time is no
+longer available" until the hold ran out (about 5 minutes). A client who comes
+back to the Cart while that payment is still going through can't start another
+checkout until it ends ("Your last payment is still going through"), and a
+payment that was left behind never touches a newer checkout. If the app is closed
+before the failure arrives, the hold still runs out on its own; the server does
+not yet let a new checkout clear the client's own unapproved one.
+
 *Partly live: migration `20261102210000` was applied on 3 November, so "Payment
 received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 `stripe-webhook` still need deploying, and until then the "didn't go through" and
