@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  useWindowDimensions,
   Easing,
   RefreshControl,
   ScrollView,
@@ -47,6 +46,7 @@ import {
   previousWindow,
   type AnalyticsRange,
 } from '../../utils/analyticsPeriod';
+import { useContentWidth } from '../../components/ReadableWidth';
 
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
@@ -466,7 +466,7 @@ function RatingAnalytics({
   dark: boolean;
   theme: any;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const ratingChartW = ratingChartWidth(screenWidth);
   const bookingServiceMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -743,7 +743,7 @@ function ServiceQuadrantCharts({
   dark: boolean;
   theme: any;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const quadW = quadWidth(screenWidth);
   const quadChartW = quadChartWidth(screenWidth);
   const months = useMemo(
@@ -891,7 +891,7 @@ const RANGES: { key: Range; label: string }[] = [
 
 export default function ProviderAnalyticsScreen({ navigation }: any) {
   const { theme, isDarkMode: dark } = useTheme();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const accent = accentColor(dark);
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   // Paid tips (pounds) by booking id; added into revenue on top of the price.

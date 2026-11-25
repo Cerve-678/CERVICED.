@@ -14,6 +14,7 @@ import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScre
 import CartScreen from '../../../screens/client/CartScreen';
 import { BeccaStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const BeccaStack = createNativeStackNavigator<BeccaStackParamList>();
 
@@ -21,7 +22,7 @@ export default function BeccaNavigator() {
   const { theme } = useTheme();
 
   return (
-    <BeccaStack.Navigator>
+    <BeccaStack.Navigator screenLayout={readableScreenLayout}>
       <BeccaStack.Screen
         name="BeccaMain"
         component={BeccaScreen}

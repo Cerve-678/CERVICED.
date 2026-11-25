@@ -13,8 +13,7 @@ import {
   Platform,
   Modal,
   Image,
-  useWindowDimensions,
-} from 'react-native';
+  } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -43,6 +42,7 @@ import type { DbPromotion, ClienteleMember, DbService } from '../../types/databa
 import { formatTime12 } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { uploadToStorage } from '../../services/providerRegistrationService';
+import { useContentWidth } from '../../components/ReadableWidth';
 
 
 // ── Brand Palette ──────────────────────────────────────────────────────────────
@@ -399,7 +399,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   // Measured per render, not captured at module load, so the two-up template
   // grid still splits the screen correctly after a rotation.
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const cardWidth = (screenWidth - 60) / 2;
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>

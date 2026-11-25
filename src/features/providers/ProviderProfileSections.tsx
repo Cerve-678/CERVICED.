@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { Image } from "expo-image";
@@ -34,6 +33,7 @@ import { plateMarkEdges } from "./heroes/EmbossedHero";
 import { SectionDivider } from "./pageParts";
 import { normalizeExternalBookingUrl } from "./externalBookingLink";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
+import { useContentWidth } from '../../components/ReadableWidth';
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 /** The feature grid (Ledger) holds five: one big, four small. */
@@ -429,7 +429,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const [showAll, setShowAll] = useState(false);
   // Measured per render rather than captured at module load, so the two-column
   // maths stays right after a rotation or in split-screen.
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const pins = palette.pageStyle?.photoLayout === "pins";
   const columnCount = pins ? PIN_COLUMNS : 2;
   const columnGap = pins ? PIN_GAP : COLUMN_GAP;
