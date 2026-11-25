@@ -1172,6 +1172,128 @@ export function requestNotAcceptedEmail(params: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Before the appointment: the address, then the reminder
+// ---------------------------------------------------------------------------
+// The app tells a client both with a notification. A client who booked on the
+// website, or turned notifications off, would otherwise never hear them, so
+// every client gets them by email too (user decision 2026-11-23). Sent by
+// send-booking-update-email when the notification row is written, so the
+// email follows exactly the same rules as the notification.
+
+/** A details row in the panel: a caps label over a bold value. */
+function detailRow(P: EmailPalette, label: string, valueHtml: string, first = false) {
+  return `
+        <p style="font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:2.2px;text-transform:uppercase;line-height:1.4;padding-top:${first ? 0 : 14}px;">${label}</p>
+        <p style="font-family:${BODY};color:${P.text};font-size:15px;font-weight:700;line-height:1.55;padding-top:3px;">${valueHtml}</p>`;
+}
+
+/** Google's universal Maps link: opens the Maps app on a phone that has it,
+ *  the website anywhere else. */
+export function mapsUrl(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+function manageInAppLine(P: EmailPalette, providerName: string) {
+  return `
+      <p style="font-family:${BODY};color:${P.sub};font-size:13px;line-height:1.7;text-align:center;padding-top:24px;">See this booking, reschedule or cancel it, or message ${providerName} in the CERVICED app. Available on the App Store and Google Play.</p>`;
+}
+
+export function addressSharedEmail(params: {
+  providerName: string;
+  service: string;
+  date: string;
+  time: string;
+  address: string;
+  directions?: string | null;
+  /** More than one service in the same group booking: the address covers them all. */
+  groupCount?: number;
+}) {
+  const P = CLIENT;
+  const e = {
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+    address: esc(params.address),
+    directions: esc(params.directions?.trim() ?? ''),
+  };
+  const group = (params.groupCount ?? 1) > 1;
+  return {
+    subject: `The address for your ${params.service} with ${params.providerName}`,
+    html: letter(P, {
+      preview: `Where to go on ${e.date}: ${e.address}`,
+      content:
+        eyebrow(P, 'Address shared') +
+        headline(P, 'Here’s where to go') +
+        lede(
+          P,
+          group
+            ? `${e.providerName} has shared the address for your ${params.groupCount} services, starting with ${e.service} on ${e.date} at ${e.time}.`
+            : `${e.providerName} has shared the address for your ${e.service} on ${e.date} at ${e.time}.`,
+        ) +
+        panel(P, 'Where', detailRow(P, 'Address', e.address, true) + (e.directions ? detailRow(P, 'Directions', e.directions) : '')) +
+        button(P, esc(mapsUrl(params.address)), 'Open in Maps') +
+        manageInAppLine(P, e.providerName),
+    }),
+  };
+}
+
+export function appointmentReminderEmail(params: {
+  providerName: string;
+  service: string;
+  date: string;
+  time: string;
+  /** How far ahead this reminder is: the provider picks 1, 2 or 3 days. */
+  daysAhead: 1 | 2 | 3;
+  /** Where to go once it's shared; a mobile provider comes to the client. */
+  where:
+    | { kind: 'venue'; address: string }
+    | { kind: 'mobile'; address: string | null }
+    | { kind: 'not_yet' };
+  /** What's left to pay at the appointment, if anything. */
+  dueAtAppointment: number;
+  /** The provider's own instructions for this booking, if they wrote any. */
+  instructions?: string | null;
+}) {
+  const P = CLIENT;
+  const e = {
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+  };
+  const when = params.daysAhead === 1 ? 'tomorrow' : `in ${params.daysAhead} days`;
+  const whenTitle = params.daysAhead === 1 ? 'Tomorrow' : `In ${params.daysAhead} days`;
+  const where = params.where;
+  const whereHtml =
+    where.kind === 'venue' ? esc(where.address)
+      : where.kind === 'mobile'
+        ? (where.address ? `${e.providerName} comes to you at ${esc(where.address)}` : `${e.providerName} comes to you`)
+        : 'Shared before your appointment';
+  const instructions = params.instructions?.trim().replace(/\s+/g, ' ');
+  return {
+    subject: `${whenTitle}: ${params.service} with ${params.providerName} at ${params.time}`,
+    html: letter(P, {
+      preview: `${e.service} with ${e.providerName} ${when} at ${e.time}.`,
+      content:
+        eyebrow(P, 'Appointment reminder') +
+        headline(P, `Your appointment is ${when}`) +
+        lede(P, `${e.service} with ${e.providerName} on ${e.date} at ${e.time}.`) +
+        panel(
+          P,
+          'Your booking',
+          detailRow(P, 'When', `${e.date} &middot; ${e.time}`, true) +
+            detailRow(P, 'Where', whereHtml) +
+            (params.dueAtAppointment > 0 ? detailRow(P, 'Due at appointment', gbp(params.dueAtAppointment)) : ''),
+        ) +
+        note(P, instructions ? esc(instructions) : `Please read ${e.providerName}’s policies before your appointment.`) +
+        (where.kind === 'venue' ? button(P, esc(mapsUrl(where.address)), 'Open in Maps') : '') +
+        manageInAppLine(P, e.providerName),
+    }),
+  };
+}
+
 export function refundRequestedProviderEmail(params: {
   clientName: string;
   service: string;
