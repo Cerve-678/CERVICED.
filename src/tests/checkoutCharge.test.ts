@@ -43,12 +43,13 @@ describe('a decline the client already saw', () => {
   const SHEET = read('src/features/cart/StripePaymentSheet.tsx');
   const RECONCILE = read('supabase/functions/reconcile-checkouts/index.ts');
   const FINALIZE = read('supabase/functions/finalize-payment-intent/index.ts');
+  const CREATE = read('supabase/functions/create-payment-intent/index.ts');
 
   it('is marked seen by the payment sheet right after it shows it, not for one the client cancelled', () => {
     const shown = SHEET.indexOf("if (confirmError.code !== 'Canceled') {\n            setPayError(");
     expect(shown).toBeGreaterThan(-1);
     const branch = SHEET.slice(shown, SHEET.indexOf('return;', shown));
-    expect(branch).toContain('if (isCardError) {\n              markDeclineSeen(checkoutBatchId, paymentIntentId)');
+    expect(branch).toContain('if (isCardError) {\n              declineSeenRef.current = markDeclineSeen(checkoutBatchId, paymentIntentId)');
   });
 
   it('is stamped on the payment only after the usual ownership checks', () => {
@@ -59,5 +60,19 @@ describe('a decline the client already saw', () => {
   it('is not notified again by the 5-minute cleanup', () => {
     expect(RECONCILE).toContain('intent.metadata?.decline_seen !== refused');
     expect(RECONCILE).toContain("cancelled === 'abandoned' && unseen ? 'declined' : cancelled");
+  });
+
+  // Found 2026-11-25: a failed bank check leaves no charge, so two identical
+  // failures have the same key, and a second one with the app closed was
+  // hidden by the first one's mark. Each new attempt now starts unmarked.
+  it('is cleared when a new attempt starts, so that attempt failing unseen is still told', () => {
+    expect(CREATE).toContain("metadata: { decline_seen: '' }");
+    expect(CREATE).toContain("paymentIntent.status === 'requires_payment_method'");
+  });
+
+  it('is sent before the next attempt starts, so it can never land on that attempt', () => {
+    const wait = SHEET.indexOf('await pendingSeen;');
+    expect(wait).toBeGreaterThan(-1);
+    expect(wait).toBeLessThan(SHEET.indexOf('await createPaymentIntent(checkoutBatchId)'));
   });
 });
