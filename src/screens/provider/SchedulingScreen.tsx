@@ -276,11 +276,12 @@ export default function SchedulingScreen({ navigation }: any) {
   const chooseHorizonMode = (value: string) => {
     const mode: HorizonMode = value === 'monthly' ? 'monthly' : 'rolling';
     setHorizonMode(mode);
-    // First time on monthly: start from today's date and open the picker,
-    // so there's never a "monthly" choice with no day behind it.
+    // First time on monthly: fill in today's date at the default time
+    // (releaseTime already holds it), so there's never a "monthly" choice
+    // with no day behind it and nothing to pick before saving. The Release
+    // day row underneath opens the picker to change either.
     if (mode === 'monthly' && releaseDay == null) {
       setReleaseDay(new Date().getDate());
-      setReleasePickerOpen(true);
     }
   };
 

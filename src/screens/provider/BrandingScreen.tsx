@@ -9,7 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  } from 'react-native';
+  useWindowDimensions,
+} from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -74,7 +75,6 @@ import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLo
 import { ImageCropModal } from '../../components/ImageCropModal';
 import { coloursFromPhoto } from '../../features/provider-registration/photoColours';
 import { logger } from '../../utils/logger';
-import { useContentWidth } from '../../components/ReadableWidth';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -1354,7 +1354,7 @@ function ProfilePreviewScreen({
 }) {
   const insets = useSafeAreaInsets();
   const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
-  const { width: screenWidth } = useContentWidth();
+  const { width: screenWidth } = useWindowDimensions();
   // The chips row opens on the style they picked, centred, rather than at
   // Classic (owner, 2026-11-17), and a chip tapped later slides to the middle.
   const chipsRef = useRef<ScrollViewInstance>(null);

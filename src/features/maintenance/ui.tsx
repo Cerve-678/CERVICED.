@@ -59,6 +59,11 @@ export function SectionLabel({ text, P }: { text: string; P: AppTheme }) {
   return <Text style={[ui.label, { color: P.sub }]}>{text}</Text>;
 }
 
+/** A section heading with how many are in it: "NEEDS ATTENTION · 2". */
+export function countedLabel(label: string, count: number): string {
+  return `${label.toUpperCase()} · ${count}`;
+}
+
 export type PillTone = 'accent' | 'bad' | 'warn' | 'ok' | 'mute';
 
 export function Pill({ text, tone, P, S }: { text: string; tone: PillTone; P: AppTheme; S: SemanticColors }) {
@@ -73,6 +78,14 @@ export function Pill({ text, tone, P, S }: { text: string; tone: PillTone; P: Ap
   return (
     <View style={[ui.pill, { backgroundColor: bg }]}>
       <Text style={[ui.pillText, { color: fg }]} numberOfLines={1}>{text.toUpperCase()}</Text>
+    </View>
+  );
+}
+
+export function ProgressBar({ percent, colour, track, height = 5 }: { percent: number; colour: string; track: string; height?: number }) {
+  return (
+    <View style={[ui.bar, { backgroundColor: track, height, borderRadius: height }]}>
+      <View style={{ width: `${Math.max(0, Math.min(100, percent))}%`, height: '100%', borderRadius: height, backgroundColor: colour }} />
     </View>
   );
 }
@@ -229,6 +242,7 @@ export const ui = StyleSheet.create({
   label: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.6, marginTop: 8, marginBottom: 2 },
   pill: { borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
   pillText: { fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: 1.1 },
+  bar: { width: '100%', overflow: 'hidden' },
   btn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 100, borderWidth: 1.5, paddingVertical: 14, paddingHorizontal: 18 },
   btnText: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 1 },
   btnSmall: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 100, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 12 },

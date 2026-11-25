@@ -34,7 +34,6 @@ import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
 import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
 import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 import { useCircleEnabledSync } from '../stores/useCircleStore';
-import { readableScreenLayout } from '../components/ReadableWidth';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -212,7 +211,6 @@ export default function RootNavigation() {
     </Modal>
     <NavigationContainer ref={navigationRef} onReady={() => setIsNavReady(true)}>
       <Stack.Navigator
-        screenLayout={readableScreenLayout}
         screenOptions={{
           headerShown: false,
           cardStyle: { backgroundColor: 'transparent' },

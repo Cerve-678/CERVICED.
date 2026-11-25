@@ -81,7 +81,8 @@ describe('client support screen performance contracts', () => {
     expect(source).toContain('const renderProviderCard: ListRenderItem<Provider> = useCallback');
     expect(source).toContain('data={filteredProviders}');
     expect(source).toContain('renderItem={renderProviderCard}');
-    expect(source).toContain('numColumns={2}');
+    expect(source).toContain('numColumns={gridColumns}');
+    expect(source).toContain('masonryColumnsForWidth(windowWidth)');
     expect(source).toContain('initialNumToRender={6}');
     expect(source).toContain('maxToRenderPerBatch={6}');
     expect(source).not.toContain('{filteredProviders.map(');

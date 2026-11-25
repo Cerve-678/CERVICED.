@@ -103,3 +103,14 @@ describe('the tours', () => {
     }
   });
 });
+
+describe('How Maintenance works, version 2', () => {
+  const steps = [{ key: 'howto', sinceVersion: 2 }];
+  it('shows the Show me walkthrough once to someone who saw the old one', () => {
+    const decision = resolveTour(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, steps, 1);
+    expect(decision).toEqual({ show: true, steps, stampVersion: 2 });
+  });
+  it('does not show it again after that', () => {
+    expect(resolveTour(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, steps, 2)).toEqual({ show: false });
+  });
+});

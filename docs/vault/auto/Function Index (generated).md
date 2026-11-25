@@ -5,9 +5,9 @@
 
 #generated
 
-**4442 functions** across **653 files**.
+**4443 functions** across **652 files**.
 
-### `src/components/` (70)
+### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -59,7 +59,6 @@
 - `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chargeableByBooking · chooseInterval · chooseSchedule · date · EmptyState · feesByBooking · feesToCharge · handleRefunded · load · loadMore · money · Notice · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
-- `ReadableWidth.tsx` — **readableScreenLayout** · **ReadableWidth** · **useContentWidth** · **useReadableBackdrop**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
 - `SafeArea.tsx` — **SafeAreaView** · value · **WindowControlsInsetProvider**
@@ -228,14 +227,14 @@
 ### `src/features/maintenance/` (12)
 - `AddReminderSheet.tsx` — **AddReminderSheet** · addWeeksFromToday · chipFor · datePill · onPickDate · pick · submit
 - `ItemMenuSheet.tsx` — **ItemMenuSheet** · markDone · onPickDate · run · saveChanges
-- `MaintenanceHowTo.tsx` — Appear · demoCountdown · FrameAdd · FrameBooked · FrameCard · FrameCountdown · goTo · link · **MaintenanceHowTo** · Pressed · Ticket · useBeats
+- `MaintenanceHowTo.tsx` — act · addDays · Appear · DemoScreen · goTo · groups · items · list · **MaintenanceHowTo** · nextUp · noop · sample · start · StepActions · StepAdd · StepBooked · StepCountdown · useBeats
 - `MaintenanceItemCard.tsx` — iconFor · **itemPill** · MaintenanceItemCardImpl · **primaryActionFor** · subline
-- `MaintenanceView.tsx` — bringUp · groups · lists · **MaintenanceView** · markDone · nextUp · notHero · onPickPatch · openMenu · renderItems · renderNote · S · snooze · turnOnReminders · visibleItems
+- `MaintenanceView.tsx` — book · filterCounts · groups · **MaintenanceView** · markDone · nextUp · NoteText · onPickPatch · openMenu · renderItems · renderNote · S · snooze · tryScroll · turnOnReminders · visibleItems
 - `NextUpCard.tsx` — DueBody · header · **intervalText** · **NextUpCard** · shell · solid · weeksText
-- `presentation.ts` — **addWeeksYMD** · **byDue** · **canSnoozeItem** · **countdownFor** · **countDueItems** · dayDiff · **doneOutcome** · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **learnedWeeks** · **needsAttention** · **nextUpFrom** · **presentMaintenanceItem** · **rhythmLineFor** · **snoozedDueOn**
-- `SentenceHero.tsx` — kickerFor · link · primaryLabel · **SentenceHero** · **sentenceTail** · supportLine
+- `presentation.ts` — **addWeeksYMD** · byDue · **canSnoozeItem** · **categoryOf** · **countdownFor** · **countDueItems** · dayDiff · **doneOutcome** · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **learnedWeeks** · **needsAttention** · **nextUpFrom** · **presentMaintenanceItem** · **rhythmLineFor** · **snoozedDueOn**
 - `SetupFlow.tsx` — datePill · finish · goBack · header · onPickEvent · onPickPatch · profileAnswers · question · S · **SetupFlow** · suggestions · today · toggle
-- `ui.tsx` — **Chip** · **GhostButton** · **hapticError** · **hapticLight** · **hapticMedium** · **hapticSelection** · **hapticSuccess** · **Note** · **Pill** · **PrimaryButton** · **SectionLabel** · **semanticColors** · **Sheet** · step · **SwitchRow** · **WeekStepper**
+- `TapMark.tsx` — **TapMark**
+- `ui.tsx` — **Chip** · **countedLabel** · **GhostButton** · **hapticError** · **hapticLight** · **hapticMedium** · **hapticSelection** · **hapticSuccess** · **Note** · **Pill** · **PrimaryButton** · **ProgressBar** · **SectionLabel** · **semanticColors** · **Sheet** · step · **SwitchRow** · **WeekStepper**
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
 - `useMaintenanceDueCount.ts` — **useMaintenanceDueCount**
 

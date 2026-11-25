@@ -25,7 +25,6 @@ import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFe
 import ProviderBeccaNavigator from './ProviderBeccaNavigator';
 import { ProviderHomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ProviderHomeStack = createNativeStackNavigator<ProviderHomeStackParamList>();
 
@@ -40,7 +39,7 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
   const { theme } = useTheme();
 
   return (
-    <ProviderHomeStack.Navigator screenLayout={readableScreenLayout} initialRouteName={linkOnly ? 'LinkOnlyHomeMain' : 'ProviderHomeMain'}>
+    <ProviderHomeStack.Navigator initialRouteName={linkOnly ? 'LinkOnlyHomeMain' : 'ProviderHomeMain'}>
       <ProviderHomeStack.Screen
         name="LinkOnlyHomeMain"
         component={LinkOnlyHomeScreen}

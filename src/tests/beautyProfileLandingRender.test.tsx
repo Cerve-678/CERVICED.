@@ -167,10 +167,33 @@ describe('How Maintenance works', () => {
     expect(screen.getByText('maintenance.howto.frame2')).toBeTruthy();
     act(() => { jest.advanceTimersByTime(7600); });
     expect(screen.getByText('maintenance.howto.frame3')).toBeTruthy();
-    act(() => { jest.advanceTimersByTime(7200); });
+    act(() => { jest.advanceTimersByTime(7600); });
     expect(screen.getByText('maintenance.howto.frame4')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('maintenance.howto.frameN {"n":2}'));
     expect(screen.getByText('maintenance.howto.frame2')).toBeTruthy();
+  });
+
+  it('shows the real cards: a done appointment becomes a Lash infill reminder', () => {
+    render(<MaintenanceHowTo visible onClose={jest.fn()} P={P} S={S} t={t as never} />);
+    // The copy of the screen is hidden from screen readers; the caption speaks for it.
+    const hidden = { includeHiddenElements: true };
+    expect(screen.queryByText('maintenance.howto.sample.lashes', hidden)).toBeNull();
+    act(() => { jest.advanceTimersByTime(2100); });
+    expect(screen.getByText('maintenance.howto.sample.lashes', hidden)).toBeTruthy();
+    expect(screen.getByText('MAINTENANCE.SECTION.COMINGUP · 1', hidden)).toBeTruthy();
+  });
+
+  it('acts on the big card the way the screen does: snooze, then the next one steps up', () => {
+    render(<MaintenanceHowTo visible onClose={jest.fn()} P={P} S={S} t={t as never} />);
+    fireEvent.press(screen.getByLabelText('maintenance.howto.frameN {"n":3}'));
+    act(() => { jest.advanceTimersByTime(100); });
+    // Lash infill leads, three days over; Snooze moves it a week on, so the
+    // nails due in four days step up to the big card.
+    const hidden = { includeHiddenElements: true };
+    expect(screen.getAllByText('maintenance.howto.sample.lashes', hidden).length).toBe(2);
+    act(() => { jest.advanceTimersByTime(3400); });
+    expect(screen.getAllByText('maintenance.howto.sample.nails', hidden).length).toBe(2);
+    expect(screen.getByText('maintenance.howto.hintSnooze')).toBeTruthy();
   });
 });
 

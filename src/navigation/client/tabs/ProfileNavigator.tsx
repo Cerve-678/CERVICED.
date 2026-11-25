@@ -34,7 +34,6 @@ import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import { ProfileStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -42,7 +41,7 @@ export default function ProfileNavigator() {
   const { theme, palette } = useTheme();
 
   return (
-    <ProfileStack.Navigator screenLayout={readableScreenLayout}>
+    <ProfileStack.Navigator>
       <ProfileStack.Screen
         name="ProfileMain"
         component={UserProfileScreen}
