@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-25 (every client is emailed the address and the reminder)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261125150000 | `address_and_reminder_emails` | **APPLIED 2026-11-25** on the user's "merge", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261125140000` (renumbered from 120000 above another session's `declined_payment_tells_client`), no other unapplied migration on any open PR. New function + trigger only, nothing redefined. Forced-rollback dry run first: a reminder notification queued 1 request, another type 0. `send-booking-update-email` deployed straight before. Verified live: version recorded (live max); `queue_booking_update_email` md5 `6e19e413…`, the dry run's; anon/authenticated can't execute; trigger enabled on `notifications`. PR #776. |
+
 ### Applied 2026-11-25 (a declined payment nobody saw now tells the client)
 
 | Recorded version | Name | Verified live |

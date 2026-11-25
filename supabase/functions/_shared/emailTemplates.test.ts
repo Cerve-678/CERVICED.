@@ -15,6 +15,8 @@
 // excludes supabase/functions for that reason, and jest picks the file up here
 // on its default testMatch regardless.
 import {
+  addressSharedEmail,
+  appointmentReminderEmail,
   BOOKING_EMAIL_APP_BENEFITS,
   bookingConfirmationEmail,
   clientHatAddedEmail,
@@ -37,8 +39,10 @@ import {
   bankDisputeSupportEmail,
   moneySummaryEmail,
   signupCodeEmail,
+  mapsUrl,
   supportRequestEmail,
 } from './emailTemplates.ts';
+import { emailedReminderTiming, londonToday, reminderIsDue } from './reminderEmailTiming.ts';
 
 /** No whitespace: firstNameOf() splits on it, so this survives whole. */
 const HOSTILE = `<script>alert(1)</script>&"'`;
@@ -66,6 +70,17 @@ const every = () => [
   ['clientHatAddedEmail', clientHatAddedEmail({ name: HOSTILE })],
   ['providerHatAddedEmail', providerHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
   ['passwordChangedEmail', passwordChangedEmail({ name: HOSTILE })],
+  [
+    'addressSharedEmail',
+    addressSharedEmail({ providerName: HOSTILE, service: HOSTILE, date: HOSTILE, time: HOSTILE, address: HOSTILE, directions: HOSTILE }),
+  ],
+  [
+    'appointmentReminderEmail',
+    appointmentReminderEmail({
+      providerName: HOSTILE, service: HOSTILE, date: HOSTILE, time: HOSTILE, daysAhead: 1,
+      where: { kind: 'venue', address: HOSTILE }, dueAtAppointment: 10, instructions: HOSTILE,
+    }),
+  ],
   [
     'requestNotAcceptedEmail',
     requestNotAcceptedEmail({
@@ -479,5 +494,91 @@ describe('a request that wasn’t accepted', () => {
     const free = requestNotAcceptedEmail({ ...base, money: { kind: 'none', amount: 0 } }).html;
     expect(free).not.toContain('held on your card');
     expect(free).not.toContain('refunded');
+  });
+});
+
+describe('the address email', () => {
+  const base = {
+    providerName: 'Amara Lash Studio', service: 'Classic lash full set',
+    date: 'Wednesday, 14 October 2026', time: '2:30pm', address: '12 Rose Street, Leeds LS1 4AB',
+  };
+
+  it('says where to go, with directions and a Maps link', () => {
+    const { subject, html } = addressSharedEmail({ ...base, directions: 'Buzz flat 2' });
+    expect(subject).toBe('The address for your Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('Amara Lash Studio has shared the address for your Classic lash full set on Wednesday, 14 October 2026 at 2:30pm.');
+    expect(html).toContain('12 Rose Street, Leeds LS1 4AB');
+    expect(html).toContain('Buzz flat 2');
+    expect(html).toContain(`href="${mapsUrl(base.address).replace(/&/g, '&amp;')}"`);
+    expect(html).toContain('reschedule or cancel it');
+  });
+
+  it('covers every service in a group booking', () => {
+    expect(addressSharedEmail({ ...base, groupCount: 3 }).html)
+      .toContain('the address for your 3 services, starting with Classic lash full set');
+  });
+});
+
+describe('the reminder email', () => {
+  const base = {
+    providerName: 'Amara Lash Studio', service: 'Classic lash full set',
+    date: 'Wednesday, 14 October 2026', time: '2:30pm', dueAtAppointment: 0,
+  };
+
+  it('says it’s tomorrow, where, and what’s due', () => {
+    const { subject, html } = appointmentReminderEmail({
+      ...base, daysAhead: 1, where: { kind: 'venue', address: '12 Rose Street' }, dueAtAppointment: 53,
+    });
+    expect(subject).toBe('Tomorrow: Classic lash full set with Amara Lash Studio at 2:30pm');
+    expect(html).toContain('Your appointment is tomorrow');
+    expect(html).toContain('12 Rose Street');
+    expect(html).toContain('Due at appointment');
+    expect(html).toContain('£53.00');
+    expect(html).toContain('Open in Maps');
+    expect(html).toContain('Please read Amara Lash Studio’s policies before your appointment.');
+  });
+
+  it('uses the provider’s own instructions, and says nothing is due once paid', () => {
+    const { html } = appointmentReminderEmail({
+      ...base, daysAhead: 2, where: { kind: 'not_yet' }, instructions: '  Come with clean lashes.\n No caffeine. ',
+    });
+    expect(html).toContain('Your appointment is in 2 days');
+    expect(html).toContain('Come with clean lashes. No caffeine.');
+    expect(html).toContain('Shared before your appointment');
+    expect(html).not.toContain('Due at appointment');
+    expect(html).not.toContain('Open in Maps');
+  });
+
+  it('says a mobile provider comes to the client', () => {
+    const { html } = appointmentReminderEmail({ ...base, daysAhead: 1, where: { kind: 'mobile', address: '1 High St' } });
+    expect(html).toContain('Amara Lash Studio comes to you at 1 High St');
+    expect(html).not.toContain('Open in Maps');
+  });
+});
+
+describe('which reminder is emailed', () => {
+  it('is the one nearest the appointment the provider sends', () => {
+    expect(emailedReminderTiming(undefined)).toBe('24h');
+    expect(emailedReminderTiming(['72h', '24h'])).toBe('24h');
+    expect(emailedReminderTiming(['48h', '72h'])).toBe('48h');
+    expect(emailedReminderTiming(['72h'])).toBe('72h');
+    expect(emailedReminderTiming([])).toBe('24h');
+    expect(emailedReminderTiming('24h')).toBe('24h');
+  });
+});
+
+describe('a reminder’s window', () => {
+  it('is only the days before the appointment the reminder is for', () => {
+    expect(reminderIsDue('2026-11-26', '2026-11-25', 1)).toBe(true);
+    expect(reminderIsDue('2026-11-27', '2026-11-25', 1)).toBe(false);
+    expect(reminderIsDue('2026-11-27', '2026-11-25', 2)).toBe(true);
+    expect(reminderIsDue('2026-11-25', '2026-11-25', 1)).toBe(false);
+    expect(reminderIsDue('2026-11-24', '2026-11-25', 3)).toBe(false);
+  });
+
+  it('counts the day in London, not UTC', () => {
+    // 23:30 UTC on 30 June is already 1 July in London (BST).
+    expect(londonToday(new Date('2026-06-30T23:30:00Z'))).toBe('2026-07-01');
+    expect(londonToday(new Date('2026-12-31T23:30:00Z'))).toBe('2026-12-31');
   });
 });
