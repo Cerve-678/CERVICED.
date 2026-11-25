@@ -160,15 +160,16 @@ describe('How Maintenance works', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('plays through all four frames and lets you jump to one', () => {
+  it('plays through three frames, back to the first, and lets you jump to one', () => {
     render(<MaintenanceHowTo visible onClose={jest.fn()} P={P} S={S} t={t as never} />);
     expect(screen.getByText('maintenance.howto.frame1')).toBeTruthy();
-    act(() => { jest.advanceTimersByTime(7000); });
+    act(() => { jest.advanceTimersByTime(4800); });
     expect(screen.getByText('maintenance.howto.frame2')).toBeTruthy();
-    act(() => { jest.advanceTimersByTime(7600); });
+    act(() => { jest.advanceTimersByTime(5200); });
     expect(screen.getByText('maintenance.howto.frame3')).toBeTruthy();
-    act(() => { jest.advanceTimersByTime(7600); });
-    expect(screen.getByText('maintenance.howto.frame4')).toBeTruthy();
+    expect(screen.queryByLabelText('maintenance.howto.frameN {"n":4}')).toBeNull();
+    act(() => { jest.advanceTimersByTime(6000); });
+    expect(screen.getByText('maintenance.howto.frame1')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('maintenance.howto.frameN {"n":2}'));
     expect(screen.getByText('maintenance.howto.frame2')).toBeTruthy();
   });
@@ -183,17 +184,17 @@ describe('How Maintenance works', () => {
     expect(screen.getByText('MAINTENANCE.SECTION.COMINGUP · 1', hidden)).toBeTruthy();
   });
 
-  it('acts on the big card the way the screen does: snooze, then the next one steps up', () => {
+  it('moves the reminder up to the big card once it is due', () => {
     render(<MaintenanceHowTo visible onClose={jest.fn()} P={P} S={S} t={t as never} />);
-    fireEvent.press(screen.getByLabelText('maintenance.howto.frameN {"n":3}'));
+    fireEvent.press(screen.getByLabelText('maintenance.howto.frameN {"n":2}'));
     act(() => { jest.advanceTimersByTime(100); });
-    // Lash infill leads, three days over; Snooze moves it a week on, so the
-    // nails due in four days step up to the big card.
+    // Nine days away: only in Coming up.
     const hidden = { includeHiddenElements: true };
+    expect(screen.getAllByText('maintenance.howto.sample.lashes', hidden).length).toBe(1);
+    act(() => { jest.advanceTimersByTime(1400); });
+    // A week on it's due in two days: on the big card and under Needs attention.
     expect(screen.getAllByText('maintenance.howto.sample.lashes', hidden).length).toBe(2);
-    act(() => { jest.advanceTimersByTime(3400); });
-    expect(screen.getAllByText('maintenance.howto.sample.nails', hidden).length).toBe(2);
-    expect(screen.getByText('maintenance.howto.hintSnooze')).toBeTruthy();
+    expect(screen.getByText('MAINTENANCE.SECTION.ATTENTION · 1', hidden)).toBeTruthy();
   });
 });
 

@@ -6,15 +6,20 @@
 // that you can tap to jump to a step. Shown the first time someone opens
 // Maintenance, then from the ⓘ next to its title.
 //
+// Kept deliberately small (cut from four steps the same day, "too much going
+// on"): three steps, one short line and at most one tap each, following the
+// same Lash infill from appointment to reminder to Book. Snooze, Done it and
+// suggestions aren't acted out; the real screen labels them plainly.
+//
 // The copy is drawn with the screen's own pieces — NextUpCard,
 // MaintenanceItemCard and the grouping in presentation.ts — fed sample items
 // and a pretend "today", so it can't drift from what the screen really does.
 // Nothing in it can be pressed and nothing real changes. The items are
 // examples, not the client's data.
 //
-// Two steps follow what the app really does: a reminder is made when an
+// Step 1 follows what the app really does: a reminder is made when an
 // appointment is DONE (the server's handle_booking_completed_maintenance), not
-// when it's booked; and "add your own" counts from when you last had it.
+// when it's booked.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -25,7 +30,7 @@ import type { TranslationKey, TranslationParams } from '../../i18n';
 import type { MaintenanceItem } from '../../types/maintenance';
 import { dateToYMD, toLocalDate } from '../../utils/dateUtils';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { doneOutcome, groupMaintenanceItems, nextUpFrom, snoozedDueOn } from './presentation';
+import { groupMaintenanceItems, nextUpFrom } from './presentation';
 import { NextUpCard, type DemoTap } from './NextUpCard';
 import { MaintenanceItemCard } from './MaintenanceItemCard';
 import { TapMark } from './TapMark';
@@ -36,16 +41,15 @@ import {
 type T = (key: TranslationKey, params?: TranslationParams) => string;
 
 /** How long each step plays before the next one. */
-export const STEP_MS = [7000, 7600, 7600, 7000];
+export const STEP_MS = [4800, 5200, 6000];
 const CAPTIONS: TranslationKey[] = [
   'maintenance.howto.frame1',
   'maintenance.howto.frame2',
   'maintenance.howto.frame3',
-  'maintenance.howto.frame4',
 ];
 
-/** What the fingertip is on: a NextUpCard button, or something the copy draws. */
-type Tap = DemoTap | 'add' | 'banner' | 'repeat' | 'submit';
+/** What the fingertip is on: the big card's Book, or something the copy draws. */
+type Tap = DemoTap | 'add' | 'submit';
 
 interface Props {
   visible: boolean;
@@ -100,8 +104,7 @@ function useBeats(stepKey: number, beats: [number, () => void][]) {
 
 interface Overlay {
   toast?: boolean;
-  banner?: boolean;
-  sheet?: { typed: string; weeks: number } | null;
+  sheet?: { typed: string } | null;
 }
 
 /** The copy of the Maintenance screen: header, big card, then the lists. */
@@ -143,14 +146,6 @@ function DemoScreen({ items, today, tap, overlay, P, S, t }: {
             <Text style={[styles.toastText, { color: P.onAccent }]}>{t('maintenance.howto.sampleAppointment')}</Text>
           </Appear>
         ) : null}
-        {overlay.banner ? (
-          <Appear style={[styles.banner, { backgroundColor: P.accentDim, borderColor: P.border }]}>
-            <Ionicons name="sparkles-outline" size={16} color={P.accentText} />
-            <Text style={[styles.bannerText, { color: P.text }]}>{t('maintenance.picked.one')}</Text>
-            <Ionicons name="chevron-forward" size={14} color={P.sub} />
-            {tap === 'banner' ? <TapMark colour={P.accentText} /> : null}
-          </Appear>
-        ) : null}
 
         <NextUpCard
           nextUp={nextUp}
@@ -160,7 +155,7 @@ function DemoScreen({ items, today, tap, overlay, P, S, t }: {
           onDone={noop}
           onSnooze={noop}
           busyItemId={null}
-          demoTap={tap === 'book' || tap === 'done' || tap === 'snooze' ? tap : null}
+          demoTap={tap === 'book' ? 'book' : null}
         />
         {list('maintenance.section.attention', groups.needsAttention)}
         {list('maintenance.section.comingUp', groups.comingUp)}
@@ -179,10 +174,7 @@ function DemoScreen({ items, today, tap, overlay, P, S, t }: {
             </View>
             <View style={styles.sheetRow}>
               <Text style={[styles.sheetLabel, { color: P.sub }]}>{t('maintenance.add.repeats').toUpperCase()}</Text>
-              <View>
-                <Text style={[styles.repeat, { color: P.text }]}>{t('maintenance.howto.everyWeeks', { weeks: overlay.sheet.weeks })}</Text>
-                {tap === 'repeat' ? <TapMark colour={P.accentText} /> : null}
-              </View>
+              <Text style={[styles.repeat, { color: P.text }]}>{t('maintenance.howto.everyWeeks', { weeks: 4 })}</Text>
             </View>
             <View>
               <PrimaryButton P={P} label={t('maintenance.add.submit')} onPress={noop} />
@@ -195,89 +187,52 @@ function DemoScreen({ items, today, tap, overlay, P, S, t }: {
   );
 }
 
-// ── Step 1: a done appointment becomes a reminder; a suggestion is added ─────
+/** The one item the walkthrough follows from start to finish. */
+function lashes(today: string, inDays: number, t: T): MaintenanceItem {
+  return sample(today, inDays, {
+    id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor',
+    providerId: 'demo', repeatWeeks: 3, intervalSource: 'provider',
+  });
+}
+
+function trim(today: string, inDays: number, t: T): MaintenanceItem {
+  return sample(today, inDays, {
+    id: 'trim', title: t('maintenance.howto.sample.trim'), typeKey: 'trim', providerName: 'Kinks & Co', providerId: 'demo', repeatWeeks: 12,
+  });
+}
+
+// ── Step 1: a done appointment becomes a reminder ───────────────────────────
 function StepBooked({ today, P, S, t, k }: StepProps) {
   const [beat, setBeat] = useState(0);
-  useBeats(k, [[400, () => setBeat(1)], [2000, () => setBeat(2)], [3200, () => setBeat(3)], [4300, () => setBeat(4)], [5000, () => setBeat(5)]]);
-  const items = useMemo(() => {
-    const out: MaintenanceItem[] = [];
-    if (beat >= 2) {
-      out.push(sample(today, 21, {
-        id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor',
-        providerId: 'demo', repeatWeeks: 3, intervalSource: 'provider',
-      }));
-    }
-    if (beat >= 5) {
-      out.push(sample(today, 42, {
-        id: 'facial', title: t('maintenance.howto.sample.facial'), typeKey: 'facial', origin: 'client', repeatWeeks: 6,
-      }));
-    }
-    return out;
-  }, [beat, today, t]);
+  useBeats(k, [[400, () => setBeat(1)], [1800, () => setBeat(2)]]);
+  const items = useMemo(() => (beat >= 2 ? [lashes(today, 21, t)] : []), [beat, today, t]);
+  return <DemoScreen items={items} today={today} tap={null} overlay={{ toast: beat === 1 }} P={P} S={S} t={t} />;
+}
+
+// ── Step 2: when it's due it moves up to the big card; tap Book ─────────────
+// One jump a week on rather than a ticking count: the lash infill goes from
+// nine days away to two, and up to the big card.
+function StepDue({ today, P, S, t, k }: StepProps) {
+  const [beat, setBeat] = useState(0);
+  useBeats(k, [[1400, () => setBeat(1)], [2900, () => setBeat(2)], [4100, () => setBeat(3)]]);
+  const items = useMemo(() => [lashes(today, 9, t), trim(today, 42, t)], [today, t]);
   return (
     <DemoScreen
       items={items}
-      today={today}
-      tap={beat === 4 ? 'banner' : null}
-      overlay={{ toast: beat === 1, banner: beat === 3 || beat === 4 }}
+      today={beat >= 1 ? addDays(today, 7) : today}
+      tap={beat === 2 ? 'book' : null}
+      overlay={{}}
       P={P} S={S} t={t}
     />
   );
 }
 
-// ── Step 2: the days count down; inside a week it needs you, then it's overdue
-function StepCountdown({ today, P, S, t, k }: StepProps) {
-  const [shift, setShift] = useState(0);
-  useEffect(() => {
-    setShift(0);
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const start = setTimeout(() => {
-      timer = setInterval(() => setShift(x => (x >= 11 ? x : x + 1)), 450);
-    }, 600);
-    return () => { clearTimeout(start); if (timer) clearInterval(timer); };
-  }, [k]);
-  const items = useMemo(() => [
-    sample(today, 9, { id: 'nails', title: t('maintenance.howto.sample.nails'), typeKey: 'gel_nails', providerName: 'The Nail Bar', providerId: 'demo', repeatWeeks: 3 }),
-    sample(today, 42, { id: 'trim', title: t('maintenance.howto.sample.trim'), typeKey: 'trim', providerName: 'Kinks & Co', providerId: 'demo', repeatWeeks: 12 }),
-  ], [today, t]);
-  return <DemoScreen items={items} today={addDays(today, shift)} tap={null} overlay={{}} P={P} S={S} t={t} />;
-}
-
-// ── Step 3: the big card's three actions, and the next one stepping up ───────
-function StepActions({ today, P, S, t, k, onHint }: StepProps & { onHint: (key: TranslationKey | null) => void }) {
-  const start = useMemo(() => [
-    sample(today, -3, { id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor', providerId: 'demo', repeatWeeks: 3 }),
-    sample(today, 4, { id: 'nails', title: t('maintenance.howto.sample.nails'), typeKey: 'gel_nails', providerName: 'The Nail Bar', providerId: 'demo', repeatWeeks: 3 }),
-  ], [today, t]);
-  const [items, setItems] = useState(start);
-  const [tap, setTap] = useState<Tap>(null);
-  // Acts on whichever item leads the big card at that moment, as the real one does.
-  const act = (fn: (item: MaintenanceItem) => Partial<MaintenanceItem>) =>
-    setItems(prev => {
-      const first = nextUpFrom(groupMaintenanceItems(prev, today)).due?.item;
-      return first ? prev.map(i => (i.id === first.id ? { ...i, ...fn(i) } : i)) : prev;
-    });
-  useBeats(k, [
-    [0, () => { setItems(start); onHint(null); }],
-    [900, () => { setTap('book'); onHint('maintenance.howto.hintBook'); }],
-    [2200, () => setTap(null)],
-    [2700, () => { setTap('snooze'); onHint('maintenance.howto.hintSnooze'); }],
-    [3300, () => { setTap(null); act(i => ({ dueOn: snoozedDueOn(i, today) })); }],
-    [4600, () => { setTap('done'); onHint('maintenance.howto.hintDone'); }],
-    [5200, () => {
-      setTap(null);
-      act(i => { const o = doneOutcome(i, today); return o.kind === 'update' ? o.patch : {}; });
-    }],
-  ]);
-  return <DemoScreen items={items} today={today} tap={tap} overlay={{}} P={P} S={S} t={t} />;
-}
-
-// ── Step 4: add your own ─────────────────────────────────────────────────────
+// ── Step 3: add your own ─────────────────────────────────────────────────────
 function StepAdd({ today, P, S, t, k }: StepProps) {
   const word = t('maintenance.howto.sample.own');
   const [beat, setBeat] = useState(0);
   const [typed, setTyped] = useState(0);
-  useBeats(k, [[600, () => setBeat(1)], [1100, () => setBeat(2)], [3000, () => setBeat(3)], [3500, () => setBeat(4)], [4100, () => setBeat(5)], [4700, () => setBeat(6)]]);
+  useBeats(k, [[600, () => setBeat(1)], [1100, () => setBeat(2)], [3300, () => setBeat(3)], [3900, () => setBeat(4)]]);
   useEffect(() => {
     if (beat !== 2) return;
     let i = 0;
@@ -289,17 +244,14 @@ function StepAdd({ today, P, S, t, k }: StepProps) {
     return () => clearInterval(timer);
   }, [beat, word.length]);
   const items = useMemo(() => {
-    const out = [
-      sample(today, 35, { id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor', providerId: 'demo', repeatWeeks: 5 }),
-      sample(today, 63, { id: 'trim', title: t('maintenance.howto.sample.trim'), typeKey: 'trim', providerName: 'Kinks & Co', providerId: 'demo', repeatWeeks: 12 }),
-    ];
-    if (beat >= 6) {
+    const out = [lashes(today, 35, t), trim(today, 63, t)];
+    if (beat >= 4) {
       out.push(sample(today, 28, { id: 'own', title: word, origin: 'client', intervalSource: 'client', repeatWeeks: 4, lastDoneOn: today }));
     }
     return out;
   }, [beat, today, t, word]);
-  const tap: Tap = beat === 1 ? 'add' : beat === 4 ? 'repeat' : beat === 5 ? 'submit' : null;
-  const sheet = beat >= 2 && beat <= 5 ? { typed: word.slice(0, typed), weeks: beat >= 4 ? 4 : 6 } : null;
+  const tap: Tap = beat === 1 ? 'add' : beat === 3 ? 'submit' : null;
+  const sheet = beat === 2 || beat === 3 ? { typed: word.slice(0, typed) } : null;
   return <DemoScreen items={items} today={today} tap={tap} overlay={{ sheet }} P={P} S={S} t={t} />;
 }
 
@@ -312,7 +264,6 @@ export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
   // Bumped on every (re)start so a step's timers restart from zero.
   const [run, setRun] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const [hint, setHint] = useState<TranslationKey | null>(null);
   const fill = useRef(new Animated.Value(0)).current;
   // How much of the current step has played, so Pause/Play carries on where it was.
   const played = useRef({ key: -1, ms: 0 });
@@ -320,7 +271,6 @@ export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
   const goTo = useCallback((i: number) => {
     setStep(i);
     setRun(r => r + 1);
-    setHint(null);
   }, []);
 
   useEffect(() => {
@@ -367,12 +317,10 @@ export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
 
         <View style={styles.stage}>
           {step === 0 && <StepBooked key={k} today={today} P={P} S={S} t={t} k={k} />}
-          {step === 1 && <StepCountdown key={k} today={today} P={P} S={S} t={t} k={k} />}
-          {step === 2 && <StepActions key={k} today={today} P={P} S={S} t={t} k={k} onHint={setHint} />}
-          {step === 3 && <StepAdd key={k} today={today} P={P} S={S} t={t} k={k} />}
+          {step === 1 && <StepDue key={k} today={today} P={P} S={S} t={t} k={k} />}
+          {step === 2 && <StepAdd key={k} today={today} P={P} S={S} t={t} k={k} />}
         </View>
 
-        <Text style={[styles.hint, { color: P.accentText }]}>{hint ? t(hint) : ' '}</Text>
         <Text style={[styles.caption, { color: P.text }]} accessibilityLiveRegion="polite">{t(CAPTIONS[step]!)}</Text>
 
         <View style={styles.bars}>
@@ -430,8 +378,6 @@ const styles = StyleSheet.create({
   toast: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 3 },
   toastKick: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4, opacity: 0.85 },
   toastText: { fontFamily: FONT_BODY, fontSize: 14 },
-  banner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, padding: 11 },
-  bannerText: { fontFamily: FONT_BODY, fontSize: 13, flex: 1 },
   scrim: { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.28)' },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderBottomWidth: 0, padding: 16, paddingTop: 10, gap: 10 },
   grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
@@ -441,7 +387,6 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: 100, paddingVertical: 11, paddingHorizontal: 16 },
   inputText: { fontFamily: FONT_BODY, fontSize: 14 },
   repeat: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.8, paddingVertical: 6, paddingHorizontal: 4 },
-  hint: { fontFamily: FONT_BODY, fontSize: 13, textAlign: 'center', minHeight: 18 },
   caption: { fontFamily: FONT_BODY, fontSize: 15, lineHeight: 21, minHeight: 42 },
   bars: { flexDirection: 'row', gap: 6 },
   barHit: { flex: 1, paddingVertical: 8 },
