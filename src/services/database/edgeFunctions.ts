@@ -522,7 +522,7 @@ export async function keepDisputedBookingFee(chargeId: string, response: string)
 export async function finalizeCheckoutPaymentIntent(
   checkoutBatchId: string,
   paymentIntentId: string,
-  action: 'capture' | 'cancel',
+  action: 'capture' | 'cancel' | 'decline_seen',
 ): Promise<string> {
   const { data, error } = await supabase.functions.invoke('finalize-payment-intent', {
     body: { checkoutBatchId, paymentIntentId, action },

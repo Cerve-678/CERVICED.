@@ -336,9 +336,49 @@ client's own hold as busy, so paying again was refused with "That time is no
 longer available" until the hold ran out (about 5 minutes). A client who comes
 back to the Cart while that payment is still going through can't start another
 checkout until it ends ("Your last payment is still going through"), and a
-payment that was left behind never touches a newer checkout. If the app is closed
-before the failure arrives, the hold still runs out on its own; the server does
-not yet let a new checkout clear the client's own unapproved one.
+payment that was left behind never touches a newer checkout.
+
+If the app is closed before the failure arrives, nothing on the phone is left to
+cancel it. Since 25 November two things cover that. Before a new checkout is
+prepared, the Cart cancels the client's own earlier checkouts that a payment was
+started for and that hold the same slot (same provider, day and start time)
+(`getMyEarlierCheckoutPayments`, `releaseEarlierPayments`), through
+`finalize-payment-intent`'s cancel, which asks Stripe first and refuses (409) if
+the card was approved. On a 409 the client sees "Your last payment is still going
+through" instead of paying twice. (`prepare_checkout` already cleared an earlier
+checkout that never reached Stripe; it can't ask Stripe, so it left these.) And
+when `reconcile-checkouts` cancels an unpaid checkout once its hold is over, it
+records `declined` rather than `abandoned` if the bank had refused an attempt
+(`last_payment_error`, no approved charge), and `record_checkout_outcome` sends
+the client "Payment didn't go through": "Your payment of £X didn't go through, so
+you haven't been charged and nothing was booked. You can try again whenever
+you're ready." (migration `20261125140000`). A checkout walked away from without
+a refused attempt stays `abandoned` and silent. Like `abandoned`, `declined` is
+replaced if money turns out to have moved after all (the client then gets that
+outcome's notice too). Matching the exact start time keeps this off a payment
+the same client is making for a different time on another phone or the website.
+
+For the very same slot, nothing on the phone can tell an attempt left behind on
+a closed app from one still open on another phone or the website, so the Cart
+asks first: "You're already paying for this time" — "You started paying for this
+time a few minutes ago, on this phone or another one. If you pay here, we'll stop
+that payment. You won't be charged twice." with Not now / Pay here. Only "Pay
+here" cancels it; closing the question any other way keeps it (`useAppDialog`'s
+`showConfirm` takes an `onClose` for this).
+
+A decline the client has already seen isn't notified again. When the payment
+sheet shows a refused attempt it calls `finalize-payment-intent` with
+`decline_seen`, which (after the usual ownership checks) stamps that refusal's
+key (`declineKey`: the failed charge, or card and reason for a failed bank check)
+into the PaymentIntent's `metadata.decline_seen`. `reconcile-checkouts` records
+`declined`, and so notifies, only for a refusal not stamped, so a later attempt
+that fails after the app closed is still told. Each new attempt also clears the
+stamp (`create-payment-intent`, which every attempt goes through, removes
+`decline_seen` when it reuses the payment), and the sheet waits for its last
+stamp to reach the server before starting the next attempt, so even a second
+failure identical to the first (a failed bank check leaves no charge to tell
+them apart) is told. An older app build doesn't stamp, so it can still repeat
+the notice.
 
 *Partly live: migration `20261102210000` was applied on 3 November, so "Payment
 received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
@@ -1257,7 +1297,7 @@ Keep the list short and review it monthly.
 | `request-card-hold` | App (success screen) | Hands the app a hold's bank check and records the result (section 2.1.1) |
 | `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes (matched to bookings by `_shared/bankDispute.ts` / `disputePlan.ts`), bank payout failures |
 | `assign-bank-dispute` | App (admins only) | An admin's pick of which booking(s) a dispute is about: takes back from those providers, then records it (`assign_bank_dispute`) |
-| `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over |
+| `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over (and tells the client if the bank had declined one) |
 | `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; support alerts |
 | `refund-payment` | Provider, admin, or the server (`refund_booking_async`) | Full and partial refunds; reconciles the payout |
 | `apply-cancellation-refund` | App, after a client cancels | Applies the frozen cancellation policy and settles the provider directly |

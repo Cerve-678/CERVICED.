@@ -173,8 +173,10 @@ export {
   getServiceDurationsByIds,
   countProviderServices,
   countProviderPortfolioItems,
+  getMyEarlierCheckoutPayments,
 } from "./database/services";
 export type {
+  EarlierCheckoutPayment,
   MyServiceDraft,
   ServiceDescriptionRevision,
   CheckoutIntentItem,

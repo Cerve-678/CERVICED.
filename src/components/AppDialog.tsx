@@ -335,19 +335,33 @@ export function useAppDialog() {
     toastTimer.current = setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
   }, []);
 
-  const showConfirm = useCallback((title: string, message: string | undefined, buttons: DialogButton[], placement: DialogPlacement = 'sheet') => {
-    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons, visible: true, placement });
+  // Runs once when the open dialog goes away for any reason: a button, a tap
+  // on the backdrop, Android back, or another dialog replacing it. Lets a
+  // caller await an answer without hanging when no button is pressed.
+  const onCloseRef = useRef<(() => void) | null>(null);
+  const runOnClose = useCallback(() => {
+    const onClose = onCloseRef.current;
+    onCloseRef.current = null;
+    onClose?.();
   }, []);
+
+  const showConfirm = useCallback((title: string, message: string | undefined, buttons: DialogButton[], placement: DialogPlacement = 'sheet', onClose?: () => void) => {
+    runOnClose();
+    onCloseRef.current = onClose ?? null;
+    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons, visible: true, placement });
+  }, [runOnClose]);
 
   /** Drop-in replacement for a single-button Alert.alert(title, message).
    *  Pass 'center' for a centred alert box instead of the default bottom sheet. */
   const showAlert = useCallback((title: string, message?: string, placement: DialogPlacement = 'sheet') => {
+    runOnClose();
     setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons: [{ text: 'OK' }], visible: true, placement });
-  }, []);
+  }, [runOnClose]);
 
   const dismissConfirm = useCallback(() => {
     setConfirm(prev => ({ ...prev, visible: false }));
-  }, []);
+    runOnClose();
+  }, [runOnClose]);
 
   const DialogHost = useCallback(() => (
     <>
