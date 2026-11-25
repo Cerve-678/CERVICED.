@@ -42,6 +42,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   type ViewInstance,
+  useWindowDimensions,
 } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
@@ -73,7 +74,7 @@ import {
   createMyService,
   deletePortfolioItem,
   refreshCachedProviderProfile,
-  getMyBookmarkCount,
+  getMyProviderSaverCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
   getProviderRecentBookings,
@@ -144,7 +145,6 @@ import {
 } from '../../features/providers/goLiveStatus';
 import { splitPortfolioByKind } from '../../features/providers/venuePhotos';
 import { mapProviderReviews, type ProviderReviewItem } from '../../features/providers/reviewPresentation';
-import { useContentWidth } from '../../components/ReadableWidth';
 import { useReportReview } from '../../features/safety/useReportReview';
 
 
@@ -327,7 +327,7 @@ const DashEmpty = React.memo(function DashEmpty({
  * app's background and only the sheet, always pale on the real page, is fixed.
  */
 function ProviderProfileLoadingShell({ isDarkMode }: { isDarkMode: boolean }) {
-  const { width: screenWidth, height: screenHeight } = useContentWidth();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -779,7 +779,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { theme, isDarkMode } = useTheme();
   // Measured per render, not captured at module load: the paired tiles and the
   // quick-action row both divide the screen width between them.
-  const { width: screenWidth, height: screenHeight } = useContentWidth();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { user, myBookingMode } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -960,7 +960,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 logger.error('[MyServices] terms status load failed:', err);
               }),
 
-            getMyBookmarkCount()
+            getMyProviderSaverCount()
               .then(count => {
                 if (active) setBookmarkCount(count);
               })

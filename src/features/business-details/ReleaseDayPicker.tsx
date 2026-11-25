@@ -12,11 +12,16 @@ const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
  *  is still offered, so opening the picker never changes it. */
 const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
 
+/** Wheel values standing for "not chosen yet". Never saved: picking one is ignored. */
+const NO_DAY = 0;
+const NO_TIME = '';
+
 interface ReleaseDayPickerProps {
   visible: boolean;
-  value: number;
-  /** 'HH:MM', UK time. */
-  time: string;
+  /** null = not chosen yet: the wheel starts on "Choose a day" and Done waits. */
+  value: number | null;
+  /** 'HH:MM', UK time. null = not chosen yet, as for `value`. */
+  time: string | null;
   accentColor: string;
   cardColor: string;
   textColor: string;
@@ -59,7 +64,8 @@ export function ReleaseDayPicker({
   allowClear = false,
   onClear,
 }: ReleaseDayPickerProps) {
-  const hours = HOURS.includes(time) ? HOURS : [time, ...HOURS];
+  const hours = time == null || HOURS.includes(time) ? HOURS : [time, ...HOURS];
+  const chosen = value != null && time != null;
   // iOS-only itemStyle is the only way to colour the wheel's own rows — the
   // native picker doesn't inherit text colour from its container, so without
   // it the rows render black on a dark provider theme. Android renders a
@@ -88,15 +94,16 @@ export function ReleaseDayPicker({
             <View style={localStyles.dayColumn}>
               <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>DAY</Text>
               <Picker
-                selectedValue={value}
+                selectedValue={value ?? NO_DAY}
                 onValueChange={(day) => {
-                  if (day === value) return;
+                  if (day === NO_DAY || day === value) return;
                   Haptics.selectionAsync().catch(() => {});
                   onSelect(day);
                 }}
                 accessibilityLabel="Release day"
                 {...wheelProps}
               >
+                {value == null && <Picker.Item key="none" label="Choose a day" value={NO_DAY} color={subColor} />}
                 {DAYS.map(day => (
                   <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
                 ))}
@@ -105,15 +112,16 @@ export function ReleaseDayPicker({
             <View style={localStyles.timeColumn}>
               <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>TIME</Text>
               <Picker
-                selectedValue={time}
+                selectedValue={time ?? NO_TIME}
                 onValueChange={(next) => {
-                  if (next === time) return;
+                  if (next === NO_TIME || next === time) return;
                   Haptics.selectionAsync().catch(() => {});
                   onSelectTime(next);
                 }}
                 accessibilityLabel="Release time"
                 {...wheelProps}
               >
+                {time == null && <Picker.Item key="none" label="Choose a time" value={NO_TIME} color={subColor} />}
                 {hours.map(hour => (
                   <Picker.Item key={hour} label={releaseTimeLabel(hour)} value={hour} color={textColor} />
                 ))}
@@ -129,8 +137,13 @@ export function ReleaseDayPicker({
               <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day, use a rolling window</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
-            <Text style={[styles.releasePickerDoneText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Done</Text>
+          <TouchableOpacity
+            style={[styles.releasePickerDoneButton, { backgroundColor: accentColor, opacity: chosen ? 1 : 0.45 }]}
+            disabled={!chosen}
+            accessibilityState={{ disabled: !chosen }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}
+          >
+            <Text style={[styles.releasePickerDoneText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{chosen ? 'Done' : 'Pick a day and a time'}</Text>
           </TouchableOpacity>
         </View>
       </View>
