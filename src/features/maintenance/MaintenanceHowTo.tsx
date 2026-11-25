@@ -149,39 +149,37 @@ function FrameCountdown({ P, S, t, k }: { P: AppTheme; S: SemanticColors; t: T; 
   );
 }
 
-// ── Frame 3: the sentence's three actions ───────────────────────────────────
+// ── Frame 3: the big card's three actions ───────────────────────────────────
 function FrameCard({ P, t, k }: { P: AppTheme; t: T; k: number }) {
   const [beat, setBeat] = useState(0);
   useBeats(k, [[700, () => setBeat(1)], [1700, () => setBeat(2)], [2400, () => setBeat(3)], [3500, () => setBeat(4)], [4400, () => setBeat(5)], [5400, () => setBeat(6)]]);
   const snoozed = beat >= 3;
   const done = beat >= 5;
-  const tail = done
-    ? t('maintenance.hero.inWeeks', { count: 3 })
-    : snoozed ? t('maintenance.hero.inDays', { count: 7 }) : t('maintenance.hero.daysAgo', { count: 3 });
+  const n = done ? 3 : snoozed ? 7 : 3;
+  const unit = t(done ? 'maintenance.countdown.weeks' : snoozed ? 'maintenance.countdown.days' : 'maintenance.countdown.daysOver');
   const hint = beat >= 5 ? 'maintenance.howto.hintDone' : beat >= 3 ? 'maintenance.howto.hintSnooze' : beat >= 1 ? 'maintenance.howto.hintBook' : null;
-  const link = (label: string, pressed: boolean) => (
+  const btn = (label: string, pressed: boolean, ghost = false) => (
     <Pressed on={pressed}>
-      <Text style={[styles.sentLink, { color: P.accentText }]}>{label.toUpperCase()}</Text>
+      <View style={[styles.cardBtn, ghost ? { borderColor: P.onAccent } : { backgroundColor: P.onAccent, borderColor: P.onAccent }]}>
+        <Text style={[styles.cardBtnText, { color: ghost ? P.onAccent : P.accent }]}>{label.toUpperCase()}</Text>
+      </View>
     </Pressed>
   );
   return (
     <View style={styles.stage}>
-      <View style={styles.sentWrap}>
-        <Text style={[styles.coachKick, { color: P.sub }]}>
+      <View style={[styles.card, { backgroundColor: P.accent }]}>
+        <Text style={[styles.coachKick, { color: P.onAccent }]}>
           {t(done ? 'maintenance.howto.doneNextIn' : 'maintenance.next.title').toUpperCase()}
         </Text>
-        <Text style={[styles.sentence, { color: P.text }]}>
-          <Text style={{ color: P.accentText, textDecorationLine: 'underline' }}>{t('maintenance.howto.sample.lashes')}</Text>
-          {tail}
-        </Text>
-        <Pressed on={beat === 1}>
-          <View style={[styles.sentBtn, { backgroundColor: P.accent }]}>
-            <Text style={[styles.sentBtnText, { color: P.onAccent }]}>{t('maintenance.action.book').toUpperCase()}</Text>
-          </View>
-        </Pressed>
-        <View style={styles.sentLinks}>
-          {link(t('maintenance.action.doneIt'), beat === 5)}
-          {link(t('maintenance.action.snooze'), beat === 3)}
+        <View style={styles.bigRow}>
+          <Text style={[styles.big, { color: P.onAccent }]}>{n}</Text>
+          <Text style={[styles.bigUnit, { color: P.onAccent }]}>{unit.toUpperCase()}</Text>
+        </View>
+        <Text style={[styles.cardTitle, { color: P.onAccent }]}>{t('maintenance.howto.sample.lashes')}</Text>
+        <View style={styles.cardActions}>
+          {btn(t('maintenance.action.book'), beat === 1)}
+          {btn(t('maintenance.action.doneIt'), beat === 5)}
+          {btn(t('maintenance.action.snoozeWeek'), beat === 3, true)}
         </View>
       </View>
       <Text style={[styles.hint, { color: P.sub, textAlign: 'center' }]}>{hint ? t(hint) : ' '}</Text>
@@ -347,12 +345,14 @@ const styles = StyleSheet.create({
   miniBtnText: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1 },
   pressed: { transform: [{ scale: 0.92 }], opacity: 0.7 },
   hint: { fontFamily: FONT_BODY, fontSize: 12.5, marginTop: 6, minHeight: 18 },
-  sentWrap: { gap: 10 },
-  sentence: { fontFamily: FONT_DISPLAY, fontSize: 26, lineHeight: 32, letterSpacing: 0.3 },
-  sentBtn: { borderRadius: 100, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  sentBtnText: { fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: 1.1 },
-  sentLinks: { flexDirection: 'row', justifyContent: 'center', gap: 22 },
-  sentLink: { fontFamily: FONT_DISPLAY, fontSize: 11.5, letterSpacing: 1.1, textDecorationLine: 'underline', paddingVertical: 6 },
+  card: { borderRadius: 28, padding: 20 },
+  bigRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 8 },
+  big: { fontFamily: FONT_DISPLAY, fontSize: 64, lineHeight: 68 },
+  bigUnit: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 1.4 },
+  cardTitle: { fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: 0.8, marginTop: 4 },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  cardBtn: { borderWidth: 1.5, borderRadius: 100, paddingVertical: 10, paddingHorizontal: 14 },
+  cardBtnText: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
   input: { borderWidth: 1, borderRadius: 100, paddingVertical: 11, paddingHorizontal: 16 },
   inputText: { fontFamily: FONT_BODY, fontSize: 14 },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
