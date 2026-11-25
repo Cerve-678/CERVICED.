@@ -70,7 +70,7 @@ serve(async (req) => {
       .select(
         'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
         'client_address, booking_date, booking_time, provider_id, ' +
-        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status',
+        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request',
       )
       .eq('id', bookingId)
       .maybeSingle();
@@ -112,6 +112,11 @@ serve(async (req) => {
     // Raw — the template escapes its own HTML and leaves the subject as plain
     // text, so a service called "Gel manicure & art" no longer reaches the
     // inbox as "Gel manicure &amp; art".
+    // A request the provider hasn't accepted yet gets "Request sent", not
+    // "Booking confirmed". When it's accepted, queue_booking_confirmation_email
+    // clears the stamps and this runs again for the confirmed email.
+    const isRequest = booking.status === 'pending';
+
     const { subject, html } = bookingConfirmationEmail({
       providerName: booking.provider_name_snapshot?.trim() || 'your provider',
       service: booking.service_name_snapshot || 'your appointment',
@@ -126,6 +131,9 @@ serve(async (req) => {
       amountPaid: Number(booking.amount_paid) || 0,
       paymentType: booking.payment_type ?? 'full',
       paymentStatus: booking.payment_status ?? 'pending',
+      isRequest,
+      isOutOfHours: booking.is_emergency_request === true,
+      clientEmail: booking.customer_email,
     });
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -138,7 +146,9 @@ serve(async (req) => {
         // here more than once. Resend collapses repeats of one key within 24h,
         // which is what stops a slow first attempt plus a retry becoming two
         // emails.
-        'Idempotency-Key': `booking-confirmation-${booking.id}`,
+        // The request and the confirmed email are two different emails, so
+        // they need two keys, or the confirmed one would be swallowed.
+        'Idempotency-Key': `${isRequest ? 'booking-request' : 'booking-confirmation'}-${booking.id}`,
       },
       body: JSON.stringify({ from: FROM_EMAIL, to: booking.customer_email, subject, html }),
     });
@@ -162,10 +172,15 @@ serve(async (req) => {
     // this half of a3ffa2fe (25 Sep) never reached main, though its retry job
     // went live. A failed stamp is logged, not surfaced: the email did go out,
     // and the idempotency key above covers a needless retry.
-    const { error: stampError } = await supabase
+    // Only while the booking is still in the state this email described: if
+    // the request was accepted while the request email was going out, the
+    // stamps now belong to the confirmed email, and stamping here would
+    // stop the retry job sending it.
+    const stamp = supabase
       .from('bookings')
       .update({ confirmation_email_sent_at: new Date().toISOString(), confirmation_email_error: null })
       .eq('id', booking.id);
+    const { error: stampError } = await (isRequest ? stamp.eq('status', 'pending') : stamp.neq('status', 'pending'));
     if (stampError) {
       console.error(`[booking-confirmation] ${booking.id} sent but could not be recorded: ${stampError.message}`);
     }

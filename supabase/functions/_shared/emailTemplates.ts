@@ -877,7 +877,28 @@ export interface BookingConfirmationParams {
   amountPaid: number;
   paymentType: string;
   paymentStatus: string;
+  /** The booking is still a request: the provider reviews every booking (or
+   *  it's out of hours) and hasn't accepted it yet (bookings.status 'pending').
+   *  The email then says "Request sent", not "Booking confirmed", and the
+   *  client gets the confirmed email once it's accepted. */
+  isRequest?: boolean;
+  /** The request is for a time outside the provider's usual rules (an
+   *  emergency request), not because they review every booking. */
+  isOutOfHours?: boolean;
+  /** Where this email is going, for the "Sign in with …" line. */
+  clientEmail?: string;
 }
+
+/** What the CERVICED app gives a client, listed under every booking email the
+ *  way the website's Booked screen lists them. Keep in step with APP_BENEFITS
+ *  in src/web/WebPaymentStep.tsx (the edge functions can't import src/). */
+export const BOOKING_EMAIL_APP_BENEFITS = [
+  'Ask Becca, your beauty assistant, anything',
+  'Save your Beauty Profile so every provider knows your preferences',
+  'Get Maintenance reminders when you’re due to rebook',
+  'Be the first to know when your provider releases new slots',
+  'Find inspiration and new providers on Explore',
+] as const;
 
 export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const P = CLIENT;
@@ -891,14 +912,26 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const isDeposit = params.paymentType === 'deposit';
   // The database value (bookings.payment_status), not the app's
   // PaymentStatus.PAID_IN_FULL ('paid_in_full'), which only exists after mapping.
-  const isPaidInFull = params.paymentStatus === 'fully_paid';
-  const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
+  // An accepted request's hold is taken a moment after the status changes
+  // (settle_request_holds_async), so the confirmed email can be built while
+  // the payment still reads 'authorised'. Taking it is what accepting does.
+  const paymentStatus = !params.isRequest && params.paymentStatus === 'authorised'
+    ? (isDeposit ? 'deposit_paid' : 'fully_paid')
+    : params.paymentStatus;
+  const isPaidInFull = paymentStatus === 'fully_paid';
+  // A request's card is approved and held, not taken ('authorised'), until
+  // the provider accepts it. A free request (a patch test) holds nothing.
+  const isHeld = Boolean(params.isRequest) && params.paymentStatus === 'authorised' && params.amountPaid > 0;
+  const isUnpaid = !isPaidInFull && paymentStatus !== 'deposit_paid';
   // Paid is what left the card, platform fee included; Due at Appointment is the rest.
   // Same two figures as the in-app receipt (calculateBookingPaymentBreakdown).
   const paidAmount = isUnpaid ? 0 : params.amountPaid;
-  const remaining = Math.max(0, total - paidAmount);
+  const heldAmount = isHeld ? params.amountPaid : 0;
+  const remaining = Math.max(0, total - paidAmount - heldAmount);
 
-  const state = isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
+  const state = isHeld
+    ? 'Held, not taken'
+    : isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
 
   const label = (text: string, colour = P.sub) =>
     `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
@@ -925,10 +958,12 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   // of the price, so it never goes in the lines above Total.
   const depositPaid = isDeposit && !isUnpaid ? params.depositAmount : 0;
 
-  const payRows =
-    (depositPaid > 0 ? payRow('Deposit paid', depositPaid, false) : '') +
-    payRow(depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', paidAmount, remaining <= 0) +
-    payRow('Due at Appointment', remaining, remaining > 0);
+  const payRows = isHeld
+    ? payRow('Held on your card', heldAmount, remaining <= 0) +
+      (remaining > 0 ? payRow('Due at Appointment', remaining, true) : '')
+    : (depositPaid > 0 ? payRow('Deposit paid', depositPaid, false) : '') +
+      payRow(depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', paidAmount, remaining <= 0) +
+      payRow('Due at Appointment', remaining, remaining > 0);
 
   const e = {
     providerName: esc(params.providerName),
@@ -938,6 +973,26 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
     location: esc(params.location),
     reference: esc(params.reference),
   };
+
+  // The same words as the website's "Request sent" screen.
+  const requestNote = params.isRequest
+    ? (params.isOutOfHours
+        ? `${e.providerName} will accept or decline your out-of-hours request.`
+        : `${e.providerName} reviews every booking and will accept or decline it.`) +
+      (isHeld ? ` ${gbp(heldAmount)} is held on your card, not taken. You’re only charged if it’s accepted.` : '') +
+      ' We’ll email you again when it’s accepted.'
+    : '';
+
+  const para = (text: string) =>
+    `<p style="font-family:${BODY};font-size:14px;font-weight:600;color:${P.sub};line-height:1.6;padding-top:6px;">${text}</p>`;
+
+  const benefitRows = BOOKING_EMAIL_APP_BENEFITS.map(benefit => `
+                  <tr>
+                    <td valign="top" width="20" style="font-family:${BODY};font-size:14px;font-weight:700;color:${P.accent};padding-top:7px;">&#10003;</td>
+                    <td style="font-family:${BODY};font-size:14px;font-weight:600;color:${P.text};line-height:1.5;padding-top:7px;">${esc(benefit)}</td>
+                  </tr>`).join('');
+
+  const signIn = params.clientEmail ? `Sign in with ${esc(params.clientEmail)}` : 'Sign in';
 
   const html = `<!DOCTYPE html>
 <html lang="en" style="color-scheme:light only;">
@@ -964,7 +1019,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
         <tr><td align="center" bgcolor="${tint}" style="background:${tint};border-radius:16px 16px 0 0;padding:42px 26px 32px;border-bottom:4px solid ${P.accent};">
           <img src="${BRAND_MARK_PLUM}" alt="CERVICED" width="96" height="48" style="display:block;width:96px;height:48px;margin:0 auto;border:0;" />
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:12px auto 0;">
-            <tr><td bgcolor="${pillFill}" style="background:${pillFill};border-radius:100px;padding:5px 14px;">${label('Booking confirmed', P.accent)}</td></tr>
+            <tr><td bgcolor="${pillFill}" style="background:${pillFill};border-radius:100px;padding:5px 14px;">${label(params.isRequest ? 'Request sent' : 'Booking confirmed', P.accent)}</td></tr>
           </table>
           <h1 style="font-family:${DISPLAY};font-weight:400;font-size:27px;line-height:1.15;letter-spacing:0.5px;text-transform:uppercase;color:${P.text};padding-top:26px;">${e.service}</h1>
           <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.sub};padding-top:10px;">with <span style="font-family:${PRATA};font-weight:400;font-size:19px;color:${P.text};">${e.providerName}</span></p>
@@ -976,7 +1031,12 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
 
         <tr><td align="center" style="padding:30px 24px 40px;">
           <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:470px;">
-
+${requestNote ? `
+            <!-- A request isn't a booking yet -->
+            <tr><td align="center" style="padding-bottom:22px;">
+              <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.text};line-height:1.6;">${requestNote}</p>
+            </td></tr>
+` : ''}
             <!-- Reference and address -->
             <tr><td style="border-bottom:1px solid ${hair};padding-bottom:16px;">
               <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
@@ -1024,6 +1084,19 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
               </table>
             </td></tr>
 
+            <!-- The app: the same box as the website's Booked screen -->
+            <tr><td style="padding-top:30px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border:1px solid ${hair};border-radius:14px;">
+                <tr><td style="padding:18px 20px 20px;">
+                  <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.text};">Manage your booking</p>
+                  ${para(`${signIn} to see this booking, reschedule or cancel it, and message ${e.providerName}. Available on the App Store and Google Play.`)}
+                  <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.text};padding-top:16px;">Enjoy the benefits of the CERVICED app</p>
+                  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${benefitRows}
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+
           </table>
         </td></tr>
 
@@ -1042,7 +1115,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
 
   return {
     // Plain text — the template escapes only what lands in HTML.
-    subject: `Booking confirmed — ${params.service} with ${params.providerName}`,
+    subject: `${params.isRequest ? 'Request sent' : 'Booking confirmed'} — ${params.service} with ${params.providerName}`,
     html,
   };
 }
