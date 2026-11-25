@@ -588,6 +588,8 @@ export {
   getOrCreateConversation,
   markConversationReadByProvider,
   markConversationReadByUser,
+  getConversationBlockState,
+  setConversationBlock,
   getConversationMessages,
   subscribeToConversationMessages,
   sendProviderMessage,
@@ -616,6 +618,7 @@ export type {
 export {
   invokeSendAccountEmail,
   invokeSendSupportRequest,
+  reportContent,
   lookupPostcodeAddresses,
   lookupPostcodeAddress,
   createCheckoutPaymentIntent,
@@ -643,6 +646,7 @@ export {
 export type {
   AccountEmailKind,
   SupportRequestInput,
+  ReportKind,
   SupportRequestResult,
   PostcodeLookupAddressRow,
   CheckoutFee,

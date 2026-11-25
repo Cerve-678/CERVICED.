@@ -41,6 +41,9 @@ import {
 } from "../../services/databaseService";
 import { formatShortDate, formatTime12 } from "../../utils/dateUtils";
 import { logger } from "../../utils/logger";
+import { toUserMessageAllowingDbGuard } from "../../utils/userFacingError";
+import { useAppDialog } from "../../components/AppDialog";
+import { useChatSafety } from "../../features/safety/useChatSafety";
 
 type Props = NativeStackScreenProps<HomeStackParamList, "ProviderChat">;
 
@@ -70,6 +73,13 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const { showConfirm, showAlert, DialogHost } = useAppDialog();
+  const { blockedByMe, openChatMenu, confirmReportMessage, unblock } = useChatSafety({
+    conversationId,
+    otherName: providerName,
+    activeMode: "client",
+    dialogs: { showConfirm, showAlert },
+  });
   const userId = user?.id ?? null;
   const flatListRef = useRef<FlatList>(null);
 
@@ -217,8 +227,18 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       title: providerName,
       headerShown: true,
       headerBackTitle: "Back",
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={openChatMenu}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={`Report or block ${providerName}`}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={OP.text} />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, providerName]);
+  }, [navigation, providerName, openChatMenu, OP.text]);
 
   const postMessage = useCallback(
     async (text: string) => {
@@ -263,7 +283,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       logger.error('[ProviderChat] send message failed:', err);
       // Message never reached the provider — put the text back so it isn't lost
       setInputText(text);
-      Alert.alert('Message not sent', "Check your connection and try again.");
+      Alert.alert("Message not sent", toUserMessageAllowingDbGuard(err, "Check your connection and try again.", "ProviderChatScreen.sendMessage"));
     }
     setSending(false);
   }, [inputText, conversationId, userId, sending, postMessage]);
@@ -441,7 +461,11 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             </Text>
           )}
           <View style={[styles.row, isUser ? styles.rowRight : styles.rowLeft]}>
-            <View
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={isUser}
+              onLongPress={() => confirmReportMessage(item.id)}
+              accessibilityHint={isUser ? undefined : "Press and hold to report this message"}
               style={[
                 styles.bubble,
                 isUser
@@ -460,12 +484,12 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               >
                 {item.content}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
       );
     },
-    [messages, OP],
+    [messages, OP, confirmReportMessage],
   );
 
   if (loading) {
@@ -511,6 +535,30 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             }
           />
 
+          {blockedByMe ? (
+            <View
+              style={[
+                styles.blockedRow,
+                {
+                  backgroundColor: OP.bg,
+                  borderTopColor: OP.border,
+                  paddingBottom: tabBarHidden ? Math.max(insets.bottom, 12) : FLOATING_TAB_BAR_CLEARANCE,
+                },
+              ]}
+            >
+              <Text style={[styles.blockedText, { color: OP.sub }]}>
+                You blocked {providerName}. Neither of you can send messages here.
+              </Text>
+              <TouchableOpacity
+                onPress={unblock}
+                activeOpacity={0.75}
+                style={[styles.blockedBtn, { borderColor: OP.border }]}
+              >
+                <Text style={[styles.blockedBtnText, { color: OP.accentText }]}>Unblock</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+          <>
           {addressSettings?.business_type === "mobile" && (
             <TouchableOpacity
               style={[
@@ -608,6 +656,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               )}
             </TouchableOpacity>
           </View>
+          </>
+          )}
 
           <Modal
             visible={showAddressModal}
@@ -739,11 +789,23 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           </Modal>
         </KeyboardDismissView>
       </View>
+      <DialogHost />
     </ThemedBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  blockedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  blockedText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  blockedBtn: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  blockedBtnText: { fontSize: 13, fontWeight: "600" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   listContent: { padding: 16, paddingBottom: 8 },
   emptyState: {
