@@ -15,6 +15,7 @@
 // excludes supabase/functions for that reason, and jest picks the file up here
 // on its default testMatch regardless.
 import {
+  BOOKING_EMAIL_APP_BENEFITS,
   bookingConfirmationEmail,
   clientHatAddedEmail,
   clientWelcomeEmail,
@@ -381,5 +382,71 @@ describe('Supabase Auth code emails', () => {
   it('does not tell someone they have an account when they may not', () => {
     expect(signupCodeEmail().html).not.toContain('you have a CERVICED account');
     expect(recoveryCodeEmail().html).not.toContain('you have a CERVICED account');
+  });
+});
+
+describe('a request’s email', () => {
+  const REQUEST = { ...BOOKING, isRequest: true, paymentStatus: 'authorised', clientEmail: 'sam@example.com' };
+
+  it('says the request was sent, not that the booking is confirmed', () => {
+    const { subject, html } = bookingConfirmationEmail(REQUEST);
+    expect(subject).toBe('Request sent — Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('Request sent');
+    expect(html).not.toContain('Booking confirmed');
+  });
+
+  it('says the money is held, not taken, and only charged if accepted', () => {
+    const { html } = bookingConfirmationEmail(REQUEST);
+    expect(html).toContain('Amara Lash Studio reviews every booking and will accept or decline it.');
+    expect(html).toContain('£74.99 is held on your card, not taken. You’re only charged if it’s accepted.');
+    expect(html).toContain('Held on your card');
+    expect(html).not.toContain('Paid in full');
+    expect(html).not.toContain('Awaiting payment');
+  });
+
+  it('holds only the deposit on a deposit request, with the rest due at the appointment', () => {
+    const { html } = bookingConfirmationEmail({ ...REQUEST, paymentType: 'deposit', depositAmount: 20, amountPaid: 21.99 });
+    expect(html).toContain('£21.99 is held on your card');
+    expect(html).toContain('Due at Appointment');
+    expect(html).toContain('£53.00');
+  });
+
+  it('mentions no hold on a free request', () => {
+    const { html } = bookingConfirmationEmail({ ...REQUEST, paymentStatus: 'pending', amountPaid: 0 });
+    expect(html).toContain('will accept or decline it.');
+    expect(html).not.toContain('is held on your card');
+  });
+
+  it('calls an out-of-hours request what it is', () => {
+    const { html } = bookingConfirmationEmail({ ...REQUEST, isOutOfHours: true });
+    expect(html).toContain('Amara Lash Studio will accept or decline your out-of-hours request.');
+    expect(html).not.toContain('reviews every booking');
+  });
+
+  it('calls an accepted request paid even while its hold is still being taken', () => {
+    const { subject, html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'authorised' });
+    expect(subject).toMatch(/^Booking confirmed/);
+    expect(html).toContain('Paid in full');
+    expect(html).not.toContain('Awaiting payment');
+    expect(html).not.toContain('is held on your card');
+  });
+});
+
+describe('the app box in a booking email', () => {
+  it('says how to manage the booking and lists the app’s benefits', () => {
+    const { html } = bookingConfirmationEmail({ ...BOOKING, clientEmail: 'sam@example.com' });
+    expect(html).toContain('Manage your booking');
+    expect(html).toContain('Sign in with sam@example.com to see this booking, reschedule or cancel it, and message Amara Lash Studio.');
+    expect(html).toContain('Enjoy the benefits of the CERVICED app');
+    for (const benefit of BOOKING_EMAIL_APP_BENEFITS) expect(html).toContain(benefit);
+  });
+
+  it('lists the same benefits as the website’s Booked screen', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readFileSync } = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { join } = require('path') as typeof import('path');
+    const screen = readFileSync(join(__dirname, '../../../src/web/WebPaymentStep.tsx'), 'utf8');
+    for (const benefit of BOOKING_EMAIL_APP_BENEFITS) expect(screen).toContain(`'${benefit}'`);
   });
 });
