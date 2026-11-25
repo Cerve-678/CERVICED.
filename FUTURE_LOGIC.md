@@ -1712,3 +1712,34 @@ once.
 - Reuse `bookingsByDate`, `scheduleIssues` and the per-day availability
   shading that `WeekView` already gets, so the new layout can't disagree
   with the grid about what's on.
+
+---
+
+## iPad Layouts (Switched Off for Launch, 2026-11-25)
+
+### What it means
+
+`ios.supportsTablet` in `app.json` is `false` for launch. With it `true`,
+App Review tests every screen on an iPad at full iPad size, and a layout
+that looks broken there gets the app rejected. Nobody had checked every main
+screen on an iPad simulator, so it's off until someone does.
+
+### What happens now
+
+- iPad users can still download and use the app. It runs as an iPhone app
+  in a phone-sized window, so they see the phone layouts.
+- `Platform.isPad` is `false` in that mode, so the iPad-only code stays
+  dormant: the window-controls top inset (`IPAD_WINDOW_CONTROLS_INSET` in
+  `src/components/SafeArea.tsx`, #71). Width-based layouts like Search's
+  three-up cards (#59) and `masonryColumnsForWidth` still follow the window
+  width, so they show the phone layout.
+- No iPad screenshots are needed in App Store Connect.
+
+### Turning it back on
+
+- Check every main screen (client and provider hats, both themes, portrait,
+  Split View / Stage Manager widths) on an iPad simulator first.
+- Once a store version ships with iPad support, Apple won't let a later
+  version remove it, so this is a one-way switch. Turning it on later is
+  always allowed.
+- App Store Connect will then ask for 13-inch iPad screenshots.
