@@ -64,6 +64,16 @@ import {
 } from './webCheckout';
 import { getWebStripe } from './webStripe';
 
+/** Reasons to get the app, under Booked. Each one is a real feature of the
+ *  client app: appointment reminders, Beauty Maintenance, the waitlist, and
+ *  Your Providers + Explore. */
+const APP_BENEFITS = [
+  'Get a reminder before every appointment',
+  'Know when you’re due to rebook, from your lashes to your nails',
+  'Join a waitlist when your favourite is fully booked',
+  'Save your providers and discover new ones near you',
+] as const;
+
 type Phase =
   | { kind: 'review' }
   | { kind: 'pay'; checkout: PreparedCheckout }
@@ -209,6 +219,13 @@ export function WebPaymentStep({
           <Text style={[styles.body, { color: tokens.sub }]}>
             Sign in with {account.email} to see this booking, reschedule or cancel it, and message {providerName}. Available on the App Store and Google Play.
           </Text>
+          <Text style={[styles.strong, styles.benefitsTitle, { color: tokens.text }]}>Enjoy the benefits of the CERVICED app</Text>
+          {APP_BENEFITS.map(benefit => (
+            <View key={benefit} style={styles.benefitRow}>
+              <Text style={[styles.benefitMark, { color: accentColor }]}>✓</Text>
+              <Text style={[styles.body, styles.flex, { color: tokens.text }]}>{benefit}</Text>
+            </View>
+          ))}
         </View>
       </View>
     );
@@ -662,7 +679,10 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, minHeight: 64 },
   notice: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
-  appBox: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, marginTop: 4, gap: 4 },
+  appBox: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, marginTop: 4, gap: 6 },
+  benefitsTitle: { marginTop: 8 },
+  benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  benefitMark: { fontSize: 13, fontWeight: '700', lineHeight: 19 },
   tickRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   tickBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   tickMark: { fontSize: 14, fontWeight: '700' },
