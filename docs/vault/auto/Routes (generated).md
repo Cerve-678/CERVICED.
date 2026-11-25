@@ -57,7 +57,6 @@ Curated overview: [[Screens & Navigation]].
 - `ChangePassword`
 - `NotificationsSettings`
 - `PaymentMethods`
-- `Subscription`
 - `HelpCentre`
 - `TextSizing`
 - `LanguageRegion`

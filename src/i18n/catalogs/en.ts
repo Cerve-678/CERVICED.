@@ -119,8 +119,6 @@ export const en = {
   'profile.account.password.sub': 'Update credentials',
   'profile.account.payment.title': 'Payment Methods',
   'profile.account.payment.sub': 'Cards, Apple Pay',
-  'profile.account.subscription.title': 'Subscription & Billing',
-  'profile.account.subscription.sub': 'Plans, invoices',
 
   'profile.section.preferences': 'Preferences',
   'profile.pref.notifications.title': 'Notifications',

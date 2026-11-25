@@ -111,6 +111,7 @@ import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ProviderReviewsModal } from "../../features/providers/ProviderReviewsModal";
+import { useReportReview } from "../../features/safety/useReportReview";
 import { ProviderContactSheet } from "../../features/providers/ProviderContactSheet";
 import { providerContactOptions } from "../../features/providers/contactOptions";
 import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
@@ -1371,6 +1372,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // It sees what clients see, but Bookings, Cart and Chat don't exist in the
   // provider tabs, and saved providers belong to a client profile.
   const viewingOtherAsProvider = hatState.active === "provider" && !isOwnProvider;
+  const reportReview = useReportReview(hatState.active);
   const canSaveProvider =
     viewerChecked && canBookProvider && providerDbId !== null && !viewingOtherAsProvider;
 
@@ -3850,6 +3852,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           adaptiveAccentColor={adaptiveAccentColor}
           providerGradient={provider?.gradient ?? OP.gradient}
           squareCards={squareCards}
+          onReportReview={reportReview}
         />
 
         {/* Offers side panel */}

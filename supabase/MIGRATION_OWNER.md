@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-25 (block stops messages; report a message, review or person)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261125160000 | `block_in_messages_and_report_content` | **APPLIED 2026-11-25** on the user's "deploy", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261125150000`, no unapplied migration on any open PR. Nothing redefined (new trigger, functions and columns only), so no md5 guard. Forced-rollback dry run first: an unblocked message went in; after `set_conversation_block(conv, true)` as the client, the provider's reply was refused with "You can't send messages in this conversation."; only the blocker saw `get_conversation_block_state = true`; live unchanged afterwards. Verified live: version recorded (live max); trigger `trg_refuse_message_when_blocked` enabled; `set_conversation_block` / `get_conversation_block_state` authenticated only, not anon; `conversation_other_person` and the trigger function not callable by authenticated; 3 report columns on `support_requests`. `send-support-request` deployed straight after (it writes the new columns). PR feat/report-and-block. |
+
 ### Applied 2026-11-25 (every client is emailed the address and the reminder)
 
 | Recorded version | Name | Verified live |
