@@ -15,3 +15,17 @@ export function emailedReminderTiming(providerTimings: unknown): ReminderTiming 
     : [];
   return picked[0] ?? '24h';
 }
+
+/** Today's date where the appointments are, as YYYY-MM-DD. */
+export function londonToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(now);
+}
+
+/** A reminder is only emailed in its real window: the appointment is ahead of
+ *  today and no further than the reminder's own days. A notification row
+ *  written by hand days early (a client or provider can insert one) never
+ *  turns into an email at the wrong time. */
+export function reminderIsDue(bookingDate: string, today: string, daysAhead: number): boolean {
+  const days = (Date.parse(`${bookingDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
+  return Number.isFinite(days) && days > 0 && days <= daysAhead;
+}

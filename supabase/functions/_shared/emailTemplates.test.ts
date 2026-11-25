@@ -42,7 +42,7 @@ import {
   mapsUrl,
   supportRequestEmail,
 } from './emailTemplates.ts';
-import { emailedReminderTiming } from './reminderEmailTiming.ts';
+import { emailedReminderTiming, londonToday, reminderIsDue } from './reminderEmailTiming.ts';
 
 /** No whitespace: firstNameOf() splits on it, so this survives whole. */
 const HOSTILE = `<script>alert(1)</script>&"'`;
@@ -564,5 +564,21 @@ describe('which reminder is emailed', () => {
     expect(emailedReminderTiming(['72h'])).toBe('72h');
     expect(emailedReminderTiming([])).toBe('24h');
     expect(emailedReminderTiming('24h')).toBe('24h');
+  });
+});
+
+describe('a reminder’s window', () => {
+  it('is only the days before the appointment the reminder is for', () => {
+    expect(reminderIsDue('2026-11-26', '2026-11-25', 1)).toBe(true);
+    expect(reminderIsDue('2026-11-27', '2026-11-25', 1)).toBe(false);
+    expect(reminderIsDue('2026-11-27', '2026-11-25', 2)).toBe(true);
+    expect(reminderIsDue('2026-11-25', '2026-11-25', 1)).toBe(false);
+    expect(reminderIsDue('2026-11-24', '2026-11-25', 3)).toBe(false);
+  });
+
+  it('counts the day in London, not UTC', () => {
+    // 23:30 UTC on 30 June is already 1 July in London (BST).
+    expect(londonToday(new Date('2026-06-30T23:30:00Z'))).toBe('2026-07-01');
+    expect(londonToday(new Date('2026-12-31T23:30:00Z'))).toBe('2026-12-31');
   });
 });

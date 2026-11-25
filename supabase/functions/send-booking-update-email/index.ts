@@ -16,7 +16,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { addressSharedEmail, appointmentReminderEmail } from '../_shared/emailTemplates.ts';
 import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
-import { emailedReminderTiming, type ReminderTiming } from '../_shared/reminderEmailTiming.ts';
+import { emailedReminderTiming, londonToday, reminderIsDue, type ReminderTiming } from '../_shared/reminderEmailTiming.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -38,7 +38,7 @@ serve(async (req) => {
 
     const { data: notification, error: notificationError } = await supabase
       .from('notifications')
-      .select('id, type, booking_id, user_id, metadata')
+      .select('id, type, booking_id, user_id, metadata, created_at')
       .eq('id', notificationId)
       .maybeSingle();
     if (notificationError) throw notificationError;
@@ -64,18 +64,44 @@ serve(async (req) => {
     // Cancelled since the notification was written: nothing to go to.
     if (!['confirmed', 'in_progress'].includes(booking.status)) return json({ skipped: `status ${booking.status}` });
 
+    // The server tags every reminder it writes with its timing. A client can
+    // insert their own notification rows, and a provider can send one about
+    // their own booking, so an untagged reminder isn't one of ours.
+    const timing = notification.metadata?.reminder_timing as ReminderTiming | undefined;
+    if (notification.type === 'booking_reminder' && !timing) return json({ skipped: 'untagged reminder' });
+
+    // One email per booking for each kind (and each reminder timing): only
+    // the first such row is emailed, so writing the row again by hand never
+    // sends a second one.
+    let earlier = supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('booking_id', booking.id)
+      .eq('user_id', booking.user_id)
+      .eq('type', notification.type)
+      .lt('created_at', notification.created_at);
+    if (timing) earlier = earlier.eq('metadata->>reminder_timing', timing);
+    const { count: earlierCount, error: earlierError } = await earlier;
+    if (earlierError) throw earlierError;
+    if ((earlierCount ?? 0) > 0) return json({ skipped: 'already emailed for an earlier notification' });
+
     const [
       { data: provider, error: providerError },
       { data: venueRows, error: venueError },
+      { data: clientAddressRow, error: clientAddressError },
     ] = await Promise.all([
       supabase.from('providers').select('business_type, automation_settings').eq('id', booking.provider_id).maybeSingle(),
       // Released venue only: the same check the app's client_bookings view
       // makes. An email can't be unsent, so it never carries an address the
       // client couldn't see in the app yet.
       supabase.rpc('booking_released_venue', { p_booking_id: booking.id }),
+      // A mobile provider's client keeps their address here; the bookings
+      // column is only the checkout funnel and is empty at rest.
+      supabase.from('booking_client_addresses').select('address').eq('booking_id', booking.id).maybeSingle(),
     ]);
     if (providerError) throw providerError;
     if (venueError) throw venueError;
+    if (clientAddressError) throw clientAddressError;
 
     const isMobile = provider?.business_type === 'mobile';
     const venue = Array.isArray(venueRows) ? venueRows[0] : null;
@@ -101,10 +127,13 @@ serve(async (req) => {
         groupCount: Number(booking.group_booking_count) || 1,
       });
     } else {
-      // Untagged reminders are the old job's, which were all 24h.
-      const timing = (notification.metadata?.reminder_timing as ReminderTiming | undefined) ?? '24h';
-      if (timing !== emailedReminderTiming(provider?.automation_settings?.clientReminderTiming)) {
-        return json({ skipped: `reminder ${timing} is not the emailed one` });
+      const reminderTiming = timing ?? '24h';
+      if (reminderTiming !== emailedReminderTiming(provider?.automation_settings?.clientReminderTiming)) {
+        return json({ skipped: `reminder ${reminderTiming} is not the emailed one` });
+      }
+      const daysAhead = reminderTiming === '72h' ? 3 : reminderTiming === '48h' ? 2 : 1;
+      if (!reminderIsDue(booking.booking_date, londonToday(), daysAhead)) {
+        return json({ skipped: 'reminder outside its window' });
       }
       const { data: addOns, error: addOnsError } = await supabase
         .from('booking_add_ons').select('price_snapshot').eq('booking_id', booking.id).limit(50);
@@ -118,9 +147,9 @@ serve(async (req) => {
         ? Number(booking.amount_paid) || 0 : 0;
       mail = appointmentReminderEmail({
         ...common,
-        daysAhead: timing === '72h' ? 3 : timing === '48h' ? 2 : 1,
+        daysAhead,
         where: isMobile
-          ? { kind: 'mobile', address: booking.client_address?.trim() || null }
+          ? { kind: 'mobile', address: clientAddressRow?.address?.trim() || booking.client_address?.trim() || null }
           : venueAddress ? { kind: 'venue', address: venueAddress } : { kind: 'not_yet' },
         dueAtAppointment: Math.max(0, Math.round((total - paid) * 100) / 100),
         instructions: booking.booking_instructions,

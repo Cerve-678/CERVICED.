@@ -16,8 +16,11 @@
 -- send-booking-update-email decides the rest from the row: it re-checks the
 -- booking is still on, sends an address only once booking_released_venue
 -- returns it (never for a mobile provider, who comes to the client), and
--- emails only the reminder nearest the appointment. Sent once per
--- notification (Resend idempotency key); not retried.
+-- emails only the reminder nearest the appointment, and only in its window.
+-- One email per booking for each kind (and reminder timing): a row a client
+-- or provider writes again by hand is never emailed twice, and an untagged
+-- reminder (not written by the reminder job) isn't emailed at all. Not
+-- retried.
 --
 -- New function and trigger; nothing live is redefined. Numbered above the
 -- live frontier (20261125140000, declined_payment_tells_client).
@@ -37,18 +40,19 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT decrypted_secret INTO v_key
-    FROM vault.decrypted_secrets
-   WHERE name = 'service_role_key'
-   LIMIT 1;
-
-  -- Key not configured: skip quietly, as the push trigger does.
-  IF v_key IS NULL OR v_key = '' OR v_key LIKE '<%' THEN
-    RETURN NEW;
-  END IF;
-
-  -- The notification must never fail because an email couldn't be queued.
+  -- The notification must never fail because an email couldn't be queued,
+  -- so the key read sits inside this block too.
   BEGIN
+    SELECT decrypted_secret INTO v_key
+      FROM vault.decrypted_secrets
+     WHERE name = 'service_role_key'
+     LIMIT 1;
+
+    -- Key not configured: skip quietly, as the push trigger does.
+    IF v_key IS NULL OR v_key = '' OR v_key LIKE '<%' THEN
+      RETURN NEW;
+    END IF;
+
     PERFORM net.http_post(
       url     := 'https://ztrfpfvvejzaysrelmfm.supabase.co/functions/v1/send-booking-update-email',
       headers := jsonb_build_object(
