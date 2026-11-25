@@ -24,7 +24,6 @@ export const CLIENT_PROFILE_SCREENS = new Set([
   "ChangePassword",
   "NotificationsSettings",
   "PaymentMethods",
-  "Subscription",
   "HelpCentre",
   "ReportProblem",
   "Points",

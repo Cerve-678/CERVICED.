@@ -10,7 +10,6 @@ import CircleScreen from '../../../screens/client/CircleScreen';
 import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import NotificationsSettingsScreen from '../../../screens/client/NotificationsSettingsScreen';
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
-import SubscriptionScreen from '../../../screens/client/SubscriptionScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
@@ -86,11 +85,6 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="PaymentMethods"
         component={PaymentMethodsScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
-        name="Subscription"
-        component={SubscriptionScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
