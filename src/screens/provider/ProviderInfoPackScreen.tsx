@@ -372,7 +372,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       closeForm();
     } catch (error) {
       logger.error('[InfoPacks] save failed:', error);
-      showToast("Couldn't save this pack. Please try again.", 'error');
+      showToast(toUserMessageAllowingDbGuard(error, "Couldn't save this pack. Please try again.", 'ProviderInfoPackScreen.save'), 'error');
     } finally {
       setSaving(false);
     }

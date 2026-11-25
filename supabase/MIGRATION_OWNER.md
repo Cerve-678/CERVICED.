@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-25 (language filter on everything one person writes to another)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261125170000 | `refuse_blocked_language` | **APPLIED 2026-11-25** on the user's "apply and merge", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock taken on this branch; live max `20261125160000`, no other unapplied migration on any open PR. New table, functions and triggers only, nothing redefined, so no md5 guard. Before applying, live data had 0 matches in every covered column. Forced-rollback dry run first: 15 beauty phrases (Brazilian, bikini, Pakistani bridal, retarder, cocoon…) passed, 8 disguised slurs caught, unchanged update allowed, slur update and slur announcement refused, 10 triggers. Verified live: version recorded (live max); 27 terms; `trg_refuse_blocked_language` enabled on info_packs, notifications, portfolio_items, promotions, provider_messages, providers, reviews, scheduled_announcements, services, users; `blocked_terms` RLS on with no policies, not readable by authenticated; `contains_blocked_language` not executable by anon/authenticated. Rolled-back check as a signed-in provider (role authenticated + JWT sub): a clean About edit saved, a slur was refused with the app's message. PR #789. |
+
 ### Applied 2026-11-25 (block stops messages; report a message, review or person)
 
 | Recorded version | Name | Verified live |

@@ -770,6 +770,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
 
   // Date picker state
@@ -783,6 +784,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 
   useEffect(() => {
     if (visible) {
+      setSaveError('');
       const f = editing ? promoToForm(editing) : initialForm ?? EMPTY_FORM;
       setForm(f);
       const fd = f.validFrom ? new Date(f.validFrom + 'T12:00:00') : new Date();
@@ -826,6 +828,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
     if (form.scheduleNotify && !form.scheduleDate.trim()) return;
 
     setSaving(true);
+    setSaveError('');
     try {
       let imageUrl: string | null | undefined = editing ? form.existingImageUrl : undefined;
       if (form.imageUri) {
@@ -865,6 +868,10 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
         ...(form.scheduleNotify ? { notify_sent_at: null } : {}),
       };
       await onSave(input);
+    } catch (e) {
+      // Shown inside the sheet: a toast on the screen behind it would be
+      // hidden by the Modal. The language filter's refusal lands here too.
+      setSaveError(toUserMessage(e, "That didn't save. Please try again.", 'ProviderPromotionsScreen.save'));
     } finally {
       setSaving(false);
       setUploadingImage(false);
@@ -889,6 +896,9 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
             }
           </TouchableOpacity>
         </View>
+        {saveError ? (
+          <Text style={[fmSt.saveError, { color: C.danger }]} accessibilityRole="alert">{saveError}</Text>
+        ) : null}
 
         <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
@@ -1236,6 +1246,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 }
 
 const fmSt = StyleSheet.create({
+  saveError: { paddingHorizontal: 20, paddingVertical: 10, fontSize: 14, lineHeight: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 16 : 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: CP.border },
   headerClose: { minWidth: 60 },
   headerCloseText: { fontSize: 16, fontWeight: '500' },

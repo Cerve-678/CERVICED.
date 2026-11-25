@@ -531,8 +531,8 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
       setTitle('');
       setBody('');
       setAudience(clients.length > 0 ? 'all' : 'followers');
-    } catch {
-      setErrorMsg('Something went wrong. Please try again.');
+    } catch (err) {
+      setErrorMsg(toUserMessage(err, 'Something went wrong. Please try again.', 'ProviderClienteleScreen.sendAnnouncement'));
     } finally {
       setSending(false);
     }

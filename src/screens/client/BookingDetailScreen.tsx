@@ -818,7 +818,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false);
         recommendAfterRating.offer(providerId, booking.providerName, ratedStars);
       }, 2000);
-    } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', 'Please try again in a moment.'); }
+    } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', 'BookingDetailScreen.submitRating')); }
     finally { setIsLoading(false); }
   }, [booking, rating, reviewText, reviewAnonymous, user, recommendAfterRating]);
 

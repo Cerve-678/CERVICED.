@@ -359,7 +359,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       void loadInbox();
     } catch (err) {
       logger.error('[ProviderInbox] quick reply failed:', err);
-      showToast('Message not sent. Check your connection and try again.', 'error');
+      showToast(toUserMessage(err, 'Message not sent. Check your connection and try again.', '[ProviderInbox] quick reply'), 'error');
     }
     setReplySending(false);
   }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
