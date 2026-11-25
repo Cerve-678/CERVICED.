@@ -44,6 +44,9 @@ export const ROUTES_WITHOUT_TAB_BAR: readonly string[] = ['Branding', 'Payments'
  * An empty stack means the tab has not navigated anywhere yet, so it is on its root.
  */
 export function stackHidesTabBar(tab: string, stack: readonly string[]): boolean {
+  // Search is pushed from both client Home and Explore. Hide the bar only while
+  // Search itself is focused; result screens keep their own visibility rules.
+  if (stack[stack.length - 1] === 'Search') return true;
   if (stack.some(name => ROUTES_WITHOUT_TAB_BAR.includes(name))) return true;
   if (tab === SETTINGS_TAB) {
     const top = stack[stack.length - 1];
