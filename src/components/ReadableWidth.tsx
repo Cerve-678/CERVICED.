@@ -7,24 +7,32 @@ const ContentWidthContext = createContext<number | null>(null);
 const BackdropContext = createContext<((color: string | null) => void) | null>(null);
 
 /**
- * Wraps one screen in the centred column on wide windows; a no-op at phone
- * widths. Used as each stack navigator's `screenLayout`, so screens never
- * mount it themselves.
+ * Wraps one screen in the centred column on a wide window held upright (an
+ * iPad in portrait); the full width in landscape and on a phone. Used as each
+ * stack navigator's `screenLayout`, so screens never mount it themselves.
  *
  * The space either side is the app's page colour, unless the screen paints
  * its own page (a provider's profile in their chosen colours) and says so with
  * `useReadableBackdrop`, so the column doesn't read as a phone in a frame.
  */
 export function ReadableWidth({ children }: { children: React.ReactNode }): React.ReactElement {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { palette } = useTheme();
   const [backdrop, setBackdrop] = useState<string | null>(null);
-  if (width <= READABLE_MAX_WIDTH) return <>{children}</>;
+  // Only a wide window held upright gets the column. In landscape the screen
+  // fills the display, as the user asked for; on a phone there's no room
+  // either side anyway.
+  const constrained = width > READABLE_MAX_WIDTH && width <= height;
+  // The same views render either way and only the cap changes, so rotating the
+  // iPad or resizing its window never remounts the screen (which would lose a
+  // half-typed form or the scroll position).
   return (
-    <View style={[styles.outer, { backgroundColor: backdrop ?? palette.bg }]}>
-      <View style={styles.column}>
+    <View style={[styles.outer, constrained && { backgroundColor: backdrop ?? palette.bg }]}>
+      <View style={[styles.column, constrained && styles.capped]}>
         <BackdropContext.Provider value={setBackdrop}>
-          <ContentWidthContext.Provider value={READABLE_MAX_WIDTH}>{children}</ContentWidthContext.Provider>
+          <ContentWidthContext.Provider value={constrained ? READABLE_MAX_WIDTH : null}>
+            {children}
+          </ContentWidthContext.Provider>
         </BackdropContext.Provider>
       </View>
     </View>
@@ -87,5 +95,6 @@ export function useReadableBackdrop(color: string | null | undefined): void {
 
 const styles = StyleSheet.create({
   outer: { flex: 1, alignItems: 'center' },
-  column: { flex: 1, width: '100%', maxWidth: READABLE_MAX_WIDTH, overflow: 'hidden' },
+  column: { flex: 1, width: '100%' },
+  capped: { maxWidth: READABLE_MAX_WIDTH, overflow: 'hidden' },
 });
