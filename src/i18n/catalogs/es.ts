@@ -73,8 +73,6 @@ export const es: Catalog = {
   'profile.account.password.sub': 'Actualizar credenciales',
   'profile.account.payment.title': 'Métodos de pago',
   'profile.account.payment.sub': 'Tarjetas, Apple Pay',
-  'profile.account.subscription.title': 'Suscripción y facturación',
-  'profile.account.subscription.sub': 'Planes, facturas',
 
   'profile.section.preferences': 'Preferencias',
   'profile.pref.notifications.title': 'Notificaciones',

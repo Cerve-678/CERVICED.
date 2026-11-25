@@ -222,7 +222,6 @@ export default function UserProfileScreen({ navigation }: any) {
             <SettingsOption icon="user" title={t('profile.account.account.title')} subtitle={t('profile.account.account.sub')} onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
             <SettingsOption icon="lock" title={t('profile.account.password.title')} subtitle={t('profile.account.password.sub')} onPress={() => navigation.navigate('ChangePassword')} palette={P} />
             <SettingsOption icon="payment" title={t('profile.account.payment.title')} subtitle={t('profile.account.payment.sub')} onPress={() => navigation.navigate('PaymentMethods')} palette={P} />
-            <SettingsOption icon="receipt" title={t('profile.account.subscription.title')} subtitle={t('profile.account.subscription.sub')} onPress={() => navigation.navigate('Subscription')} palette={P} />
           </View>
 
           {/* Notifications & Preferences */}

@@ -193,7 +193,6 @@ export type ProfileStackParamList = {
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;
-  Subscription: undefined;
   HelpCentre: undefined;
   TextSizing: undefined;
   LanguageRegion: undefined;
