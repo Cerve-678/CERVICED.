@@ -511,6 +511,28 @@ export interface ConversationContext {
    * eventually suppress every option and leave a reply with nothing to tap.
    */
   offeredSuggestions?: string[];
+  /**
+   * A question Becca understood but couldn't answer yet, because one detail
+   * was missing — she has just asked for it ("Which provider do you mean?").
+   *
+   * The next message is read as the answer when it supplies that detail, and
+   * the ORIGINAL capability runs with it. Without this, "Lola Studio" in reply
+   * to a reviews question was matched cold and showed Lola Studio's profile,
+   * and the question that was actually asked was lost.
+   *
+   * Lives for exactly one turn: any reply that isn't the answer drops it.
+   */
+  awaiting?: AwaitedDetail;
+}
+
+/** See ConversationContext.awaiting. */
+export interface AwaitedDetail {
+  /** The capability to run once the detail arrives. */
+  capabilityId: string;
+  /** The detail asked for. */
+  kind: "booking" | "service" | "provider" | "date";
+  /** What the original question already established, minus ambiguity. */
+  entities: EntityBag;
 }
 
 /**

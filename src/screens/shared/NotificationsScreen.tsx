@@ -55,7 +55,6 @@ import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { logger, reportError } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 import { dateToYMD } from '../../utils/dateUtils';
-import { openLegalPage } from '../../utils/legalPage';
 import {
   isCertificateNotification,
   isScheduleAutoClosedNotification,
@@ -207,6 +206,8 @@ const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'b
  * booking detail is still the destination of its View Booking button.
  */
 const opensSomewhere = (n: { type: string; actionable: boolean; bookingId?: string | undefined }, isProvider: boolean): boolean =>
+  // A Terms change is only a notice: its pop-up has no button.
+  n.type === 'terms_updated' ? false :
   n.actionable || n.type === 'follow_request' ||
   (isProvider && n.type === 'booking_confirmed' && !!n.bookingId);
 // Providers need a direct route to act on an incoming booking and to inspect a
@@ -896,9 +897,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         dismissThenNavigate(() => navigateNested('Profile', 'Circle'));
       }, 300);
-    } else if (notification.type === 'terms_updated') {
-      // The Terms live on cerviced.co/legal, opened over this screen.
-      defer(() => openLegalPage('terms'), 300);
     } else if (notification.type === 'payout_failed') {
       // Provider-only. The fix (Stripe account or bank details) lives on
       // Payments, not on the booking the payout was for.
@@ -1103,8 +1101,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Certificate';
       case 'payout_failed':
         return 'Open Payments';
-      case 'terms_updated':
-        return 'Read Terms';
       case 'provider_saved':
         return 'View Analytics';
       case 'waitlist_joined':

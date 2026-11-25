@@ -177,3 +177,16 @@ export function isOutsideHoursRefusal(error: unknown): boolean {
   if (e?.code !== "P0001" || typeof e.message !== "string") return false;
   return /outside the provider's working hours|has to start by/i.test(e.message);
 }
+
+/**
+ * The bookings check's "That time is no longer available" is written for a
+ * client who lost a slot. Refusing a provider's own offer it means the time
+ * clashes with something already in their diary, so they're told that.
+ */
+export function providerOfferRefusalMessage(error: unknown, fallback: string): string {
+  const e = error as { code?: unknown; message?: unknown } | null;
+  if (e?.code === "P0001" && e.message === "That time is no longer available") {
+    return "You already have a booking at that time. Pick another time.";
+  }
+  return fallback;
+}

@@ -108,7 +108,7 @@ Curated: [[Payments]] · **210 files**
 - … +180 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **432 files**
+Curated: [[Booking Flow]] · **433 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(635)_
@@ -128,7 +128,7 @@ Curated: [[Booking Flow]] · **432 files**
 - `src/services/database/edgeFunctions.ts` _(143)_
 - `src/services/AvailabilityService.ts` _(141)_
 - `supabase/waitlist_holds.sql` _(134)_
-- `src/services/becca/engine.ts` _(130)_
+- `src/services/becca/engine.ts` _(132)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `src/services/database/registration.ts` _(116)_
@@ -139,12 +139,12 @@ Curated: [[Booking Flow]] · **432 files**
 - `src/services/database/reschedule.ts` _(109)_
 - `src/types/booking.ts` _(109)_
 - `src/web/WebPaymentStep.tsx` _(107)_
-- … +402 more
+- … +403 more
 
 ## Notifications
 Curated: [[Notifications]] · **219 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(369)_
+- `src/screens/shared/NotificationsScreen.tsx` _(368)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/database/notifications.ts` _(118)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(107)_
@@ -154,7 +154,7 @@ Curated: [[Notifications]] · **219 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(61)_
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(54)_
-- `src/services/notificationTapHandler.ts` _(51)_
+- `src/services/notificationTapHandler.ts` _(52)_
 - `supabase/automation_jobs.sql` _(51)_
 - `src/services/becca/capabilities/client.ts` _(48)_
 - `supabase/booking_flow_fixes.sql` _(40)_
@@ -314,9 +314,9 @@ Curated: [[Contexts]] · **255 files**
 ## Becca / AI
 Curated: [[Services]] · **68 files**
 - `src/screens/shared/BeccaScreen.tsx` _(110)_
-- `src/services/becca/engine.ts` _(61)_
+- `src/services/becca/engine.ts` _(66)_
 - `src/services/becca/capabilities/client.ts` _(53)_
-- `src/services/becca/types.ts` _(42)_
+- `src/services/becca/types.ts` _(43)_
 - `src/services/database/becca.ts` _(39)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(37)_
 - `src/components/ChatComponents.tsx` _(36)_
@@ -332,11 +332,11 @@ Curated: [[Services]] · **68 files**
 - `src/services/becca/missLog.ts` _(17)_
 - `src/services/databaseService.ts` _(14)_
 - `src/services/becca/capabilities/provider.ts` _(11)_
+- `src/services/becca/matcher.ts` _(11)_
 - `src/services/becca/navigationContract.ts` _(11)_
 - `src/services/becca/registry.ts` _(10)_
 - `src/i18n/catalogs/en.ts` _(9)_
 - `src/services/becca/aiRuntime.ts` _(9)_
-- `src/services/becca/matcher.ts` _(9)_
 - `src/utils/env.ts` _(9)_
 - `src/navigation/provider/ProviderTabNavigator.tsx` _(8)_
 - `src/navigation/client/ClientTabNavigator.tsx` _(6)_
