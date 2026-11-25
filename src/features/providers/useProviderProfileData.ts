@@ -15,8 +15,8 @@ import {
   getProviderReviews,
   trackUserInteraction,
 } from "../../services/databaseService";
-import { getUnclaimedProviderDetail } from "../../services/providerClaimService";
-import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
+import { getDirectoryListingDetail } from "../../services/directoryListingService";
+import type { DirectoryListingDetail } from "../../services/directoryListingService";
 import userLearningService from "../../services/userLearningService";
 import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
@@ -33,7 +33,7 @@ export interface ProviderProfileDataState {
   providerDbId: string | null;
   loading: boolean;
   loadFailed: boolean;
-  unclaimedProvider: UnclaimedProviderDetail | null;
+  unclaimedProvider: DirectoryListingDetail | null;
   reviews: ProviderReviewItem[];
   reviewsLoading: boolean;
   reviewsLoadedAll: boolean;
@@ -89,7 +89,7 @@ export function useProviderProfileData(
   const keepSeedRef = useRef(seed !== null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [unclaimedProvider, setUnclaimedProvider] =
-    useState<UnclaimedProviderDetail | null>(null);
+    useState<DirectoryListingDetail | null>(null);
   const [reviews, setReviews] = useState<ProviderReviewItem[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsLoadedAll, setReviewsLoadedAll] = useState(false);
@@ -189,7 +189,7 @@ export function useProviderProfileData(
           // Postgres reject the query, so a provider that has simply gone
           // offline showed "Could not load provider" instead of "not found".
           const unclaimed = isProviderProfileUuid(providerSlug)
-            ? await getUnclaimedProviderDetail(providerSlug)
+            ? await getDirectoryListingDetail(providerSlug)
             : null;
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;

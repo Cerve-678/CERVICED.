@@ -1094,3 +1094,96 @@ To raise (not lawyer-reviewed):
   hold · bank dispute" while one is open, instead of "Returned" throughout.
   Needs an app build. A fee won back says "being paid back" because support
   does it by hand.
+
+## 29. Businesses listed before they join ("Not on CERVICED yet") (2026-10-19)
+
+**What it is:** client Search shows unclaimed directory listings: 515
+London beauty businesses imported from a third party's public directory
+(Gina's Maintenance Directory), plus the booking link from each business's
+Instagram bio (`supabase/import_gina_directory_listings.sql`, run on
+2026-11-24: 515 listings, six businesses listed twice kept once).
+Each shows the Instagram handle as its name, area, category and links, with a
+grey initial instead of a logo. They can't be booked in the app. The owner can
+claim a listing (Instagram bio code, approved by hand) and anyone can email
+support@cerviced.co to have one corrected or removed. Client Terms §6,
+Privacy Policy §2 ("Public business information", which on 2026-11-24 gained
+"its public social media profile") on cerviced.co/legal and the listing page
+say so. Built on `feat/directory-listings-in-search` (PR #123).
+
+**Gaps to raise (not resolved):**
+- **Lawful basis.** Many listings are sole traders, so handle + area is
+  personal data about people who never signed up. Legitimate interests is the
+  likely basis, and that needs a written legitimate interests assessment.
+- **Article 14 notice.** Data collected indirectly normally has to be told to
+  each person within a month. The in-app Privacy text doesn't reach people who
+  aren't users. Whether a public notice is enough ("disproportionate effort"),
+  or each business must be contacted (e.g. on Instagram), is a solicitor
+  question.
+- **Removal handling.** There's no owner, deadline (one month) or suppression
+  list for removal requests, so a removed business could come back in a later
+  import. Retention for listings that are never claimed isn't set.
+- **The source directory.** A compiled directory can be protected by UK
+  database right and copyright. Check its terms and whether there's
+  permission to re-use 521 entries. Instagram's terms restrict automated
+  collection, which matters for how the bio links were gathered.
+- **Endorsement.** Terms and the listing page now say a listing doesn't mean
+  the business approved of or partnered with CERVICED. Whether chains or
+  registered marks should be excluded is undecided.
+- **Logos.** If real logos or Instagram profile pictures are added later,
+  they're usually the business's copyright, and a sole trader's picture is
+  often their face. That's a bigger step than a handle and an area.
+- ~~**Contact addresses disagree.**~~ Resolved: the Privacy Policy moved to
+  cerviced.co/legal, which no longer names privacy@cerviced.app.
+- **New notice wording (2026-11-24).** The product owner reworded the listing
+  page notice and added "We list beauty businesses so beauty lovers can find
+  them in one place. Press Nudge if you want them on the app." Every point
+  from Client Terms §6 is kept (not partnered, not bookable in the app, their
+  page isn't run by CERVICED, may be out of date, claim or email to correct or
+  remove). For the 146 listings with no booking link, "You book on their own
+  page" is replaced by "To book, get in touch with them on Instagram". Text:
+  `listingNotice()` in `src/features/providers/directoryListings.ts`.
+- **Join nudges on listings (2026-11-24).** A signed-in client can nudge a
+  listing to join. It's stored as the client's id, the business and the day
+  (`provider_stat_viewers`, the same record a link-only provider's nudge uses),
+  and the team messages nudged businesses on Instagram by hand. That's new
+  personal data: which client wants which business. The Privacy Policy on
+  cerviced.co doesn't mention it yet. The owner sees only a count when
+  claiming, never who. The client is told "We'll let them know", so the team
+  has to actually message nudged businesses for that to stay true.
+- **Not lawyer-reviewed**, like the rest of the Terms and Privacy text (§19).
+
+## 30. Paying for a booking on the website (2026-11-24)
+
+**What it is:** a client without the app can book and pay on a provider's
+page at cerviced.co/@handle: email-code sign-in (a real CERVICED account),
+the Cart's single policies tick, the late/no-show and late cancellation fee
+ticks, then Stripe card or Apple Pay, and a Booked screen pointing to the app
+(`src/web/WebPaymentStep.tsx`, branch `feat/web-pay`). The Book buttons stay
+switched off on cerviced.co until Stripe goes live, so none of this is live.
+Flagged by the legal-flagger review; nothing below is resolved.
+
+**Gaps to raise before switching it on:**
+- **Distance-selling information (Consumer Contracts Regulations 2013).**
+  A website sale is a distance contract, and a mobile visit may be
+  off-premises. The web checkout shows no 14-day cancellation right or the
+  request to start the service within it, and the provider's cancellation
+  policy and the Terms are linked, not shown, at the tick. Same open
+  question as the app (above), made live for the first time here. Solicitor.
+- **Confirmation on a durable medium.** The booking confirmation email
+  carries the reference, services and total, but not the cancellation policy,
+  the Terms or any cooling-off notice. Solicitor.
+- **Web-only clients can't cancel.** The Booked screen sends them to the app
+  ("coming soon") to change or cancel, and there's no web way to do either, so
+  until the app is out a web client has no self-serve cancellation or
+  cooling-off route. User decides (web cancel, email route, or wait for the app).
+- **The tick is still placeholder copy.** It's the Cart's wording, marked
+  TODO(copy) there; the web reuses it for real payments. User, then solicitor.
+- **Cookies.** The legal page says the website sets no cookies; Stripe.js on
+  the checkout sets fraud-prevention cookies. Whether "strictly necessary"
+  covers them, and whether Stripe is named as a processor, is open. Solicitor.
+- **Health-adjacent data and the mobile address** are collected from an
+  account made minutes earlier, with no wording on why or who sees them (same
+  gap as §2 for the app). User and solicitor.
+- **Age.** The web asks for a date of birth (16+, like the app) only when the
+  account has none. Neither the web nor `prepare_checkout` checks a service's
+  `min_age` (also true of the app). Solicitor, then user.

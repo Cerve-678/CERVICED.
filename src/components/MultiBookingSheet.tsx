@@ -943,6 +943,10 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
                   </Text>
                 )}
+                {/* The provider's own "Note to clients" from Payments, in their words. */}
+                {!!depositPolicy?.depositNote && (
+                  <Text style={[styles.depositNoteText, { color: tokens.sub }]}>{depositPolicy.depositNote}</Text>
+                )}
               </View>
               </>
               )}
@@ -1409,6 +1413,7 @@ const styles = StyleSheet.create({
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
+  depositNoteText: { fontSize: 13, lineHeight: 18, marginTop: 8 },
   summaryGroupBlock: { marginBottom: 4 },
   summaryGroupBlockBanded: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 },
   summaryGroupHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },

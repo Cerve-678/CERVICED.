@@ -1,4 +1,4 @@
-import { resolveDepositMode, resolveEditorDepositMode } from '../utils/depositPolicy';
+import { depositNoteForClients, resolveDepositMode, resolveEditorDepositMode } from '../utils/depositPolicy';
 
 describe('resolveDepositMode', () => {
   it('prefers the explicit depositMode a provider set', () => {
@@ -50,5 +50,29 @@ describe('resolveEditorDepositMode', () => {
   it('otherwise agrees with resolveDepositMode', () => {
     expect(resolveEditorDepositMode({ depositRequired: false })).toBe('full_only');
     expect(resolveEditorDepositMode({ depositMode: 'deposit_required' })).toBe('deposit_required');
+  });
+});
+
+// The "Note to clients" a provider writes under their deposit on Payments.
+// It was saved but never shown anywhere a client could read it.
+describe('depositNoteForClients', () => {
+  it("shows the provider's note when they take deposits", () => {
+    expect(depositNoteForClients({ depositMode: 'client_choice', depositAmount: '20', depositNote: 'The deposit will be deducted from your final bill' }))
+      .toBe('The deposit will be deducted from your final bill');
+    expect(depositNoteForClients({ depositMode: 'deposit_required', depositAmount: '10', depositNote: '  Comes off your bill  ' }))
+      .toBe('Comes off your bill');
+  });
+
+  it('shows nothing when the provider takes no deposit, even if an old note is still saved', () => {
+    expect(depositNoteForClients({ depositMode: 'full_only', depositAmount: '20', depositNote: 'Old note' })).toBeNull();
+    expect(depositNoteForClients({ depositNote: 'Never chose a mode' })).toBeNull();
+    expect(depositNoteForClients({ depositMode: 'client_choice', depositNote: 'No amount set' })).toBeNull();
+  });
+
+  it('shows nothing for a blank or missing note', () => {
+    expect(depositNoteForClients({ depositMode: 'client_choice', depositAmount: '20', depositNote: '   ' })).toBeNull();
+    expect(depositNoteForClients({ depositMode: 'client_choice', depositAmount: '20' })).toBeNull();
+    expect(depositNoteForClients({ depositMode: 'client_choice', depositAmount: '20', depositNote: 42 })).toBeNull();
+    expect(depositNoteForClients(null)).toBeNull();
   });
 });

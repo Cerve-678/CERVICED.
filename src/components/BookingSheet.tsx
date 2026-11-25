@@ -160,7 +160,7 @@ export interface BookingSheetResult {
   emergencyRequest?: EmergencyRequest;
 }
 
-interface BookingSheetProps {
+export interface BookingSheetProps {
   isVisible: boolean;
   onClose: () => void;
   mode: 'add' | 'edit';
@@ -210,6 +210,9 @@ interface BookingSheetProps {
    *  it, above the main service's, and both are scheduled together on
    *  submit. Caller adds both as separate cart items. */
   consultationRequired?: BookingSheetService | null;
+  /** The last step's button in mode="add". The app adds to its Cart; the
+   *  website has no cart and goes straight on to paying (src/web). */
+  submitLabel?: string;
   onSubmit: (result: BookingSheetResult) => void;
 }
 
@@ -228,6 +231,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   backgroundColor,
   initial,
   consultationRequired,
+  submitLabel,
   onSubmit,
 }) => {
   const insets = useSafeAreaInsets();
@@ -1010,6 +1014,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
                   </Text>
                 )}
+                {/* The provider's own "Note to clients" from Payments, in their words. */}
+                {!!depositPolicy?.depositNote && (
+                  <Text style={[styles.depositNoteText, { color: tokens.sub }]}>{depositPolicy.depositNote}</Text>
+                )}
               </View>
 
               {/* Promo entry only on the add flow (from the provider profile) —
@@ -1300,7 +1308,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       ? stepBlocker
                       : step === 'confirm'
                       ? (mode === 'add'
-                          ? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart')
+                          ? (submitLabel ?? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart'))
                           : 'Save Changes')
                       : 'Continue'}
                   </Text>
@@ -1449,8 +1457,14 @@ const styles = StyleSheet.create({
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
+  // On a computer's browser (the website's /@handle page) the sheet is as wide
+  // as the page under it rather than the whole window. A phone is narrower
+  // than this, so the app is unchanged.
+  sheet: {
+    flex: 1, width: '100%', marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden',
+    ...(Platform.OS === 'web' ? { maxWidth: 480 } : {}),
+  },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -1530,6 +1544,7 @@ const styles = StyleSheet.create({
   paymentButtons: { flexDirection: 'row', gap: 10 },
   paymentOptionButton: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: 'transparent', paddingVertical: 12, alignItems: 'center' },
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
+  depositNoteText: { fontSize: 13, lineHeight: 18, marginTop: 8 },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
   footer: {

@@ -20,6 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { suggestionProps, type SuggestionKeyboard } from '../../utils/textInputSuggestions';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Kept identical to the values the original Business Details screen used, so
@@ -117,11 +118,13 @@ const minusSt = StyleSheet.create({
 
 // ─── Field ────────────────────────────────────────────────────────────────────
 
-export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline, maxLength }: {
+export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline, maxLength, noSuggestions }: {
   label: string; value: string; onChange?: (v: string) => void;
   placeholder?: string; readOnly?: boolean; note?: string;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'decimal-pad'; multiline?: boolean;
+  keyboardType?: SuggestionKeyboard; multiline?: boolean;
   maxLength?: number;
+  /** A handle, link or stylised name: no suggestions, no autocorrect. */
+  noSuggestions?: boolean;
 }) {
   const C = useBusinessPalette();
   return (
@@ -137,8 +140,7 @@ export function Field({ label, value, onChange, placeholder, readOnly, note, key
           placeholder={placeholder}
           placeholderTextColor={C.sub}
           keyboardType={keyboardType ?? 'default'}
-          autoCapitalize="none"
-          autoCorrect={false}
+          {...suggestionProps({ keyboardType, noSuggestions })}
           editable={!readOnly}
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}

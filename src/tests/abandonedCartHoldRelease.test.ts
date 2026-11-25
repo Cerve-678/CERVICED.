@@ -7,6 +7,8 @@ const MIGRATION = readFileSync(
   'utf8',
 );
 const CART = readFileSync(join(REPO, 'src/screens/client/CartScreen.tsx'), 'utf8');
+// The Stripe sheet the Cart (and a waitlist ticket) opens.
+const PAY_SHEET = readFileSync(join(REPO, 'src/features/cart/StripePaymentSheet.tsx'), 'utf8');
 
 // Reproduced live on 2026-09-07: two "Confirm & Pay" taps left an on_hold row
 // each, neither released, and the client who placed them was then told their
@@ -97,7 +99,7 @@ describe('leaving the Cart while a payment is going through', () => {
     CART.indexOf('const abandonOutstandingCheckout = useCallback'),
     CART.indexOf('}, [releaseCartCheckoutSlots]);'),
   );
-  const pay = CART.slice(CART.indexOf('const StripePaymentModal'));
+  const pay = PAY_SHEET.slice(PAY_SHEET.indexOf('export const StripePaymentSheet'));
 
   it('does not cancel a checkout whose payment is in flight', () => {
     expect(abandon).toContain('if (paymentInFlightRef.current) return;');

@@ -80,6 +80,7 @@ import {
   getMyWaitlist,
   joinWaitlist,
   leaveWaitlist,
+  updateMyWaitlistDates,
   type MyWaitlistPlace,
   setProviderFollowNotify,
   recordProviderStat,
@@ -90,7 +91,7 @@ import {
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
 import { toUserMessage } from "../../utils/userFacingError";
-import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
+import type { DirectoryListingDetail } from "../../services/directoryListingService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
 import { useBeforeYouBook } from "../../features/bookings/BeforeYouBookSheet";
@@ -108,22 +109,38 @@ import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { dateToYMD, formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { releaseTimeLabel } from "../../utils/bookingHorizon";
-import { hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
+import { ProviderReviewsModal } from "../../features/providers/ProviderReviewsModal";
+import { ProviderContactSheet } from "../../features/providers/ProviderContactSheet";
+import { providerContactOptions } from "../../features/providers/contactOptions";
 import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
 import { ProviderPageHero } from "../../features/providers/page/ProviderPageHero";
 import { ProviderPageSheet } from "../../features/providers/page/ProviderPageSheet";
 import { PinnedBarServiceText, pinnedBarServices, type PinnedBarLine } from "../../features/providers/page/PinnedBarServices";
 import { ProviderPageServices } from "../../features/providers/page/ProviderPageServices";
 import { revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { heroPhotoPickLimit, type PageSectionKey } from "../../constants/pageStyles";
+import { heroPhotoPickLimit } from "../../constants/pageStyles";
 import { heroPhotoFramesOf } from "../../features/providers/HeroPhoto";
-import { heroPhotos } from "../../features/providers/heroPhotos";
+import { heroPhotosForPage } from "../../features/providers/heroPhotos";
+import { pageJumpTargets } from "../../features/providers/page/jumpTargets";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
+import {
+  listingCategoryLabel,
+  listingInstagramUrl,
+  listingLink,
+  listingNotice,
+  listingServiceKind,
+} from "../../features/providers/directoryListings";
+import { ListingInitialBadge } from "../../components/ListingInitialBadge";
+import { JoinNudgeBar, JoinNudgeSideToast } from "../../components/JoinNudgeBar";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
 import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
+import { WaitlistTicket } from "../../features/bookings/WaitlistTicket";
+import { WaitlistDatesSheet } from "../../features/bookings/WaitlistDatesSheet";
+import { useWaitlistHoldActions } from "../../features/bookings/useWaitlistHoldActions";
+import { durationToMinutes } from "../../features/cart/presentation";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -321,147 +338,6 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
   },
 );
 SuccessMessage.displayName = "SuccessMessage";
-// Reviews Modal Component
-interface ReviewsModalProps {
-  isVisible: boolean;
-  onClose: () => void;
-  reviews: {
-    id: number | string;
-    name: string;
-    rating: number;
-    comment: string;
-    date: string;
-  }[];
-  providerName: string;
-  adaptiveAccentColor: string;
-  providerGradient: [string, string, ...string[]];
-  /** Branding → Card Shape. */
-  squareCards: boolean;
-}
-
-const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
-  ({
-    isVisible,
-    onClose,
-    reviews,
-    providerName,
-    adaptiveAccentColor,
-    providerGradient,
-    squareCards,
-  }) => {
-    const allReviews = reviews;
-
-    const averageRating = useMemo(() => {
-      if (allReviews.length === 0) return "0.0";
-      const total = allReviews.reduce((sum, review) => sum + review.rating, 0);
-      return (total / allReviews.length).toFixed(1);
-    }, [allReviews]);
-
-    return (
-      <Modal
-        visible={isVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={onClose}
-      >
-        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
-        <SafeAreaProvider>
-        <WindowControlsInsetProvider>
-        <View style={styles.modalBackground}>
-          <LinearGradient
-            colors={providerGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={[styles.modalGradient, { opacity: 0.85 }]}
-          />
-
-          <SafeAreaView style={styles.modalSafeArea}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderContent}>
-                <View>
-                  <Text style={styles.modalTitle}>All Reviews</Text>
-                  <Text style={styles.modalSubtitle}>
-                    @{providerName} • {averageRating} ★ ({allReviews.length}{" "}
-                    reviews)
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.modalCloseButton,
-                    { backgroundColor: adaptiveAccentColor },
-                  ]}
-                  onPress={onClose}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.modalCloseText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Reviews List — virtualized so a heavily-reviewed provider doesn't
-                mount every BlurView/LinearGradient card at once */}
-            <FlatList
-              data={allReviews}
-              keyExtractor={(review) => String(review.id)}
-              style={styles.modalContent}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              initialNumToRender={8}
-              maxToRenderPerBatch={8}
-              windowSize={7}
-              renderItem={({ item: review }) => (
-                <BlurView
-                  intensity={20}
-                  tint="light"
-                  style={[styles.modalReviewCard, squareCards && styles.squareCard]}
-                >
-                  <LinearGradient
-                    colors={["rgba(255,255,255,0.4)", "transparent"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={[styles.modalCardHighlight, squareCards && styles.squareCard]}
-                  />
-                  <View style={styles.modalReviewHeader}>
-                    <Text style={styles.modalReviewerName}>{review.name}</Text>
-                    <View style={styles.modalReviewRating}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Text
-                          key={star}
-                          style={[
-                            styles.modalStar,
-                            {
-                              color:
-                                star <= review.rating
-                                  ? "#FFD700"
-                                  : "rgba(0,0,0,0.2)",
-                            },
-                          ]}
-                        >
-                          ★
-                        </Text>
-                      ))}
-                    </View>
-                    <Text style={styles.modalReviewDate}>{review.date}</Text>
-                  </View>
-                  {review.comment ? (
-                    <Text style={styles.modalReviewComment}>
-                      {review.comment}
-                    </Text>
-                  ) : null}
-                </BlurView>
-              )}
-            />
-          </SafeAreaView>
-        </View>
-        </WindowControlsInsetProvider>
-        </SafeAreaProvider>
-      </Modal>
-    );
-  },
-);
-
-ReviewsModal.displayName = "ReviewsModal";
 
 // Notification Alert Component
 interface NotificationAlertProps {
@@ -952,149 +828,335 @@ const offersStyles = StyleSheet.create({
 });
 
 // ── Unclaimed Provider View ──────────────────────────────────────────────────
-// Read-only card for an imported-but-unclaimed listing (is_claimed = false).
-// Deliberately has no services/availability/booking UI at all — those don't
-// exist for a row nobody has onboarded yet. Its one job is to show enough to
-// recognise the business and offer a way to claim it.
+// Read-only page for an imported-but-unclaimed listing (is_claimed = false):
+// a business that hasn't joined CERVICED, which clients reach from Search
+// (see directoryListings.ts). Deliberately has no services/availability/
+// booking UI at all — those don't exist for a row nobody has onboarded yet.
+// Its job is to show enough to recognise the business, send the client to
+// the business's own page or Instagram, let them nudge it to join (the same
+// join nudge a link-only provider's page has), and offer the owner a way to
+// claim it.
+//
+// It's CERVICED's page, not the business's, so it follows the viewer's own
+// colours and dark mode rather than a provider theme. The band behind the top
+// is a fixed CERVICED colour, never the business's.
+const LISTING_HERO = {
+  light: ["#3F1E36", "#7A4A6C"] as const,
+  dark: ["#2E3A4E", "#1E1B21"] as const,
+};
+
 function UnclaimedProviderView({
   provider,
-  theme,
-  onBack,
+  currentUserId,
   onClaim,
 }: {
-  provider: UnclaimedProviderDetail;
-  theme: ProviderThemeTokens;
-  onBack: () => void;
+  provider: DirectoryListingDetail;
+  currentUserId: string | null | undefined;
   onClaim: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  return (
-    <View style={[unclaimedStyles.container, { backgroundColor: theme.bg }]}>
-      <View style={[unclaimedStyles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          onPress={onBack}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={[unclaimedStyles.backButton, { backgroundColor: theme.surface }]}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <Text style={[unclaimedStyles.backButtonText, { color: theme.text }]}>←</Text>
-        </TouchableOpacity>
-      </View>
+  const { palette: P, isDarkMode } = useTheme();
+  const link = listingLink(provider.website);
+  const instagramUrl = listingInstagramUrl(provider.instagram);
+  const kind = listingServiceKind(provider.customServiceType, provider.serviceCategory);
+  const longName = provider.displayName.length > 20;
 
+  const [nudgePending, setNudgePending] = useState(false);
+  const [nudgeSent, setNudgeSent] = useState(false);
+  const [footerHeight, setFooterHeight] = useState(0);
+
+  const openLink = () => {
+    if (!link) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    const opening = link.opensInApp ? openExternalBookingPage(link.url) : Linking.openURL(link.url);
+    opening.catch((error: unknown) => {
+      logger.error("[ProviderProfile] listing link failed to open", error);
+      Alert.alert("Couldn't open their page", "Please try again in a moment.");
+    });
+  };
+
+  const openInstagram = () => {
+    if (!instagramUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Linking.openURL(instagramUrl).catch((error: unknown) => {
+      logger.error("[ProviderProfile] listing Instagram failed to open", error);
+      Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+    });
+  };
+
+  // Same record as a link-only provider's nudge: record_provider_stat
+  // 'join_nudge', at most one per client per business per day. The team
+  // messages the most-nudged listings (Admin → Nudged businesses).
+  const nudge = async () => {
+    if (nudgePending || nudgeSent) return;
+    if (!currentUserId) {
+      Alert.alert("Sign in to nudge them", "Sign in to your CERVICED account, then tap Nudge.");
+      return;
+    }
+    setNudgePending(true);
+    try {
+      await recordProviderStat([provider.id], "join_nudge");
+      setNudgeSent(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (error) {
+      logger.warn("[ProviderProfile] could not record listing nudge", error);
+      Alert.alert("Couldn't send your nudge", "Please try again in a moment.");
+    } finally {
+      setNudgePending(false);
+    }
+  };
+
+  const nudgeBottom = footerHeight + 12;
+
+  return (
+    <ThemedBackground>
+      <FocusAwareStatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={isDarkMode ? LISTING_HERO.dark : LISTING_HERO.light}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.6, y: 1 }}
+        style={[unclaimedStyles.hero, { height: insets.top + 194 }]}
+      />
+
+      {/* Back is the screen's native header (white, set in the header
+          effect), so the page draws no back button of its own. */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={unclaimedStyles.content}
+        contentContainerStyle={[unclaimedStyles.scroll, { paddingTop: insets.top + 76 }]}
         showsVerticalScrollIndicator={false}
       >
-        {provider.logoUrl ? (
-          <Image
-            source={{ uri: provider.logoUrl }}
-            style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]}
-            contentFit="cover"
-            transition={0}
-          />
-        ) : (
-          <View style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]} />
-        )}
-
-        <Text style={[unclaimedStyles.name, { color: theme.text }]}>
-          {provider.displayName}
-        </Text>
-
-        <View style={[unclaimedStyles.chip, { backgroundColor: theme.surface }]}>
-          <Text style={[unclaimedStyles.chipText, { color: theme.sub }]}>
-            {[provider.serviceCategory, provider.locationText].filter(Boolean).join(" · ")}
-          </Text>
+        {/* Below the header row so the back arrow never covers it. */}
+        <View style={unclaimedStyles.pillRow}>
+          <View style={unclaimedStyles.pill}>
+            <Text style={unclaimedStyles.pillText}>Not on CERVICED yet</Text>
+          </View>
         </View>
+        <View
+          style={[
+            unclaimedStyles.sheet,
+            { backgroundColor: P.bg, paddingBottom: 58 + 32 },
+          ]}
+        >
+          <View style={[unclaimedStyles.logoRing, { backgroundColor: P.bg }]}>
+            {provider.logoUrl ? (
+              <Image
+                source={{ uri: provider.logoUrl }}
+                style={[unclaimedStyles.logo, { backgroundColor: P.surface }]}
+                contentFit="cover"
+                transition={0}
+              />
+            ) : (
+              <ListingInitialBadge
+                name={provider.displayName}
+                dark={isDarkMode}
+                fontSize={34}
+                style={unclaimedStyles.logo}
+              />
+            )}
+          </View>
 
-        {provider.aboutText && (
-          <Text style={[unclaimedStyles.about, { color: theme.sub }]}>
-            {provider.aboutText}
+          <Text
+            style={[unclaimedStyles.name, { color: P.text, fontSize: longName ? 18 : 22 }]}
+            numberOfLines={2}
+          >
+            {provider.displayName}
           </Text>
-        )}
 
-        <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
-            This listing hasn't been claimed by its owner yet, so it isn't
-            bookable — details here were imported and may be out of date.
-          </Text>
+          <View style={unclaimedStyles.chips}>
+            <View style={[unclaimedStyles.chip, { backgroundColor: P.accentDim }]}>
+              <Text style={[unclaimedStyles.chipText, { color: P.accentText }]}>
+                {listingCategoryLabel(provider.serviceCategory)}
+              </Text>
+            </View>
+            {kind && (
+              <View style={[unclaimedStyles.chip, { backgroundColor: P.accentDim }]}>
+                <Text style={[unclaimedStyles.chipText, { color: P.accentText }]}>{kind}</Text>
+              </View>
+            )}
+            {provider.locationText && (
+              <View style={[unclaimedStyles.chip, { backgroundColor: P.surface }]}>
+                <Text style={[unclaimedStyles.chipText, { color: P.sub }]}>{provider.locationText}</Text>
+              </View>
+            )}
+          </View>
+
+          {(link || instagramUrl) && (
+            <View style={unclaimedStyles.actions}>
+              {link ? (
+                <TouchableOpacity
+                  style={[unclaimedStyles.primaryButton, { backgroundColor: P.accent }]}
+                  onPress={openLink}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <Text style={[unclaimedStyles.primaryButtonText, { color: P.onAccent }]}>{link.label}</Text>
+                  <Ionicons name="open-outline" size={15} color={P.onAccent} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[unclaimedStyles.primaryButton, { backgroundColor: P.accent }]}
+                  onPress={openInstagram}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                >
+                  <Ionicons name="logo-instagram" size={16} color={P.onAccent} />
+                  <Text style={[unclaimedStyles.primaryButtonText, { color: P.onAccent }]}>Open their Instagram</Text>
+                </TouchableOpacity>
+              )}
+              {link && instagramUrl && (
+                <TouchableOpacity
+                  style={[unclaimedStyles.roundButton, { backgroundColor: P.card, borderColor: P.border }]}
+                  onPress={openInstagram}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                >
+                  <Ionicons name="logo-instagram" size={20} color={P.text} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {provider.aboutText && (
+            <Text style={[unclaimedStyles.about, { color: P.sub }]}>{provider.aboutText}</Text>
+          )}
+
+          <View style={[unclaimedStyles.noticeCard, { backgroundColor: P.surface, borderColor: P.border }]}>
+            <Text style={[unclaimedStyles.noticeText, { color: P.sub }]}>
+              {listingNotice(!!link)}
+            </Text>
+          </View>
         </View>
       </ScrollView>
 
-      <View style={[unclaimedStyles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.sep }]}>
+      <View
+        style={[unclaimedStyles.footer, { backgroundColor: P.bg, paddingBottom: insets.bottom + 16, borderTopColor: P.sep }]}
+        onLayout={e => setFooterHeight(e.nativeEvent.layout.height)}
+      >
         <TouchableOpacity
-          style={[unclaimedStyles.claimButton, { backgroundColor: theme.accent }]}
+          style={[unclaimedStyles.claimButton, { borderColor: P.border }]}
           onPress={onClaim}
           activeOpacity={0.85}
         >
-          <Text style={unclaimedStyles.claimButtonText}>Claim this business</Text>
+          <Text style={[unclaimedStyles.claimButtonText, { color: P.text }]}>
+            Is this your business? Claim it
+          </Text>
         </TouchableOpacity>
       </View>
-    </View>
+
+      {footerHeight > 0 && (
+        <JoinNudgeSideToast
+          bottom={nudgeBottom}
+          businessName={provider.displayName}
+          sent={nudgeSent}
+          pending={nudgePending}
+          sentLabel="Nudged! We'll let them know"
+          onNudge={() => { void nudge(); }}
+        />
+      )}
+    </ThemedBackground>
   );
 }
 
 const unclaimedStyles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  hero: { position: "absolute", top: 0, left: 0, right: 0 },
+  pillRow: {
+    height: 44,
+    paddingHorizontal: 20,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-end",
   },
-  backButtonText: { fontSize: 20, lineHeight: 22 },
-  content: { flexGrow: 1, alignItems: "center", paddingHorizontal: 32, paddingTop: 24, paddingBottom: 24 },
-  logo: { width: 88, height: 88, borderRadius: 44 },
+  pill: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  pillText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  scroll: { flexGrow: 1 },
+  sheet: {
+    flexGrow: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+  },
+  logoRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 30,
+    padding: 5,
+    marginTop: -48,
+  },
+  logo: { width: 86, height: 86, borderRadius: 26 },
   name: {
     fontFamily: "BakbakOne-Regular",
-    fontSize: 20,
-    marginTop: 16,
-    textAlign: "center",
+    marginTop: 12,
   },
-  chip: {
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   chipText: {
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "700",
   },
+  actions: { flexDirection: "row", gap: 8, marginTop: 20 },
+  primaryButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 16,
+    minHeight: 50,
+    paddingHorizontal: 14,
+  },
+  primaryButtonText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 14,
+    flexShrink: 1,
+  },
+  roundButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   about: {
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     lineHeight: 20,
-    textAlign: "center",
     marginTop: 16,
   },
   noticeCard: {
-    alignItems: "flex-start",
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
-    marginTop: 28,
+    marginTop: 18,
   },
   noticeText: {
-    flex: 1,
     fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 21,
   },
   footer: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   claimButton: {
     borderRadius: 16,
-    paddingVertical: 16,
+    borderWidth: 1,
+    paddingVertical: 14,
     alignItems: "center",
   },
   claimButtonText: {
     fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: "#FFFFFF",
+    fontSize: 13,
   },
 });
 
@@ -1500,6 +1562,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [leaveConfirmEntry, setLeaveConfirmEntry] =
     useState<MyWaitlistPlace | null>(null);
+  // The client's waitlist ticket, opened from their "2nd in line" chip, by
+  // place id so a reload shows its latest state; and its Change dates sheet.
+  const [ticketPlaceId, setTicketPlaceId] = useState<string | null>(null);
+  const [ticketNow, setTicketNow] = useState(() => Date.now());
+  const [datesSheetPlace, setDatesSheetPlace] = useState<MyWaitlistPlace | null>(null);
+  const [datesBusy, setDatesBusy] = useState(false);
+  const [datesError, setDatesError] = useState<string | null>(null);
+  // Set once the client's waitlist places have been read for this page, so
+  // a "slot opened" notification can tell a held slot from one that's gone.
+  const [waitlistLoaded, setWaitlistLoaded] = useState(false);
+  const [holdBusyId, setHoldBusyId] = useState<string | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -1641,7 +1714,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Bow, which has nothing to pick, keeps its newest photo.
   const heroPickLimit = heroPhotoPickLimit(pageStyle);
   const heroPhotoItems = useMemo(
-    () => (heroPickLimit > 0 ? heroPhotos(workPortfolio, heroPickLimit) : workPortfolio.slice(0, 3)).filter((item) => !!item.image_url),
+    () => heroPhotosForPage(workPortfolio, heroPickLimit),
     [heroPickLimit, workPortfolio],
   );
   const heroPhotoUris = useMemo(() => heroPhotoItems.map((item) => item.image_url), [heroPhotoItems]);
@@ -1724,6 +1797,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           map[place.serviceId ?? "__any__"] = place;
         });
       setUserWaitlistMap(map);
+      setWaitlistLoaded(true);
     } catch (error) {
       logger.warn("[ProviderProfile] waitlist places failed to load", error);
     }
@@ -2003,20 +2077,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const policyPagesRef = useRef<ViewInstance>(null);
 
   // Cover's section links, only for sections this profile actually shows.
-  const jumpTargets = useMemo(() => {
-    if (!provider || !pageStyle.jumpBar) return [];
-    const targets: { key: PageSectionKey; ref: React.RefObject<ViewInstance | null> }[] = [
-      { key: "about", ref: aboutCardRef },
-    ];
-    if (!provider.isLinkOnly) targets.push({ key: "services", ref: servicesSectionRef });
-    if (hasProviderPolicyInfo(provider)) {
-      targets.push({ key: "policies", ref: policiesSectionRef });
-    } else if (policyPages.length > 0) {
-      targets.push({ key: "policies", ref: policyPagesRef });
-    }
-    if (!provider.isLinkOnly) targets.push({ key: "reviews", ref: reviewsSectionRef });
-    return targets;
-  }, [provider, pageStyle.jumpBar, policyPages.length]);
+  const jumpTargets = useMemo(
+    () => provider
+      ? pageJumpTargets(provider, pageStyle.jumpBar, policyPages.length, {
+          about: aboutCardRef,
+          services: servicesSectionRef,
+          policies: policiesSectionRef,
+          policyPages: policyPagesRef,
+          reviews: reviewsSectionRef,
+        })
+      : [],
+    [provider, pageStyle.jumpBar, policyPages.length],
+  );
 
   const [showFullLogo, setShowFullLogo] = useState(false);
   const openFullLogo = useCallback(() => setShowFullLogo(true), []);
@@ -2198,6 +2270,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const handleJoinWaitlist = useCallback(async () => {
     if (!provider || !providerDbId || !currentUserId || !waitlistModal.service)
       return;
+    // "Date range" with no dates used to join for any date without saying so.
+    if (waitlistDateMode === "range" && !waitlistDateFrom) {
+      setWaitlistError("Pick the first day you can do, or choose Anytime.");
+      return;
+    }
     Keyboard.dismiss();
     setWaitlistJoining(true);
     try {
@@ -2252,6 +2329,78 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Alert.alert("Error", "Could not leave waitlist.");
     }
   }, []);
+
+  const ticketPlace = useMemo(
+    () => (ticketPlaceId ? Object.values(userWaitlistMap).find((place) => place.id === ticketPlaceId) ?? null : null),
+    [ticketPlaceId, userWaitlistMap],
+  );
+  const openWaitlistTicket = useCallback((place: MyWaitlistPlace) => {
+    setTicketNow(Date.now());
+    setTicketPlaceId(place.id);
+  }, []);
+  const closeWaitlistTicket = useCallback(() => {
+    setDatesSheetPlace(null);
+    setTicketPlaceId(null);
+  }, []);
+  // A held slot's price and length, for its ticket, from this page's own
+  // services.
+  const ticketService = useMemo(() => {
+    if (!provider || !ticketPlace?.serviceId) return null;
+    const match = Object.values(provider.categories).flat().find((service) => service.dbId === ticketPlace.serviceId);
+    return match ? { price: match.price, durationMinutes: durationToMinutes(match.duration) } : null;
+  }, [provider, ticketPlace?.serviceId]);
+  // Confirm & pay (to the Cart) and Pass it on, the same as from Bookings.
+  const openCart = useCallback(() => navigation.getParent()?.navigate("Cart" as never), [navigation]);
+  const { confirmAndPay, passOnHold } = useWaitlistHoldActions({
+    showAlert, showConfirm, setBusyId: setHoldBusyId, openCart, reload: loadWaitlistMap, context: "ProviderProfile",
+  });
+  // The dialog host sits outside the ticket's Modal, so the ticket closes
+  // before anything that asks or alerts.
+  const confirmAndPayFromTicket = useCallback((place: MyWaitlistPlace) => {
+    closeWaitlistTicket();
+    void confirmAndPay(place);
+  }, [closeWaitlistTicket, confirmAndPay]);
+  const passFromTicket = useCallback((place: MyWaitlistPlace) => {
+    closeWaitlistTicket();
+    setTimeout(() => passOnHold(place), 350);
+  }, [closeWaitlistTicket, passOnHold]);
+  // Arriving from a "slot opened" notification (or the Activity Centre) with
+  // the hold's booking id: open its ticket and countdown here, or say it has
+  // gone if its time ran out first.
+  const holdParamHandled = useRef<string | null>(null);
+  const openWaitlistHoldId = route.params?.openWaitlistHoldId;
+  useEffect(() => {
+    if (!openWaitlistHoldId || !waitlistLoaded || holdParamHandled.current === openWaitlistHoldId) return;
+    holdParamHandled.current = openWaitlistHoldId;
+    const held = Object.values(userWaitlistMap).find((place) => place.holdBookingId === openWaitlistHoldId);
+    if (held) {
+      openWaitlistTicket(held);
+    } else {
+      showAlert("This slot has gone", `Its ${WAITLIST_HOLD_MINUTES} minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from here.`);
+    }
+    navigation.setParams({ openWaitlistHoldId: undefined } as never);
+  }, [openWaitlistHoldId, waitlistLoaded, userWaitlistMap, openWaitlistTicket, showAlert, navigation]);
+  // Leave asks first. The ticket and its dates sheet close before the
+  // confirm opens: iOS shows one Modal at a time, and a second can't present
+  // while the first is still sliding away.
+  const leaveFromTicket = useCallback((place: MyWaitlistPlace) => {
+    setDatesSheetPlace(null);
+    setTicketPlaceId(null);
+    setTimeout(() => setLeaveConfirmEntry(place), 350);
+  }, []);
+  const saveWaitlistDates = useCallback(async (place: MyWaitlistPlace, dates: string[] | null) => {
+    setDatesBusy(true);
+    setDatesError(null);
+    try {
+      await updateMyWaitlistDates(place.id, dates);
+      setDatesSheetPlace(null);
+      await loadWaitlistMap();
+    } catch (error) {
+      setDatesError(toUserMessage(error, "Couldn't save your dates. Try again.", "ProviderProfile.saveWaitlistDates"));
+    } finally {
+      setDatesBusy(false);
+    }
+  }, [loadWaitlistMap]);
 
   const handleConfirmLeave = useCallback(async () => {
     if (!leaveConfirmEntry) return;
@@ -2325,87 +2474,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   }, [provider, providerDbId, navigation, isOwnProvider, viewingOtherAsProvider]);
 
-  // The communication options this provider actually publishes, in the order
-  // the Contact card lists them. Built once so the sheet and that card can't
-  // drift apart on which methods count as available.
-  //
-  // PUBLIC contact, deliberately NOT gated on preferred_contact_methods. There
-  // are two audiences with two different sources of truth:
-  //   • this profile / Get In Touch — general enquiries from anyone browsing,
-  //     driven by the contact details set in Business Profile → InfoReg step 03
-  //     ("What clients see on your public profile"). Filling a field in there
-  //     is what publishes it.
-  //   • Booking Details → Contact — clients who already hold a confirmed
-  //     appointment, driven by the Contact Preferences toggles
-  //     (providers.preferred_contact_methods) and the booked-client details
-  //     beside them (get_booked_client_contact, see ProviderCommunicationsScreen).
-  // Those toggles used to gate this card too, which collapsed both audiences
-  // onto one setting and contradicted what both screens' own copy promised.
-  const contactOptions = useMemo(() => {
-    if (!provider) return [];
-    const options: {
-      key: string;
-      icon: keyof typeof Ionicons.glyphMap;
-      label: string;
-      detail: string;
-      url: string;
-    }[] = [];
-    if (provider.phone) {
-      options.push({
-        key: "phone",
-        icon: "chatbubble-outline",
-        label: "Text message",
-        detail: provider.phone,
-        url: `sms:${provider.phone.replace(/\s/g, "")}`,
-      });
-    }
-    if (provider.whatsapp) {
-      options.push({
-        key: "whatsapp",
-        icon: "logo-whatsapp",
-        label: "WhatsApp",
-        detail: provider.whatsapp,
-        url: `https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, "")}`,
-      });
-    }
-    if (provider.email) {
-      options.push({
-        key: "email",
-        icon: "mail-outline",
-        label: "Email",
-        detail: provider.email,
-        url: `mailto:${provider.email}`,
-      });
-    }
-    if (provider.instagram) {
-      options.push({
-        key: "instagram",
-        icon: "logo-instagram",
-        label: "Instagram",
-        detail: `@${provider.instagram}`,
-        url: `https://instagram.com/${provider.instagram}`,
-      });
-    }
-    if (provider.website) {
-      options.push({
-        key: "website",
-        icon: "globe-outline",
-        label: "Website",
-        detail: provider.website,
-        url: provider.website,
-      });
-    }
-    if (provider.tiktok) {
-      options.push({
-        key: "tiktok",
-        icon: "logo-tiktok",
-        label: "TikTok",
-        detail: `@${provider.tiktok}`,
-        url: `https://tiktok.com/@${provider.tiktok}`,
-      });
-    }
-    return options;
-  }, [provider]);
+  // The communication options this provider publishes (features/providers/
+  // contactOptions, shared with the website's Get In Touch).
+  const contactOptions = useMemo(() => (provider ? providerContactOptions(provider) : []), [provider]);
 
   // Configure the navigation header with your gradient and icons
   React.useLayoutEffect(() => {
@@ -2413,6 +2484,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // and no buttons. They close it by swiping (MyPublicProfile's options).
     if (asOwnPreview) {
       navigation.setOptions({ headerShown: false });
+      return;
+    }
+    // A "Not on CERVICED yet" listing: the native back only, white over the
+    // listing's dark band. Bookmark and Share need a real provider, so a
+    // listing shows neither rather than two buttons that do nothing.
+    if (!provider && unclaimedProvider) {
+      navigation.setOptions({
+        headerShown: true,
+        headerTransparent: true,
+        headerTintColor: "#FFFFFF",
+        headerBackButtonDisplayMode: 'minimal',
+        headerTitle: "",
+        headerRight: () => null,
+        headerBackground: () => null,
+      });
       return;
     }
     navigation.setOptions({
@@ -2509,6 +2595,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     OP.text,
     provider?.brandFont,
     asOwnPreview,
+    unclaimedProvider,
   ]);
   const handleScroll = useCallback(
     (event: any) => {
@@ -3387,8 +3474,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       return (
         <UnclaimedProviderView
           provider={unclaimedProvider}
-          theme={OP}
-          onBack={() => navigation.goBack()}
+          currentUserId={currentUserId}
           onClaim={() => {
             // ClaimProvider is a root-stack screen, several levels above
             // wherever this tab screen sits — navigating via the root ref
@@ -3484,7 +3570,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
       return next;
     });
-  const openBookings = () => navigation.navigate("Bookings" as never);
   const openWaitlistJoin = (service: ServiceData) => {
     setWaitlistNotes("");
     setWaitlistModal({ visible: true, service });
@@ -3534,8 +3619,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       onToggleServiceSelected={toggleServiceSelected}
       onEditAddOns={setAddOnPickerService}
       waitlistPlaces={userWaitlistMap}
-      onOpenHeldPlace={openBookings}
-      onLeaveWaitlist={setLeaveConfirmEntry}
+      onOpenHeldPlace={openWaitlistTicket}
+      onOpenWaitlistPlace={openWaitlistTicket}
       onJoinWaitlist={openWaitlistJoin}
     />
   );
@@ -3733,96 +3818,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             profile, where in-app chat isn't possible. Themed with this
             provider's own palette (OP) like every other surface here, rather
             than an OS Alert dropped on top of it. */}
-        <Modal
+        <ProviderContactSheet
           visible={contactSheetVisible}
-          animationType="fade"
-          transparent
-          statusBarTranslucent navigationBarTranslucent
-          onRequestClose={() => setContactSheetVisible(false)}
-        >
-          <Pressable
-            style={styles.contactSheetBackdrop}
-            onPress={() => setContactSheetVisible(false)}
-          >
-            <Pressable
-              style={[styles.contactSheet, { backgroundColor: OP.surface }]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <View style={[styles.contactSheetGrabber, { backgroundColor: OP.border }]} />
-              <Text style={[styles.contactSheetTitle, { color: OP.text }]}>
-                Your contact options
-              </Text>
-              <Text style={[styles.contactSheetSub, { color: OP.sub }]}>
-                What anyone browsing your profile sees for general enquiries,
-                from the contact details you set in Business Profile → Contact.
-                In-app messaging isn't available on your own profile.
-              </Text>
-
-              {contactOptions.length === 0 ? (
-                <Text style={[styles.contactSheetEmpty, { color: OP.sub }]}>
-                  You haven't published any contact details yet. Add them in
-                  Business Profile → Contact so people browsing can get in touch.
-                </Text>
-              ) : (
-                <View style={styles.contactSheetList}>
-                  {contactOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.key}
-                      style={[
-                        styles.contactSheetOption,
-                        { backgroundColor: OP.card, borderColor: OP.border },
-                      ]}
-                      activeOpacity={0.75}
-                      // Read-only, like the Contact card rows behind it —
-                      // this sheet only ever renders on your own profile, so
-                      // every option here would be a message to yourself.
-                      // The dialog is another native modal, so it can't be
-                      // presented in the same tick this one is dismissed —
-                      // iOS drops the second presentation and nothing appears.
-                      // Wait for the dismissal to finish first.
-                      onPress={() => {
-                        setContactSheetVisible(false);
-                        setTimeout(() => handleContactLink(option.url), 350);
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.contactSheetOptionIcon,
-                          { backgroundColor: OP.surface, borderColor: OP.border },
-                        ]}
-                      >
-                        <Ionicons name={option.icon} size={17} color={OP.text} />
-                      </View>
-                      <View style={styles.contactSheetOptionText}>
-                        <Text style={[styles.contactSheetOptionLabel, { color: OP.text }]}>
-                          {option.label}
-                        </Text>
-                        <Text
-                          style={[styles.contactSheetOptionDetail, { color: OP.sub }]}
-                          numberOfLines={1}
-                        >
-                          {option.detail}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={OP.sub} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[styles.contactSheetClose, { borderColor: OP.border }]}
-                onPress={() => setContactSheetVisible(false)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.contactSheetCloseText, { color: OP.text }]}>Close</Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+          onClose={() => setContactSheetVisible(false)}
+          title="Your contact options"
+          subtitle="What anyone browsing your profile sees for general enquiries, from the contact details you set in Business Profile → Contact. In-app messaging isn't available on your own profile."
+          emptyText="You haven't published any contact details yet. Add them in Business Profile → Contact so people browsing can get in touch."
+          options={contactOptions}
+          // Read-only, like the Contact card rows behind it — this sheet only
+          // ever renders on your own profile, so every option here would be a
+          // message to yourself. The dialog is another native modal, so it
+          // can't be presented in the same tick this one is dismissed — iOS
+          // drops the second presentation and nothing appears. Wait for the
+          // dismissal to finish first.
+          onPick={(option) => {
+            setContactSheetVisible(false);
+            setTimeout(() => handleContactLink(option.url), 350);
+          }}
+          colors={{ surface: OP.surface, card: OP.card, border: OP.border, text: OP.text, sub: OP.sub }}
+        />
 
         {/* Reviews Modal */}
-        <ReviewsModal
+        <ProviderReviewsModal
           isVisible={showReviewsModal}
           onClose={() => setShowReviewsModal(false)}
           reviews={reviews}
@@ -4261,11 +4278,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 onSubmitEditing={Keyboard.dismiss}
               />
 
-              {waitlistError && (
+              {waitlistError ? (
                 <Text style={[styles.waitlistErrorText, { color: "#FF3B30" }]}>
                   {waitlistError}
                 </Text>
-              )}
+              ) : waitlistDateMode === "range" && !waitlistDateFrom ? (
+                // Join stays off until there's a first day to wait for.
+                <Text style={[styles.waitlistErrorText, { color: OP.sub }]}>
+                  Pick the first day you can do, or choose Anytime.
+                </Text>
+              ) : null}
 
               {/* Action buttons */}
               <View style={styles.waitlistPopupActions}>
@@ -4288,11 +4310,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     styles.waitlistPopupConfirmBtn,
                     {
                       backgroundColor: adaptiveAccentColor,
-                      opacity: waitlistJoining ? 0.6 : 1,
+                      opacity: waitlistJoining || (waitlistDateMode === "range" && !waitlistDateFrom) ? 0.5 : 1,
                     },
                   ]}
                   onPress={handleJoinWaitlist}
-                  disabled={waitlistJoining}
+                  disabled={waitlistJoining || (waitlistDateMode === "range" && !waitlistDateFrom)}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.waitlistJoinConfirmText}>
@@ -4303,6 +4325,33 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             </View>
           </KeyboardDismissView>
         </Modal>
+
+        {/* The client's waitlist ticket, from their "2nd in line" chip: place
+            in line, dates, Change dates and Leave. A held slot is paid for
+            from Bookings, so its buttons hand over there (to the Cart from
+            its ticket). Change dates opens on top, so the dates sheet is
+            rendered inside the ticket's Modal. */}
+        <WaitlistTicket
+          place={ticketPlace}
+          nowMs={ticketNow}
+          busy={datesBusy || (!!ticketPlace && holdBusyId === ticketPlace.id)}
+          service={ticketService}
+          onClose={closeWaitlistTicket}
+          onConfirmAndPay={confirmAndPayFromTicket}
+          onPass={passFromTicket}
+          onChangeDates={(place) => { setDatesError(null); setDatesSheetPlace(place); }}
+          onLeave={leaveFromTicket}
+          onHoldEnded={() => { setTicketNow(Date.now()); void loadWaitlistMap(); }}
+        >
+          <WaitlistDatesSheet
+            place={datesSheetPlace}
+            busy={datesBusy}
+            error={datesError}
+            onClose={() => setDatesSheetPlace(null)}
+            onSave={(place, dates) => { void saveWaitlistDates(place, dates); }}
+            onLeave={leaveFromTicket}
+          />
+        </WaitlistTicket>
 
         {/* Waitlist Leave Confirmation Modal */}
         <Modal
@@ -4464,37 +4513,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* Join nudge — a link-only provider can't be booked here, so this
             never shares the spot with the selection bar above. */}
         {isLinkOnly && viewerChecked && currentUserId && !isOwnProvider && !joinNudgeDismissed && (
-          <View style={[styles.joinNudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE }]}>
-            <Ionicons
-              name={joinNudgeSent ? "checkmark-circle" : "megaphone-outline"}
-              size={18}
-              color="#FFFFFF"
-            />
-            <Text style={styles.joinNudgeBarText} numberOfLines={1}>
-              {joinNudgeSent ? "Nudge sent" : "Want them on CERVICED?"}
-            </Text>
-            {!joinNudgeSent && (
-              <TouchableOpacity
-                style={[styles.joinNudgeBarButton, joinNudgePending && styles.joinNudgeButtonMuted]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); void handleJoinNudge(); }}
-                disabled={joinNudgePending}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Nudge ${provider.displayName} to take bookings on CERVICED`}
-              >
-                <Text style={styles.joinNudgeBarButtonText}>{joinNudgePending ? "Sending…" : "Nudge"}</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.joinNudgeBarClose}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); setJoinNudgeDismissed(true); }}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss"
-            >
-              <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
-            </TouchableOpacity>
-          </View>
+          <JoinNudgeBar
+            bottom={FLOATING_TAB_BAR_CLEARANCE}
+            businessName={provider.displayName}
+            sent={joinNudgeSent}
+            pending={joinNudgePending}
+            onNudge={() => { void handleJoinNudge(); }}
+            onDismiss={() => setJoinNudgeDismissed(true)}
+          />
         )}
 
         {/* No bottom edge inset — the pink sheet must run under the home indicator */}
@@ -4832,11 +4858,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  joinNudgeButtonMuted: {
-    opacity: 0.55,
-  },
-  // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
-  // as the selection bar, fixed near-black so it reads on every provider theme.
   // Riviera's pinned bar, over the foot of the page above the tab bar.
   pinnedBookBar: {
     position: "absolute",
@@ -4865,52 +4886,6 @@ const styles = StyleSheet.create({
   pinnedBookPrice: { fontSize: 12, marginTop: 2 },
   pinnedBookButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   pinnedBookButtonText: { fontFamily: "BakbakOne-Regular", fontSize: 14, color: "#FFFFFF" },
-  joinNudgeBar: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    zIndex: 999,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: "#050505",
-    paddingLeft: 18,
-    paddingRight: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.34,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  joinNudgeBarText: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  joinNudgeBarButton: {
-    height: 42,
-    borderRadius: 21,
-    paddingHorizontal: 18,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  joinNudgeBarButtonText: {
-    color: "#26201E",
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  joinNudgeBarClose: {
-    width: 36,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   providerNameLarge: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 28,
@@ -5224,87 +5199,6 @@ const styles = StyleSheet.create({
   },
 
   // Communication-options sheet (Get In Touch on your own profile)
-  contactSheetBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  contactSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 32,
-  },
-  contactSheetGrabber: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  contactSheetTitle: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  contactSheetSub: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  contactSheetEmpty: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  contactSheetList: {
-    gap: 8,
-  },
-  contactSheetOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  contactSheetOptionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  contactSheetOptionText: {
-    flex: 1,
-  },
-  contactSheetOptionLabel: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  contactSheetOptionDetail: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    marginTop: 1,
-  },
-  contactSheetClose: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderRadius: 100,
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-  contactSheetCloseText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    letterSpacing: 0.5,
-  },
 
   policyRowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -5390,13 +5284,6 @@ const styles = StyleSheet.create({
   modalBackground: {
     flex: 1,
   },
-  modalGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
   modalSafeArea: {
     flex: 1,
   },
@@ -5447,66 +5334,6 @@ const styles = StyleSheet.create({
   modalScrollContent: {
     paddingVertical: 20,
     paddingBottom: 40,
-  },
-  // elevation: 0 (Android only) — doubly at risk: a translucent
-  // backgroundColor lets Android's elevation shadow bleed straight through
-  // as a dark ring, AND overflow:'hidden' + borderRadius clips whatever
-  // shadow remains to the rounded outline instead of letting it fade
-  // outward. iOS keeps its shadow via shadow* above.
-  modalReviewCard: {
-    padding: 18,
-    borderRadius: 20,
-    marginBottom: 15,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 0,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-  },
-  modalCardHighlight: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 30,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  modalReviewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  modalReviewerName: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: "#000",
-  },
-  modalReviewRating: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  modalStar: {
-    fontSize: 14,
-  },
-  modalReviewDate: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 12,
-    color: "rgba(0, 0, 0, 0.75)",
-    marginLeft: "auto",
-  },
-  modalReviewComment: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 14,
-    color: "#000",
-    lineHeight: 20,
-    marginTop: 12,
   },
 
 

@@ -123,6 +123,31 @@ Becca already knows (any phrase word, any service word, or `NOT_TYPOS` in
 "massage" is not "messages". When a real word gets misread, add it to
 `NOT_TYPOS` along with a test in `beccaTypos.test.ts`.
 
+**Asking for a missing detail (2026-11-25).** When Becca knows the question
+but one detail is missing, she asks for it and then answers the *original*
+question with the reply: "what are the reviews like" → "Which provider do you
+mean?" → "lola studio" → Lola Studio's reviews. Four details can be asked for:
+appointment, service, provider and day. Three pieces make it work:
+
+- `matcher.ts` picks a question that is missing exactly one detail when
+  nothing matched confidently and its words alone clearly point at it (an
+  exact phrase of 6+ characters, at least 0.1 ahead of what did match and of
+  any rival). The missing-detail penalty still decides ranking; it no longer
+  turns a clear question into "didn't catch that". Missing two details (bare
+  "what about") still falls back. A confident match is never overridden.
+- `engine.ts` holds the open question in `ConversationContext.awaiting` for
+  one turn. A reply of 5 words or fewer that supplies the detail answers it,
+  and so does a longer one that matches nothing else. Anything else drops it.
+  Picking from "which did you mean?" matches keeps it open.
+- `entityResolver.ts` reads the whole short reply as a provider name while a
+  provider is awaited, so lowercase names and multi-word names that share a
+  first word ("Lola Studio" vs "Lola Nails") resolve.
+
+The option buttons send just the detail ("Nails", "Tomorrow", a provider
+shown on screen). If the AI router picks a question whose detail is missing,
+Becca asks for it the same way rather than discarding the pick.
+`beccaFollowUpQuestions.test.ts` covers it.
+
 **Learning from misses.** Every reply carries `understood` (the capability
 that answered, or `null` for the fallback). `missLog.ts` holds a typed miss
 until the person's next move, then records it once through

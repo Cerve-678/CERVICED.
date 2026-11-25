@@ -420,6 +420,7 @@ export async function resolveProvider(
   message: string,
   bookings: ConfirmedBooking[],
   service?: ResolvedEntity<"service", ServiceRef>,
+  options: ResolveOptions = {},
 ): Promise<{
   resolved?: ResolvedEntity<"provider", ProviderRef>;
   ambiguous?: AmbiguousEntity<"provider">;
@@ -504,6 +505,26 @@ export async function resolveProvider(
     candidates.push(namedSearch);
   }
 
+  // Becca just asked "Which provider do you mean?", so the reply itself is
+  // the name — typed in lower case or not. Tried FIRST: searching "Lola" on
+  // its own can match several providers when "Lola Studio" was typed, which
+  // sent a tapped "Lola Studio" option straight back to "which did you mean?".
+  if (options.expectingProvider) {
+    const reply = message
+      .trim()
+      .replace(/[?!.,]+$/g, "")
+      .replace(/^(?:it'?s|its|the one called|called)\s+/i, "")
+      .replace(/\s+please$/i, "")
+      .trim();
+    if (
+      reply.length >= 2 &&
+      !genericSearchTerms.has(reply.toLowerCase()) &&
+      reply.toLowerCase() !== service?.sourceText.toLowerCase()
+    ) {
+      candidates.unshift(reply);
+    }
+  }
+
   const uniqueCandidates = [...new Set(candidates.map((value) => value.trim()).filter(Boolean))];
   for (const cand of uniqueCandidates) {
     try {
@@ -572,10 +593,20 @@ const SENTENCE_OPENERS = new Set([
 // ==================== ORCHESTRATION ====================
 
 /** Resolves every entity in one message. Ordering matters: service/date/provider feed booking resolution. */
+/** What the conversation tells the resolver to expect. */
+export interface ResolveOptions {
+  /**
+   * Becca has just asked which provider: read the whole (short) reply as a
+   * name, not only its capitalised words. Set by the engine, never guessed.
+   */
+  expectingProvider?: boolean;
+}
+
 export async function resolveEntities(
   message: string,
   bookings: ConfirmedBooking[],
   now: Date,
+  options: ResolveOptions = {},
 ): Promise<EntityBag> {
   const service = resolveService(message);
   const date = resolveDate(message, now);
@@ -584,7 +615,7 @@ export async function resolveEntities(
 
   // Provider hits the network; everything above is pure. Run it once and
   // reuse the result for booking disambiguation.
-  const providerResult = await resolveProvider(message, bookings, service);
+  const providerResult = await resolveProvider(message, bookings, service, options);
 
   const bookingResult = resolveBooking(message, bookings, now, {
     ...(service ? { service: service.value } : {}),

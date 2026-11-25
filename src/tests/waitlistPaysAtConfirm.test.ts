@@ -1,15 +1,21 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
-  buildWaitlistHoldCartItem,
   formatCountdown,
+  heldTimeRangeLabel,
   holdSecondsLeft,
   placeInLineLabel,
   sortWaitlistPlaces,
   waitlistCardState,
+  buildWaitlistHoldCartItem,
+  nextWaitingFor,
+  firstNameOf,
+  isOutsideHoursRefusal,
+  providerOfferRefusalMessage,
   waitlistDatesLabel,
 } from '../features/bookings/waitlist';
 import type { MyWaitlistPlace, RebookableService } from '../services/databaseService';
+import { formatTime12Safe } from '../utils/dateUtils';
 
 const NOW = new Date('2026-11-10T14:00:00Z').getTime();
 
@@ -49,6 +55,12 @@ describe('how a waitlist place reads', () => {
     expect(waitlistDatesLabel(null)).toBe('Any day');
     expect(waitlistDatesLabel(['2026-11-18', '2026-11-30'])).toBe('18 – 30 Nov');
     expect(waitlistDatesLabel(['2026-11-18'])).toBe('18 Nov onward');
+  });
+
+  it('gives a held slot its start and end time, or just the start', () => {
+    expect(heldTimeRangeLabel('14:00:00', 120)).toBe(`${formatTime12Safe('14:00')} – ${formatTime12Safe('16:00')}`);
+    expect(heldTimeRangeLabel('14:00', null)).toBe(formatTime12Safe('14:00'));
+    expect(heldTimeRangeLabel(null, 60)).toBeNull();
   });
 
   it('counts down whole seconds and never below zero', () => {
@@ -183,5 +195,81 @@ describe('the migration keeps waitlist slots paid for', () => {
   it('stops clients editing their own place in line', () => {
     expect(sql).toContain('DROP POLICY IF EXISTS "Waitlist participants can see and manage their entries"');
     expect(sql).not.toMatch(/ON public\.provider_waitlist\s+FOR (UPDATE|ALL)/);
+  });
+});
+
+describe('a held slot is paid for through the Cart', () => {
+  const HOOK = readFileSync(join(__dirname, '../features/bookings/useWaitlistHoldActions.ts'), 'utf8');
+  const BOOKINGS = readFileSync(join(__dirname, '../screens/client/BookingsScreen.tsx'), 'utf8');
+  const PROFILE = readFileSync(join(__dirname, '../screens/client/ProviderProfileScreen.tsx'), 'utf8');
+
+  it('puts the held slot in the cart and opens the Cart', () => {
+    expect(HOOK).toContain('addToCart(buildWaitlistHoldCartItem({');
+    expect(HOOK).toContain('openCart();');
+  });
+
+  it('does it the same way from Bookings and from the provider page', () => {
+    expect(BOOKINGS).toContain('useWaitlistHoldActions({');
+    expect(PROFILE).toContain('useWaitlistHoldActions({');
+  });
+});
+
+describe('the "slot opened" notification opens the ticket on the provider page', () => {
+  const TAP = readFileSync(join(__dirname, '../services/notificationTapHandler.ts'), 'utf8');
+  const LIST = readFileSync(join(__dirname, '../screens/shared/NotificationsScreen.tsx'), 'utf8');
+  const ACTIVITY = readFileSync(join(__dirname, '../screens/client/ActivityCentreScreen.tsx'), 'utf8');
+  const PROFILE = readFileSync(join(__dirname, '../screens/client/ProviderProfileScreen.tsx'), 'utf8');
+
+  it('sends a push tap, the in-app list and the Activity Centre there with the hold', () => {
+    expect(TAP).toContain("openWaitlistHoldId: booking_id");
+    expect(LIST).toContain("openWaitlistHoldId: bookingId");
+    expect(ACTIVITY).toContain("openWaitlistHoldId: target.bookingId");
+  });
+
+  it('opens that hold\'s ticket, or says the slot has gone', () => {
+    expect(PROFILE).toContain('place.holdBookingId === openWaitlistHoldId');
+    expect(PROFILE).toContain('"This slot has gone"');
+  });
+});
+
+describe("who a freed slot goes to next", () => {
+  const e = (id: string, service_id: string | null, position: number, status = 'waiting') =>
+    ({ id, service_id, position, status, created_at: `2026-11-0${position}T10:00:00Z` });
+
+  it('picks the same service first, then any service, in queue order', () => {
+    const list = [e('any1', null, 1), e('s2', 's', 3), e('s1', 's', 2), e('other', 't', 1)];
+    expect(nextWaitingFor(list, 's')?.id).toBe('s1');
+    expect(nextWaitingFor(list, 'u')?.id).toBe('any1');
+  });
+
+  it('skips the client holding it and anyone not waiting', () => {
+    const list = [e('held', 's', 1, 'notified'), e('s2', 's', 2), e('s3', 's', 3)];
+    expect(nextWaitingFor(list, 's', 's2')?.id).toBe('s3');
+    expect(nextWaitingFor([], 's')).toBeNull();
+  });
+
+  it('uses the first name', () => {
+    expect(firstNameOf('Jo Martin')).toBe('Jo');
+    expect(firstNameOf('  ')).toBeNull();
+    expect(firstNameOf(null)).toBeNull();
+  });
+});
+
+describe('a provider offering a time outside their hours', () => {
+  it('is asked only when the refusal is about their own hours', () => {
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: "This appointment is outside the provider's working hours" })).toBe(true);
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: 'This service has to start by 3:30pm' })).toBe(true);
+    expect(isOutsideHoursRefusal({ code: 'P0001', message: 'Provider is unavailable on this date' })).toBe(false);
+    expect(isOutsideHoursRefusal({ code: '42501', message: "outside the provider's working hours" })).toBe(false);
+    expect(isOutsideHoursRefusal(null)).toBe(false);
+  });
+});
+
+describe("a provider's offer that clashes with their own booking", () => {
+  it('says so in their words, and leaves every other refusal as it was', () => {
+    expect(providerOfferRefusalMessage({ code: 'P0001', message: 'That time is no longer available' }, 'x'))
+      .toBe('You already have a booking at that time. Pick another time.');
+    expect(providerOfferRefusalMessage({ code: 'P0001', message: 'Provider is unavailable on this date' }, 'fallback')).toBe('fallback');
+    expect(providerOfferRefusalMessage(null, 'fallback')).toBe('fallback');
   });
 });

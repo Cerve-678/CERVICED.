@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
-import { ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKit';
+import { StatusChip } from '../features/payments/PaymentsCardKit';
 import {
   bookingPaymentTimeline, payoutNeedsAttention, payoutStatusLabel, shortDay, tipPence, type TimelineStep,
 } from '../features/payments/bookingPaymentTimeline';
@@ -131,9 +131,7 @@ function Step({ step, last, nextDone }: { step: TimelineStep; last: boolean; nex
     </View>
     <View style={st.stepBody}>
       <View style={st.stepHead}>
-        {step.explainsProcessing
-          ? <View style={{ flex: 1 }}><ProcessingLabel color={titleColor} ringColor={C.border} labelStyle={st.stepTitle} /></View>
-          : <Text style={[st.stepTitle, { color: titleColor, flex: 1 }]}>{step.title}</Text>}
+        <Text style={[st.stepTitle, { color: titleColor, flex: 1 }]}>{step.title}</Text>
         {step.amountPence != null && <Text style={[st.stepAmount, { color: C.text }]}>{money(step.amountPence)}</Text>}
       </View>
       {!!step.when && <Text style={[st.sub, { color: C.sub }]}>{step.when}</Text>}

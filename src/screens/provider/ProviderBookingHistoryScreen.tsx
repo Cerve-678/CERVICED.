@@ -43,8 +43,10 @@ import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { placeInLineLabel, holdEndLabel } from '../../features/bookings/waitlist';
+import { placeInLineLabel, holdEndLabel, nextWaitingFor, firstNameOf, waitlistDatesLabel, isOutsideHoursRefusal, providerOfferRefusalMessage } from '../../features/bookings/waitlist';
+import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
 import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
+import { useAppDialog } from '../../components/AppDialog';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -342,6 +344,7 @@ function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
 export default function ProviderBookingHistoryScreen({ navigation, route }: any) {
   const { isDarkMode: dark } = useTheme();
   const P = dark ? DARK : LIGHT;
+  const { showConfirm, showAlert, DialogHost } = useAppDialog();
 
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -475,7 +478,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
       Alert.alert('Nobody waiting', `Nobody is waiting for ${slot.serviceName} right now.`);
       return;
     }
-    Alert.alert('Who should get it?', "They'll have 15 minutes to confirm and pay.", [
+    Alert.alert('Who should get it?', `They'll have ${WAITLIST_HOLD_MINUTES} minutes to confirm and pay.`, [
       ...candidates.map(e => ({
         text: e.user_name_snapshot ?? 'Client',
         onPress: () => { void handleOfferReleasedSlot(slot, e.id); },
@@ -664,24 +667,62 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   const handleConfirmInvite = useCallback(async () => {
     if (!inviteModal.entry || !inviteDate || !inviteTime) return;
     setInviting(true);
-    try {
-      const entry = inviteModal.entry;
-      const bookingTime = `${String(inviteTime.getHours()).padStart(2, '0')}:${String(inviteTime.getMinutes()).padStart(2, '0')}`;
-      await providerOfferWaitlistSlot(entry.id, dateToYMD(inviteDate), bookingTime);
+    const entry = inviteModal.entry;
+    const bookingDate = dateToYMD(inviteDate);
+    const bookingTime = `${String(inviteTime.getHours()).padStart(2, '0')}:${String(inviteTime.getMinutes()).padStart(2, '0')}`;
+    const offered = async () => {
       setInviteModal({ visible: false, entry: null });
       setInviteDate(null);
       setInviteTime(null);
       await fetchWaitlist();
+    };
+    try {
+      await providerOfferWaitlistSlot(entry.id, bookingDate, bookingTime);
+      await offered();
     } catch (err: unknown) {
-      // The database says why (taken, outside your hours, inside your
-      // notice); anything technical becomes the fallback.
-      Alert.alert(
-        "Couldn't hold that time",
-        toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot'),
-      );
+      if (isOutsideHoursRefusal(err)) {
+        // Their own diary, their call: the same as booking someone in by
+        // hand. Asked in the app's own dialog, which can't show over this
+        // Modal, so the invite closes first (its date and time are kept) and
+        // Cancel brings it back.
+        const who = firstNameOf(entry.user_name_snapshot) ?? 'them';
+        setInviteModal({ visible: false, entry: null });
+        setTimeout(() => {
+          showConfirm(
+            'Outside your hours',
+            `${formatShortDate(bookingDate)} at ${formatTime12(bookingTime)} runs outside your working hours. Offer it to ${who} anyway?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => setInviteModal({ visible: true, entry }) },
+              {
+                text: 'Offer anyway',
+                onPress: () => {
+                  void (async () => {
+                    try {
+                      await providerOfferWaitlistSlot(entry.id, bookingDate, bookingTime, true);
+                      await offered();
+                    } catch (retryErr: unknown) {
+                      showAlert(
+                        "Couldn't hold that time",
+                        providerOfferRefusalMessage(retryErr, toUserMessageAllowingDbGuard(retryErr, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlotOutsideHours')),
+                      );
+                    }
+                  })();
+                },
+              },
+            ],
+          );
+        }, 350);
+      } else {
+        // The database says why (taken, inside your notice, a day off);
+        // anything technical becomes the fallback.
+        Alert.alert(
+          "Couldn't hold that time",
+          providerOfferRefusalMessage(err, toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot')),
+        );
+      }
     }
     setInviting(false);
-  }, [inviteModal.entry, inviteDate, inviteTime, fetchWaitlist]);
+  }, [inviteModal.entry, inviteDate, inviteTime, fetchWaitlist, showConfirm, showAlert]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -818,6 +859,8 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                         While the schedule is closed only the waitlist can have it. */}
                     {releasedSlots.map(slot => {
                       const busy = waitlistBusyId === slot.id;
+                      const next = nextWaitingFor(waitlist, slot.serviceId);
+                      const nextName = firstNameOf(next?.user_name_snapshot);
                       return (
                         <View key={slot.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10, borderWidth: 1.5, borderColor: P.accent }, !dark && bc.shadow]}>
                           <Text style={[wl.clientName, { color: P.text }]}>
@@ -832,7 +875,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                           </Text>
                           <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent, marginTop: 10, alignSelf: 'stretch', alignItems: 'center' }]} activeOpacity={0.8}
                             disabled={busy} onPress={() => { void handleOfferReleasedSlot(slot); }}>
-                            {busy ? <ActivityIndicator color={P.onAccent} size="small" /> : <Text style={[wl.inviteBtnText, { color: P.onAccent }]}>Offer it to the next in line</Text>}
+                            {busy ? <ActivityIndicator color={P.onAccent} size="small" /> : <Text style={[wl.inviteBtnText, { color: P.onAccent }]}>{nextName ? `Offer it to ${nextName} (next in line)` : 'Offer it to the next in line'}</Text>}
                           </TouchableOpacity>
                           <View style={wl.actions}>
                             <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8} disabled={busy}
@@ -841,7 +884,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                             </TouchableOpacity>
                             <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8} disabled={busy}
                               onPress={() => { void handleDismissReleasedSlot(slot); }}>
-                              <Text style={[wl.removeBtnText, { color: P.sub }]}>Leave it open</Text>
+                              <Text style={[wl.removeBtnText, { color: P.sub }]}>Open to everyone</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -863,7 +906,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                               {entry.user_name_snapshot ?? 'Client'}
                             </Text>
                             <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
-                              {entry.service_name_snapshot}
+                              {entry.service_name_snapshot} · {waitlistDatesLabel(entry.preferred_dates)}
                             </Text>
                           </View>
                           <View style={[wl.posBadge, { backgroundColor: held ? P.accent : P.accentSoft }]}>
@@ -880,14 +923,33 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                             {holdEndLabel(entry.offer_expires_at) ? ` · theirs to pay for until ${holdEndLabel(entry.offer_expires_at)}` : ''}
                           </Text>
                         ) : null}
-                        {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
-                        {entry.preferred_dates && entry.preferred_dates.length > 0 ? (
-                          <Text style={[wl.preferredDates, { color: P.sub }]}>
-                            Preferred: {entry.preferred_dates.length > 1
-                              ? `${formatShortDate(entry.preferred_dates[0]!)} – ${formatShortDate(entry.preferred_dates[1]!)}`
-                              : `${formatShortDate(entry.preferred_dates[0]!)} onward`}
-                          </Text>
+                        {held && entry.offer_expires_at ? (
+                          <View style={wl.holdClock}>
+                            <View style={wl.holdClockBar}>
+                              <WaitlistHoldCountdown
+                                expiresAt={entry.offer_expires_at}
+                                color={P.accent}
+                                trackColor={P.accentSoft}
+                                showBar
+                                showTime={false}
+                              />
+                            </View>
+                            <WaitlistHoldCountdown
+                              expiresAt={entry.offer_expires_at}
+                              color={P.text}
+                              textStyle={wl.holdClockTime}
+                              onEnd={() => { void fetchWaitlist(); }}
+                            />
+                          </View>
                         ) : null}
+                        {held && (() => {
+                          const nextName = firstNameOf(nextWaitingFor(waitlist, entry.service_id, entry.id)?.user_name_snapshot);
+                          const who = firstNameOf(entry.user_name_snapshot) ?? 'they';
+                          return nextName ? (
+                            <Text style={[wl.preferredDates, { color: P.sub }]}>If {who} passes, {nextName} is next.</Text>
+                          ) : null;
+                        })()}
+                        {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
                         {!held && (
                           <View style={wl.actions}>
                             <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8} disabled={busy}
@@ -1051,7 +1113,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[wl.confirmBtn, { backgroundColor: P.accent, opacity: (!inviteDate || !inviteTime || inviting) ? 0.5 : 1 }]}
-                  onPress={handleConfirmInvite}
+                  onPress={() => { void handleConfirmInvite(); }}
                   disabled={!inviteDate || !inviteTime || inviting}
                   activeOpacity={0.8}
                 >
@@ -1063,6 +1125,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
         </Modal>
 
       </SafeAreaView>
+      <DialogHost />
     </View>
   );
 }
@@ -1127,6 +1190,9 @@ const wl = StyleSheet.create({
   posBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
   notes:        { fontSize: 12, lineHeight: 17, marginBottom: 6 },
   preferredDates:{ fontSize: 11, marginBottom: 6 },
+  holdClock:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  holdClockBar: { flex: 1 },
+  holdClockTime:{ fontSize: 13 },
   actions:      { flexDirection: 'row', gap: 8, marginTop: 6 },
   inviteBtn:    { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 20 },
   inviteBtnText:{ fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },

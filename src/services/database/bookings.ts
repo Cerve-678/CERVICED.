@@ -6,6 +6,7 @@ import type { BookingWithAddOns, DbBookingRescheduleRequest, DbClientExternalBoo
 import { getSessionUser } from "./account";
 import { DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT, DEFAULT_PROVIDER_QUERY_LIMIT, getMyProviderProfile } from "./providers";
 import { UUID_RE } from "./social";
+import { getProviderReleasedWaitlistSlots } from "./waitlist";
 
 // ─────────────────────────────────────────────────────────
 // BOOKINGS — Consumer side
@@ -206,6 +207,9 @@ export async function getProviderIdByDisplayName(
     .select("id")
     .ilike("display_name", name)
     .eq("is_active", true)
+    // Not an imported directory listing — those share this table, and one
+    // named like a real provider would make this lookup ambiguous.
+    .eq("is_claimed", true)
     .maybeSingle();
   return (data as any)?.id ?? null;
 }
@@ -582,6 +586,32 @@ export async function getProviderConversations(): Promise<
 }
 
 /** Count unread provider conversations without hydrating conversation rows. */
+/**
+ * Whether the signed-in provider has anything on Booking History's To Do tab:
+ * a booking request to answer, a reschedule request, someone waiting on their
+ * waitlist, a freed slot to offer, or an unread message. The same things that
+ * tab counts, each read as a head count rather than loading every booking, so
+ * Settings can mark the card cheaply.
+ */
+export async function providerHasBookingsToDo(): Promise<boolean> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return false;
+  const [pending, reschedules, waiting, released, unread] = await Promise.all([
+    supabase.from("bookings").select("id", { count: "exact", head: true })
+      .eq("provider_id", provider.id).eq("status", "pending"),
+    supabase.from("booking_reschedule_requests").select("id, bookings!inner(provider_id)", { count: "exact", head: true })
+      .eq("bookings.provider_id", provider.id).eq("status", "pending"),
+    supabase.from("provider_waitlist").select("id", { count: "exact", head: true })
+      .eq("provider_id", provider.id).eq("status", "waiting"),
+    getProviderReleasedWaitlistSlots(provider.id),
+    getProviderUnreadConversationCount(),
+  ]);
+  if (pending.error) throw pending.error;
+  if (reschedules.error) throw reschedules.error;
+  if (waiting.error) throw waiting.error;
+  return (pending.count ?? 0) + (reschedules.count ?? 0) + (waiting.count ?? 0) + released.length + unread > 0;
+}
+
 export async function getProviderUnreadConversationCount(): Promise<number> {
   const provider = await getMyProviderProfile();
   if (!provider) return 0;

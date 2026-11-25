@@ -11,7 +11,6 @@ import { requestMode } from '../navigation/modeController';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { markNotificationRead, getProviderBasicById } from './databaseService';
 import { logger } from '../utils/logger';
-import { openLegalPage } from '../utils/legalPage';
 import { REVIEW_PROMPT_TYPES } from '../features/notifications/notificationPresentation';
 
 export interface NotificationTapData {
@@ -152,6 +151,13 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // A slot held for the client: their ticket with its countdown opens on the
+  // provider's page, where Confirm & pay sends it to the Cart.
+  if (type === 'waitlist_slot_available' && booking_id && !isProvider && provider_id) {
+    navigateNested('Home', 'ProviderProfile', { providerId: provider_id, source: 'notification', openWaitlistHoldId: booking_id });
+    return;
+  }
+
   if (type === 'waitlist_slot_available' && !booking_id) {
     if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
     else navigateNested('Home', 'Bookings', {});
@@ -190,9 +196,9 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   }
 
   // ── Terms changed (both hats) ────────────────────────────────────────────────
-  // The Terms live on cerviced.co/legal, the one copy both hats agree to.
+  // Only a notice: the app doesn't open the Terms; they're on cerviced.co/legal.
   if (type === 'terms_updated') {
-    openLegalPage('terms');
+    openNotifications();
     return;
   }
 

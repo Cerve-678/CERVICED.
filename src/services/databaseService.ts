@@ -25,6 +25,8 @@ export {
   sendPasswordReset,
   verifyRecoveryOtp,
   verifySignupOtp,
+  sendEmailSignInCode,
+  getSignedInAccount,
   resendSignupOtp,
   updateCurrentPassword,
   updatePasswordAndSignOut,
@@ -66,6 +68,8 @@ export {
   searchProvidersAndServices,
   getServiceCoverImages,
   searchProviders,
+  getDirectoryListings,
+  getDirectoryListingDetail,
   logSearchEvent,
   getProviderProfilePreviewBySlug,
   getProviderBySlug,
@@ -99,6 +103,8 @@ export type {
   ProviderProfileViewerContext,
   ProviderAccountEditorInfo,
   ProviderLogoFramingEntry,
+  DirectoryListingRow,
+  DirectoryListingDetailRow,
 } from "./database/providers";
 export {
   getProviderPortfolio,
@@ -223,6 +229,7 @@ export {
   getGroupBookingSiblings,
   getProviderConversations,
   getProviderUnreadConversationCount,
+  providerHasBookingsToDo,
   getProviderEnquirySummary,
   getUserConversations,
   subscribeToUserConversationChanges,
@@ -515,9 +522,12 @@ export {
   getMyProviderDailyStats,
   getMyLinkOnlyDashboardExtras,
   getMyProviderSaverCount,
+  getListingNudgeCount,
+  getAdminListingNudges,
 } from "./database/analytics";
 export type {
   LinkOnlyDashboardExtras,
+  AdminListingNudge,
 } from "./database/analytics";
 export {
   getUserProfileById,
@@ -564,11 +574,15 @@ export {
   replaceMyProviderMessageTemplates,
   searchUnclaimedProviders,
   getUnclaimedProviderDetail,
+  requestProviderClaim,
+  getLatestProviderClaimRequest,
 } from "./database/providerAccount";
 export type {
   ProviderMessageTemplate,
   UnclaimedProviderSearchRow,
   UnclaimedProviderDetailRow,
+  ProviderClaimStatus,
+  ProviderClaimRequestRow,
 } from "./database/providerAccount";
 export {
   getOrCreateConversation,
@@ -600,8 +614,6 @@ export type {
   DbBeccaMessage,
 } from "./database/becca";
 export {
-  requestProviderClaimVerification,
-  claimUnclaimedProviderProfile,
   invokeSendAccountEmail,
   invokeSendSupportRequest,
   lookupPostcodeAddresses,

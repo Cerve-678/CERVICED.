@@ -349,8 +349,10 @@ received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 **Waitlist slots** are paid for through this same checkout. When a slot
 opens and the provider has **Auto** on, the next client in line gets it held
 for 10 minutes (an `on_hold` booking); with Auto off the provider is told and
-offers it from Bookings (since 18 November, `20261118150000`). "Confirm & pay" puts that slot in the cart at its fixed time;
-`prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
+offers it from Bookings (since 18 November, `20261118150000`). "Confirm & pay" on the slot's waitlist ticket
+puts that slot in the cart at its fixed time and opens the Cart, like any
+booking (the user's call, 24 November, undoing the same day's pay-on-ticket
+sheet). `prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
 database like any item, and the checkout can't outlast the hold: the 10
 minutes keep running while the client pays. Nothing is booked until
 `finalize_checkout` captures the payment. If the time runs out or the client
@@ -362,6 +364,23 @@ provider offering a time by hand also creates a 10-minute hold, never an unpaid
 booking. *Live since 16 November (`20261113210000`); the app part needs a new
 build. Before that the old path booked waitlist slots with £0 paid, though none
 ever was.*
+
+**Booking on the website (cerviced.co/@handle).** A client without the app
+books through the same server path: one service per checkout, signed in with an
+email code (a real CERVICED account), the same single policies tick
+(`buildCheckoutIntentItem`, shared with the Cart, so both send
+`prepare_checkout` the same request), the same 5-minute hold, the same
+late/no-show and late cancellation ticks (`accept_checkout_fees`, recorded with
+platform `web`), then `create-payment-intent` and `finalize-payment-intent`.
+The card is typed into Stripe's own Payment Element (Stripe.js), so card
+details never reach CERVICED's code. Card, Apple Pay and Google Pay only: the
+web form asks Stripe for card alone, so PayPal isn't offered there even when
+the payment would allow it. No saved cards on the web. While the card is being
+confirmed the page can't be closed from its own buttons, and once it's approved
+the checkout is never cancelled from the page; the server settles it like an
+app checkout. Code: `src/web/WebPaymentStep.tsx`. *On a branch (PR 3 of the web
+booking work), and switched off on cerviced.co (`WEB_BOOKING_ENABLED` is
+development-only) until Stripe goes live (Part 6 #1).*
 
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
@@ -1390,6 +1409,7 @@ Ranked, most important first.
 | 12 | **The cancel window can disagree with the written policy.** `cancel_notice_hours()` uses `providers.cancellation_notice_hours` first and the policy's `cancelNotice` only when the column is empty. On 13 November four live providers had them disagree (Nails Studio and Uniquely Aesthetics 24h vs 48h written, Daminkfinesse 48h vs 24h, CuratedByCilva 24h vs 12h) | A client can be judged by a window different from the one they were shown | Find which editor writes only one of them, then make one the source |
 | 13 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
 | 14 | **Waitlist checkout has never run end to end.** No waitlist offer has ever been sent in production, and the new pay-at-confirm path hasn't been tried in Stripe test mode | A broken step would only show as nobody being offered a slot | Rehearse it in test mode after the migration (hold, pay, decline, time running out, Auto-fill on and off) |
+| 15 | **Website booking hasn't run end to end with a real email and a Stripe test card**, and Apple Pay on the web needs cerviced.co verified in the Stripe account that goes live (done in test mode on 24 November) | A broken step would only show when the site's Book buttons are switched on | Rehearse it on localhost in test mode (card, 3-D Secure card, decline, timer running out, fees ticks, and a card payment on a booking whose payment also allows PayPal), then add the domain in live mode. The legal gaps in LEGAL-COMPLIANCE-NOTES §30 come before switching it on |
 
 ---
 
@@ -1434,6 +1454,8 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 3 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED refunds its fee when the deposit is the only thing kept | The user's call (2 and 3 Nov), including not waiting for a solicitor. **Not lawyer-reviewed** |
 | 10 Nov | A waitlist slot is paid for at checkout like any booking: 15-minute hold, the clock keeps running while paying, missing it or passing takes the client off that waitlist. "Offer automatically" rolls a lapsed slot to the next person; off, it opens to everyone and the provider can offer it. A provider's own offer is a hold too | Confirming used to book with £0 paid: no deposit, fee, saved card or policy agreement. The user's call, 10 November 2026 |
 | 18 Nov | Waitlist **Auto** decides the first hold as well as the roll-on: with it off, a freed slot goes back to the provider to offer. Holds are 10 minutes, not 15. Closing when full works with the waitlist on, and the waitlist alone gets a slot freed while closed | The owner's call, 18 November 2026: "Enable waitlist" is the manual waitlist and Auto the automatic hold |
+| 24 Nov | A held waitlist slot is paid for on its own ticket: Confirm & pay opens the payment sheet there instead of sending the client to the Cart. Same checkout, same agreement, same Stripe sheet; only where it opens changes | The user's call, 24 November 2026 (idea A's ticket with idea B's checkout) |
+| 24 Nov (later) | Undone: Confirm & pay on the ticket goes to the Cart and checks out like any booking. The ticket opens from the client's "2nd in line" chip on the provider's page as well as from Bookings | The user's call, 24 November 2026: "it should use cart like normal to checkout" |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |

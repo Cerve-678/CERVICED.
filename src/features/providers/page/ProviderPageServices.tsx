@@ -20,7 +20,6 @@ import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes
 import type { MyWaitlistPlace } from "../../../services/databaseService";
 import { placeInLineLabel } from "../../bookings/waitlist";
 import { capsuleServiceSurface, GlossShine } from "../ProfilePageStyle";
-import { moodboardTag } from "../heroes/MoodboardHero";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 
@@ -222,9 +221,10 @@ export interface ProviderPageServicesProps {
   onEditAddOns: (service: ServiceData) => void;
   /** service.dbId → the viewer's place on that service's waitlist. */
   waitlistPlaces: Record<string, MyWaitlistPlace>;
-  /** A held waitlist slot is paid for from Bookings. */
-  onOpenHeldPlace: () => void;
-  onLeaveWaitlist: (place: MyWaitlistPlace) => void;
+  /** A held waitlist slot opens its ticket and countdown on this page. */
+  onOpenHeldPlace: (place: MyWaitlistPlace) => void;
+  /** Opens the client's ticket for that waitlist place (Leave is on it). */
+  onOpenWaitlistPlace: (place: MyWaitlistPlace) => void;
   onJoinWaitlist: (service: ServiceData) => void;
 }
 
@@ -265,7 +265,7 @@ export function ProviderPageServices({
   onEditAddOns,
   waitlistPlaces,
   onOpenHeldPlace,
-  onLeaveWaitlist,
+  onOpenWaitlistPlace,
   onJoinWaitlist,
 }: ProviderPageServicesProps) {
   const {
@@ -304,10 +304,9 @@ export function ProviderPageServices({
   // Storefront: two across, each photo standing in a soft arched frame.
   const serviceArches = pageStyle.serviceLayout === "archTiles";
   const serviceTwoUp = serviceTiles || serviceArches;
-  // Moodboard: no photos; a small outlined tag of the service type (LASH,
-  // BROW), the name in a serif and the price in light type, a hairline under.
+  // Moodboard: no photos; the name in a serif and the price in light type, a
+  // hairline under. No service-type tag (owner, 2026-11-24).
   const serviceTagged = pageStyle.serviceLayout === "taggedRows";
-  const serviceTag = serviceTagged ? moodboardTag(selectedServiceType) : "";
   const serviceNoPhoto = serviceMenu || servicePills || serviceTagged;
   const serviceStacked = serviceTwoUp || servicePhotoCards;
   // Hibiscus: "Book now" then a small arrow in a circle. Storefront: a small square outline in spaced caps.
@@ -577,11 +576,6 @@ export function ProviderPageServices({
                     </View>
                   ) : serviceTagged ? (
                     <View style={styles.taggedRow}>
-                      {serviceTag ? (
-                        <View style={[styles.taggedTag, { borderColor: SV.border }]}>
-                          <Text style={[styles.taggedTagText, { color: SV.sub }]} numberOfLines={1}>{serviceTag}</Text>
-                        </View>
-                      ) : null}
                       <Text style={[styles.taggedName, { color: SV.text }]}>{service.name}</Text>
                       <Text style={[styles.taggedPrice, { color: SV.text }]}>£{service.price}</Text>
                     </View>
@@ -758,6 +752,8 @@ export function ProviderPageServices({
                           ],
                           darkPillButtons && [styles.darkPillButton, { backgroundColor: fullyBooked ? withAlpha(SV.sub, 0.18) : SV.text }],
                           captionPillButtons && [styles.captionPillButton, { borderColor: fullyBooked ? SV.border : SV.text }],
+                          // Last: the closed label is two lines, so it needs less side padding.
+                          !takingBookings && styles.closedButton,
                         ]}
                         onPress={() => {
                           runAction(() => onBook(service));
@@ -780,10 +776,17 @@ export function ProviderPageServices({
                             glowPillButtons && [styles.glowPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
                             darkPillButtons && !fullyBooked && [styles.darkPillButtonText, { color: darkPillInk }],
                             captionPillButtons && [styles.captionPillButtonText, { color: fullyBooked ? SV.sub : SV.text }],
+                            // Last, over every style's size and spacing: Neon's and
+                            // Caption Pill's wide-spaced capitals ran "Not taking
+                            // bookings" far past the pill (owner, 11-24).
+                            !takingBookings && styles.closedButtonText,
                           ]}
+                          numberOfLines={takingBookings ? undefined : 2}
+                          adjustsFontSizeToFit={!takingBookings}
+                          minimumFontScale={0.8}
                         >
                           {!takingBookings
-                              ? "Not taking bookings"
+                              ? "Not taking\nbookings"
                               : fullyBooked
                               ? "Fully Booked"
                               // Boutique says "Add to basket"; it still opens the booking sheet.
@@ -804,19 +807,19 @@ export function ProviderPageServices({
 
                   {(() => {
                     const wEntry = waitlistPlaces[service.dbId];
-                    // Held: the slot is theirs for WAITLIST_HOLD_MINUTES; it's paid for
-                    // from Bookings, so the chip goes there. No ✕ while held:
-                    // they pass on it from Bookings instead.
+                    // Held: the slot is theirs for WAITLIST_HOLD_MINUTES. The chip
+                    // opens its ticket and countdown here; Confirm & pay goes to
+                    // the Cart, and Pass it on is on the ticket.
                     if (wEntry?.status === "notified") {
                       return (
                         <TouchableOpacity
                           style={[styles.waitlistChip, { borderColor: adaptiveAccentColor, backgroundColor: adaptiveAccentColor }]}
                           onPress={() => {
-                            runAction(onOpenHeldPlace);
+                            runAction(() => onOpenHeldPlace(wEntry));
                           }}
                           activeOpacity={0.8}
                           accessibilityRole="button"
-                          accessibilityLabel="A slot is held for you. Open Bookings to confirm and pay."
+                          accessibilityLabel="A slot is held for you. Open it to confirm and pay."
                         >
                           <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
                           <Ionicons name="chevron-forward" size={11} color="#fff" />
@@ -825,27 +828,23 @@ export function ProviderPageServices({
                     }
                     if (wEntry) {
                       return (
-                        <View
+                        <TouchableOpacity
                           style={[
                             styles.waitlistChip,
                             { borderColor: adaptiveAccentColor + "70", backgroundColor: adaptiveAccentColor + "0D" },
                           ]}
+                          onPress={() => {
+                            runAction(() => onOpenWaitlistPlace(wEntry));
+                          }}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${placeInLineLabel(wEntry.placeInLine)} for ${service.name}. Open your waitlist ticket.`}
                         >
                           <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
                             {placeInLineLabel(wEntry.placeInLine)}
                           </Text>
-                          <TouchableOpacity
-                            onPress={() => {
-                              runAction(() => onLeaveWaitlist(wEntry));
-                            }}
-                            activeOpacity={0.6}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Leave the ${service.name} waitlist`}
-                          >
-                            <Text style={[styles.waitlistChipX, { color: adaptiveAccentColor }]}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
+                          <Ionicons name="chevron-forward" size={11} color={adaptiveAccentColor} />
+                        </TouchableOpacity>
                       );
                     }
                     // undefined means "still checking" and true means
@@ -895,8 +894,9 @@ export function ProviderPageServices({
                             styles.waitlistJoinText,
                             { color: adaptiveAccentColor },
                           ]}
+                          numberOfLines={1}
                         >
-                          Waitlist
+                          Join waitlist
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1151,13 +1151,13 @@ const styles = StyleSheet.create({
   shopBoxButtonText: { fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
   glowPillButton: { backgroundColor: "transparent", borderWidth: 1.5, borderRadius: 999, shadowOffset: { width: 0, height: 0 }, shadowRadius: 12, elevation: 0 },
   glowPillButtonText: { fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" },
+  closedButton: { paddingHorizontal: 12 },
+  closedButtonText: { fontSize: 10, lineHeight: 13, letterSpacing: 0.6, textAlign: "center" },
   darkPillButton: { borderRadius: 999, paddingHorizontal: 20, shadowOpacity: 0, elevation: 0 },
   darkPillButtonText: { fontFamily: "Figtree-SemiBold", fontSize: 13 },
   captionPillButton: { backgroundColor: "transparent", borderWidth: 1, borderRadius: 999, shadowOpacity: 0, elevation: 0 },
   captionPillButtonText: { fontFamily: "Jost-Light", fontSize: 11, letterSpacing: 3, textTransform: "uppercase" },
   taggedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  taggedTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  taggedTagText: { fontFamily: "Jost-Light", fontSize: 9, letterSpacing: 2 },
   taggedName: { flex: 1, fontFamily: "InstrumentSerif-Regular", fontSize: 19, lineHeight: 24 },
   taggedPrice: { fontFamily: "Jost-Light", fontSize: 15 },
   // Posy: two tiles across, each a column of photo, details and Book.
@@ -1233,11 +1233,6 @@ const styles = StyleSheet.create({
     fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     letterSpacing: 0.3,
-  },
-  waitlistChipX: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 11,
-    opacity: 0.7,
   },
   waitlistJoinBtn: {
     borderRadius: 20,

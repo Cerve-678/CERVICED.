@@ -55,6 +55,17 @@ export function offeredSlotLabel(date: string | null, time: string | null): stri
   return when ? `${formatShortDayDate(date)} · ${when}` : formatShortDayDate(date);
 }
 
+/** "2:00pm – 4:00pm" for a held slot, or just "2:00pm" when its length isn't known. */
+export function heldTimeRangeLabel(time: string | null, durationMinutes: number | null): string | null {
+  const start = formatTime12Safe(time);
+  if (!start || !time || !durationMinutes || durationMinutes <= 0) return start;
+  const [h = NaN, m = NaN] = time.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return start;
+  const endMinutes = h * 60 + m + durationMinutes;
+  const end = formatTime12Safe(`${String(Math.floor(endMinutes / 60) % 24).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`);
+  return end ? `${start} – ${end}` : start;
+}
+
 /** "2:15pm": when a hold ended or ends, in the client's own clock. */
 export function holdEndLabel(expiresAt: string | null): string | null {
   if (!expiresAt) return null;
@@ -125,4 +136,57 @@ export function buildWaitlistHoldCartItem(args: {
     selectedTime: args.bookingTime.slice(0, 5),
     waitlistHold: { bookingId: args.holdBookingId, expiresAt: args.holdExpiresAt },
   };
+}
+
+/** The fields nextWaitingFor reads from a provider's waitlist entry. */
+interface QueueEntry {
+  id: string;
+  service_id: string | null;
+  status: string;
+  position: number;
+  created_at: string;
+}
+
+/**
+ * Who a freed slot goes to next, the way the database picks: people waiting
+ * for that service first, then people happy with any service, each in queue
+ * order (position, then when they joined). `excludeId` leaves out the client
+ * who has it now.
+ */
+export function nextWaitingFor<T extends QueueEntry>(entries: T[], serviceId: string | null, excludeId?: string): T | null {
+  const inOrder = (a: T, b: T) => a.position - b.position || a.created_at.localeCompare(b.created_at);
+  const waiting = entries.filter(e => e.status === "waiting" && e.id !== excludeId);
+  const same = serviceId ? waiting.filter(e => e.service_id === serviceId).sort(inOrder) : [];
+  const any = waiting.filter(e => e.service_id === null).sort(inOrder);
+  return same[0] ?? any[0] ?? null;
+}
+
+/** "Jo" from "Jo Martin"; null when there's no name. */
+export function firstNameOf(name: string | null | undefined): string | null {
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? first : null;
+}
+
+/**
+ * Whether a refused offer was refused only for falling outside the
+ * provider's own hours (or past a service's latest start), which the
+ * provider can choose to override. Read from the database guard's words.
+ */
+export function isOutsideHoursRefusal(error: unknown): boolean {
+  const e = error as { code?: unknown; message?: unknown } | null;
+  if (e?.code !== "P0001" || typeof e.message !== "string") return false;
+  return /outside the provider's working hours|has to start by/i.test(e.message);
+}
+
+/**
+ * The bookings check's "That time is no longer available" is written for a
+ * client who lost a slot. Refusing a provider's own offer it means the time
+ * clashes with something already in their diary, so they're told that.
+ */
+export function providerOfferRefusalMessage(error: unknown, fallback: string): string {
+  const e = error as { code?: unknown; message?: unknown } | null;
+  if (e?.code === "P0001" && e.message === "That time is no longer available") {
+    return "You already have a booking at that time. Pick another time.";
+  }
+  return fallback;
 }

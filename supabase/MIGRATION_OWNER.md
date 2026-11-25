@@ -56,6 +56,59 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-24 (the Terms notice points to the website instead of "Tap to read")
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124230000 | `terms_notice_wording` | **APPLIED 2026-11-24** on the user's "yes to both", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124220000`, no unapplied migration above it on any open PR. md5 guard on live `send_terms_updated_notice(text,text)` matched (`3c40f820…`). Forced-rollback dry run first: 16 rows rewritten, 0 left with "Tap to read", anon/authenticated still can't execute, live unchanged afterwards. Verified live: version recorded (live max); md5 `ac682a81…`; EXECUTE service_role only; all 16 `terms_updated` rows now end "You can read the full Terms at cerviced.co/legal." The notice opens nothing in the app (#762). |
+
+### Applied 2026-11-24 (the address reaches a client on time, in summer and for last-minute bookings)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124220000 | `address_release_timing` | **APPLIED 2026-11-24** on the user's "apply and merge all", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row, straight after 20261124210000. Lock `(none)` on main, no unapplied migration above it on any open PR. md5 guards matched on live `is_address_released` (`5873f964…`), `auto_release_address` (`a3e51cbb…`) and `process_address_release_notifications` (`e9e4525f…`). Forced-rollback dry run first: 2pm on 1 July → 13:00 UTC, 23½ h away inside "day before", 30 h away not, schedule `*/10`, live unchanged afterwards. Verified live: version recorded (live max); md5s now `551ac5ec…`, `9613cf94…`, `7f3ee201…`; `address-release-notifications` runs `*/10 * * * *`. Times are read as Europe/London (was UTC, an hour late in BST); a booking confirmed after its timed release moment is released and notified at once. PR #753. |
+### Applied 2026-11-24 (the provider's waitlist-joined notification says who and what for)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124210000 | `waitlist_joined_wording` | **APPLIED 2026-11-24** on the user's "apply and merge all", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124200000`, no unapplied migration above it on any open PR. md5 guard on live `notify_provider_waitlist_joined()` matched (`d9ca6152…`). Forced-rollback dry run first, with a temporary waitlist join: "Awa Jatta is on your waitlist for Wax & Tint" / "1st in line.", live unchanged afterwards. Verified live: version recorded; md5 `91f97f83…`, the dry run's. Only the title and message change. PR #750. |
+
+### Applied 2026-11-24 (tell savers and bell followers when a closed schedule opens again)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124200000 | `schedule_reopen_alerts` | **APPLIED 2026-11-24** by the user pasting the file into the SQL editor (MCP `execute_sql` was declined), in one transaction with its `schema_migrations` row. Lock held on this branch, live max `20261124150000` (cerviced-9b's, applied by cerviced-f9), no unapplied migration above it on any open PR. md5 guard on live `reopen_my_schedule` matched (`93ab36d9…`). Forced-rollback dry run first (pasted by the user): 5 "Aestheticsby N is back from holiday" alerts for its 5 savers, none for a 1-hour test closure, Glo Installs (still closed) untouched, Rose Haus's ended row cleared; live unchanged afterwards. Verified live: version recorded (live max); `reopen_my_schedule` md5 `14b8bc39…` (the dry run's); `process_schedule_reopen_alerts` exists, not executable by anon or authenticated; cron `schedule-reopen-alerts` `11,26,41,56 * * * *`; Rose Haus's ended closure cleared, no alerts sent at apply. Reopen now ends the closure (`reopens_on` = today) instead of deleting it. Push for savers without the bell needs `send-push-notification` deployed from this branch (on top of #743). |
+
+### Applied 2026-11-24 (a provider can offer a waitlist client a time outside their hours)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124150000 | `waitlist_offer_outside_hours` | **APPLIED 2026-11-24** on the user's pick ("Ask, then allow"), via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124140000`, no unapplied migration above it on any open PR. md5 guard on live `provider_offer_waitlist_slot(uuid,date,time)` matched (`64e2e2a1…`). Forced-rollback dry run first, signed in as a live provider with a temporary waitlist entry: 5:30pm on a day closing at 6pm refused without the switch ("outside the provider's working hours"), held (`on_hold`) with it, bypass back to off, old 3-argument function gone, live unchanged afterwards. Verified live: version recorded (live max); `provider_offer_waitlist_slot(uuid,date,time,boolean)` md5 `0dc93fe0…`, EXECUTE for authenticated + service_role only, same as before. Replaces the 3-argument function with one taking `p_outside_hours boolean DEFAULT FALSE`, so older app builds behave as before. |
+
+### Applied 2026-11-24 (the "slot opened" notification leads with the time)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124140000 | `waitlist_slot_push_wording` | **APPLIED 2026-11-24** on the user's go-ahead ("do the notification wording then merge"), via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261124130000`, no unapplied migration above it on any open PR (re-checked at apply time). md5 guard on live `offer_waitlist_slot` matched (`c046664d…`). Forced-rollback dry run first: new title "Fri 20 Nov, 2:00pm is yours for 10 min", old title gone, hold insert unchanged, live max and md5 unchanged afterwards. Verified live: version recorded (live max); `offer_waitlist_slot` md5 `5565406e…`, the dry run's. Only the client notification's title and message change. |
+
+### Applied 2026-11-24 (clients nudge "Not on CERVICED yet" listings to join)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261124130000 | `listing_nudges` | **APPLIED 2026-11-24** on the user's go-ahead ("yes"), via the Supabase MCP `execute_sql`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261123220000`, no unapplied migration above it on any open PR (re-checked at apply time). Forced-rollback dry run first: two nudges by one client on one day counted 1, a `profile_view` on a listing still refused. Verified live: version recorded (live max); new `record_provider_stat` md5 `915b37df…` with the listing rule; anon + authenticated execute `listing_nudge_count`, authenticated only on `admin_listing_nudges` and `record_provider_stat`; the 9 existing link-only join nudges untouched. PR #736. Redefines `record_provider_stat` from live with an md5 guard (`33e29c0b…`) so 'join_nudge' also counts for an active directory listing; adds `listing_nudge_count` (anon + authenticated) and `admin_listing_nudges` (admins). |
+
+### Applied 2026-11-23 (signed-out visitors read a provider's written terms)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261123220000 | `provider_terms_readable_signed_out` | **APPLIED 2026-11-23** on the user's go-ahead (picked "Let visitors read them"), via `supabase db query --linked -f` from a worktree (the link file copied in; nothing run in the main folder), in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261123210000`, no unapplied migration above it on any open PR. md5 guard on live `get_provider_terms` matched (`97000329…`); the function is unchanged, only `GRANT EXECUTE … TO anon`. Forced-rollback dry run first, as anon: a live provider's terms returned (1 row), `provider_form_library` read directly returned 0 rows, live max and grants unchanged afterwards. Verified live: version recorded (live max); anon and authenticated both execute it; md5 unchanged; the public REST call answers 200 (was 401). The local web page then showed Keyshé Nail's terms and the "I agree" tick in the booking sheet. 5 live providers have written terms. |
+
+### Applied 2026-11-23 (the public web page reads reviews, address and open/closed)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261123210000 | `public_web_page_reads` | **APPLIED 2026-11-23** on the user's go-ahead (picked "Reviews with names" and "Yes, allow both"), via the Supabase MCP `execute_sql` (the CLI isn't linked in the main folder), in one transaction with its `schema_migrations` row. Lock `(none)`, live max `20261119200000`, no open PR above it. md5 guard on live `get_provider_reviews` matched (`60b2b861…`). Forced-rollback dry run first, as anon: 8 reviews, 7 named, the anonymous one nameless, 0 reviewer ids/avatars, taking-bookings answered, nothing left behind. Verified live: version recorded (live max); anon executes `get_provider_reviews`, `get_public_provider_address`, `provider_is_taking_bookings`; `provider_schedule_is_closed` still not anon; authenticated unchanged. Local web page then showed reviews and Keysh Nails' always-visible address with 0 console errors. PR #726. |
+
 ### Applied 2026-11-19 (providers move and zoom their hero photos)
 
 | Recorded version | Name | Verified live |
@@ -482,6 +535,12 @@ Frontier before applying: `20261103000000` (#268, applied by its own session). `
 |---|---|---|
 | 20261101190000 | `close_schedule_by_hand` | **APPLIED** by the user (SQL editor), version recorded by the file. Frontier before apply: `20261101180000`. Verified live: table `provider_schedule_closures` (RLS on, 0 policies, 0 rows, not readable by anon or authenticated); `provider_next_release_after`, `provider_schedule_is_closed` (not executable by authenticated); `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated, not anon); the closed check present in `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`, `process_follow_openings_alerts`, `invite_next_waitlist_entry`, `expire_waitlist_holds`, `decline_waitlist_hold`. With nobody closed, 10 of 10 live providers report taking bookings and 50 of 50 sampled services still find a slot. Not yet exercised: a real close and reopen from the app. The file records its own version. |
 
+
+### Applied 2026-10-24 (listing claims checked through Instagram)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261024100000 | `listing_claims_checked_by_instagram` | **APPLIED 2026-10-24** by Codex (Supabase MCP execute_sql) on the user's OK, version recorded. Re-verified live by cerviced-ae: the `claim_token*`/`claim_attempts` columns and `claim_provider_profile()` are gone; `provider_claim_requests` has RLS on with one policy (`provider_claim_requests_own_read`, SELECT, authenticated, `user_id = auth.uid()`); anon has no table or column privilege; authenticated can SELECT `bio_code` but not `review_note` and cannot write; `request_provider_claim` is EXECUTE for authenticated only (md5 `6eeb6e4758f83fa5eb36d4aa718b659b`) and `review_provider_claim` for postgres/service_role only (md5 `6554a980bf87c9b7547097cc9bf35566`), both identical to the file. Under `SET LOCAL ROLE anon` the table and both functions give 42501. Authored as `20261019235500` (frontier `20261019233000`), renumbered above the live frontier `20261021112728`. Does not touch `notifications_type_check`. Still to do: delete the old `request-claim-verification` Edge Function in the dashboard. |
 ### Applied 2026-11-01 (provider achievements)
 
 | Authored version | Name | Status |

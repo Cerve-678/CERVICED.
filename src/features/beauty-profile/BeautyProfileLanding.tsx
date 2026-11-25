@@ -493,7 +493,17 @@ export function BeautyProfileLanding({
                   >
                     <View style={styles.dateCol}>
                       <Text style={[styles.cap, styles.dateTop, { color: C.soft }]}>{stub.top}</Text>
-                      <Text style={[styles.dateBig, { color: C.ink }]}>{stub.big}</Text>
+                      {/* SOON / NOW are words in a column sized for a day number:
+                          smaller, and shrunk if a font still runs wide (owner,
+                          2026-11-24: "soon" was cut off). */}
+                      <Text
+                        style={[styles.dateBig, due && styles.dateWord, { color: C.ink }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                      >
+                        {stub.big}
+                      </Text>
                     </View>
                     <View style={styles.rail}>
                       <View
@@ -624,6 +634,7 @@ const styles = StyleSheet.create({
   dateCol: { width: 46, paddingVertical: 12, alignItems: 'center' },
   dateTop: { fontSize: 8.5 },
   dateBig: { fontFamily: FONT_DISPLAY, fontSize: 19, lineHeight: 23 },
+  dateWord: { fontSize: 13, letterSpacing: 0.4 },
   rail: { width: 12, alignItems: 'center' },
   railLine: { position: 'absolute', top: 0, bottom: 0, width: 2 },
   railLineFirst: { top: 26 },

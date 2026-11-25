@@ -2,7 +2,13 @@ import { openProviderBookingOnCalendar } from "../navigation/rootNavigate";
 import { navigationRef } from "../navigation/navigationRef";
 
 jest.mock("../navigation/navigationRef", () => ({
-  navigationRef: { isReady: jest.fn(), navigate: jest.fn() },
+  navigationRef: {
+    isReady: jest.fn(),
+    navigate: jest.fn(),
+    // The provider tabs are already mounted, so the navigate fires at once.
+    getRootState: () => ({ routeNames: ["MainTabs"], routes: [{ state: { routeNames: ["ProviderHome"], routes: [] } }] }),
+    addListener: jest.fn(() => () => {}),
+  },
 }));
 
 const ready = navigationRef.isReady as jest.Mock;

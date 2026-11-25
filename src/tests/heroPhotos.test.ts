@@ -1,4 +1,4 @@
-import { HERO_PHOTO_LIMIT, heroPhotos, toggleHeroPhotoPick } from '../features/providers/heroPhotos';
+import { HERO_PHOTO_LIMIT, heroPhotos, heroPhotosForPage, toggleHeroPhotoPick } from '../features/providers/heroPhotos';
 
 const photo = (id: string, isFeatured = false) => ({ id, is_featured: isFeatured });
 
@@ -41,5 +41,24 @@ describe('the photos a hero opens on', () => {
     expect(toggleHeroPhotoPick(['a', 'b'], 'a')).toEqual(['b']);
     const full = ['a', 'b', 'c'];
     expect(toggleHeroPhotoPick(full, 'c')).toEqual(['a', 'b']);
+  });
+});
+
+describe('the photos a page hero draws (app, InfoReg preview and website)', () => {
+  const shot = (id: string, isFeatured = false, url: string | null = `https://x/${id}.jpg`) => ({ id, is_featured: isFeatured, image_url: url });
+
+  it('takes as many as the style shows, picks first', () => {
+    const items = [shot('a'), shot('b'), shot('c', true), shot('d'), shot('e')];
+    expect(heroPhotosForPage(items, 4).map(p => p.id)).toEqual(['c', 'a', 'b', 'd']);
+    expect(heroPhotosForPage(items, 1).map(p => p.id)).toEqual(['c']);
+  });
+
+  it('takes the newest three for a style with nothing to pick', () => {
+    const items = [shot('a'), shot('b', true), shot('c'), shot('d')];
+    expect(heroPhotosForPage(items, 0).map(p => p.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('leaves out a photo with no picture', () => {
+    expect(heroPhotosForPage([shot('a', false, null), shot('b')], 3).map(p => p.id)).toEqual(['b']);
   });
 });

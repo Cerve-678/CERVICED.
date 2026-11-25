@@ -16,6 +16,7 @@ import { BookingStatus, type ConfirmedBooking } from "../../types/booking";
 import type { AddToCartParams } from "../../contexts/CartContext";
 import type {
   AnswerLayout,
+  AwaitedDetail,
   BeccaAnswer,
   BeccaHat,
   Capability,
@@ -304,6 +305,48 @@ function setLastContext(hat: BeccaHat, context: ConversationContext): void {
 }
 
 /**
+ * A reply this many words or fewer that supplies the detail Becca asked for
+ * is the answer to her question. "Lola Studio", "nails please", "the second
+ * one", "this weekend" — answers are short; new questions usually aren't.
+ */
+const SHORT_ANSWER_WORDS = 5;
+
+/** The details Becca can ask for and then carry into the next turn. */
+function isAskableKind(kind: string): kind is AwaitedDetail["kind"] {
+  return kind === "booking" || kind === "service" || kind === "provider" || kind === "date";
+}
+
+/** An open question lives for one turn: every new turn starts without it. */
+function withoutAwaiting(context: ConversationContext | undefined): ConversationContext | undefined {
+  if (!context?.awaiting) return context;
+  const { awaiting: _answeredOrDropped, ...rest } = context;
+  return rest;
+}
+
+/** Entities worth carrying into the answer turn: what resolved, not what didn't. */
+function settled(entities: EntityBag): EntityBag {
+  const { ambiguous: _unresolved, ...rest } = entities;
+  return rest;
+}
+
+/** Marks the reply about to be sent as a question awaiting a detail. */
+function holdQuestion(hat: BeccaHat, awaiting: AwaitedDetail | undefined): void {
+  if (awaiting) setLastContext(hat, { ...lastContextByHat[hat], awaiting });
+}
+
+/** The person just answered Becca's question: run the question it answers. */
+function answeredUnderstanding(awaiting: AwaitedDetail, entities: EntityBag, ask: string): Understanding {
+  return {
+    capabilityId: awaiting.capabilityId,
+    entities,
+    confidence: "high",
+    score: 1,
+    alternatives: [],
+    rawMessage: ask,
+  };
+}
+
+/**
  * Whether this turn is a link-only provider's. Set once at the top of
  * `respond()`, same reasoning as `lastContextByHat`: every early return and every
  * chip helper needs it, and threading it through all of them would bury the
@@ -329,7 +372,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // to hand the caller context from THIS hat. Leaving a module-global context
   // from the prior turn here was enough for a fast hat switch to revive an
   // old client thread on the next provider message.
-  setLastContext(hat, conversation ?? { hat, entities: {} });
+  setLastContext(hat, withoutAwaiting(conversation) ?? { hat, entities: {} });
 
   // A confirmation short-circuits everything: it's not natural language and
   // must never be re-parsed as an intent.
@@ -376,7 +419,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   ) {
     // Preserve the active thread: the provider may use Back after changing
     // the setting and should land in the same capacity conversation.
-    setLastContext(hat, conversation ?? { hat, entities: {} });
+    setLastContext(hat, withoutAwaiting(conversation) ?? { hat, entities: {} });
     return message_(
       {
         content: "You can set it under Booking Rules — choose the maximum bookings per day.",
@@ -419,10 +462,14 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // verbatim above this point, where the confirmation prefix and the social/
   // dismissal short-circuits need the user's exact words.
   const ask = normalizeAsk(message);
+  // Answers to "Which provider do you mean?" are short; see SHORT_ANSWER_WORDS.
+  const shortReply = ask.trim().split(/\s+/).length <= SHORT_ANSWER_WORDS;
 
   let entities: EntityBag = {};
   try {
-    entities = await resolveEntities(ask, bookings, now);
+    entities = await resolveEntities(ask, bookings, now, {
+      expectingProvider: conversation?.awaiting?.kind === "provider" && shortReply,
+    });
   } catch {
     // Entity resolution touches the network for providers. If it fails we
     // still want a useful reply from phrase matching alone, rather than an
@@ -566,17 +613,41 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     }
   }
 
-  const understanding = await understandWithFallback(
-    ask,
-    entities,
-    hat,
-    input.interpreter,
-  );
+  // Is this the answer to the question Becca just asked? "Which provider do
+  // you mean?" → "Lola Studio" supplies the provider, and the reviews question
+  // from the turn before is the one to answer — matched cold, a bare name
+  // would just open Lola Studio's profile.
+  const awaiting = conversation?.awaiting;
+  const answered = awaiting && entities[awaiting.kind] != null ? awaiting : undefined;
+  if (answered) entities = { ...answered.entities, ...entities };
+  // A short reply that supplies the detail IS the answer (shortReply, set
+  // above). A longer one may be a new question that happens to name it ("how
+  // do I contact Lola Studio?"), so it's matched normally and only treated as
+  // the answer when it matches nothing else.
+  let understanding = answered && shortReply
+    ? answeredUnderstanding(answered, entities, ask)
+    : await understandWithFallback(ask, entities, hat, input.interpreter);
+  if (answered && (understanding.confidence === "low" || !understanding.capabilityId)) {
+    understanding = answeredUnderstanding(answered, entities, ask);
+  }
 
   // Ambiguity outranks everything: if we don't know WHICH booking or provider
   // they meant, answering about the wrong one is worse than asking.
   const ambiguityReply = buildAmbiguityReply(entities, hat);
-  if (ambiguityReply) return ambiguityReply;
+  if (ambiguityReply) {
+    // Picking one of the matches must still answer the question asked.
+    const kind = entities.ambiguous?.[0]?.kind;
+    const asked = understanding.capabilityId ? getCapability(understanding.capabilityId, hat) : undefined;
+    holdQuestion(
+      hat,
+      awaiting && awaiting.kind === kind && shortReply
+        ? awaiting
+        : asked && kind && isAskableKind(kind) && asked.needs?.some((n) => n.kind === kind)
+          ? { capabilityId: asked.id, kind, entities: settled(entities) }
+          : undefined,
+    );
+    return ambiguityReply;
+  }
 
   if (understanding.confidence === "low" || !understanding.capabilityId) {
     return buildFallback(understanding, hat);
@@ -601,7 +672,12 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const missing = (capability.needs ?? []).find(
     (n) => n.required && entities[n.kind as keyof EntityBag] == null,
   );
-  if (missing) return buildMissingEntityReply(missing.kind, hat, message, bookings);
+  if (missing) {
+    if (isAskableKind(missing.kind)) {
+      holdQuestion(hat, { capabilityId: capability.id, kind: missing.kind, entities: settled(entities) });
+    }
+    return buildMissingEntityReply(missing.kind, hat, message, bookings, conversation);
+  }
 
   // Understood and about to run: say what Becca is actually doing now, in
   // place of the screen's generic "reading your message".
@@ -974,12 +1050,20 @@ async function understandWithFallback(
     if (!result?.capabilityId || !selected) {
       return fallback;
     }
-    // A model cannot claim a missing required entity is present. If it picks
-    // a capability that local resolution cannot support, trust the existing
-    // deterministic ranking instead of steering the user to a dead end.
+    // A model cannot claim a missing required entity is present. When it
+    // picks a capability whose detail never resolved, the engine asks for
+    // that detail (the same as a phrase match missing one) — so the pick
+    // stands, but never as better than medium.
     if (selected.needs?.some(
       (need) => need.required && entities[need.kind as keyof EntityBag] == null,
-    )) return fallback;
+    )) {
+      return {
+        ...fallback,
+        capabilityId: selected.id,
+        confidence: "medium",
+        alternatives: fallback.alternatives.filter((a) => a.capabilityId !== selected.id),
+      };
+    }
 
     // Clamp rather than trust a provider's schema adherence. A missing model
     // confidence is intentionally medium: the engine will name any carried
@@ -1363,7 +1447,13 @@ function buildMissingEntityReply(
   hat: BeccaHat,
   message: string,
   bookings: ConfirmedBooking[],
+  conversation: ConversationContext | undefined,
 ): ChatMessage {
+  // Apart from appointments (which re-send the question with the booking
+  // attached), every option below answers by sending just the detail
+  // ("Nails", "Lola Studio", "Tomorrow"). The engine reads that as the answer
+  // to the question it's holding (ConversationContext.awaiting) and runs the
+  // original capability with it.
   // Understood, but not which appointment. Each card re-asks the same
   // question with that exact booking attached (selectedBookingId), so it
   // lands on the same capability — "I didn't catch that" would be untrue.
@@ -1389,20 +1479,38 @@ function buildMissingEntityReply(
     return message_({
       content: "What are you after?",
       suggestions: [
-        chip("nails", "Nails", "Find nails"),
-        chip("hair", "Hair", "Find hair"),
-        chip("lashes", "Lashes", "Find lashes"),
-        chip("brows", "Brows", "Find brows"),
-        chip("mua", "Makeup", "Find makeup"),
-        chip("aesthetics", "Aesthetics", "Find aesthetics"),
+        chip("nails", "Nails", "Nails"),
+        chip("hair", "Hair", "Hair"),
+        chip("lashes", "Lashes", "Lashes"),
+        chip("brows", "Brows", "Brows"),
+        chip("mua", "Makeup", "Makeup"),
+        chip("aesthetics", "Aesthetics", "Aesthetics"),
       ],
     }, hat, { title: "Choose a service" });
   }
   if (kind === "provider") {
+    // The providers just shown are the likeliest answer, one tap each.
+    const shown = (conversation?.lastProviders ?? []).slice(0, 4);
     return message_({
-      content: "Which provider did you mean?",
-      suggestions: [askChip("saved", "My saved providers", "Show my saved providers")],
+      content: shown.length > 0
+        ? "Which provider do you mean? Pick one or type their name."
+        : "Which provider do you mean? Type their name.",
+      suggestions: [
+        ...shown.map((p) => chip(`provider-${p.slug}`, p.displayName, p.displayName)),
+        askChip("saved", "My saved providers", "Show my saved providers"),
+      ],
     }, hat, { title: "Choose a provider" });
+  }
+  if (kind === "date") {
+    return message_({
+      content: "Which day?",
+      suggestions: [
+        chip("today", "Today", "Today"),
+        chip("tomorrow", "Tomorrow", "Tomorrow"),
+        chip("weekend", "This weekend", "This weekend"),
+        chip("next-week", "Next week", "Next week"),
+      ],
+    }, hat, { title: "Choose a day" });
   }
   return message_({
     content: "I didn't quite catch that — can you give me a bit more?",

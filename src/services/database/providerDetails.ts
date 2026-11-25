@@ -37,6 +37,7 @@ export async function getProviderContactByDisplayName(
     .from("providers")
     .select("preferred_contact_methods, whatsapp_number, email, phone")
     .eq("display_name", displayName)
+    .eq("is_claimed", true) // never an imported directory listing
     .maybeSingle();
   return mapContactRow(data);
 }
@@ -156,7 +157,8 @@ export async function getProviderLocationsByDisplayNames(
   const { data, error } = await supabase
     .from("providers")
     .select("display_name, location_text, latitude, longitude, phone")
-    .in("display_name", displayNames);
+    .in("display_name", displayNames)
+    .eq("is_claimed", true); // never an imported directory listing
 
   if (error || !data) return {};
 

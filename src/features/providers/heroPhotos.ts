@@ -29,3 +29,17 @@ export function toggleHeroPhotoPick(picked: readonly string[], id: string, limit
   if (picked.length >= limit) return [...picked];
   return [...picked, id];
 }
+
+/**
+ * The photos a provider's page hero actually draws: a style that lets them
+ * pick (heroPhotoPickLimit > 0) opens on their picks topped up with the
+ * newest; any other style takes the newest three. One rule for the app's
+ * profile, its InfoReg preview and the website, so none of them shows a
+ * different set.
+ */
+export function heroPhotosForPage<T extends { is_featured?: boolean | null; image_url?: string | null }>(
+  items: readonly T[],
+  pickLimit: number,
+): T[] {
+  return (pickLimit > 0 ? heroPhotos(items, pickLimit) : items.slice(0, 3)).filter(item => !!item.image_url);
+}
