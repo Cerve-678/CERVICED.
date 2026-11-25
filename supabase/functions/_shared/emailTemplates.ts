@@ -1126,6 +1126,61 @@ ${requestNote ? `
  * that can hold anything (health details included), so it stays behind the
  * app's sign-in rather than sitting in an inbox.
  */
+// ---------------------------------------------------------------------------
+// A request that ended without being accepted
+// ---------------------------------------------------------------------------
+// The provider declined it, or didn't answer in time. The app tells the client
+// with a notification; a client who booked on the website has only email, and
+// they were told "Request sent … we'll email you again", so this closes that.
+
+export function requestNotAcceptedEmail(params: {
+  providerName: string;
+  service: string;
+  date: string;
+  time: string;
+  /** 'declined': the provider said no. 'expired': nobody answered in time. */
+  reason: 'declined' | 'expired';
+  /** What became of the money: held and now released, taken and being
+   *  refunded (requests from before card holds), or nothing was taken. */
+  money: { kind: 'released' | 'refunded' | 'none'; amount: number };
+}) {
+  const P = CLIENT;
+  const e = {
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+  };
+  const declined = params.reason === 'declined';
+  const amount = gbp(params.money.amount);
+  const moneyLine =
+    params.money.kind === 'released' && params.money.amount > 0
+      ? `The ${amount} held on your card has been released. Nothing was taken. Your bank may still show the hold for a few days until it drops off.`
+      : params.money.kind === 'refunded' && params.money.amount > 0
+        ? `Your ${amount} is being refunded in full. It can take 5–10 working days to show on your statement.`
+        : '';
+  return {
+    // Plain text, like every subject here.
+    subject: `${declined ? 'Request declined' : 'Request expired'} — ${params.service} with ${params.providerName}`,
+    html: letter(P, {
+      preview: declined
+        ? `${e.providerName} couldn’t accept your request.`
+        : `${e.providerName} didn’t answer your request in time.`,
+      content:
+        eyebrow(P, declined ? 'Request declined' : 'Request expired') +
+        headline(P, declined ? 'Your request wasn’t accepted' : 'Your request wasn’t answered in time') +
+        lede(
+          P,
+          declined
+            ? `${e.providerName} couldn’t accept your request for ${e.service} on ${e.date} at ${e.time}.`
+            : `${e.providerName} didn’t answer your request for ${e.service} on ${e.date} at ${e.time} in time, so it’s been cancelled.`,
+        ) +
+        (moneyLine ? note(P, moneyLine) : '') +
+        lede(P, `You can find another time with ${e.providerName}, or another provider, in the CERVICED app. Available on the App Store and Google Play.`),
+    }),
+  };
+}
+
 export function refundRequestedProviderEmail(params: {
   clientName: string;
   service: string;

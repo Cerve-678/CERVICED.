@@ -17,7 +17,7 @@
 // already does — this is not reachable by a user session.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
+import { bookingConfirmationEmail, requestNotAcceptedEmail } from '../_shared/emailTemplates.ts';
 import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 
@@ -70,13 +70,52 @@ serve(async (req) => {
       .select(
         'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
         'client_address, booking_date, booking_time, provider_id, ' +
-        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request',
+        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request, cancelled_by, declined_at',
       )
       .eq('id', bookingId)
       .maybeSingle();
 
     if (bookingError || !booking) return json({ error: 'Booking not found.' }, 404);
     if (!booking.customer_email) return json({ skipped: 'no customer email' });
+
+    // A request that ended without being accepted: the provider declined it,
+    // or it expired unanswered. queue_booking_confirmation_email asks for this
+    // as the request is cancelled; declined_at (stamped in the same write, by
+    // a trigger that runs after the queueing one) is what tells it apart from
+    // the client withdrawing it, which gets nothing. Sent once, by the
+    // trigger: the confirmation stamps and their retry job are left alone.
+    if (booking.status === 'cancelled') {
+      if (!booking.declined_at) return json({ skipped: 'cancelled, not a declined request' });
+      const amount = Number(booking.amount_paid) || 0;
+      const status = booking.payment_status ?? 'pending';
+      const kind: 'released' | 'refunded' | 'none' =
+        status === 'authorised' || status === 'not_charged' ? 'released'
+          : ['fully_paid', 'deposit_paid', 'refund_pending', 'refunded', 'partially_refunded'].includes(status)
+            ? 'refunded' : 'none';
+      const reason = booking.cancelled_by === 'provider' ? 'declined' : 'expired';
+      const { subject, html } = requestNotAcceptedEmail({
+        providerName: booking.provider_name_snapshot?.trim() || 'your provider',
+        service: booking.service_name_snapshot || 'your appointment',
+        date: formatLongDate(booking.booking_date),
+        time: formatTime12(booking.booking_time),
+        reason,
+        money: { kind, amount },
+      });
+      const sent = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `booking-request-ended-${booking.id}`,
+        },
+        body: JSON.stringify({ from: FROM_EMAIL, to: booking.customer_email, subject, html }),
+      });
+      if (!sent.ok) {
+        console.error(`[booking-confirmation] request-ended ${booking.id} failed: ${await sent.text()}`);
+        return json({ error: 'Send failed.' }, 502);
+      }
+      return json({ sent: true, kind: `request ${reason}` });
+    }
 
     // A mobile provider travels to the client, so the address that belongs in
     // the client's confirmation is their own — the same rule the app applies

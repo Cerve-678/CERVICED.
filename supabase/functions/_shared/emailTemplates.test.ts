@@ -28,6 +28,7 @@ import {
   linkOnlyLiveEmail,
   linkOnlyWelcomeEmail,
   passwordChangedEmail,
+  requestNotAcceptedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
   recoveryCodeEmail,
@@ -65,6 +66,13 @@ const every = () => [
   ['clientHatAddedEmail', clientHatAddedEmail({ name: HOSTILE })],
   ['providerHatAddedEmail', providerHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
   ['passwordChangedEmail', passwordChangedEmail({ name: HOSTILE })],
+  [
+    'requestNotAcceptedEmail',
+    requestNotAcceptedEmail({
+      providerName: HOSTILE, service: HOSTILE, date: HOSTILE, time: HOSTILE,
+      reason: 'declined', money: { kind: 'released', amount: 45 },
+    }),
+  ],
   [
     'bookingConfirmationEmail',
     bookingConfirmationEmail({
@@ -448,5 +456,35 @@ describe('the app box in a booking email', () => {
     const { join } = require('path') as typeof import('path');
     const screen = readFileSync(join(__dirname, '../../../src/web/WebPaymentStep.tsx'), 'utf8');
     for (const benefit of BOOKING_EMAIL_APP_BENEFITS) expect(screen).toContain(`'${benefit}'`);
+  });
+});
+
+describe('a request that wasn’t accepted', () => {
+  const base = {
+    providerName: 'Amara Lash Studio', service: 'Classic lash full set',
+    date: 'Wednesday, 14 October 2026', time: '2:30pm',
+  };
+
+  it('says the provider declined it and the hold is released, nothing taken', () => {
+    const { subject, html } = requestNotAcceptedEmail({ ...base, reason: 'declined', money: { kind: 'released', amount: 68.65 } });
+    expect(subject).toBe('Request declined — Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('Amara Lash Studio couldn’t accept your request for Classic lash full set on Wednesday, 14 October 2026 at 2:30pm.');
+    expect(html).toContain('The £68.65 held on your card has been released. Nothing was taken.');
+    expect(html).toContain('find another time');
+  });
+
+  it('says an unanswered request expired', () => {
+    const { subject, html } = requestNotAcceptedEmail({ ...base, reason: 'expired', money: { kind: 'released', amount: 20 } });
+    expect(subject).toBe('Request expired — Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('didn’t answer your request');
+    expect(html).toContain('so it’s been cancelled');
+  });
+
+  it('says an older, charged request is refunded, and says nothing about money on a free one', () => {
+    expect(requestNotAcceptedEmail({ ...base, reason: 'declined', money: { kind: 'refunded', amount: 45 } }).html)
+      .toContain('Your £45.00 is being refunded in full.');
+    const free = requestNotAcceptedEmail({ ...base, reason: 'declined', money: { kind: 'none', amount: 0 } }).html;
+    expect(free).not.toContain('held on your card');
+    expect(free).not.toContain('refunded');
   });
 });
