@@ -34,6 +34,7 @@ import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnaps
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 import type { ProviderBookingMode } from '../types/database';
 import { accountDeletionError } from '../utils/accountDeletionError';
+import { revokeAppleSignInForDeletion, shouldRevokeAppleSignIn } from '../services/appleSignInRevocation';
 
 export type AccountType = 'user' | 'provider';
 
@@ -1025,6 +1026,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearStorageFolder('avatars', user.id);
 
     if ((data as any).full_account_deleted) {
+      // The session is still valid here (deletion only stamps the account), so
+      // the revoke call can prove who is asking. Never throws.
+      if (shouldRevokeAppleSignIn(session?.user)) await revokeAppleSignInForDeletion();
       await logout();
       return;
     }
@@ -1050,6 +1054,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
 
     if ((data as any).full_account_deleted) {
+      // The session is still valid here (deletion only stamps the account), so
+      // the revoke call can prove who is asking. Never throws.
+      if (shouldRevokeAppleSignIn(session?.user)) await revokeAppleSignInForDeletion();
       await logout();
       return;
     }

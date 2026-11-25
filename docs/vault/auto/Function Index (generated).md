@@ -5,7 +5,7 @@
 
 #generated
 
-**4431 functions** across **650 files**.
+**4436 functions** across **651 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -517,9 +517,10 @@
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
 
-### `src/services/` (19)
+### `src/services/` (20)
 - `acuityTransferService.ts` — invoke · **transferFromAcuity**
 - `addressLookupService.ts` — **findAddressesByPostcode** · **resolvePostcodeAddress**
+- `appleSignInRevocation.ts` — **accountUsesAppleSignIn** · **revokeAppleSignInForDeletion** · **shouldRevokeAppleSignIn** · trades
 - `authProfileSnapshot.ts` — **clearAuthProfileSnapshot** · **readAuthProfileSnapshot** · **saveAuthProfileSnapshot**
 - `AvailabilityService.ts` — findBackToBackSlotsForDate · firstOpen · offer · rather
 - `biometricService.ts` — **authenticateWithBiometrics** · **disableBiometric** · **enableBiometric** · **getBiometricLabel** · **getBiometricRefreshToken** · **isBiometricAvailable** · **isBiometricEnabled** · **updateBiometricToken**
@@ -567,7 +568,7 @@
 - `becca.ts` — **clearBeccaSessions** · **createBeccaSession** · **deleteBeccaSession** · **getBeccaMessages** · **getBeccaSessions** · **recordBeccaMiss** · **setPushTokenIfChanged** · **updateBeccaSession** · **upsertBeccaMessage**
 - `bookings.ts` — **addMyExternalBooking** · getBookedConversationUserIds · **getBookingById** · **getBookingUserId** · **getBookingWithAddOnsById** · **getGroupBookingSiblings** · **getMyBookings** · **getMyExternalBooking** · **getMyExternalBookings** · **getMyLatestCompletedBooking** · **getMyUpcomingBookedSpans** · **getOlderBookings** · **getOlderProviderBookings** · **getProviderBookings** · **getProviderBookingsByDate** · **getProviderBookingsByDateRange** · **getProviderConversations** · **getProviderEnquirySummary** · **getProviderIdByDisplayName** · **getProviderRecentBookings** · **getProviderUnreadConversationCount** · **getProviderUpcomingBookings** · **getSlotsTaken** · **getUserConversations** · **isSlotTaken** · mapExternalBookingRow · **providerHasBookingsToDo** · **removeMyExternalBooking** · **subscribeToProviderBookingChanges** · **subscribeToProviderBookingDetailChanges** · **subscribeToUserConversationChanges**
 - `checkout.ts` — **cancelOwnBooking** · **claimCartBookingSlots** · **disputeNoShow** · **getProviderCheckoutMetadata** · **getProviderDepositPoliciesByDisplayNames** · **holdCartBookingSlots** · **markProviderNoShow** · **providerCancelGroupBooking** · **providerCancelOwnBooking** · **releaseCartBookingSlots** · **updateBookingGroupInfo** · **updateBookingStatus** · **updateGroupBookingStatus**
-- `edgeFunctions.ts` — **acceptCheckoutFees** · bookingFeeAction · calls · **cancelBookingFeeRequest** · **chargeBookingFee** · **confirmBookingFeePayment** · **createCheckoutPaymentIntent** · day · **disputeBookingFee** · **extractProviderProfileFromUrl** · **finalizeCheckoutPaymentIntent** · **getBookingFeeCharges** · **getBookingFeeTerms** · **getCheckoutFees** · **getCheckoutHoldPlan** · **getCheckoutOutcome** · **getFeeChargeCandidates** · **getMyBookingLateCancelFee** · **getMyRequestCardHolds** · **invokeBeccaAi** · **invokeSendAccountEmail** · **invokeSendSupportRequest** · **keepDisputedBookingFee** · **lookupPostcodeAddress** · **lookupPostcodeAddresses** · mapBookingFeeTerms · **refundBookingFee** · **reportContent** · **requestCardHoldStep** · **startBookingFeePayment**
+- `edgeFunctions.ts` — **acceptCheckoutFees** · bookingFeeAction · calls · **cancelBookingFeeRequest** · **chargeBookingFee** · **confirmBookingFeePayment** · **createCheckoutPaymentIntent** · day · **disputeBookingFee** · **extractProviderProfileFromUrl** · **finalizeCheckoutPaymentIntent** · **getBookingFeeCharges** · **getBookingFeeTerms** · **getCheckoutFees** · **getCheckoutHoldPlan** · **getCheckoutOutcome** · **getFeeChargeCandidates** · **getMyBookingLateCancelFee** · **getMyRequestCardHolds** · **invokeBeccaAi** · **invokeSendAccountEmail** · **invokeSendSupportRequest** · **keepDisputedBookingFee** · **lookupPostcodeAddress** · **lookupPostcodeAddresses** · mapBookingFeeTerms · **refundBookingFee** · **reportContent** · **requestCardHoldStep** · **revokeAppleSignIn** · **startBookingFeePayment**
 - `eventPlans.ts` — **getEventPlanDetails** · **getMyEventPlans**
 - `forms.ts` — **createIntakeForm** · **deleteLibraryForm** · **getBookingIdsWithLibraryForm** · **getIntakeFormByBooking** · **getIntakeFormById** · **getIntakeFormsByBooking** · **getMyProviderIntakeForms** · **getMyProviderTermsText** · **getPendingIntakeFormsForMe** · **getProviderFormLibrary** · **getProviderTerms** · getSentFormsOnBookings · **hasMyProviderTermsForm** · mapLibraryForm · notifyClientIntakeFormSent · **saveFormToLibrary** · **saveMyProviderTermsText** · **sendLibraryFormToBookings** · **sendLibraryFormToClient** · **submitIntakeFormAnswers** · **updateLibraryForm**
 - `infoPacks.ts` — **attachInfoPackToBooking** · **createInfoPack** · **deleteInfoPack** · **getInfoPackDeliveries** · **getInfoPacksByBooking** · **getMyActivity** · **getMyBookingActionItems** · **getProviderInfoPacksByUserId** · mapBookingInfoPack · **markInfoPackViewed** · **updateInfoPack**

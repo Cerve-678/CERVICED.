@@ -644,6 +644,7 @@ export {
   requestCardHoldStep,
   invokeBeccaAi,
   extractProviderProfileFromUrl,
+  revokeAppleSignIn,
 } from "./database/edgeFunctions";
 export type {
   AccountEmailKind,
