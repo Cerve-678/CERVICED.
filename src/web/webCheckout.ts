@@ -74,7 +74,7 @@ export function sheetAmountPence(plan: CheckoutHoldPlan, amountDue: number): num
 }
 
 /** A request is held on the card until the provider accepts: a booking with
- *  a provider who accepts by hand, or a time outside their usual rules.
+ *  a provider who reviews every booking first, or a time outside their usual rules.
  *  Anything else is booked straight away. */
 export function isRequestCheckout(plan: CheckoutHoldPlan | null): boolean {
   return plan !== null && plan.requestCount > 0;
@@ -88,7 +88,7 @@ export function dueNowLine(plan: CheckoutHoldPlan | null, amountDue: number, isD
   return { label: isDeposit ? 'Deposit due now' : 'Due now', amount: plan ? plan.chargeNowPence / 100 : amountDue };
 }
 
-/** The pay button. A request (a provider who accepts by hand, or a time
+/** The pay button. A request (a provider who reviews every booking, or a time
  *  outside their hours) only holds the money, and a bare "Hold £X" didn't
  *  read as the button that sends it. */
 export function webPayButtonLabel(plan: CheckoutHoldPlan, amountDue: number): string {
