@@ -44,10 +44,15 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
 
   describe('notification preferences', () => {
     it('makes the service report a failed read instead of returning defaults', () => {
-      const section = database.slice(
-        database.indexOf('async function readStoredNotificationPreferences'),
-        database.indexOf('/** Count how many users have bookmarked'),
-      );
+      const start = database.indexOf('async function readStoredNotificationPreferences');
+      // The next function after the preference read/write helpers. Anchored on
+      // a function name, and both ends checked, so a renamed or deleted
+      // neighbour fails here instead of silently widening the slice to the end
+      // of the database layer.
+      const end = database.indexOf('export async function getMyServiceBookingRows', start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const section = database.slice(start, end);
 
       // Returning DEFAULT_NOTIF_PREFS on error made "we could not read your
       // settings" indistinguishable from "these are your settings" — and the
