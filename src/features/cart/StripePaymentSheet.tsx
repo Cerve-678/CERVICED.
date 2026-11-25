@@ -15,7 +15,7 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { PaymentRequestError } from '../../utils/paymentRequestError';
-import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../../services/stripeService';
+import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent, markDeclineSeen } from '../../services/stripeService';
 import { settledFromCaptureStatus, waitForCheckoutOutcome, type CheckoutWaitResult } from './checkoutOutcome';
 import {
   getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards, getCheckoutOutcome,
@@ -392,6 +392,15 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
               : method === 'paypal'
                 ? 'That PayPal payment didn\'t go through. Please try again, or pay by card.'
                 : 'That payment didn\'t go through. Please check your details and try again.');
+            // They've now seen this refusal, so the 5-minute cleanup mustn't
+            // notify them of it again if they leave the sheet open past the
+            // hold. Only a card error: that's the bank's own refusal shown
+            // word for word; a generic line may not be the refusal on record.
+            // Best-effort: missing it only means a repeated notice.
+            if (isCardError) {
+              markDeclineSeen(checkoutBatchId, paymentIntentId)
+                .catch(err => logger.error('[checkout] could not mark a decline as seen', err));
+            }
           }
           return;
         }
