@@ -23,6 +23,7 @@ import {
   type RhythmLine,
 } from './presentation';
 import { FONT_BODY, FONT_DISPLAY, hapticLight, hapticMedium } from './ui';
+import { TapMark } from './TapMark';
 
 type T = (key: TranslationKey, params?: TranslationParams) => string;
 
@@ -65,9 +66,13 @@ interface Props {
   onSnooze: (item: MaintenanceItem) => void;
   /** The item mid-request, so its buttons can't be pressed twice. */
   busyItemId: string | null;
+  /** "How this works" only: the button the walkthrough is pretending to tap. */
+  demoTap?: DemoTap;
 }
 
-export function NextUpCard({ nextUp, P, t, compact, onOpenAll, onBook, onDone, onSnooze, busyItemId }: Props) {
+export type DemoTap = 'book' | 'done' | 'snooze' | null;
+
+export function NextUpCard({ nextUp, P, t, compact, onOpenAll, onBook, onDone, onSnooze, busyItemId, demoTap = null }: Props) {
   const on = { color: P.onAccent };
   const soft = { color: P.onAccent, opacity: 0.8 };
 
@@ -110,11 +115,11 @@ export function NextUpCard({ nextUp, P, t, compact, onOpenAll, onBook, onDone, o
     );
   }
 
-  return shell(<DueBody p={due} P={P} t={t} compact={compact} header={header} onBook={onBook} onDone={onDone} onSnooze={onSnooze} busy={busyItemId === due.item.id} />);
+  return shell(<DueBody p={due} P={P} t={t} compact={compact} header={header} onBook={onBook} onDone={onDone} onSnooze={onSnooze} busy={busyItemId === due.item.id} demoTap={demoTap} />);
 }
 
 function DueBody({
-  p, P, t, compact, header, onBook, onDone, onSnooze, busy,
+  p, P, t, compact, header, onBook, onDone, onSnooze, busy, demoTap,
 }: {
   p: PresentedItem;
   P: AppTheme;
@@ -125,6 +130,7 @@ function DueBody({
   onDone: (item: MaintenanceItem) => void;
   onSnooze: (item: MaintenanceItem) => void;
   busy: boolean;
+  demoTap: DemoTap;
 }) {
   const { item } = p;
   const c = countdownFor(p);
@@ -134,7 +140,7 @@ function DueBody({
   const on = { color: P.onAccent };
   const soft = { color: P.onAccent, opacity: 0.85 };
 
-  const solid = (label: string, onPress: () => void) => (
+  const solid = (key: DemoTap, label: string, onPress: () => void) => (
     <TouchableOpacity
       style={[styles.btn, { backgroundColor: P.onAccent, borderColor: P.onAccent }, busy && styles.dim]}
       onPress={() => { hapticMedium(); onPress(); }}
@@ -144,6 +150,7 @@ function DueBody({
       accessibilityLabel={`${label}, ${item.title}`}
     >
       <Text style={[styles.btnText, { color: P.accent }]}>{label.toUpperCase()}</Text>
+      {demoTap === key ? <TapMark colour={P.accent} /> : null}
     </TouchableOpacity>
   );
 
@@ -158,8 +165,8 @@ function DueBody({
       {interval ? <Text style={[styles.line, soft]}>{interval}</Text> : null}
       <View style={[styles.actions, compact && styles.actionsCompact]}>
         {busy ? <ActivityIndicator color={P.onAccent} style={styles.busy} /> : null}
-        {solid(t('maintenance.action.book'), () => onBook(item))}
-        {solid(t('maintenance.action.doneIt'), () => onDone(item))}
+        {solid('book', t('maintenance.action.book'), () => onBook(item))}
+        {solid('done', t('maintenance.action.doneIt'), () => onDone(item))}
         {snooze ? (
           <TouchableOpacity
             style={[styles.btn, { borderColor: P.onAccent }, busy && styles.dim]}
@@ -170,6 +177,7 @@ function DueBody({
             accessibilityLabel={`${t('maintenance.action.snoozeWeek')}, ${item.title}`}
           >
             <Text style={[styles.btnText, on]}>{t('maintenance.action.snoozeWeek').toUpperCase()}</Text>
+            {demoTap === 'snooze' ? <TapMark colour={P.onAccent} /> : null}
           </TouchableOpacity>
         ) : null}
       </View>

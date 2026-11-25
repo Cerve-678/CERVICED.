@@ -36,7 +36,7 @@ export const TOUR_KEYS = {
    *  the Forms library and reopened from the screen's ⓘ. */
   PROVIDER_FORMS: 'provider_forms',
   /** "How Maintenance works", shown on the first visit to Maintenance and
-   *  replayed from its "How this works" link. */
+   *  replayed from the ⓘ next to its title. */
   CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
   /** The Info Pack / Form tip card in the service editor. Recorded when the
    *  provider closes it or uses it; after that only the one-line links show. */
@@ -65,7 +65,8 @@ export const TOUR_CURRENT_VERSION: Record<TourKey, number> = {
   provider_home: 1,
   provider_info_packs: 1,
   provider_forms: 1,
-  client_maintenance_howto: 1,
+  // 2: the Show me walkthrough (2026-11-25) replaced the ticket movie.
+  client_maintenance_howto: 2,
   provider_service_pack_tip: 1,
   provider_policies_pack_tip: 1,
   provider_my_profile: 1,
