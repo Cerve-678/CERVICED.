@@ -2106,7 +2106,7 @@ export default function SearchScreen({ navigation, route }: Props) {
             </View>
           ) : undefined
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomInset + 20 }]}
         showsVerticalScrollIndicator={false}
         bounces={true}
         initialNumToRender={6}
@@ -2521,7 +2521,6 @@ const styles = StyleSheet.create({
   // List — two columns, matches BookmarkedProvidersScreen's provider grid
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 110,
     paddingTop: 4,
   },
   providerRow: {
