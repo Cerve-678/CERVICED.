@@ -10,7 +10,7 @@
 --
 -- send-booking-confirmation now reads the booking's status and sends the
 -- request wording while it is 'pending'. This makes the trigger send again
--- when a request is accepted: leaving 'pending' for a real status clears the
+-- when a request is accepted: going from 'pending' to 'confirmed' clears the
 -- email stamps, so the normal path (and retry_unsent_booking_confirmations)
 -- treats it as a booking whose confirmation hasn't gone out yet.
 --
@@ -45,13 +45,15 @@ begin
   -- A request accepted: its "Request sent" email has gone, and now it needs
   -- "Booking confirmed". Clearing the stamps sends it below, and lets the
   -- retry job pick it up if that first attempt never lands.
-  if tg_op = 'UPDATE' and old.status = 'pending'
-     and new.status is distinct from 'pending'
-     and new.status not in ('on_hold', 'cancelled', 'declined', 'rejected') then
-    new.confirmation_email_queued_at := null;
-    new.confirmation_email_sent_at := null;
-    new.confirmation_email_attempts := 0;
-    new.confirmation_email_error := null;
+  -- Accepting is the one move from 'pending' to 'confirmed'; anything else
+  -- leaving 'pending' (cancelled, declined, expired) is never emailed.
+  if tg_op = 'UPDATE' then
+    if old.status = 'pending' and new.status = 'confirmed' then
+      new.confirmation_email_queued_at := null;
+      new.confirmation_email_sent_at := null;
+      new.confirmation_email_attempts := 0;
+      new.confirmation_email_error := null;
+    end if;
   end if;
 
   if new.confirmation_email_queued_at is not null then
