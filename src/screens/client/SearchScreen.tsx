@@ -55,6 +55,7 @@ import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { cityFilterKeys, matchesCityFilter } from '../../utils/providerCity';
 import SearchGuideSheet, { AVAILABILITY_INFO } from '../../features/providers/SearchGuideSheet';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import {
   resolveProviderPriceRange,
   priceRangeMatchesBucket,
@@ -587,6 +588,7 @@ ServiceResultCard.displayName = 'ServiceResultCard';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
+  useHideTabBar();
   const bottomInset = useSystemBottomInset();
   // Concrete pixel cap for the filter sheet's scroll area. A percentage
   // maxHeight on the sheet + flexShrink on the ScrollView left the list
@@ -2106,7 +2108,7 @@ export default function SearchScreen({ navigation, route }: Props) {
             </View>
           ) : undefined
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomInset + 20 }]}
         showsVerticalScrollIndicator={false}
         bounces={true}
         initialNumToRender={6}
@@ -2521,7 +2523,6 @@ const styles = StyleSheet.create({
   // List — two columns, matches BookmarkedProvidersScreen's provider grid
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 110,
     paddingTop: 4,
   },
   providerRow: {

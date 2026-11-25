@@ -33,7 +33,9 @@ async function recordPaymentMethod(admin: SupabaseClient, stripe: Stripe, intent
 // client unless nothing was ever taken. Best-effort: the money has already
 // moved correctly, and a checkout left 'prepared' is picked up again by the
 // reconcile-checkouts job, which records it then.
-export type CheckoutOutcome = 'not_charged' | 'refunded' | 'abandoned';
+// 'declined' comes only from reconcile-checkouts: a refused attempt the
+// client never saw, because the app had closed.
+export type CheckoutOutcome = 'not_charged' | 'refunded' | 'abandoned' | 'declined';
 
 async function recordOutcome(admin: SupabaseClient, batchId: string, outcome: CheckoutOutcome) {
   const { error } = await admin.rpc('record_checkout_outcome', {
@@ -44,8 +46,9 @@ async function recordOutcome(admin: SupabaseClient, batchId: string, outcome: Ch
 
 // A cancelled payment says something to the client only if the card had been
 // approved: their bank may show it as pending. A declined or never-paid one
-// was already explained on the payment sheet, or never started.
-export async function outcomeOfCancelledIntent(stripe: Stripe, intentId: string): Promise<CheckoutOutcome> {
+// was explained on the payment sheet or never started, except when the app
+// had closed before the bank answered (reconcile-checkouts tells them then).
+export async function outcomeOfCancelledIntent(stripe: Stripe, intentId: string): Promise<'not_charged' | 'abandoned'> {
   const intent = await stripe.paymentIntents.retrieve(intentId, { expand: ['latest_charge'] });
   return chargeWasApproved(intent.latest_charge) ? 'not_charged' : 'abandoned';
 }
