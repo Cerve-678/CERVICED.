@@ -17,7 +17,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
-  useWindowDimensions,
   Alert,
   Animated,
   Linking,
@@ -143,6 +142,7 @@ import { WaitlistDatesSheet } from "../../features/bookings/WaitlistDatesSheet";
 import { useWaitlistHoldActions } from "../../features/bookings/useWaitlistHoldActions";
 import { durationToMinutes } from "../../features/cart/presentation";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
+import { useContentWidth, useReadableBackdrop } from '../../components/ReadableWidth';
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -352,7 +352,7 @@ interface NotificationAlertProps {
 
 const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
   ({ isVisible, message, onHide, slideAnimation, isActive, isBookmark }) => {
-    const { width: screenWidth } = useWindowDimensions();
+    const { width: screenWidth } = useContentWidth();
     const slideStyle = useMemo(
       () => ({
         transform: [
@@ -441,7 +441,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
     canBookProvider,
     onBookOffer,
   }) => {
-    const { width: screenWidth } = useWindowDimensions();
+    const { width: screenWidth } = useContentWidth();
     const OP = themeTokens;
 
     const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -1167,7 +1167,7 @@ const unclaimedStyles = StyleSheet.create({
 // even in dark mode: the page never follows the viewer's dark mode, and the
 // back button's tint already assumes this background.
 function ProviderProfileSkeleton() {
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight } = useContentWidth();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -1309,7 +1309,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const { theme } = useTheme();
   // Measured per render, not captured at module load: the offers panel rests
   // one panel-width offscreen and the full-screen image modal pages by width.
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useContentWidth();
   const [serviceTileGridWidth, setServiceTileGridWidth] = useState(0);
 
   const providerId = route.params?.providerId ?? "";
@@ -1441,6 +1441,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     heroKicker,
     heroPillLabels,
   } = palette;
+  // On an iPad the page sits in a centred column; paint the space either
+  // side in the provider's own page colour rather than the app's.
+  useReadableBackdrop(OP.bg);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();

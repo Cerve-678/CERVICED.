@@ -27,7 +27,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { Image } from "expo-image";
@@ -47,6 +46,7 @@ import {
   WaveEdge,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { useContentWidth } from '../../components/ReadableWidth';
 
 // ── Edge colours ─────────────────────────────────────────────────────────────
 
@@ -140,7 +140,7 @@ export function PolicyPagesInline({
   palette: PageStylePalette;
   onOpen: () => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width } = useContentWidth();
   const sheet = palette.background;
   const ink = sheetInk(sheet);
   if (urls.length === 0) return null;
@@ -304,7 +304,7 @@ export function PolicyPagesShowcase({
   onOpenPage: (index: number) => void;
   onOpenAll: () => void;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const [current, setCurrent] = useState(0);
   if (urls.length === 0) return null;
   // The content sheet keeps 20pt each side.

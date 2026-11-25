@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReAnimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -11,6 +11,7 @@ import {
   logoFrameLayout,
   minLogoZoom,
 } from '../../utils/logoFraming';
+import { useContentWidth } from '../../components/ReadableWidth';
 
 interface LogoCardFramerProps {
   /** Which card is being framed; null = closed. */
@@ -46,7 +47,7 @@ const FILL_LABELS: Record<LogoCardSlot, string> = {
  * each shape can frame it differently.
  */
 export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCancel, onReplace, palette }: LogoCardFramerProps) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentWidth();
   const card = LOGO_CARD_SIZES[slot ?? 'large'];
   const cardRatio = card.width / card.height;
   // Shown bigger than on screen so it's easy to work with, but the same
