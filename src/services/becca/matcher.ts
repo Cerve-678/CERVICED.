@@ -229,6 +229,20 @@ function scoreEntities(
   return score;
 }
 
+/**
+ * How strong the words alone must be before Becca asks for a missing detail
+ * rather than saying she didn't catch it. 0.4 is an exact phrase of six or
+ * more characters ("reviews", "help me plan"): a four-letter hit or a typo'd
+ * one is too thin to commit to a single question.
+ */
+const ASK_FOR_DETAIL_MIN = 0.4;
+/**
+ * How clearly the words must point at that question: ahead of what did
+ * match, and ahead of any other question also missing a detail. Closer than
+ * this is a genuine toss-up, and the honest fallback offers both.
+ */
+const ASK_FOR_DETAIL_MARGIN = 0.1;
+
 /** Builds the full Understanding for a message. */
 export function understand(
   message: string,
@@ -265,20 +279,64 @@ export function understand(
   }
 
   const messageWords = wordsOf(message);
-  const ranked = capabilitiesFor(hat)
+  const scored = capabilitiesFor(hat)
     // A capability's veto removes it from contention outright — it's for
     // modifiers that flip the intent ("edit my services" is not a request to
     // list them), which a score adjustment would only ever make close.
     .filter((c) => !c.excludeWhen?.test(message))
-    .map((c) => ({
-      capabilityId: c.id,
-      score: scorePhrases(message, messageWords, c.phrases) + scoreEntities(entities, c.needs),
-    }))
+    .map((c) => {
+      const phrase = scorePhrases(message, messageWords, c.phrases);
+      return {
+        capabilityId: c.id,
+        phrase,
+        // Exactly ONE missing detail. Missing two means the words were too
+        // bare to ask about: "what about" alone has neither a day nor a
+        // service, and "Which day?" back at it makes no sense. With a nails
+        // search on screen the service carries over, and the same "what
+        // about" is then rightly answered with "Which day?".
+        lacksDetail: (c.needs ?? []).filter(
+          (n) => n.required && entities[n.kind as keyof EntityBag] == null,
+        ).length === 1,
+        score: phrase + scoreEntities(entities, c.needs),
+      };
+    });
+  const ranked = scored
     .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .map(({ capabilityId, score }) => ({ capabilityId, score }));
 
   const top = ranked[0];
   const score = top?.score ?? 0;
+
+  // Nothing matched confidently, but the words clearly ask one specific
+  // question that is only missing a detail ("what are the reviews like" —
+  // whose?). The missing-detail penalty above is right for RANKING (the
+  // capability that has its provider should beat the one that doesn't), but
+  // on its own it pushed a clear question below the line: Becca said she
+  // hadn't caught it, or answered a vaguer match instead ("help me plan a
+  // booking" → the general what-I-can-do reply, on the words "help me").
+  // Pick that question instead: the engine then asks for the missing detail
+  // rather than answering anything half-blind. A confident match is never
+  // overridden.
+  if (scoreToConfidence(score) !== "high") {
+    const [best, next] = scored
+      .filter((r) => r.lacksDetail && r.phrase >= ASK_FOR_DETAIL_MIN)
+      .sort((a, b) => b.phrase - a.phrase);
+    if (
+      best &&
+      best.phrase - score >= ASK_FOR_DETAIL_MARGIN &&
+      (!next || best.phrase - next.phrase >= ASK_FOR_DETAIL_MARGIN)
+    ) {
+      return {
+        capabilityId: best.capabilityId,
+        entities,
+        confidence: "medium",
+        score: best.phrase,
+        alternatives: ranked.filter((r) => r.capabilityId !== best.capabilityId).slice(0, 3),
+        rawMessage: message,
+      };
+    }
+  }
 
   return {
     capabilityId: top?.capabilityId ?? null,
