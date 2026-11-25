@@ -77,7 +77,7 @@ Curated: [[Availability & Slots]] · **249 files**
 Curated: [[Payments]] · **211 files**
 - `src/screens/client/CartScreen.tsx` _(471)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
-- `src/features/cart/StripePaymentSheet.tsx` _(181)_
+- `src/features/cart/StripePaymentSheet.tsx` _(182)_
 - `src/components/BookingSheet.tsx` _(118)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_

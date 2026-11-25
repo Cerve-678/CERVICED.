@@ -181,10 +181,23 @@ Deno.serve(async (req: Request) => {
       capture_method: 'manual',
     }, { idempotencyKey: `checkout_create_request_holds_${batch.id}` });
 
-    // An intent started before saved cards shipped has no Customer; attach it
-    // while it can still change, so the sheet's saved cards line up.
-    if (!paymentIntent.customer && paymentIntent.status === 'requires_payment_method') {
-      paymentIntent = await stripe.paymentIntents.update(paymentIntent.id, { customer: customerId });
+    // Reused for a new attempt while it can still change (one Stripe call):
+    //  - An intent started before saved cards shipped has no Customer; attach
+    //    it, so the sheet's saved cards line up.
+    //  - A refusal the sheet showed earlier was stamped decline_seen
+    //    (finalize-payment-intent). This is a new attempt, so clear it: if this
+    //    one fails with nobody watching (the app closed), reconcile-checkouts
+    //    must tell the client, even when it fails exactly like the last one.
+    //    Setting a metadata key to '' removes it; the other keys are kept.
+    if (paymentIntent.status === 'requires_payment_method') {
+      const attach = !paymentIntent.customer;
+      const clearSeen = Boolean(paymentIntent.metadata?.decline_seen);
+      if (attach || clearSeen) {
+        paymentIntent = await stripe.paymentIntents.update(paymentIntent.id, {
+          ...(attach ? { customer: customerId } : {}),
+          ...(clearSeen ? { metadata: { decline_seen: '' } } : {}),
+        });
+      }
     }
 
     if (paymentIntent.status === 'canceled' || paymentIntent.status === 'succeeded') {

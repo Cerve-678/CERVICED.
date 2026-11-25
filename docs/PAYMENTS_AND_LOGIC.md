@@ -372,8 +372,13 @@ sheet shows a refused attempt it calls `finalize-payment-intent` with
 key (`declineKey`: the failed charge, or card and reason for a failed bank check)
 into the PaymentIntent's `metadata.decline_seen`. `reconcile-checkouts` records
 `declined`, and so notifies, only for a refusal not stamped, so a later attempt
-that fails after the app closed is still told. An older app build doesn't stamp,
-so it can still repeat the notice.
+that fails after the app closed is still told. Each new attempt also clears the
+stamp (`create-payment-intent`, which every attempt goes through, removes
+`decline_seen` when it reuses the payment), and the sheet waits for its last
+stamp to reach the server before starting the next attempt, so even a second
+failure identical to the first (a failed bank check leaves no charge to tell
+them apart) is told. An older app build doesn't stamp, so it can still repeat
+the notice.
 
 *Partly live: migration `20261102210000` was applied on 3 November, so "Payment
 received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and

@@ -136,6 +136,11 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
     // The intent this checkout opened. A retry reuses it (the server hands
     // back the same one per checkout); closing the sheet cancels it.
     const openIntentRef = useRef<string | null>(null);
+    // The "client saw this refusal" mark still on its way to the server. The
+    // next attempt waits for it, because starting that attempt clears the mark
+    // (create-payment-intent); a mark landing after the clear would hide the
+    // new attempt's refusal if the app then closed.
+    const declineSeenRef = useRef<Promise<void> | null>(null);
 
     useEffect(() => {
       if (!isVisible) return;
@@ -315,6 +320,11 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
           });
         }
         if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
+        const pendingSeen = declineSeenRef.current;
+        if (pendingSeen) {
+          declineSeenRef.current = null;
+          await pendingSeen;
+        }
         const { clientSecret, paymentIntentId, paypalAvailable } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
         openIntentRef.current = paymentIntentId;
@@ -398,7 +408,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
             // word for word; a generic line may not be the refusal on record.
             // Best-effort: missing it only means a repeated notice.
             if (isCardError) {
-              markDeclineSeen(checkoutBatchId, paymentIntentId)
+              declineSeenRef.current = markDeclineSeen(checkoutBatchId, paymentIntentId)
                 .catch(err => logger.error('[checkout] could not mark a decline as seen', err));
             }
           }
