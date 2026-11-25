@@ -103,7 +103,7 @@ just showed the first 10 providers in DB order under the label
    package already used elsewhere in the app (`BookingsScreen`, for
    in-progress-booking tracking), and the permission string is already
    declared in `app.json`
-   (`"This app uses your location to show nearby beauty service providers."`)
+   (`"CERVICED uses your location to show providers near you, and where you are on the map next to today's appointments."`)
    — it had simply never been consumed by Home.
 2. If granted, `Location.getCurrentPositionAsync({})` gets a one-time GPS
    fix, stored as `userCoords`.
