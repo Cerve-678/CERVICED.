@@ -147,3 +147,22 @@ export async function sendConversationQuickReply(params: {
   }).catch(() => {});
   return inserted;
 }
+
+/** Whether the signed-in person has blocked the other person in this chat. */
+export async function getConversationBlockState(conversationId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("get_conversation_block_state", {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
+/** Blocks or unblocks the other person in this chat. Uses the same block list
+ *  as Circle, and while it's on neither side can send a message. */
+export async function setConversationBlock(conversationId: string, blocked: boolean): Promise<void> {
+  const { error } = await supabase.rpc("set_conversation_block", {
+    p_conversation_id: conversationId,
+    p_blocked: blocked,
+  });
+  if (error) throw error;
+}
