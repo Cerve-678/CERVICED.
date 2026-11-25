@@ -145,6 +145,7 @@ import {
 } from '../../features/providers/goLiveStatus';
 import { splitPortfolioByKind } from '../../features/providers/venuePhotos';
 import { mapProviderReviews, type ProviderReviewItem } from '../../features/providers/reviewPresentation';
+import { useReportReview } from '../../features/safety/useReportReview';
 
 
 // Hero → content transition, inherited from the client-facing profile.
@@ -799,6 +800,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [termsSet, setTermsSet] = useState(false);
   const [automationsSet, setAutomationsSet] = useState(false);
   const [reviews, setReviews] = useState<ProviderReviewItem[]>([]);
+  const reportReview = useReportReview('provider');
   const [isLoading, setIsLoading] = useState(true);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
   // How far ahead clients can book, for the release-date quick view. Re-read
@@ -2154,6 +2156,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                                 {review.comment}
                               </Text>
                             ) : null}
+                            <TouchableOpacity
+                              onPress={() => reportReview(String(review.id))}
+                              activeOpacity={0.6}
+                              style={styles.reviewReportBtn}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              accessibilityLabel={`Report review by ${review.name || 'a client'}`}
+                            >
+                              <Text style={[styles.reviewReportText, { color: PP.sub }]}>Report</Text>
+                            </TouchableOpacity>
                           </View>
                         ))}
                         {totalReviews > MAX_REVIEW_PREVIEWS ? (
@@ -3557,6 +3568,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 10,
   },
+  reviewReportBtn: { alignSelf: 'flex-start', marginTop: 6 },
+  reviewReportText: { fontSize: 11, textDecorationLine: 'underline' },
   reviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',

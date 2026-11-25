@@ -20,6 +20,8 @@ interface ProviderReviewsModalProps {
   providerGradient: [string, string, ...string[]];
   /** Branding → Card Shape. */
   squareCards: boolean;
+  /** Signed-in app only (not the website): each review gets a Report link. */
+  onReportReview?: (reviewId: string) => void;
 }
 
 export const ProviderReviewsModal: React.FC<ProviderReviewsModalProps> = React.memo(
@@ -31,6 +33,7 @@ export const ProviderReviewsModal: React.FC<ProviderReviewsModalProps> = React.m
     adaptiveAccentColor,
     providerGradient,
     squareCards,
+    onReportReview,
   }) => {
     const allReviews = reviews;
 
@@ -131,6 +134,17 @@ export const ProviderReviewsModal: React.FC<ProviderReviewsModalProps> = React.m
                     <Text style={styles.modalReviewComment}>
                       {review.comment}
                     </Text>
+                  ) : null}
+                  {onReportReview ? (
+                    <TouchableOpacity
+                      onPress={() => onReportReview(String(review.id))}
+                      activeOpacity={0.6}
+                      style={styles.modalReportBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel={`Report review by ${review.name || "a client"}`}
+                    >
+                      <Text style={styles.modalReportText}>Report</Text>
+                    </TouchableOpacity>
                   ) : null}
                 </BlurView>
               )}
@@ -274,5 +288,12 @@ const styles = StyleSheet.create({
     color: "#000",
     lineHeight: 20,
     marginTop: 12,
+  },
+  modalReportBtn: { alignSelf: "flex-start", marginTop: 10 },
+  modalReportText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    color: "rgba(0,0,0,0.5)",
+    textDecorationLine: "underline",
   },
 });

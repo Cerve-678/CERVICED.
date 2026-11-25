@@ -49,7 +49,12 @@ export interface SupportRequestInput {
   /** Set for a refund request: the ticket is linked to it and the provider
    *  is emailed (see send-support-request). */
   refundRequestId?: string;
+  /** Set for a report about one message, review or chat (send-support-request
+   *  looks up what it is and fixes the category). */
+  report?: { kind: ReportKind; id: string };
 }
+
+export type ReportKind = 'message' | 'review' | 'conversation';
 
 export interface SupportRequestResult {
   /** Human-quotable reference, e.g. 1042 — shown to the reporter as "#1042". */
@@ -517,7 +522,7 @@ export async function keepDisputedBookingFee(chargeId: string, response: string)
 export async function finalizeCheckoutPaymentIntent(
   checkoutBatchId: string,
   paymentIntentId: string,
-  action: 'capture' | 'cancel',
+  action: 'capture' | 'cancel' | 'decline_seen',
 ): Promise<string> {
   const { data, error } = await supabase.functions.invoke('finalize-payment-intent', {
     body: { checkoutBatchId, paymentIntentId, action },
@@ -634,4 +639,24 @@ export async function revokeAppleSignIn(authorizationCode: string): Promise<void
   });
   if (error) throw error;
   if (data?.revoked !== true) throw new Error(data?.error ?? 'Apple sign-in was not revoked');
+}
+
+/** Reports one message, review or chat to support (App Store guideline 1.2).
+ *  The server looks up what was reported, so only its id is sent. */
+export async function reportContent(input: {
+  kind: ReportKind;
+  id: string;
+  note?: string;
+  platform: string;
+  appVersion: string;
+  activeMode: string;
+}): Promise<SupportRequestResult> {
+  return invokeSendSupportRequest({
+    category: '',
+    description: input.note?.trim() ?? '',
+    platform: input.platform,
+    appVersion: input.appVersion,
+    activeMode: input.activeMode,
+    report: { kind: input.kind, id: input.id },
+  });
 }

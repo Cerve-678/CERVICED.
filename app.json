@@ -16,7 +16,6 @@
       "buildNumber": "1",
       "userInterfaceStyle": "light",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app uses your location to show nearby beauty service providers.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIUserInterfaceStyle": "Light"
       }
@@ -71,9 +70,20 @@
       ],
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "This app uses your location to show nearby beauty service providers.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "locationFullAccuracyPermission": false,
+          "motionUsagePermission": false
+        }
+      ],
+      [
         "expo-calendar",
         {
-          "calendarPermission": "CERVICED uses your calendar to show your appointments in the app, and to add a booking to it when you ask. Nothing from your calendar is sent to CERVICED."
+          "calendarPermission": "CERVICED uses your calendar to show your appointments in the app, and to add a booking to it when you ask. Nothing from your calendar is sent to CERVICED.",
+          "remindersPermission": false
         }
       ],
       [
@@ -121,6 +131,14 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CERVICED opens your photo library so you can choose pictures to add, like your logo, your portfolio, or a photo to show Becca.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "expo-sharing",
       "expo-status-bar",
       "expo-web-browser",

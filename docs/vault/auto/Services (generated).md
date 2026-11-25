@@ -119,7 +119,7 @@ _no named exports_
 `cancelOwnBooking` · `claimCartBookingSlots` · `disputeNoShow` · `getProviderCheckoutMetadata` · `getProviderDepositPoliciesByDisplayNames` · `holdCartBookingSlots` · `markProviderNoShow` · `providerCancelGroupBooking` · `providerCancelOwnBooking` · `releaseCartBookingSlots` · `updateBookingGroupInfo` · `updateBookingStatus` · `updateGroupBookingStatus`
 
 ### `src/services/database/edgeFunctions.ts`
-`acceptCheckoutFees` · `cancelBookingFeeRequest` · `chargeBookingFee` · `confirmBookingFeePayment` · `createCheckoutPaymentIntent` · `disputeBookingFee` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `getBookingFeeCharges` · `getBookingFeeTerms` · `getCheckoutFees` · `getCheckoutHoldPlan` · `getCheckoutOutcome` · `getFeeChargeCandidates` · `getMyBookingLateCancelFee` · `getMyRequestCardHolds` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `keepDisputedBookingFee` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `refundBookingFee` · `requestCardHoldStep` · `revokeAppleSignIn` · `startBookingFeePayment`
+`acceptCheckoutFees` · `cancelBookingFeeRequest` · `chargeBookingFee` · `confirmBookingFeePayment` · `createCheckoutPaymentIntent` · `disputeBookingFee` · `extractProviderProfileFromUrl` · `finalizeCheckoutPaymentIntent` · `getBookingFeeCharges` · `getBookingFeeTerms` · `getCheckoutFees` · `getCheckoutHoldPlan` · `getCheckoutOutcome` · `getFeeChargeCandidates` · `getMyBookingLateCancelFee` · `getMyRequestCardHolds` · `invokeBeccaAi` · `invokeSendAccountEmail` · `invokeSendSupportRequest` · `keepDisputedBookingFee` · `lookupPostcodeAddress` · `lookupPostcodeAddresses` · `refundBookingFee` · `reportContent` · `requestCardHoldStep` · `revokeAppleSignIn` · `startBookingFeePayment`
 
 ### `src/services/database/eventPlans.ts`
 `getEventPlanDetails` · `getMyEventPlans`
@@ -134,7 +134,7 @@ _no named exports_
 `addMaintenanceItems` · `deleteMaintenanceItem` · `getMaintenanceBookingContext` · `getMaintenanceItems` · `getMaintenanceRebookTarget` · `getMaintenanceSettings` · `getUpcomingMaintenanceCoverage` · `saveMaintenanceSettings` · `updateMaintenanceItem` · `upsertUserAfterVerification`
 
 ### `src/services/database/messaging.ts`
-`getConversationMessages` · `getOrCreateConversation` · `markConversationReadByProvider` · `markConversationReadByUser` · `sendConversationQuickReply` · `sendProviderMessage` · `subscribeToConversationMessages` · `updateConversationLastMessage`
+`getConversationBlockState` · `getConversationMessages` · `getOrCreateConversation` · `markConversationReadByProvider` · `markConversationReadByUser` · `sendConversationQuickReply` · `sendProviderMessage` · `setConversationBlock` · `subscribeToConversationMessages` · `updateConversationLastMessage`
 
 ### `src/services/database/notifications.ts`
 `countProviderBookingsOnDate` · `countProviderBookingsOnDates` · `DEFAULT_NOTIF_PREFS` · `DEFAULT_PROVIDER_NOTIF_PREFS` · `deleteNotification` · `getLiveServiceDescriptions` · `getMyBookmarkCount` · `getMyNotifications` · `getMyProviderAchievements` · `getMyServiceBookingRows` · `getMyUnseenFullyBooked` · `getNotificationPreferences` · `getProviderBookingCapSettings` · `getProviderBookingCapSettingsForProviders` · `getProviderNotificationPreferences` · `getSpecialityUses` · `getUnreadNotificationCount` · `insertProviderNotification` · `markAllNotificationsRead` · `markFullyBookedSeen` · `markNotificationRead` · `saveNotificationPreferences` · `saveProviderNotificationPreferences` · `setMaintenanceRemindersOptIn` · `subscribeToNotificationChanges` · `updateProviderMaxBookingsPerDay`
@@ -164,7 +164,7 @@ _no named exports_
 `confirmBookingTipPayment` · `getBookingReviewStates` · `getBookingTip` · `getMyProviderReviews` · `getProviderBookingTip` · `getProviderReviews` · `hasReviewedBooking` · `startBookingTipPayment` · `submitReview`
 
 ### `src/services/database/services.ts`
-`cancelCheckout` · `cancelScheduledAnnouncement` · `countProviderPortfolioItems` · `countProviderServices` · `createMyService` · `getClientBookingHistory` · `getClientReliabilityStats` · `getClientReliabilityStatsBatch` · `getMyAnnouncementFollowers` · `getMyPromotionManagerCore` · `getMyServiceCatalogue` · `getProviderClientele` · `getRebookableService` · `getServiceDescriptionHistory` · `getServiceDurationsByIds` · `getServiceIdsByNames` · `getServiceSafetyFlags` · `markScheduledNotifSent` · `prepareCheckout` · `providerCreateManualBooking` · `queueScheduledAnnouncement` · `saveServiceDescriptionDraft` · `sendAnnouncement` · `sendPromotionNotificationsToClients` · `sendPromoToClient` · `sendProviderClientNotifications` · `sendRebookPrompt` · `setMyServiceActive` · `updateMyService`
+`cancelCheckout` · `cancelScheduledAnnouncement` · `countProviderPortfolioItems` · `countProviderServices` · `createMyService` · `getClientBookingHistory` · `getClientReliabilityStats` · `getClientReliabilityStatsBatch` · `getMyAnnouncementFollowers` · `getMyEarlierCheckoutPayments` · `getMyPromotionManagerCore` · `getMyServiceCatalogue` · `getProviderClientele` · `getRebookableService` · `getServiceDescriptionHistory` · `getServiceDurationsByIds` · `getServiceIdsByNames` · `getServiceSafetyFlags` · `markScheduledNotifSent` · `prepareCheckout` · `providerCreateManualBooking` · `queueScheduledAnnouncement` · `saveServiceDescriptionDraft` · `sendAnnouncement` · `sendPromotionNotificationsToClients` · `sendPromoToClient` · `sendProviderClientNotifications` · `sendRebookPrompt` · `setMyServiceActive` · `updateMyService`
 
 ### `src/services/database/social.ts`
 `addBookmark` · `blockPerson` · `CIRCLE_BATCH_LIMIT` · `CONTACT_HASH_BATCH_LIMIT` · `getBookmarkedProviders` · `getCircleForProviders` · `getMyFollowerCount` · `getMyPeople` · `getMyProviderSharing` · `getMyRecommendedProviders` · `getMySocialSettings` · `getProviderFollowerCount` · `isProviderBookmarked` · `isUuid` · `markWhereIGoNoticeSeen` · `matchContactHashes` · `removeBookmark` · `removeFollower` · `requestFollow` · `respondFollowRequest` · `setProviderFollowNotify` · `setProviderHidden` · `setProviderRecommendation` · `unblockPerson` · `unfollowPerson` · `updateMySocialSettings` · `UUID_RE`
@@ -209,7 +209,7 @@ _no named exports_
 `isExpoGo` · `registerForPushNotifications` · `startExpoGoNotificationBridge` · `unregisterPushToken`
 
 ### `src/services/stripeService.ts`
-`cancelPaymentIntent` · `capturePaymentIntent` · `createPaymentIntent`
+`cancelPaymentIntent` · `capturePaymentIntent` · `createPaymentIntent` · `markDeclineSeen`
 
 ### `src/services/tourService.ts`
 `recordTourSeen` · `resolveTourForUser`
