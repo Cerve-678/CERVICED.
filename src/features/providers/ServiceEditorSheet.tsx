@@ -53,6 +53,7 @@ import {
 import { formatLatestStart, latestStartToEditor } from '../../utils/latestStart';
 import { PackFormHint, type PackFormKind } from '../info-packs/PackFormHint';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { readableSheet } from '../../constants/readableWidth';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
   dismissArea: {
     flex: 1,
   },
-  sheet: {
+  sheet: { ...readableSheet,
     maxHeight: '86%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,

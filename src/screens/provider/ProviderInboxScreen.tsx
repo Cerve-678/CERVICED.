@@ -45,6 +45,7 @@ import {
   NO_INBOX_FILTERS,
   type InboxFilters,
 } from '../../features/providers/inboxFilters';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -902,7 +903,7 @@ const s = StyleSheet.create({
 const m = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   positioner:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  dialog:      { width: '100%', borderRadius: 14, overflow: 'hidden' },
+  dialog: { ...readableDialog, width: '100%', borderRadius: 14, overflow: 'hidden' },
   dialogTitle:   { fontSize: 16, fontWeight: '700', textAlign: 'center', paddingTop: 18, paddingHorizontal: 16 },
   dialogMessage: { fontSize: 13, textAlign: 'center', paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16, lineHeight: 18 },
   divider:     { height: StyleSheet.hairlineWidth, width: '100%' },
@@ -922,7 +923,7 @@ const m = StyleSheet.create({
 const t = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   overlayTap:  { flex: 1 },
-  sheet:       { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  sheet: { ...readableSheet, height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   sheetTitle:  { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
 

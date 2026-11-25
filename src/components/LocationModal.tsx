@@ -15,6 +15,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { searchPlaces } from '../data/cityAreas';
+import { readableSheet } from '../constants/readableWidth';
 
 interface LocationModalProps {
   visible: boolean;
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
-  sheet: {
+  sheet: { ...readableSheet,
     maxHeight: '75%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

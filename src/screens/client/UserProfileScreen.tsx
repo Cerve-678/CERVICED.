@@ -40,6 +40,7 @@ import { useBeautyProfileTodo } from '../../features/beauty-profile/useBeautyPro
 import { TodoMark } from '../../components/TodoMark';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
+import { readableDialog } from '../../constants/readableWidth';
 
 // ── Settings row ────────────────────────────────────────────────────────────
 
@@ -533,7 +534,7 @@ const styles = StyleSheet.create({
   // Modals
   modalOverlayCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', padding: 16, paddingBottom: 32 },
-  modalCard: {
+  modalCard: { ...readableDialog,
     borderRadius: 24,
     borderWidth: 0.5,
     padding: 24,

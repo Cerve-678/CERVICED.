@@ -74,6 +74,7 @@ import { openLegalPage } from '../../utils/legalPage';
 import { durationWithAddOns } from '../../features/bookings/addOnTime';
 import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
 import { holdSecondsLeft } from '../../features/bookings/waitlist';
+import { readableDialog } from '../../constants/readableWidth';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
@@ -5023,7 +5024,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
-  pickerSheet: {
+  pickerSheet: { ...readableDialog,
     borderRadius: dimensions.card.borderRadius,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing.lg,
@@ -5770,7 +5771,7 @@ const styles = StyleSheet.create({
   },
 
   // Booking Summary — centred-card presentation (small carts)
-  summaryModalContainer: {
+  summaryModalContainer: { ...readableDialog,
     maxHeight: '85%',
   },
   // flexShrink so the pinned footer below it always keeps its own height

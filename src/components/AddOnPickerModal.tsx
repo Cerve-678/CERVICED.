@@ -24,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../constants/providerThemes';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
+import { readableSheet } from '../constants/readableWidth';
 
 export interface AddOnPickerAddOn {
   id: string | number;
@@ -177,7 +178,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  sheet: { ...readableSheet, flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',

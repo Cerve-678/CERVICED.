@@ -27,6 +27,7 @@ import { logger } from '../../utils/logger';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { validateDob, validatePhone } from '../../utils/validation';
 import { type BookingDetail, missingBookingDetails } from './beforeYouBook';
+import { readableSheet } from '../../constants/readableWidth';
 
 // How long a closing sheet takes to slide out. React Native can leave the next
 // Modal behind one that's still dismissing, so the next one waits this long.
@@ -238,7 +239,7 @@ export function useBeforeYouBook() {
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   dismissArea: { flex: 1 },
-  sheet: { maxHeight: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 24 },
+  sheet: { ...readableSheet, maxHeight: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 24 },
   close: { position: 'absolute', top: 16, right: 16, zIndex: 1, padding: 4 },
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 16 },
   rowIcon: { marginTop: 14 },

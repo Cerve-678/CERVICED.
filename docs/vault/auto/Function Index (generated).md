@@ -5,7 +5,7 @@
 
 #generated
 
-**4441 functions** across **653 files**.
+**4442 functions** across **653 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -97,7 +97,7 @@
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 - `useRevealNext.ts` — onScroll · onViewportLayout · reveal · **revealEase** · **revealOffset** · step · stopGlide · **useRevealNext**
 
-### `src/constants/` (12)
+### `src/constants/` (13)
 - `customPageStyle.ts` — **customHeadingFont** · **customPageStyle** · **customTextFont** · **encodeCustomChoices** · isCustomLayout · **matchingFontSet** · **matchingLook** · **parseCustomChoices** · **partsOf** · pick · **sameCustomChoices** · sameParts · **withPart**
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
 - `pageStyles.ts` — **chapterHeading** · **customHeadingPair** · **getPageStyle** · **headingPair** · **heroPhotoPickLimit** · **heroPhotoSlotAspect** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
@@ -106,6 +106,7 @@
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
 - `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale** · **resolveProviderNameLineHeight**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · isCardShape · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
+- `readableWidth.ts` — **readableAbsoluteSheet**
 - `reschedule.ts` — changes
 - `serviceTypes.ts` — **isServiceTypeKey** · **serviceTypeOptionsFor**
 - `skinTones.ts` — **matchesSkinTone**

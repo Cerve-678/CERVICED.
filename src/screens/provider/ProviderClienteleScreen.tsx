@@ -48,6 +48,7 @@ import { reportError } from '../../utils/logger';
 import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { interestedRecipientIds } from '../../features/providers/announcementAudience';
+import { readableSheet } from '../../constants/readableWidth';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -379,7 +380,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
 }
 const csSt = StyleSheet.create({
   overlay:      { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:        { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '88%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '88%' },
   handle:       { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   header:       { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   avatar:       { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
@@ -808,7 +809,7 @@ const anSt = StyleSheet.create({
   errorText:    { fontSize: 13, color: '#FF6868', textAlign: 'center', marginTop: 10 },
   pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
   pickerDoneLabel:   { fontSize: 15, fontWeight: '700' },
@@ -1141,7 +1142,7 @@ const s = StyleSheet.create({
   emptyTitle:       { fontSize: 18, fontWeight: '700' },
   emptySub:         { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalCard:        { maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  modalCard: { ...readableSheet, maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle:       { fontSize: 17, fontWeight: '700', flex: 1, marginRight: 12 },
   modalRow:         { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },

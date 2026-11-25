@@ -25,6 +25,7 @@ import { useTranslation } from '../../i18n';
 import { getMyProviderAchievements } from '../../services/databaseService';
 import type { ProviderAchievements } from '../../types/achievements';
 import { reportError } from '../../utils/logger';
+import { readableAbsoluteSheet } from '../../constants/readableWidth';
 
 interface Props {
   navigation: { goBack: () => void };
@@ -234,7 +235,7 @@ const styles = StyleSheet.create({
   cellName: { fontSize: 12, fontWeight: '700', lineHeight: 15, marginTop: 8, textAlign: 'center' },
   cellProgress: { fontSize: 11, fontWeight: '600', lineHeight: 16, textAlign: 'center' },
   scrim: StyleSheet.absoluteFill,
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingHorizontal: 20, alignItems: 'center' },
+  sheet: { position: 'absolute', ...readableAbsoluteSheet(0), bottom: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingHorizontal: 20, alignItems: 'center' },
   grabber: { width: 40, height: 4, borderRadius: 2 },
   sheetSeal: { marginTop: 20 },
   sheetName: { fontFamily: 'Prata-Regular', fontSize: 28, lineHeight: 36, marginTop: 14, textAlign: 'center' },

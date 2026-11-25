@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { readableSheet } from '../../constants/readableWidth';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -84,7 +85,7 @@ export function FullCervicedLockedSheet({ visible, title, note, onClose, onSeeMo
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
   grabber: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 18 },
   kicker: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.5 },
   title: { fontFamily: 'Prata-Regular', fontSize: 28, lineHeight: 36, marginTop: 4 },

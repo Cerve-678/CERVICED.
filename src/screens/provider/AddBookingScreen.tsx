@@ -45,6 +45,7 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { findBufferClash } from '../../utils/bufferClash';
 import { isDarkColor } from '../../constants/providerThemes';
 import { formatAddOnExtraTime } from '../../features/bookings/addOnTime';
+import { readableSheet } from '../../constants/readableWidth';
 
 const WARN = '#E8A13A';
 
@@ -1113,7 +1114,7 @@ const s = StyleSheet.create({
   // so the overlay colour never bleeds through the sheet's own background.
   pickerModalWrap: { flex: 1, flexDirection: 'column' },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
   pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerLabel:     { fontSize: 15, fontWeight: '600' },
   pickerDone:      { fontSize: 15, fontWeight: '700' },

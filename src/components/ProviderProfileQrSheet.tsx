@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { copyText } from "../utils/clipboard";
 import { providerWebPageUrl } from "../utils/providerProfileLink";
 import { isDarkColor } from '../constants/providerThemes';
+import { readableSheet } from '../constants/readableWidth';
 
 type Props = {
   visible: boolean;
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.46)",
   },
-  sheet: {
+  sheet: { ...readableSheet,
     alignItems: "center",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: 28,

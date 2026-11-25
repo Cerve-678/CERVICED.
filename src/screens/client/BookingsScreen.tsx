@@ -67,6 +67,7 @@ import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { useAppDialog } from '../../components/AppDialog';
 import { getRescheduleBlock, getStaleRequestBlock, type OpenRequestStatus } from '../../utils/rescheduleBlockedReason';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -2966,14 +2967,14 @@ const createStyles = (
     borderRadius: 25,
     overflow: 'hidden',
   },
-  modalContent: {
+  modalContent: { ...readableDialog,
     borderRadius: 25,
     overflow: 'hidden'
   },
   modalBlur: {
     backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.95)' : '#FFFFFF'
   },
-  modalContainer: {
+  modalContainer: { ...readableDialog,
     maxHeight: '100%'
   },
   modalScrollView: {
@@ -3049,7 +3050,7 @@ const createStyles = (
     alignItems: 'center',
     marginBottom: 12,
   },
-  modalCard: {
+  modalCard: { ...readableDialog,
     backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
     borderRadius: 12,
     padding: 15
@@ -4372,7 +4373,7 @@ intakeFormTodoBadgeText: {
 // isDarkMode-branched overrides, same pattern as popSt below.
 const csSt = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
+  sheet: { ...readableSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20 },
   title:       { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   subtitle:    { fontSize: 13, textAlign: 'center', marginBottom: 20 },

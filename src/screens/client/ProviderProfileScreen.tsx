@@ -143,6 +143,7 @@ import { useWaitlistHoldActions } from "../../features/bookings/useWaitlistHoldA
 import { durationToMinutes } from "../../features/cart/presentation";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
 import { useContentWidth, useReadableBackdrop } from '../../components/ReadableWidth';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -1082,7 +1083,7 @@ const unclaimedStyles = StyleSheet.create({
     color: "#FFFFFF",
   },
   scroll: { flexGrow: 1 },
-  sheet: {
+  sheet: { ...readableSheet,
     flexGrow: 1,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -5280,7 +5281,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  modalContainer: {
+  modalContainer: { ...readableSheet,
     flex: 1,
     marginTop: 100, // Start modal below status bar
     borderTopLeftRadius: 25,
@@ -5333,7 +5334,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  modalContent: {
+  modalContent: { ...readableDialog,
     flex: 1,
     paddingHorizontal: 20,
   },
@@ -5623,7 +5624,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 22,
   },
-  waitlistPopupCard: {
+  waitlistPopupCard: { ...readableDialog,
     width: "100%",
     borderRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,
