@@ -30,24 +30,20 @@ jest.mock('../services/databaseService', () => ({
 import NotificationsSettingsScreen from '../screens/client/NotificationsSettingsScreen';
 import { DEFAULT_NOTIF_PREFS, getNotificationPreferences } from '../services/databaseService';
 
-describe('client Notifications: Coming up', () => {
-  it('shows CERVICED Wrapped as coming soon, with no switch of its own', async () => {
+// App Review (guideline 2.1) treats a visible "Coming soon" feature as an
+// unfinished app, so settings list only what's built. When CERVICED Wrapped
+// ships it arrives as a real switch in DISCOVER, not as a placeholder row.
+describe('client Notifications: nothing unbuilt', () => {
+  it('shows no Coming soon placeholder, and one switch per real preference', async () => {
     (getNotificationPreferences as jest.Mock).mockResolvedValue(DEFAULT_NOTIF_PREFS);
     render(<NotificationsSettingsScreen navigation={{ goBack: () => {} }} />);
 
-    expect(await screen.findByText('COMING UP')).toBeTruthy();
-    expect(screen.getByText('CERVICED Wrapped')).toBeTruthy();
-    expect(screen.getByText('Coming soon')).toBeTruthy();
-    // One switch per real preference; Wrapped adds none.
+    expect(await screen.findByText('DISCOVER')).toBeTruthy();
+    expect(screen.queryByText('COMING UP')).toBeNull();
+    expect(screen.queryByText('Coming soon')).toBeNull();
+    expect(screen.queryByText('CERVICED Wrapped')).toBeNull();
     expect(screen.UNSAFE_getAllByType(require('react-native').Switch)).toHaveLength(
       Object.keys(DEFAULT_NOTIF_PREFS).length,
     );
-  });
-
-  it('keeps Coming up hidden while the settings are still loading', () => {
-    (getNotificationPreferences as jest.Mock).mockReturnValue(new Promise(() => {}));
-    render(<NotificationsSettingsScreen navigation={{ goBack: () => {} }} />);
-
-    expect(screen.queryByText('CERVICED Wrapped')).toBeNull();
   });
 });
