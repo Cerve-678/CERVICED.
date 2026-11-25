@@ -16,12 +16,12 @@ import {
   type StyleProp,
   type TextStyle,
   type ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { useTheme } from '../../contexts/ThemeContext';
-import { useContentWidth } from '../ReadableWidth';
 
 export type AnalyticsTheme = ReturnType<typeof useTheme>['theme'];
 export type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -432,7 +432,7 @@ export function StatTile({
   animate?: boolean;
   columns?: number;
 }) {
-  const { width: screenWidth } = useContentWidth();
+  const { width: screenWidth } = useWindowDimensions();
   // flexGrow fills the row-stretched Reveal wrapper, so a tile whose label
   // wraps to two lines ("Instagram taps") doesn't hang lower than its row.
   return (
