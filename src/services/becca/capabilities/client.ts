@@ -3582,7 +3582,7 @@ const myStats: Capability = {
     "how many bookmarks", "my stats", "how many providers",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
-    // MUST be getBookmarkedProviders(), not getMyBookmarkCount(). The latter
+    // MUST be getBookmarkedProviders(), not getMyProviderSaverCount(). The latter
     // counts how many people have bookmarked YOU **as a provider** — it
     // resolves a providers row for the signed-in user and returns 0 when
     // there isn't one, so in the client hat it reported "you've saved 0

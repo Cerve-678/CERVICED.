@@ -74,7 +74,7 @@ import {
   createMyService,
   deletePortfolioItem,
   refreshCachedProviderProfile,
-  getMyBookmarkCount,
+  getMyProviderSaverCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
   getProviderRecentBookings,
@@ -960,7 +960,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 logger.error('[MyServices] terms status load failed:', err);
               }),
 
-            getMyBookmarkCount()
+            getMyProviderSaverCount()
               .then(count => {
                 if (active) setBookmarkCount(count);
               })
