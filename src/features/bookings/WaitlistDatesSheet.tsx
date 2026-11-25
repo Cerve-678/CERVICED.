@@ -8,6 +8,7 @@ import type { MyWaitlistPlace } from '../../services/databaseService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { placeInLineLabel } from './waitlist';
+import { readableSheet } from '../../constants/readableWidth';
 
 interface WaitlistDatesSheetProps {
   place: MyWaitlistPlace | null;
@@ -181,7 +182,7 @@ type Palette = ReturnType<typeof useTheme>['palette'];
 const createStyles = (P: Palette) =>
   StyleSheet.create({
     overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-    sheet: { backgroundColor: P.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 18, paddingTop: 10, gap: 12 },
+    sheet: { ...readableSheet, backgroundColor: P.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 18, paddingTop: 10, gap: 12 },
     grab: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: P.border, marginBottom: 4 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     title: { fontFamily: 'BakbakOne-Regular', fontSize: 17, color: P.text },

@@ -21,6 +21,7 @@ import type { AdminBankDispute, AdminMoneyOverview, AdminRefundRequest } from '.
 import { newRequestId } from '../../utils/requestId';
 import { logger } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { readableSheet } from '../../constants/readableWidth';
 
 // ── Admin Money screen ─────────────────────────────────────────────────────
 // Only reachable from the settings row an admin account sees (admin_users),
@@ -582,7 +583,7 @@ const styles = StyleSheet.create({
   pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.5 },
   footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, textAlign: 'center', marginTop: 8 },
   overlay: { backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '92%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '92%' },
   handle: { width: 38, height: 5, borderRadius: 3, alignSelf: 'center', marginVertical: 10 },
   sheetTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 24, letterSpacing: 1 },
   sep: { height: StyleSheet.hairlineWidth, marginVertical: 4 },

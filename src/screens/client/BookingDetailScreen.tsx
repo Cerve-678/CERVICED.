@@ -82,6 +82,7 @@ import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { formsToDoFirst } from '../../features/bookings/bookingForms';
 import { RecommendBookingButton } from '../../features/social/RecommendBookingButton';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
+import { readableSheet } from '../../constants/readableWidth';
 
 const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1835,7 +1836,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── More (⋯) menu ─── */}
         <Modal visible={showMoreMenu} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowMoreMenu(false)}>
-          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setShowMoreMenu(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', paddingHorizontal: 10 }} onPress={() => setShowMoreMenu(false)}>
             <SlideUpOnMount>
             <Pressable style={[st.moreMenuSheet, { backgroundColor: C.surfaceRaised, marginBottom: Math.max(insets.bottom, 10) }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
@@ -2324,13 +2325,15 @@ const st = StyleSheet.create({
   tipChip: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },
   contactSheet: { maxHeight: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 40 },
   // The ⋯ menu floats: inset from the edges, rounded on all four corners.
-  moreMenuSheet: { marginHorizontal: 10, borderRadius: 28, padding: 18 },
+  // The 10pt side gap is the backdrop's padding, so on an iPad the menu can
+  // centre at the column's width instead of pinning to the left margin.
+  moreMenuSheet: { ...readableSheet, borderRadius: 28, padding: 18 },
   contactOption: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   supportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   // Full-width bottom modal; its backdrop sits behind it so the top rounding
   // is not obscured by a separate overlay edge.
-  supportSheet: { maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 10 },
+  supportSheet: { ...readableSheet, maxHeight: '88%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 10 },
   supportHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   supportHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   supportTitle: { fontSize: 18, fontWeight: '800' },

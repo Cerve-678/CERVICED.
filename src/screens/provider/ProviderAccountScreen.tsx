@@ -41,6 +41,7 @@ import { dobToParts } from '../../utils/dateUtils';
 import { openLegalPage } from '../../utils/legalPage';
 import { openAboutPage } from '../../utils/aboutPage';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
+import { readableDialog } from '../../constants/readableWidth';
 
 // ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
 const LIGHT = {
@@ -961,7 +962,7 @@ const styles = StyleSheet.create({
 
   // ---- Modal (unchanged) ----
   modalOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  modalCard: {
+  modalCard: { ...readableDialog,
     borderRadius: 24,
     borderWidth: 0.5,
     padding: 24,

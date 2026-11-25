@@ -44,6 +44,7 @@ import {
   tapWarn,
   type AddOnPalette,
 } from './addOnUi';
+import { readableSheet } from '../../constants/readableWidth';
 
 export interface AddOnEditorResult {
   item: AddOnLibraryItem;
@@ -437,7 +438,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(26,24,21,0.4)' },
   // Sizes below follow InfoReg's service sheet (serviceSheet* styles) so the
   // two editors read as the same kind of sheet.
-  sheet: {
+  sheet: { ...readableSheet,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 10,

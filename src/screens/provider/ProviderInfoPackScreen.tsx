@@ -70,6 +70,7 @@ import {
 import { BAKBAK, INFO_PACK_DARK, INFO_PACK_LIGHT, type InfoPackPalette } from '../../features/info-packs/infoPackPalette';
 import { InfoPackSendSheet } from '../../features/info-packs/InfoPackSendSheet';
 import { InfoPackWelcome } from '../../features/info-packs/InfoPackWelcome';
+import { readableSheet } from '../../constants/readableWidth';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -863,7 +864,7 @@ const s = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: '700' },
 
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { ...readableSheet, maxHeight: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   previewTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginTop: 6 },
   previewServices: { fontSize: 12, fontWeight: '600', marginTop: 4, marginBottom: 14 },

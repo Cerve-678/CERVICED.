@@ -49,6 +49,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { logger } from '../utils/logger';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { durationWithAddOns, formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
+import { readableSheet } from '../constants/readableWidth';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1463,7 +1464,7 @@ const styles = StyleSheet.create({
   // than this, so the app is unchanged.
   sheet: {
     flex: 1, width: '100%', marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden',
-    ...(Platform.OS === 'web' ? { maxWidth: 480 } : {}),
+    ...(Platform.OS === 'web' ? { maxWidth: 480 } : readableSheet),
   },
   container: { flex: 1 },
   header: {
@@ -1508,7 +1509,7 @@ const styles = StyleSheet.create({
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
   termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  termsSheet: { ...readableSheet, height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,

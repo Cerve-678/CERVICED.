@@ -16,6 +16,7 @@ import type { BookingWithAddOns } from '../../types/database';
 import { formatShortDayDate, formatTime12Safe } from '../../utils/dateUtils';
 import { BAKBAK, type InfoPackPalette } from './infoPackPalette';
 import { packServiceLabel } from './infoPackLogic';
+import { readableSheet } from '../../constants/readableWidth';
 
 export interface SendSheetPack {
   id: string;
@@ -192,7 +193,7 @@ export function InfoPackSendSheet({
 
 const st = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 10, maxHeight: '78%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 10, maxHeight: '78%' },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
   title: { fontFamily: BAKBAK, fontSize: 20, letterSpacing: -0.2 },
   packName: { fontSize: 13, marginTop: 4, marginBottom: 14 },

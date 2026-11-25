@@ -16,6 +16,7 @@ import { newRequestId } from '../utils/requestId';
 import { logger } from '../utils/logger';
 import { toUserMessage } from '../utils/userFacingError';
 import { isDarkColor } from '../constants/providerThemes';
+import { readableSheet } from '../constants/readableWidth';
 
 // ── Issue Refund sheet ──────────────────────────────────────────────────────
 // The provider's one refund surface, opened from a booking's detail screen and
@@ -512,7 +513,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
+  sheet: { ...readableSheet, maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   headIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

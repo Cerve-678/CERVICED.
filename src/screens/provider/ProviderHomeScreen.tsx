@@ -82,6 +82,7 @@ import {
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
+import { readableAbsoluteSheet } from '../../constants/readableWidth';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -2405,8 +2406,7 @@ const s = StyleSheet.create({
   // Add-action sheet
   sheet: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    ...readableAbsoluteSheet(12),
     bottom: Platform.OS === 'ios' ? 28 : 16,
     borderRadius: 28,
     paddingHorizontal: 20,

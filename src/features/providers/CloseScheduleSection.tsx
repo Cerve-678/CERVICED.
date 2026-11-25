@@ -50,6 +50,7 @@ import {
   formatTime12Safe,
   ordinalSuffix,
 } from '../../utils/dateUtils';
+import { readableSheet } from '../../constants/readableWidth';
 
 type Palette = {
   bg: string;
@@ -511,7 +512,7 @@ const st = StyleSheet.create({
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 10 },
   switchText: { flex: 1, gap: 3 },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { maxHeight: '90%', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingHorizontal: 16 },
+  sheet: { ...readableSheet, maxHeight: '90%', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingHorizontal: 16 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   sheetTitle: { fontSize: 20, fontWeight: '700' },
   iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },

@@ -2,6 +2,7 @@ import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { readableSheet } from '../../constants/readableWidth';
 
 interface CollectionSheetFrameProps {
   visible: boolean;
@@ -33,7 +34,7 @@ export function CollectionSheetFrame({ visible, title, subtitle, onClose, childr
 const styles = StyleSheet.create({
   fill: { flex: 1, justifyContent: 'flex-end' },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,10,16,0.35)' },
-  sheet: {
+  sheet: { ...readableSheet,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,

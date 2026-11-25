@@ -43,6 +43,7 @@ import { formatTime12 } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 import { useContentWidth } from '../../components/ReadableWidth';
+import { readableSheet } from '../../constants/readableWidth';
 
 
 // ── Brand Palette ──────────────────────────────────────────────────────────────
@@ -439,7 +440,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
 
 const tpSt = StyleSheet.create({
   container: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 12, paddingHorizontal: 20, maxHeight: '80%' },
+  sheet: { ...readableSheet, backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 12, paddingHorizontal: 20, maxHeight: '80%' },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: CP.border, alignSelf: 'center', marginBottom: 20 },
   heading: { fontSize: 20, fontWeight: '700', color: CP.text, marginBottom: 4 },
   sub: { fontSize: 13, color: CP.sub, marginBottom: 20 },
@@ -638,7 +639,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
 
 const nmSt = StyleSheet.create({
   container: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 },
+  sheet: { ...readableSheet, backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: CP.border, alignSelf: 'center', marginBottom: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontSize: 18, fontWeight: '700', color: CP.text },
