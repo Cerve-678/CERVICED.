@@ -5,14 +5,14 @@
 
 #generated
 
-**4416 functions** across **649 files**.
+**4418 functions** across **649 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
-- `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
+- `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · runOnClose · showAlert · showConfirm · showToast · Toast · **useAppDialog**
 - `AppLoadingScreen.tsx` — AppLoadingScreen
 - `AreaPicker.tsx` — AreaPicker · back · close · confirmFreeText · exactly · freeMatches · inTown · isPicked · matches · matchRow · open · pickArea · pickCity · pickCounty · pickMatch · pickOtherCity · pickRegion · pickSearchedArea · pickWholeTown · regionData · rowEnd · startAreaOther · useTypedPlace
 - `AreasYouCoverPicker.tsx` — add · addSuggestion · AreasYouCoverPicker · remove
@@ -530,7 +530,7 @@
 - `providerClaimService.ts` — **clearPendingClaim** · **displayHandle** · **getLatestClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **isClaimGuardError** · **isClaimWorthShowing** · **loadListingClaim** · **mapProviderClaim** · **parsePendingClaim** · **requestClaim** · **savePendingClaim** · **searchUnclaimedProviders**
 - `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · **minutesToServiceDuration** · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · **serviceDurationToMinutes** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
 - `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · registerPushToken · **startExpoGoNotificationBridge** · **unregisterPushToken**
-- `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
+- `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent · **markDeclineSeen**
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
 - `ukGeocode.ts` — **geocodeUkPlace** · **isInUk**
 - `userLearningService.ts` — vibeSeedTags

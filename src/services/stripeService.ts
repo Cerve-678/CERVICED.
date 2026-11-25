@@ -25,7 +25,7 @@ export async function createPaymentIntent(
 async function finalizePaymentIntent(
   checkoutBatchId: string,
   paymentIntentId: string,
-  action: 'capture' | 'cancel',
+  action: 'capture' | 'cancel' | 'decline_seen',
 ): Promise<string> {
   return finalizeCheckoutPaymentIntent(checkoutBatchId, paymentIntentId, action);
 }
@@ -40,4 +40,11 @@ export async function capturePaymentIntent(checkoutBatchId: string, paymentInten
  * completion so a network timeout cannot accidentally cancel a paid booking. */
 export async function cancelPaymentIntent(checkoutBatchId: string, paymentIntentId: string): Promise<void> {
   await finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'cancel');
+}
+
+/** Tells the server the payment sheet has just shown the client a refused
+ *  attempt, so the 5-minute cleanup (reconcile-checkouts) doesn't notify them
+ *  of the same refusal again. */
+export async function markDeclineSeen(checkoutBatchId: string, paymentIntentId: string): Promise<void> {
+  await finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'decline_seen');
 }

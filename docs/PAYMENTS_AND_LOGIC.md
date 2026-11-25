@@ -356,10 +356,24 @@ you're ready." (migration `20261125140000`). A checkout walked away from without
 a refused attempt stays `abandoned` and silent. Like `abandoned`, `declined` is
 replaced if money turns out to have moved after all (the client then gets that
 outcome's notice too). Matching the exact start time keeps this off a payment
-the same client is making for a different time on another phone or the website;
-two devices paying for the very same slot at once is not covered. A client who
-saw the decline on the payment sheet and then left it open until the hold ran
-out also gets the notice, which repeats what they saw.
+the same client is making for a different time on another phone or the website.
+
+For the very same slot, nothing on the phone can tell an attempt left behind on
+a closed app from one still open on another phone or the website, so the Cart
+asks first: "You're already paying for this time" — "You started paying for this
+time a few minutes ago, on this phone or another one. If you pay here, we'll stop
+that payment. You won't be charged twice." with Not now / Pay here. Only "Pay
+here" cancels it; closing the question any other way keeps it (`useAppDialog`'s
+`showConfirm` takes an `onClose` for this).
+
+A decline the client has already seen isn't notified again. When the payment
+sheet shows a refused attempt it calls `finalize-payment-intent` with
+`decline_seen`, which (after the usual ownership checks) stamps that refusal's
+key (`declineKey`: the failed charge, or card and reason for a failed bank check)
+into the PaymentIntent's `metadata.decline_seen`. `reconcile-checkouts` records
+`declined`, and so notifies, only for a refusal not stamped, so a later attempt
+that fails after the app closed is still told. An older app build doesn't stamp,
+so it can still repeat the notice.
 
 *Partly live: migration `20261102210000` was applied on 3 November, so "Payment
 received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
