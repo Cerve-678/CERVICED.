@@ -125,14 +125,15 @@ export function MaintenanceView({
   );
 
   // "How Maintenance works": once per account on the first visit, then from
-  // the link under the title.
+  // the ⓘ next to the title.
   const [howTo, setHowTo] = useState(false);
   const howToChecked = useRef(false);
   useEffect(() => {
     if (howToChecked.current || !userId) return;
     howToChecked.current = true;
     let alive = true;
-    resolveTourForUser(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, [{ key: 'howto' }], userId)
+    // Version 2 is the Show me walkthrough, so anyone who saw the old one sees it once more.
+    resolveTourForUser(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, [{ key: 'howto', sinceVersion: 2 }], userId)
       .then((decision) => {
         if (!alive || !decision.show) return;
         setHowTo(true);
