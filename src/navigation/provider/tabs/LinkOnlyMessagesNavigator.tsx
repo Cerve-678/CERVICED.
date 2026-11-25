@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderInboxScreen from '../../../screens/provider/ProviderInboxScreen';
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import { LinkOnlyMessagesStackParamList } from '../../types';
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const Stack = createNativeStackNavigator<LinkOnlyMessagesStackParamList>();
 
@@ -11,7 +10,7 @@ const Stack = createNativeStackNavigator<LinkOnlyMessagesStackParamList>();
  *  provider has (see ProviderTabNavigator). */
 export default function LinkOnlyMessagesNavigator() {
   return (
-    <Stack.Navigator screenLayout={readableScreenLayout}>
+    <Stack.Navigator>
       <Stack.Screen name="ProviderInbox" component={ProviderInboxScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="ProviderConversation"

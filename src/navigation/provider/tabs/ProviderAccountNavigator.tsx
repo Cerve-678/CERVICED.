@@ -41,7 +41,6 @@ import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
 import { ProviderAccountStackParamList } from '../../types';
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
 
@@ -58,7 +57,7 @@ const MyPublicProfileComponent = ProviderProfileScreen as React.ComponentType<an
  */
 export default function ProviderAccountNavigator() {
   return (
-    <ProviderAccountStack.Navigator screenLayout={readableScreenLayout} initialRouteName="ProviderAccountMain">
+    <ProviderAccountStack.Navigator initialRouteName="ProviderAccountMain">
       <ProviderAccountStack.Screen
         name="ProviderAccountMain"
         component={ProviderAccountScreen}
