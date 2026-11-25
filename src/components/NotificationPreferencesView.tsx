@@ -47,9 +47,6 @@ interface Props<T extends { [K in keyof T]: boolean }> {
   save: (prefs: T) => Promise<void>;
   sections: NotificationPreferenceSection<T>[];
   alwaysOn?: { title: string; note: string; rows: AlwaysOnRow[] } | undefined;
-  /** Notifications on the way, shown under the switches with no switch of
-   *  their own, since there's nothing to turn on yet. */
-  comingUp?: { title: string; rows: AlwaysOnRow[] } | undefined;
   /** Prefix for dev logs, e.g. '[NotificationsSettings]'. */
   logTag: string;
 }
@@ -99,7 +96,7 @@ const ToggleRow = ({ icon, title, subtitle, value, onToggle, palette: P }: Toggl
  * its own rows and its own load/save, since each writes only its own keys.
  */
 export default function NotificationPreferencesView<T extends { [K in keyof T]: boolean }>({
-  navigation, initial, load: loadPrefs, save, sections, alwaysOn, comingUp, logTag,
+  navigation, initial, load: loadPrefs, save, sections, alwaysOn, logTag,
 }: Props<T>) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
@@ -275,15 +272,6 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
                 ))}
               </React.Fragment>
             ))}
-
-            {comingUp && (
-              <>
-                <Text style={[styles.section, { color: P.accentText }]}>{comingUp.title}</Text>
-                {comingUp.rows.map(row => (
-                  <StaticRow key={row.title} row={row} label="Coming soon" palette={P} />
-                ))}
-              </>
-            )}
 
             {saveError ? (
               <View style={styles.saveFailed}>
