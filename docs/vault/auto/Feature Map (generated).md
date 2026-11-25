@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **127 files**
 - … +97 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **249 files**
+Curated: [[Availability & Slots]] · **248 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -71,10 +71,10 @@ Curated: [[Availability & Slots]] · **249 files**
 - `src/services/database/services.ts` _(26)_
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
 - `src/utils/logger.ts` _(25)_
-- … +219 more
+- … +218 more
 
 ## Payments
-Curated: [[Payments]] · **211 files**
+Curated: [[Payments]] · **210 files**
 - `src/screens/client/CartScreen.tsx` _(471)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/features/cart/StripePaymentSheet.tsx` _(182)_
@@ -105,10 +105,10 @@ Curated: [[Payments]] · **211 files**
 - `supabase/provider_reminder_jobs.sql` _(34)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(33)_
-- … +181 more
+- … +180 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **435 files**
+Curated: [[Booking Flow]] · **434 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(649)_
@@ -139,10 +139,10 @@ Curated: [[Booking Flow]] · **435 files**
 - `src/services/database/reschedule.ts` _(109)_
 - `src/types/booking.ts` _(109)_
 - `src/services/database/services.ts` _(107)_
-- … +405 more
+- … +404 more
 
 ## Notifications
-Curated: [[Notifications]] · **222 files**
+Curated: [[Notifications]] · **221 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(368)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **222 files**
 - `src/services/becca/capabilities/provider.ts` _(26)_
 - `src/services/databaseService.ts` _(26)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(25)_
-- … +192 more
+- … +191 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **108 files**
