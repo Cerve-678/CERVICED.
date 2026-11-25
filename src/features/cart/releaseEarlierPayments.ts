@@ -8,18 +8,27 @@
 // already clears an earlier checkout that never reached Stripe; one that did
 // is cancelled here through finalize-payment-intent, which asks Stripe first
 // and refuses (409) if the card was approved after all.
+//
+// The client is asked first. Nothing on this phone can tell an attempt left
+// behind on a closed app from one still open on another phone or on the
+// website (the same person paying for the same time twice), and cancelling
+// that one under them would fail a payment they're in the middle of.
 
 import type { EarlierCheckoutPayment } from '../../services/databaseService';
 
 export interface ReleaseEarlierPaymentsDeps {
   find: (slots: ReadonlyArray<{ providerId: string; date: string; time: string }>) => Promise<EarlierCheckoutPayment[]>;
   cancel: (checkoutBatchId: string, paymentIntentId: string) => Promise<void>;
+  /** Asked once, only when there is an earlier attempt: true to stop it and
+   *  pay here. */
+  confirm: () => Promise<boolean>;
   onError?: (err: unknown) => void;
 }
 
 /** 'still_paying': an earlier payment for one of these times was approved or
- *  is still with the bank, so the client mustn't pay again yet. */
-export type ReleaseEarlierPaymentsResult = 'clear' | 'still_paying';
+ *  is still with the bank, so the client mustn't pay again yet.
+ *  'kept': the client chose to leave the earlier attempt alone. */
+export type ReleaseEarlierPaymentsResult = 'clear' | 'still_paying' | 'kept';
 
 function isApprovedRefusal(err: unknown): boolean {
   return (err as { context?: { status?: number } } | null)?.context?.status === 409;
@@ -38,6 +47,8 @@ export async function releaseEarlierPayments(
     deps.onError?.(err);
     return 'clear';
   }
+  if (earlier.length === 0) return 'clear';
+  if (!(await deps.confirm())) return 'kept';
   const results = await Promise.allSettled(
     earlier.map(payment => deps.cancel(payment.checkoutBatchId, payment.paymentIntentId)),
   );

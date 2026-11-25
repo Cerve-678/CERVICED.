@@ -6,25 +6,47 @@ import { releaseEarlierPayments } from '../features/cart/releaseEarlierPayments'
 describe('releaseEarlierPayments', () => {
   const slots = [{ providerId: 'p1', date: '2026-12-01', time: '14:30' }];
   const earlier = [{ checkoutBatchId: 'b1', paymentIntentId: 'pi_1' }];
+  const yes = () => Promise.resolve(true);
 
   it('cancels the earlier declined payment, so paying again can go ahead', async () => {
     const cancel = jest.fn().mockResolvedValue(undefined);
     const find = jest.fn().mockResolvedValue(earlier);
-    await expect(releaseEarlierPayments(slots, { find, cancel })).resolves.toBe('clear');
+    await expect(releaseEarlierPayments(slots, { find, cancel, confirm: yes })).resolves.toBe('clear');
     expect(find).toHaveBeenCalledWith(slots);
     expect(cancel).toHaveBeenCalledWith('b1', 'pi_1');
   });
 
-  it('does nothing when there is no earlier payment', async () => {
+  it('does nothing, and asks nothing, when there is no earlier payment', async () => {
     const cancel = jest.fn();
-    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue([]), cancel })).resolves.toBe('clear');
+    const confirm = jest.fn().mockResolvedValue(true);
+    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue([]), cancel, confirm })).resolves.toBe('clear');
     expect(cancel).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  // The same person paying for the same time on another phone or the website:
+  // their payment there must not be cancelled without them saying so.
+  it('leaves the earlier payment alone when the client chooses not to stop it', async () => {
+    const cancel = jest.fn();
+    const confirm = jest.fn().mockResolvedValue(false);
+    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue(earlier), cancel, confirm })).resolves.toBe('kept');
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('asks once, even with several earlier payments', async () => {
+    const confirm = jest.fn().mockResolvedValue(true);
+    const cancel = jest.fn().mockResolvedValue(undefined);
+    const find = jest.fn().mockResolvedValue([...earlier, { checkoutBatchId: 'b2', paymentIntentId: 'pi_2' }]);
+    await expect(releaseEarlierPayments(slots, { find, cancel, confirm })).resolves.toBe('clear');
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledTimes(2);
   });
 
   it('says the last payment is still going through when Stripe had approved it (409)', async () => {
     const cancel = jest.fn().mockRejectedValue({ context: { status: 409 } });
     const onError = jest.fn();
-    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue(earlier), cancel, onError }))
+    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue(earlier), cancel, onError, confirm: yes }))
       .resolves.toBe('still_paying');
     expect(onError).not.toHaveBeenCalled();
   });
@@ -32,7 +54,7 @@ describe('releaseEarlierPayments', () => {
   it('lets them pay when a cancel fails for any other reason, and logs it', async () => {
     const onError = jest.fn();
     const cancel = jest.fn().mockRejectedValue(new Error('network'));
-    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue(earlier), cancel, onError }))
+    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockResolvedValue(earlier), cancel, onError, confirm: yes }))
       .resolves.toBe('clear');
     expect(onError).toHaveBeenCalledTimes(1);
   });
@@ -40,7 +62,7 @@ describe('releaseEarlierPayments', () => {
   it('lets them pay when the earlier payments could not be read, and logs it', async () => {
     const onError = jest.fn();
     const cancel = jest.fn();
-    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockRejectedValue(new Error('offline')), cancel, onError }))
+    await expect(releaseEarlierPayments(slots, { find: jest.fn().mockRejectedValue(new Error('offline')), cancel, onError, confirm: yes }))
       .resolves.toBe('clear');
     expect(cancel).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
@@ -51,7 +73,7 @@ describe('releaseEarlierPayments', () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce({ context: { status: 409 } });
     const find = jest.fn().mockResolvedValue([...earlier, { checkoutBatchId: 'b2', paymentIntentId: 'pi_2' }]);
-    await expect(releaseEarlierPayments(slots, { find, cancel })).resolves.toBe('still_paying');
+    await expect(releaseEarlierPayments(slots, { find, cancel, confirm: yes })).resolves.toBe('still_paying');
     expect(cancel).toHaveBeenCalledTimes(2);
   });
 });

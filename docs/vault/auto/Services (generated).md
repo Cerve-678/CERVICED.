@@ -206,7 +206,7 @@ _no named exports_
 `isExpoGo` · `registerForPushNotifications` · `startExpoGoNotificationBridge` · `unregisterPushToken`
 
 ### `src/services/stripeService.ts`
-`cancelPaymentIntent` · `capturePaymentIntent` · `createPaymentIntent`
+`cancelPaymentIntent` · `capturePaymentIntent` · `createPaymentIntent` · `markDeclineSeen`
 
 ### `src/services/tourService.ts`
 `recordTourSeen` · `resolveTourForUser`

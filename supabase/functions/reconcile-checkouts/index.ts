@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 import { outcomeOfCancelledIntent, settleCheckout } from '../_shared/settleCheckout.ts';
+import { declineKey } from '../_shared/checkoutCharge.ts';
 import { sendSupportAlert } from '../_shared/supportAlert.ts';
 import { escapeHtml } from '../_shared/escapeHtml.ts';
 
@@ -95,11 +96,13 @@ Deno.serve(async (req: Request) => {
           // A refused attempt nobody saw (the app was closed by the time the
           // bank answered): tell the client it didn't go through, rather than
           // leaving them to wonder. Walked away from without an attempt
-          // refused, it stays 'abandoned' and silent. (A client who saw the
-          // decline on the sheet and left it open past the hold is told
-          // again; rare, and still true.)
+          // refused, it stays 'abandoned' and silent.
           const cancelled = await outcomeOfCancelledIntent(stripe, intent.id);
-          const outcome = cancelled === 'abandoned' && intent.last_payment_error ? 'declined' : cancelled;
+          // A refusal the payment sheet already showed them (decline_seen) is
+          // not news, so it stays silent.
+          const refused = declineKey(intent);
+          const unseen = refused !== null && intent.metadata?.decline_seen !== refused;
+          const outcome = cancelled === 'abandoned' && unseen ? 'declined' : cancelled;
           const { error: recordError } = await admin.rpc('record_checkout_outcome', {
             p_checkout_batch_id: batch.id, p_outcome: outcome,
           });

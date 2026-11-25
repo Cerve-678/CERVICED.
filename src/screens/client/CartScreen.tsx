@@ -3945,15 +3945,35 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           });
                           // An earlier payment for these times that failed
                           // with the app closed still holds them, and would
-                          // make this one say they're taken: cancel it first.
+                          // make this one say they're taken: cancel it first,
+                          // once the client says so.
                           const earlier = await releaseEarlierPayments(
                             intent.map(entry => ({ providerId: entry.provider_id, date: entry.booking_date, time: entry.booking_time })),
                             {
                               find: getMyEarlierCheckoutPayments,
                               cancel: cancelPaymentIntent,
+                              // Closed first: CartScreen's DialogHost sits
+                              // behind this summary sheet, so a dialog raised
+                              // while it's up never shows. Any way of closing
+                              // the dialog other than "Pay here" keeps the
+                              // earlier payment.
+                              confirm: () => new Promise<boolean>(resolve => {
+                                setShowBookingSummaryModal(false);
+                                showConfirm(
+                                  "You're already paying for this time",
+                                  "You started paying for this time a few minutes ago, on this phone or another one. If you pay here, we'll stop that payment. You won't be charged twice.",
+                                  [
+                                    { text: 'Not now', style: 'cancel' },
+                                    { text: 'Pay here', onPress: () => resolve(true) },
+                                  ],
+                                  'sheet',
+                                  () => resolve(false),
+                                );
+                              }),
                               onError: error => logger.error('[CartScreen] could not release an earlier payment', error),
                             },
                           );
+                          if (earlier === 'kept') return;
                           if (earlier === 'still_paying') {
                             setShowBookingSummaryModal(false);
                             showAlert('Your last payment is still going through', "We'll let you know as soon as it's settled. Please don't pay again in the meantime.");
