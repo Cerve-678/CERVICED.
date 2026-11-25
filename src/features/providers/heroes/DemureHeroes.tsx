@@ -22,7 +22,7 @@
 // Hush's boxes show the photos picked in Branding (heroPhotos).
 
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, type TextStyle } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, type TextStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
@@ -30,6 +30,7 @@ import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes
 import { cardInk } from "./BoutiqueHero";
 import { BowGlyph, PearlRing, ribbonColours, stripeColours } from "./demureOrnaments";
 import { HeroPhoto } from "../HeroPhoto";
+import { useContentWidth } from '../../../components/ReadableWidth';
 
 /** How far Lounge's name line hangs below the panel's foot, as a share of its
  *  size. 0.55 at first, 0.42 (#578), 0.16 once the photo went (owner,
@@ -121,7 +122,7 @@ export function LoungeHero({
   /** The content sheet's colour: the name and the strip under the panel. */
   sheetColour: string;
 }) {
-  const { width } = useWindowDimensions();
+  const { width } = useContentWidth();
   const upper = name.toUpperCase();
   const first = (name.trim().split(/\s+/)[0] ?? "").toUpperCase();
   // League Gothic is narrow: a cap is about 0.38 of its size across. Fill the

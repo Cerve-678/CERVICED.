@@ -13,6 +13,7 @@ import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScre
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import { CartStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const CartStack = createNativeStackNavigator<CartStackParamList>();
 
@@ -21,6 +22,7 @@ export default function CartNavigator() {
 
   return (
     <CartStack.Navigator
+      screenLayout={readableScreenLayout}
       screenOptions={{
         headerTransparent: true,
         headerBlurEffect: 'light',

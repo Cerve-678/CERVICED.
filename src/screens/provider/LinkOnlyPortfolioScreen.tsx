@@ -16,7 +16,7 @@
  * how clients find them.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,6 +46,7 @@ import { uploadToStorage } from '../../services/providerRegistrationService';
 import type { DbPortfolioItem } from '../../types/database';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
+import { useContentWidth } from '../../components/ReadableWidth';
 
 const GAP = 8;
 
@@ -56,7 +57,7 @@ export default function LinkOnlyPortfolioScreen() {
   const styles = useMemo(() => createStyles(P), [P]);
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
-  const { width } = useWindowDimensions();
+  const { width } = useContentWidth();
   const tileSize = (width - 32 - GAP * 2) / 3;
 
   const [providerId, setProviderId] = useState<string | null>(null);

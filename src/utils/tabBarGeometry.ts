@@ -8,6 +8,8 @@
  * drifting, which is what they used to do.
  */
 
+import { READABLE_MAX_WIDTH } from '../constants/readableWidth';
+
 export interface TabBarRect {
   x: number;
   y: number;
@@ -45,6 +47,15 @@ export function tabBarContentHeight(isAndroid: boolean): number {
  * geometry deliberately ignores the safe-area inset, which the fixed 30pt
  * offset already clears.
  */
+/**
+ * Width of the floating iOS pill: inset from both sides, but never wider than
+ * the readable column, so on an iPad it sits centred under the screen's
+ * content instead of running the width of the display.
+ */
+export function tabBarPillWidth(screenWidth: number): number {
+  return Math.min(screenWidth, READABLE_MAX_WIDTH) - TAB_BAR_SIDE_MARGIN * 2;
+}
+
 export function tabBarRect(
   isAndroid: boolean,
   screenWidth: number,
@@ -55,10 +66,11 @@ export function tabBarRect(
     const height = TAB_BAR_ANDROID_HEIGHT + Math.max(0, bottomInset);
     return { x: 0, y: screenHeight - height, width: screenWidth, height };
   }
+  const width = tabBarPillWidth(screenWidth);
   return {
-    x: TAB_BAR_SIDE_MARGIN,
+    x: (screenWidth - width) / 2,
     y: screenHeight - TAB_BAR_IOS_BOTTOM_OFFSET - TAB_BAR_PILL_HEIGHT,
-    width: screenWidth - TAB_BAR_SIDE_MARGIN * 2,
+    width,
     height: TAB_BAR_PILL_HEIGHT,
   };
 }

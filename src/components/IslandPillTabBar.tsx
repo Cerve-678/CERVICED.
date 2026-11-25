@@ -24,6 +24,7 @@ import {
   tabBarContentHeight,
   tabBarIndicatorFrame,
   tabBarClearance,
+  tabBarPillWidth,
   tabBarRect,
   type TabBarRect,
 } from '../utils/tabBarGeometry';
@@ -136,7 +137,10 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   // wrong after rotation, in split-screen, and on a foldable unfolding.
   const { width: screenWidth } = useWindowDimensions();
   // Android spans the full width edge to edge; iOS floats inset from both sides.
-  const barWidth = IS_ANDROID ? screenWidth : screenWidth - MARGIN * 2;
+  // On a wide window (iPad) the pill is capped to the readable column and
+  // centred, rather than stretching the width of the display.
+  const barWidth = IS_ANDROID ? screenWidth : tabBarPillWidth(screenWidth);
+  const barInset = IS_ANDROID ? 0 : (screenWidth - barWidth) / 2;
 
   const tabCount = state.routes.length;
   const tabWidth = barWidth / tabCount;
@@ -292,6 +296,7 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
     <Animated.View
       style={[
         styles.container,
+        !IS_ANDROID && { left: barInset, right: barInset },
         { transform: [{ translateY: combinedTranslateY }], opacity: combinedOpacity },
       ]}
       pointerEvents={forceHidden ? 'none' : 'box-none'}
