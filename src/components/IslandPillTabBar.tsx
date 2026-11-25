@@ -137,8 +137,8 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   // wrong after rotation, in split-screen, and on a foldable unfolding.
   const { width: screenWidth } = useWindowDimensions();
   // Android spans the full width edge to edge; iOS floats inset from both sides.
-  // On a wide window (iPad) the pill is capped to the readable column and
-  // centred, rather than stretching the width of the display.
+  // On a wide window (iPad) the pill is capped and centred, rather than
+  // stretching four icons across the width of the display.
   const barWidth = IS_ANDROID ? screenWidth : tabBarPillWidth(screenWidth);
   const barInset = IS_ANDROID ? 0 : (screenWidth - barWidth) / 2;
 

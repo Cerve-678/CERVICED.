@@ -18,7 +18,6 @@ import ProviderAutomationsScreen from "../../../screens/provider/ProviderAutomat
 import PaymentsScreen from "../../../screens/provider/PaymentsScreen";
 import PoliciesScreen from "../../../screens/provider/PoliciesScreen";
 import { ProviderBeccaStackParamList } from "../../types";
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ProviderBeccaStack =
   createNativeStackNavigator<ProviderBeccaStackParamList>();
@@ -42,7 +41,7 @@ const ProviderBeccaStack =
  */
 export default function ProviderBeccaNavigator() {
   return (
-    <ProviderBeccaStack.Navigator screenLayout={readableScreenLayout}>
+    <ProviderBeccaStack.Navigator>
       <ProviderBeccaStack.Screen
         name="BeccaMain"
         component={BeccaScreen}

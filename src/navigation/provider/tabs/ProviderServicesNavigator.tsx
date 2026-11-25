@@ -21,7 +21,6 @@ import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import { ProviderServicesStackParamList } from '../../types';
-import { readableScreenLayout } from '../../../components/ReadableWidth';
 
 const ProviderServicesStack = createNativeStackNavigator<ProviderServicesStackParamList>();
 
@@ -32,7 +31,7 @@ const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 export default function ProviderServicesNavigator() {
 
   return (
-    <ProviderServicesStack.Navigator screenLayout={readableScreenLayout}>
+    <ProviderServicesStack.Navigator>
       <ProviderServicesStack.Screen
         name="ProviderServicesMain"
         component={ProviderMyProfileScreen}
