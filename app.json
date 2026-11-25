@@ -11,7 +11,7 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.cerviced.app",
       "buildNumber": "1",
       "userInterfaceStyle": "light",
