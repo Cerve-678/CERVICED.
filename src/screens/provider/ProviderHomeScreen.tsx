@@ -1363,13 +1363,15 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     ]).start();
   }, [listOpacity, listSlide, selectedDate]);
 
-  // Auto-scroll strip to today on mount
+  // The date strip's last laid-out width: it centres the picked day when it
+  // first gets a width and whenever that width changes (see its onLayout).
+  // Cleared when the strip unmounts (month or week view), so it centres again
+  // when it comes back instead of opening at the start of the range.
+  const stripWidthRef = useRef(0);
+  const stripShown = !showMonth && viewMode !== 'week';
   useEffect(() => {
-    const t = setTimeout(() => {
-      stripRef.current?.scrollToIndex({ index: TODAY_IDX, animated: false, viewPosition: 0.4 });
-    }, 150);
-    return () => clearTimeout(t);
-  }, []);
+    if (!stripShown) stripWidthRef.current = 0;
+  }, [stripShown]);
 
   // A booking just added outside "today" (e.g. a custom-time squeeze-in) jumps
   // the calendar straight to that day, so the provider sees it land instead of
@@ -2054,7 +2056,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
         {/* ── Date strip — hidden when month calendar is open, and in week
              view, which draws its own day-of-week header row already ──── */}
-        {!showMonth && viewMode !== 'week' && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
+        {stripShown && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
           <FlatList
             ref={stripRef}
             data={STRIP_DATES}
@@ -2063,6 +2065,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.stripContent}
             getItemLayout={(_, index) => ({ length: STRIDE, offset: STRIDE * index, index })}
+            // Centre the picked day once the strip knows how wide it is, and
+            // again whenever that width changes (rotation, an iPad window
+            // resized). This used to be a 150ms timer on mount: on a slow first
+            // launch it fired before the strip had a width, and `viewPosition`
+            // against a zero-wide strip put today 40% off the left edge.
+            onLayout={e => {
+              const width = e.nativeEvent.layout.width;
+              if (width === 0 || width === stripWidthRef.current) return;
+              stripWidthRef.current = width;
+              const idx = STRIP_DATES.indexOf(selectedDate);
+              stripRef.current?.scrollToIndex({ index: idx >= 0 ? idx : TODAY_IDX, animated: false, viewPosition: 0.4 });
+            }}
             onScrollToIndexFailed={info => {
               stripRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
             }}
