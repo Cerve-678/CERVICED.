@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **92 files**
 - … +62 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **249 files**
+Curated: [[Booking Flow]] · **250 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(245)_
@@ -275,11 +275,11 @@ Curated: [[Booking Flow]] · **249 files**
 - `supabase/fix_provider_no_show_status.sql` _(42)_
 - `src/types/booking.ts` _(41)_
 - `src/types/database.ts` _(39)_
-- … +219 more
+- … +220 more
 
 ## Auth
-Curated: [[Contexts]] · **256 files**
-- `src/contexts/AuthContext.tsx` _(205)_
+Curated: [[Contexts]] · **257 files**
+- `src/contexts/AuthContext.tsx` _(216)_
 - `src/services/database/account.ts` _(158)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(148)_
 - `src/screens/auth/LoginScreen.tsx` _(140)_
@@ -302,14 +302,14 @@ Curated: [[Contexts]] · **256 files**
 - `src/screens/shared/ChangePasswordScreen.tsx` _(29)_
 - `src/services/biometricService.ts` _(29)_
 - `src/services/database/services.ts` _(28)_
+- `src/services/appleSignInRevocation.ts` _(27)_
 - `src/services/database/adminMoney.ts` _(23)_
 - `src/web/WebAccountStep.tsx` _(23)_
+- `src/services/databaseService.ts` _(21)_
 - `supabase/becca_chat_tables.sql` _(21)_
-- `src/services/databaseService.ts` _(20)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
-- `src/utils/userFacingError.ts` _(17)_
-- … +226 more
+- … +227 more
 
 ## Becca / AI
 Curated: [[Services]] · **68 files**

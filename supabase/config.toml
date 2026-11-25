@@ -10,6 +10,9 @@ verify_jwt = true
 [functions.send-support-request]
 verify_jwt = true
 
+[functions.revoke-apple-sign-in]
+verify_jwt = true
+
 [functions.send-account-email]
 verify_jwt = true
 

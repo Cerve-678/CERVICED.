@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { getMyProviderAccountEditorInfo, updateUserContactDetails, updateUserDob } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { shouldRevokeAppleSignIn } from '../../services/appleSignInRevocation';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { toUserMessage } from '../../utils/userFacingError';
 
@@ -33,7 +34,7 @@ const CP_LIGHT = {
 export default function ProviderAccountInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
-  const { user, updateUser, deleteProviderProfile, hatState } = useAuth();
+  const { user, updateUser, deleteProviderProfile, hatState, session } = useAuth();
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [authEmail, setAuthEmail]   = useState('');
@@ -93,7 +94,8 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
       'Delete Account',
       isDualRole
         ? 'This removes your business profile, services, portfolio and provider bookings. Your client account is not affected and you\'ll remain signed in.'
-        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.',
+        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.'
+          + (shouldRevokeAppleSignIn(session?.user) ? '\n\nApple will ask you to confirm, so CERVICED is removed from your Apple ID too.' : ''),
       [
         { text: 'Cancel', style: 'cancel' },
         {

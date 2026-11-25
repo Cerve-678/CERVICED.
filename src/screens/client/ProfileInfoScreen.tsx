@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { shouldRevokeAppleSignIn } from '../../services/appleSignInRevocation';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -35,7 +36,7 @@ MAX_DOB.setFullYear(MAX_DOB.getFullYear() - 16);
 const MIN_DOB = new Date(1900, 0, 1);
 
 export default function ProfileInfoScreen({ navigation, route }: any) {
-  const { user, updateUser, deleteClientProfile, hatState } = useAuth();
+  const { user, updateUser, deleteClientProfile, hatState, session } = useAuth();
   const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = useSystemBottomInset();
@@ -104,7 +105,8 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
       'Delete Account',
       isDualRole
         ? 'This removes your client profile, bookings and messages as a customer. Your provider/business account is not affected and you\'ll remain signed in.'
-        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.',
+        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.'
+          + (shouldRevokeAppleSignIn(session?.user) ? '\n\nApple will ask you to confirm, so CERVICED is removed from your Apple ID too.' : ''),
       [
         { text: 'Cancel', style: 'cancel' },
         {

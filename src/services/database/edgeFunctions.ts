@@ -625,3 +625,13 @@ export async function extractProviderProfileFromUrl(
   if (error) throw error;
   return data;
 }
+
+/** Revokes the caller's Sign in with Apple link (App Store 5.1.1(v)). The code
+ *  is the one-time authorizationCode from AppleAuthentication.signInAsync. */
+export async function revokeAppleSignIn(authorizationCode: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('revoke-apple-sign-in', {
+    body: { authorizationCode },
+  });
+  if (error) throw error;
+  if (data?.revoked !== true) throw new Error(data?.error ?? 'Apple sign-in was not revoked');
+}
