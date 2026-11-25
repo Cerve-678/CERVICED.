@@ -2,9 +2,10 @@
 //
 // The full Maintenance screen inside Beauty Profile (screen state, not a
 // route — see BeautyProfileScreen). Items are grouped by what the client
-// should do, not by type. Provider-written prep and aftercare are quoted in
-// full and credited, never paraphrased, and nothing is shown when the provider
-// wrote nothing. The patch-test card shows only the client's own recorded
+// should do, not by type, and each heading says how many it holds. Provider-
+// written prep and aftercare are quoted and credited, never paraphrased: a
+// long note shows its first lines with "Read more" for the rest, and nothing
+// is shown when the provider wrote nothing. The patch-test card shows only the client's own recorded
 // date: no countdown, no verdict.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,9 +36,35 @@ import { AddReminderSheet } from './AddReminderSheet';
 import type { MaintenanceState } from './useMaintenance';
 import {
   Chip, FONT_BODY, FONT_DISPLAY, GhostButton, Note, PrimaryButton, SectionLabel,
-  semanticColors, ui, hapticError, hapticLight,
+  countedLabel, semanticColors, ui, hapticError, hapticLight,
 } from './ui';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey, TranslationParams } from '../../i18n';
+import type { AppTheme } from '../../constants/theme';
+
+/** A provider's note starts this many lines tall; Read more shows the rest. */
+const NOTE_LINES = 3;
+
+/** A provider's note, word for word: the first few lines, then Read more. */
+function NoteText({ text, P, t }: { text: string; P: AppTheme; t: (key: TranslationKey, params?: TranslationParams) => string }) {
+  const [lines, setLines] = useState(0);
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <Text style={[styles.quoteText, { color: P.text }]} selectable numberOfLines={open ? undefined : NOTE_LINES}>{text}</Text>
+      {/* Lays the whole note out unseen, to know whether the lines above cut it short. */}
+      <View pointerEvents="none" style={styles.measure} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <Text style={styles.quoteText} onTextLayout={e => setLines(e.nativeEvent.lines.length)}>{text}</Text>
+      </View>
+      {lines > NOTE_LINES && (
+        <TouchableOpacity onPress={() => { hapticLight(); setOpen(o => !o); }} activeOpacity={0.5} hitSlop={8} accessibilityRole="button" style={styles.more}>
+          <Text style={[styles.moreText, { color: P.accentText }]}>
+            {(open ? t('maintenance.ctx.showLess') : t('maintenance.ctx.readMore')).toUpperCase()}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
 
 type Filter = 'ALL' | MaintenanceSearchCategory | 'OTHER';
 
@@ -188,8 +215,8 @@ export function MaintenanceView({
           <Text style={[styles.quoteFrom, { color: P.sub }]}>
             {t('maintenance.ctx.from', { provider: note.providerName })}{n.title ? ` ${n.title}` : ''}
           </Text>
-          {/* Full text: not truncated, not paraphrased. */}
-          <Text style={[styles.quoteText, { color: P.text }]} selectable>{n.text}</Text>
+          {/* Never paraphrased: the first lines, then Read more for all of it. */}
+          <NoteText text={n.text} P={P} t={t} />
           <Text style={[styles.quoteMeta, { color: P.sub }]}>
             {n.sentAt
               ? t('maintenance.ctx.sent', { date: formatShortDate(n.sentAt) })
@@ -248,7 +275,8 @@ export function MaintenanceView({
     onItemAction(item, action === 'rebook' ? 'rebook' : 'find');
   };
 
-  const isEmpty = visibleItems.length === 0 && state.context.prep.length === 0 && state.context.aftercare.length === 0 && !patchDate;
+  const noteCount = state.context.prep.length + state.context.aftercare.length;
+  const isEmpty = visibleItems.length === 0 && noteCount === 0 && !patchDate;
 
   return (
     <ThemedBackground style={styles.bg}>
@@ -269,18 +297,18 @@ export function MaintenanceView({
             <Ionicons name="chevron-back" size={18} color={P.accentText} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: P.text }]}>{t('maintenance.title')}</Text>
+          <TouchableOpacity
+            onPress={() => { hapticLight(); setHowTo(true); }}
+            activeOpacity={0.5}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('maintenance.howto.link')}
+          >
+            <Ionicons name="information-circle-outline" size={20} color={P.accentText} />
+          </TouchableOpacity>
           <View style={{ flex: 1 }} />
           <GhostButton small P={P} icon="add" label={t('maintenance.addMine')} onPress={() => setAdding(true)} />
         </View>
-        <TouchableOpacity
-          onPress={() => { hapticLight(); setHowTo(true); }}
-          activeOpacity={0.5}
-          hitSlop={8}
-          accessibilityRole="button"
-          style={styles.howLink}
-        >
-          <Text style={[styles.howLinkText, { color: P.accentText }]}>{t('maintenance.howto.link').toUpperCase()} ›</Text>
-        </TouchableOpacity>
 
         {state.loading && state.items.length === 0 ? (
           <ActivityIndicator color={P.accent} style={{ marginTop: 40 }} />
@@ -361,19 +389,21 @@ export function MaintenanceView({
               </>
             )}
 
-            {groups.needsAttention.length > 0 && <SectionLabel text={t('maintenance.section.attention').toUpperCase()} P={P} />}
+            {groups.needsAttention.length > 0 && (
+              <SectionLabel text={countedLabel(t('maintenance.section.attention'), groups.needsAttention.length)} P={P} />
+            )}
             {renderItems(groups.needsAttention)}
-            {groups.comingUp.length > 0 && <SectionLabel text={t('maintenance.section.comingUp').toUpperCase()} P={P} />}
+            {groups.comingUp.length > 0 && (
+              <SectionLabel text={countedLabel(t('maintenance.section.comingUp'), groups.comingUp.length)} P={P} />
+            )}
             {renderItems(groups.comingUp)}
 
-            {(state.context.prep.length > 0 || state.context.aftercare.length > 0) && (
-              <SectionLabel text={t('maintenance.section.bookings').toUpperCase()} P={P} />
-            )}
+            {noteCount > 0 && <SectionLabel text={countedLabel(t('maintenance.section.bookings'), noteCount)} P={P} />}
             {state.context.prep.map(n => renderNote(n, 'prep'))}
             {state.context.aftercare.map(n => renderNote(n, 'aftercare'))}
 
             {(groups.events.length > 0 || patchDate) && (
-              <SectionLabel text={t('maintenance.section.patchEvents').toUpperCase()} P={P} />
+              <SectionLabel text={countedLabel(t('maintenance.section.patchEvents'), groups.events.length + (patchDate ? 1 : 0))} P={P} />
             )}
             {patchDate && (
               <View style={[ui.card, styles.ctx, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -399,7 +429,9 @@ export function MaintenanceView({
             )}
             {renderItems(groups.events)}
 
-            {groups.paused.length > 0 && <SectionLabel text={t('maintenance.section.paused').toUpperCase()} P={P} />}
+            {groups.paused.length > 0 && (
+              <SectionLabel text={countedLabel(t('maintenance.section.paused'), groups.paused.length)} P={P} />
+            )}
             {renderItems(groups.paused)}
 
             {visibleItems.length > 0 && (
@@ -449,8 +481,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   circ: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   title: { fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 1 },
-  howLink: { alignSelf: 'flex-start', marginTop: -6 },
-  howLinkText: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.2 },
   errorBlock: { marginTop: 40, gap: 16, paddingHorizontal: 12 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, padding: 12 },
   empty: { padding: 16, gap: 8 },
@@ -462,6 +492,9 @@ const styles = StyleSheet.create({
   quote: { borderLeftWidth: 3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
   quoteFrom: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.1 },
   quoteText: { fontFamily: FONT_BODY, fontSize: 14.5, lineHeight: 21 },
+  measure: { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 },
+  more: { alignSelf: 'flex-start', marginTop: 4 },
+  moreText: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.2 },
   quoteMeta: { fontFamily: FONT_BODY, fontSize: 11.5 },
   ctxFoot: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 2 },
   patchTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

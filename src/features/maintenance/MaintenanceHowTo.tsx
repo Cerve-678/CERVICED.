@@ -1,31 +1,42 @@
 // src/features/maintenance/MaintenanceHowTo.tsx
 //
-// "How Maintenance works" (approved 2026-11-08): a short animated sequence,
-// not a sheet — four frames that play on their own, with dots to jump,
-// pause and replay. Shown the first time someone opens Maintenance, then from
-// "How this works" in its header.
+// "How Maintenance works", as a "Show me" walkthrough (2026-11-25, replacing
+// the 2026-11-08 ticket movie): a copy of the real Maintenance screen with a
+// fingertip tapping through it, a caption, and a progress bar along the bottom
+// that you can tap to jump to a step. Shown the first time someone opens
+// Maintenance, then from the ⓘ next to its title.
 //
-// Two frames are worded to match what the app really does, where the mockup
-// was looser: a reminder is made when an appointment is DONE (the server's
-// handle_booking_completed_maintenance), not when it's booked; and "add your
-// own" takes a name in your own words plus how often, counting from when you
-// last had it, rather than starting with no date.
+// The copy is drawn with the screen's own pieces — NextUpCard,
+// MaintenanceItemCard and the grouping in presentation.ts — fed sample items
+// and a pretend "today", so it can't drift from what the screen really does.
+// Nothing in it can be pressed and nothing real changes. The items are
+// examples, not the client's data.
 //
-// The items in it are examples, not the client's data.
+// Two steps follow what the app really does: a reminder is made when an
+// appointment is DONE (the server's handle_booking_completed_maintenance), not
+// when it's booked; and "add your own" counts from when you last had it.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { AppTheme } from '../../constants/theme';
 import type { TranslationKey, TranslationParams } from '../../i18n';
+import type { MaintenanceItem } from '../../types/maintenance';
+import { dateToYMD, toLocalDate } from '../../utils/dateUtils';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { FONT_BODY, FONT_DISPLAY, hapticLight, type SemanticColors } from './ui';
+import { doneOutcome, groupMaintenanceItems, nextUpFrom, snoozedDueOn } from './presentation';
+import { NextUpCard, type DemoTap } from './NextUpCard';
+import { MaintenanceItemCard } from './MaintenanceItemCard';
+import { TapMark } from './TapMark';
+import {
+  FONT_BODY, FONT_DISPLAY, GhostButton, PrimaryButton, SectionLabel, countedLabel, hapticLight, type SemanticColors,
+} from './ui';
 
 type T = (key: TranslationKey, params?: TranslationParams) => string;
-type Tone = 'bad' | 'warn' | 'ok' | 'mute';
 
-const FRAME_MS = [7000, 7600, 7200, 6400];
+/** How long each step plays before the next one. */
+export const STEP_MS = [7000, 7600, 7600, 7000];
 const CAPTIONS: TranslationKey[] = [
   'maintenance.howto.frame1',
   'maintenance.howto.frame2',
@@ -33,12 +44,36 @@ const CAPTIONS: TranslationKey[] = [
   'maintenance.howto.frame4',
 ];
 
+/** What the fingertip is on: a NextUpCard button, or something the copy draws. */
+type Tap = DemoTap | 'add' | 'banner' | 'repeat' | 'submit';
+
 interface Props {
   visible: boolean;
   onClose: () => void;
   P: AppTheme;
   S: SemanticColors;
   t: T;
+}
+
+const noop = () => {};
+
+function addDays(ymd: string, days: number): string {
+  const d = toLocalDate(ymd);
+  d.setDate(d.getDate() + days);
+  return dateToYMD(d);
+}
+
+/** A sample item, due `inDays` from `today`, last done one interval before. */
+function sample(today: string, inDays: number, p: Partial<MaintenanceItem> & Pick<MaintenanceItem, 'id' | 'title'>): MaintenanceItem {
+  const dueOn = addDays(today, inDays);
+  const weeks = p.repeatWeeks ?? null;
+  const lastDoneOn = weeks ? addDays(dueOn, -weeks * 7) : today;
+  return {
+    kind: 'service', origin: 'booking', typeKey: null, providerId: null, serviceId: null, providerName: null,
+    repeatWeeks: null, intervalEdited: false, intervalSource: 'default', learnedDays: null, learnedFrom: null,
+    lastDoneOn, dueOn, eventOn: null, paused: false, note: null, createdAt: `${lastDoneOn}T09:00:00Z`,
+    ...p,
+  };
 }
 
 /** Fades and lifts in when it mounts. */
@@ -54,218 +89,270 @@ function Appear({ children, style }: { children: React.ReactNode; style?: object
   );
 }
 
-/** Schedules a frame's beats; every timer is cleared when the frame changes. */
-function useBeats(frameKey: number, beats: [number, () => void][]) {
+/** Schedules a step's beats; every timer is cleared when the step changes. */
+function useBeats(stepKey: number, beats: [number, () => void][]) {
   useEffect(() => {
     const timers = beats.map(([ms, fn]) => setTimeout(fn, ms));
     return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run per frame only
-  }, [frameKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run per step only
+  }, [stepKey]);
 }
 
-/** Countdown wording for the demo, the same rule as countdownFor(). */
-function demoCountdown(d: number, t: T): { n: number | null; unit: string; tone: Tone } {
-  if (d < 0) return { n: -d, unit: t(d === -1 ? 'maintenance.countdown.dayOver' : 'maintenance.countdown.daysOver'), tone: 'bad' };
-  if (d === 0) return { n: null, unit: t('maintenance.countdown.today'), tone: 'warn' };
-  if (d <= 7) return { n: d, unit: t(d === 1 ? 'maintenance.countdown.day' : 'maintenance.countdown.days'), tone: 'warn' };
-  if (d < 14) return { n: d, unit: t('maintenance.countdown.days'), tone: 'mute' };
-  return { n: Math.round(d / 7), unit: t('maintenance.countdown.weeks'), tone: 'mute' };
+interface Overlay {
+  toast?: boolean;
+  banner?: boolean;
+  sheet?: { typed: string; weeks: number } | null;
 }
 
-function Ticket({ title, sub, n, unit, tone, P, S }: { title: string; sub: string; n: number | null; unit: string; tone: Tone; P: AppTheme; S: SemanticColors }) {
-  const col = tone === 'bad' ? S.bad : tone === 'warn' ? S.warn : tone === 'ok' ? S.ok : P.sub;
-  return (
-    <View style={[styles.tk, { backgroundColor: P.card, borderColor: tone === 'bad' ? S.bad : P.border }]}>
-      <View style={[styles.stub, { borderRightColor: P.border }]}>
-        {n !== null ? <Text style={[styles.stubN, { color: col }]}>{n}</Text> : null}
-        <Text style={[n !== null ? styles.stubU : styles.stubWord, { color: col }]}>{unit.toUpperCase()}</Text>
-      </View>
-      <View style={styles.tkBody}>
-        <Text style={[styles.tkTitle, { color: P.text }]}>{title}</Text>
-        <Text style={[styles.tkSub, { color: P.sub }]}>{sub}</Text>
-      </View>
-    </View>
+/** The copy of the Maintenance screen: header, big card, then the lists. */
+function DemoScreen({ items, today, tap, overlay, P, S, t }: {
+  items: MaintenanceItem[]; today: string; tap: Tap; overlay: Overlay; P: AppTheme; S: SemanticColors; t: T;
+}) {
+  const groups = useMemo(() => groupMaintenanceItems(items, today), [items, today]);
+  const nextUp = useMemo(() => nextUpFrom(groups), [groups]);
+  const list = (key: TranslationKey, rows: typeof groups.comingUp) => rows.length > 0 && (
+    <>
+      <SectionLabel text={countedLabel(t(key), rows.length)} P={P} />
+      {rows.map(({ item, view }) => (
+        <Appear key={item.id}>
+          <MaintenanceItemCard item={item} view={view} P={P} S={S} t={t} onAction={noop} onMenu={noop} />
+        </Appear>
+      ))}
+    </>
   );
-}
 
-function Pressed({ on, children }: { on: boolean; children: React.ReactNode }) {
-  return <View style={on ? styles.pressed : undefined}>{children}</View>;
-}
-
-// ── Frame 1: a done appointment becomes a reminder; a suggestion is added ────
-function FrameBooked({ P, S, t, k }: { P: AppTheme; S: SemanticColors; t: T; k: number }) {
-  const [beat, setBeat] = useState(0);
-  useBeats(k, [[300, () => setBeat(1)], [2000, () => setBeat(2)], [3000, () => setBeat(3)], [4800, () => setBeat(4)], [5300, () => setBeat(5)]]);
   return (
-    <View style={styles.stage}>
-      {beat === 1 && (
-        <Appear style={[styles.coach, { backgroundColor: P.accent }]}>
-          <Text style={[styles.coachKick, { color: P.onAccent }]}>{t('maintenance.howto.done').toUpperCase()}</Text>
-          <Text style={[styles.coachText, { color: P.onAccent }]}>{t('maintenance.howto.sampleAppointment')}</Text>
-        </Appear>
-      )}
-      {beat >= 2 && (
-        <Appear>
-          <Ticket title={t('maintenance.howto.sample.lashes')} sub={t('maintenance.howto.everyWeeks', { weeks: 3 })} n={3} unit={t('maintenance.countdown.weeks')} tone="mute" P={P} S={S} />
-        </Appear>
-      )}
-      {beat >= 3 && beat < 5 && (
-        <Appear style={[styles.sug, { borderColor: P.border }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.tkTitle, { color: P.text }]}>{t('maintenance.howto.sample.facial')}</Text>
-            <Text style={[styles.tkSub, { color: P.sub }]}>{t('maintenance.howto.pickedForYou')}</Text>
+    <View style={[styles.frame, { backgroundColor: P.bg, borderColor: P.border }]} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <View style={styles.inner}>
+        <View style={styles.header}>
+          <View style={[styles.circ, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Ionicons name="chevron-back" size={16} color={P.accentText} />
           </View>
-          <Pressed on={beat === 4}>
-            <View style={[styles.miniBtn, { borderColor: P.border }]}>
-              <Text style={[styles.miniBtnText, { color: P.accentText }]}>{t('maintenance.howto.add').toUpperCase()}</Text>
+          <Text style={[styles.title, { color: P.text }]}>{t('maintenance.title')}</Text>
+          <Ionicons name="information-circle-outline" size={18} color={P.accentText} />
+          <View style={{ flex: 1 }} />
+          <View>
+            <GhostButton small P={P} icon="add" label={t('maintenance.addMine')} onPress={noop} />
+            {tap === 'add' ? <TapMark colour={P.accentText} /> : null}
+          </View>
+        </View>
+
+        {overlay.toast ? (
+          <Appear style={[styles.toast, { backgroundColor: P.accent }]}>
+            <Text style={[styles.toastKick, { color: P.onAccent }]}>{t('maintenance.howto.done').toUpperCase()}</Text>
+            <Text style={[styles.toastText, { color: P.onAccent }]}>{t('maintenance.howto.sampleAppointment')}</Text>
+          </Appear>
+        ) : null}
+        {overlay.banner ? (
+          <Appear style={[styles.banner, { backgroundColor: P.accentDim, borderColor: P.border }]}>
+            <Ionicons name="sparkles-outline" size={16} color={P.accentText} />
+            <Text style={[styles.bannerText, { color: P.text }]}>{t('maintenance.picked.one')}</Text>
+            <Ionicons name="chevron-forward" size={14} color={P.sub} />
+            {tap === 'banner' ? <TapMark colour={P.accentText} /> : null}
+          </Appear>
+        ) : null}
+
+        <NextUpCard
+          nextUp={nextUp}
+          P={P}
+          t={t}
+          onBook={noop}
+          onDone={noop}
+          onSnooze={noop}
+          busyItemId={null}
+          demoTap={tap === 'book' || tap === 'done' || tap === 'snooze' ? tap : null}
+        />
+        {list('maintenance.section.attention', groups.needsAttention)}
+        {list('maintenance.section.comingUp', groups.comingUp)}
+      </View>
+
+      {overlay.sheet ? (
+        <View style={[StyleSheet.absoluteFill, styles.scrim]}>
+          <Appear style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border }]}>
+            <View style={[styles.grabber, { backgroundColor: P.border }]} />
+            <Text style={[styles.sheetTitle, { color: P.text }]}>{t('maintenance.add.title')}</Text>
+            <Text style={[styles.sheetLabel, { color: P.sub }]}>{t('maintenance.add.whatFor').toUpperCase()}</Text>
+            <View style={[styles.input, { backgroundColor: P.surface, borderColor: P.border }]}>
+              <Text style={[styles.inputText, { color: overlay.sheet.typed ? P.text : P.sub }]}>
+                {overlay.sheet.typed || t('maintenance.add.namePlaceholder')}
+              </Text>
             </View>
-          </Pressed>
-        </Appear>
-      )}
-      {beat >= 5 && (
-        <Appear>
-          <Ticket title={t('maintenance.howto.sample.facial')} sub={t('maintenance.howto.everyWeeks', { weeks: 6 })} n={6} unit={t('maintenance.countdown.weeks')} tone="mute" P={P} S={S} />
-        </Appear>
-      )}
-    </View>
-  );
-}
-
-// ── Frame 2: counting down, amber then red ──────────────────────────────────
-function FrameCountdown({ P, S, t, k }: { P: AppTheme; S: SemanticColors; t: T; k: number }) {
-  const [d, setD] = useState(9);
-  useEffect(() => {
-    setD(9);
-    const timer = setInterval(() => setD((x) => (x <= -2 ? x : x - 1)), 520);
-    return () => clearInterval(timer);
-  }, [k]);
-  const c = demoCountdown(d, t);
-  return (
-    <View style={styles.stage}>
-      <Ticket title={t('maintenance.howto.sample.nails')} sub={t('maintenance.howto.everyWeeks', { weeks: 3 })} n={c.n} unit={c.unit} tone={c.tone} P={P} S={S} />
-      <Ticket title={t('maintenance.howto.sample.trim')} sub={t('maintenance.howto.everyWeeks', { weeks: 12 })} n={6} unit={t('maintenance.countdown.weeks')} tone="mute" P={P} S={S} />
-      <Text style={[styles.hint, { color: P.sub }]}>{t('maintenance.howto.sameOnCard')}</Text>
-    </View>
-  );
-}
-
-// ── Frame 3: the big card's three actions ───────────────────────────────────
-function FrameCard({ P, t, k }: { P: AppTheme; t: T; k: number }) {
-  const [beat, setBeat] = useState(0);
-  useBeats(k, [[700, () => setBeat(1)], [1700, () => setBeat(2)], [2400, () => setBeat(3)], [3500, () => setBeat(4)], [4400, () => setBeat(5)], [5400, () => setBeat(6)]]);
-  const snoozed = beat >= 3;
-  const done = beat >= 5;
-  const n = done ? 3 : snoozed ? 7 : 3;
-  const unit = t(done ? 'maintenance.countdown.weeks' : snoozed ? 'maintenance.countdown.days' : 'maintenance.countdown.daysOver');
-  const hint = beat >= 5 ? 'maintenance.howto.hintDone' : beat >= 3 ? 'maintenance.howto.hintSnooze' : beat >= 1 ? 'maintenance.howto.hintBook' : null;
-  const btn = (label: string, pressed: boolean, ghost = false) => (
-    <Pressed on={pressed}>
-      <View style={[styles.cardBtn, ghost ? { borderColor: P.onAccent } : { backgroundColor: P.onAccent, borderColor: P.onAccent }]}>
-        <Text style={[styles.cardBtnText, { color: ghost ? P.onAccent : P.accent }]}>{label.toUpperCase()}</Text>
-      </View>
-    </Pressed>
-  );
-  return (
-    <View style={styles.stage}>
-      <View style={[styles.card, { backgroundColor: P.accent }]}>
-        <Text style={[styles.coachKick, { color: P.onAccent }]}>
-          {t(done ? 'maintenance.howto.doneNextIn' : 'maintenance.next.title').toUpperCase()}
-        </Text>
-        <View style={styles.bigRow}>
-          <Text style={[styles.big, { color: P.onAccent }]}>{n}</Text>
-          <Text style={[styles.bigUnit, { color: P.onAccent }]}>{unit.toUpperCase()}</Text>
+            <View style={styles.sheetRow}>
+              <Text style={[styles.sheetLabel, { color: P.sub }]}>{t('maintenance.add.repeats').toUpperCase()}</Text>
+              <View>
+                <Text style={[styles.repeat, { color: P.text }]}>{t('maintenance.howto.everyWeeks', { weeks: overlay.sheet.weeks })}</Text>
+                {tap === 'repeat' ? <TapMark colour={P.accentText} /> : null}
+              </View>
+            </View>
+            <View>
+              <PrimaryButton P={P} label={t('maintenance.add.submit')} onPress={noop} />
+              {tap === 'submit' ? <TapMark colour={P.onAccent} /> : null}
+            </View>
+          </Appear>
         </View>
-        <Text style={[styles.cardTitle, { color: P.onAccent }]}>{t('maintenance.howto.sample.lashes')}</Text>
-        <View style={styles.cardActions}>
-          {btn(t('maintenance.action.book'), beat === 1)}
-          {btn(t('maintenance.action.doneIt'), beat === 5)}
-          {btn(t('maintenance.action.snoozeWeek'), beat === 3, true)}
-        </View>
-      </View>
-      <Text style={[styles.hint, { color: P.sub, textAlign: 'center' }]}>{hint ? t(hint) : ' '}</Text>
+      ) : null}
     </View>
   );
 }
 
-// ── Frame 4: add your own ───────────────────────────────────────────────────
-function FrameAdd({ P, S, t, k }: { P: AppTheme; S: SemanticColors; t: T; k: number }) {
-  const word = t('maintenance.howto.sample.own');
-  const [typed, setTyped] = useState(0);
+// ── Step 1: a done appointment becomes a reminder; a suggestion is added ─────
+function StepBooked({ today, P, S, t, k }: StepProps) {
   const [beat, setBeat] = useState(0);
+  useBeats(k, [[400, () => setBeat(1)], [2000, () => setBeat(2)], [3200, () => setBeat(3)], [4300, () => setBeat(4)], [5000, () => setBeat(5)]]);
+  const items = useMemo(() => {
+    const out: MaintenanceItem[] = [];
+    if (beat >= 2) {
+      out.push(sample(today, 21, {
+        id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor',
+        providerId: 'demo', repeatWeeks: 3, intervalSource: 'provider',
+      }));
+    }
+    if (beat >= 5) {
+      out.push(sample(today, 42, {
+        id: 'facial', title: t('maintenance.howto.sample.facial'), typeKey: 'facial', origin: 'client', repeatWeeks: 6,
+      }));
+    }
+    return out;
+  }, [beat, today, t]);
+  return (
+    <DemoScreen
+      items={items}
+      today={today}
+      tap={beat === 4 ? 'banner' : null}
+      overlay={{ toast: beat === 1, banner: beat === 3 || beat === 4 }}
+      P={P} S={S} t={t}
+    />
+  );
+}
+
+// ── Step 2: the days count down; inside a week it needs you, then it's overdue
+function StepCountdown({ today, P, S, t, k }: StepProps) {
+  const [shift, setShift] = useState(0);
   useEffect(() => {
-    setTyped(0);
-    setBeat(0);
-    let i = 0;
+    setShift(0);
     let timer: ReturnType<typeof setInterval> | null = null;
     const start = setTimeout(() => {
-      timer = setInterval(() => {
-        i += 1;
-        setTyped(i);
-        if (i >= word.length && timer) clearInterval(timer);
-      }, 80);
-    }, 400);
+      timer = setInterval(() => setShift(x => (x >= 11 ? x : x + 1)), 450);
+    }, 600);
     return () => { clearTimeout(start); if (timer) clearInterval(timer); };
-  }, [k, word.length]);
-  useBeats(k, [[2300, () => setBeat(1)], [3100, () => setBeat(2)], [3600, () => setBeat(3)]]);
-  return (
-    <View style={styles.stage}>
-      <View style={[styles.input, { backgroundColor: P.surface, borderColor: P.border }]}>
-        <Text style={[styles.inputText, { color: typed > 0 && beat < 3 ? P.text : P.sub }]}>
-          {beat >= 3 ? t('maintenance.add.namePlaceholder') : typed > 0 ? word.slice(0, typed) : t('maintenance.add.namePlaceholder')}
-        </Text>
-      </View>
-      <View style={styles.stepRow}>
-        <Text style={[styles.tkSub, { color: P.sub }]}>{t('maintenance.add.repeats').toUpperCase()}</Text>
-        <Pressed on={beat === 1}>
-          <Text style={[styles.stepValue, { color: P.text }]}>{t('maintenance.howto.everyWeeks', { weeks: beat >= 1 ? 4 : 6 })}</Text>
-        </Pressed>
-        <View style={{ flex: 1 }} />
-        <Pressed on={beat === 2}>
-          <View style={[styles.miniBtn, { backgroundColor: P.accent, borderColor: P.accent }]}>
-            <Text style={[styles.miniBtnText, { color: P.onAccent }]}>{t('maintenance.howto.add').toUpperCase()}</Text>
-          </View>
-        </Pressed>
-      </View>
-      {beat >= 3 && (
-        <Appear>
-          <Ticket title={word} sub={t('maintenance.rhythm.client', { weeks: 4 })} n={4} unit={t('maintenance.countdown.weeks')} tone="mute" P={P} S={S} />
-        </Appear>
-      )}
-      <Ticket title={t('maintenance.howto.sample.trim')} sub={t('maintenance.howto.everyWeeks', { weeks: 12 })} n={6} unit={t('maintenance.countdown.weeks')} tone="mute" P={P} S={S} />
-    </View>
-  );
+  }, [k]);
+  const items = useMemo(() => [
+    sample(today, 9, { id: 'nails', title: t('maintenance.howto.sample.nails'), typeKey: 'gel_nails', providerName: 'The Nail Bar', providerId: 'demo', repeatWeeks: 3 }),
+    sample(today, 42, { id: 'trim', title: t('maintenance.howto.sample.trim'), typeKey: 'trim', providerName: 'Kinks & Co', providerId: 'demo', repeatWeeks: 12 }),
+  ], [today, t]);
+  return <DemoScreen items={items} today={addDays(today, shift)} tap={null} overlay={{}} P={P} S={S} t={t} />;
 }
+
+// ── Step 3: the big card's three actions, and the next one stepping up ───────
+function StepActions({ today, P, S, t, k, onHint }: StepProps & { onHint: (key: TranslationKey | null) => void }) {
+  const start = useMemo(() => [
+    sample(today, -3, { id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor', providerId: 'demo', repeatWeeks: 3 }),
+    sample(today, 4, { id: 'nails', title: t('maintenance.howto.sample.nails'), typeKey: 'gel_nails', providerName: 'The Nail Bar', providerId: 'demo', repeatWeeks: 3 }),
+  ], [today, t]);
+  const [items, setItems] = useState(start);
+  const [tap, setTap] = useState<Tap>(null);
+  // Acts on whichever item leads the big card at that moment, as the real one does.
+  const act = (fn: (item: MaintenanceItem) => Partial<MaintenanceItem>) =>
+    setItems(prev => {
+      const first = nextUpFrom(groupMaintenanceItems(prev, today)).due?.item;
+      return first ? prev.map(i => (i.id === first.id ? { ...i, ...fn(i) } : i)) : prev;
+    });
+  useBeats(k, [
+    [0, () => { setItems(start); onHint(null); }],
+    [900, () => { setTap('book'); onHint('maintenance.howto.hintBook'); }],
+    [2200, () => setTap(null)],
+    [2700, () => { setTap('snooze'); onHint('maintenance.howto.hintSnooze'); }],
+    [3300, () => { setTap(null); act(i => ({ dueOn: snoozedDueOn(i, today) })); }],
+    [4600, () => { setTap('done'); onHint('maintenance.howto.hintDone'); }],
+    [5200, () => {
+      setTap(null);
+      act(i => { const o = doneOutcome(i, today); return o.kind === 'update' ? o.patch : {}; });
+    }],
+  ]);
+  return <DemoScreen items={items} today={today} tap={tap} overlay={{}} P={P} S={S} t={t} />;
+}
+
+// ── Step 4: add your own ─────────────────────────────────────────────────────
+function StepAdd({ today, P, S, t, k }: StepProps) {
+  const word = t('maintenance.howto.sample.own');
+  const [beat, setBeat] = useState(0);
+  const [typed, setTyped] = useState(0);
+  useBeats(k, [[600, () => setBeat(1)], [1100, () => setBeat(2)], [3000, () => setBeat(3)], [3500, () => setBeat(4)], [4100, () => setBeat(5)], [4700, () => setBeat(6)]]);
+  useEffect(() => {
+    if (beat !== 2) return;
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      setTyped(i);
+      if (i >= word.length) clearInterval(timer);
+    }, 85);
+    return () => clearInterval(timer);
+  }, [beat, word.length]);
+  const items = useMemo(() => {
+    const out = [
+      sample(today, 35, { id: 'lashes', title: t('maintenance.howto.sample.lashes'), typeKey: 'lash_infill', providerName: 'Studio Noor', providerId: 'demo', repeatWeeks: 5 }),
+      sample(today, 63, { id: 'trim', title: t('maintenance.howto.sample.trim'), typeKey: 'trim', providerName: 'Kinks & Co', providerId: 'demo', repeatWeeks: 12 }),
+    ];
+    if (beat >= 6) {
+      out.push(sample(today, 28, { id: 'own', title: word, origin: 'client', intervalSource: 'client', repeatWeeks: 4, lastDoneOn: today }));
+    }
+    return out;
+  }, [beat, today, t, word]);
+  const tap: Tap = beat === 1 ? 'add' : beat === 4 ? 'repeat' : beat === 5 ? 'submit' : null;
+  const sheet = beat >= 2 && beat <= 5 ? { typed: word.slice(0, typed), weeks: beat >= 4 ? 4 : 6 } : null;
+  return <DemoScreen items={items} today={today} tap={tap} overlay={{ sheet }} P={P} S={S} t={t} />;
+}
+
+interface StepProps { today: string; P: AppTheme; S: SemanticColors; t: T; k: number }
 
 export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
   const insets = useSafeAreaInsets();
-  const [frame, setFrame] = useState(0);
-  // Bumped on every (re)start so a frame's timers restart from zero.
+  const today = dateToYMD(new Date());
+  const [step, setStep] = useState(0);
+  // Bumped on every (re)start so a step's timers restart from zero.
   const [run, setRun] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const [hint, setHint] = useState<TranslationKey | null>(null);
+  const fill = useRef(new Animated.Value(0)).current;
+  // How much of the current step has played, so Pause/Play carries on where it was.
+  const played = useRef({ key: -1, ms: 0 });
 
   const goTo = useCallback((i: number) => {
-    setFrame(i);
-    setRun((r) => r + 1);
+    setStep(i);
+    setRun(r => r + 1);
+    setHint(null);
   }, []);
 
   useEffect(() => {
     if (visible) { setPlaying(true); goTo(0); }
   }, [visible, goTo]);
 
+  const k = run * 10 + step;
+
   useEffect(() => {
     if (!visible || !playing) return;
-    const timer = setTimeout(() => goTo((frame + 1) % CAPTIONS.length), FRAME_MS[frame]);
-    return () => clearTimeout(timer);
-  }, [visible, playing, frame, run, goTo]);
+    if (played.current.key !== k) played.current = { key: k, ms: 0 };
+    const already = played.current.ms;
+    const total = STEP_MS[step]!;
+    const remaining = Math.max(0, total - already);
+    const startedAt = Date.now();
+    fill.setValue(already / total);
+    Animated.timing(fill, { toValue: 1, duration: remaining, easing: Easing.linear, useNativeDriver: false }).start();
+    const timer = setTimeout(() => goTo((step + 1) % CAPTIONS.length), remaining);
+    return () => {
+      clearTimeout(timer);
+      fill.stopAnimation();
+      if (played.current.key === k) played.current.ms = already + (Date.now() - startedAt);
+    };
+  }, [visible, playing, step, k, goTo, fill]);
 
-  const k = run * 10 + frame;
+  const width = fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <ThemedBackground style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: P.text }]}>{t('maintenance.title')}</Text>
-          <Text style={[styles.headSub, { color: P.sub }]}>{t('maintenance.howto.link')}</Text>
+        <View style={styles.top}>
+          <Text style={[styles.heading, { color: P.text }]}>{t('maintenance.howto.link')}</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
             style={[styles.close, { backgroundColor: P.card, borderColor: P.border }]}
@@ -278,90 +365,90 @@ export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.stageWrap}>
-          {frame === 0 && <FrameBooked key={k} P={P} S={S} t={t} k={k} />}
-          {frame === 1 && <FrameCountdown key={k} P={P} S={S} t={t} k={k} />}
-          {frame === 2 && <FrameCard key={k} P={P} t={t} k={k} />}
-          {frame === 3 && <FrameAdd key={k} P={P} S={S} t={t} k={k} />}
+        <View style={styles.stage}>
+          {step === 0 && <StepBooked key={k} today={today} P={P} S={S} t={t} k={k} />}
+          {step === 1 && <StepCountdown key={k} today={today} P={P} S={S} t={t} k={k} />}
+          {step === 2 && <StepActions key={k} today={today} P={P} S={S} t={t} k={k} onHint={setHint} />}
+          {step === 3 && <StepAdd key={k} today={today} P={P} S={S} t={t} k={k} />}
         </View>
 
-        <Text style={[styles.caption, { color: P.text }]} accessibilityLiveRegion="polite">{t(CAPTIONS[frame]!)}</Text>
-        <View style={styles.controls}>
+        <Text style={[styles.hint, { color: P.accentText }]}>{hint ? t(hint) : ' '}</Text>
+        <Text style={[styles.caption, { color: P.text }]} accessibilityLiveRegion="polite">{t(CAPTIONS[step]!)}</Text>
+
+        <View style={styles.bars}>
           {CAPTIONS.map((_, i) => (
             <TouchableOpacity
               key={i}
+              style={styles.barHit}
               onPress={() => { hapticLight(); goTo(i); }}
-              hitSlop={8}
               activeOpacity={0.6}
               accessibilityRole="button"
               accessibilityLabel={t('maintenance.howto.frameN', { n: i + 1 })}
-              accessibilityState={{ selected: i === frame }}
+              accessibilityState={{ selected: i === step }}
             >
-              <View style={[styles.dot, { backgroundColor: i === frame ? P.accent : P.border }, i === frame && styles.dotOn]} />
+              <View style={[styles.bar, { backgroundColor: P.border }]}>
+                {i < step ? <View style={[styles.barFill, { backgroundColor: P.accent, width: '100%' }]} /> : null}
+                {i === step ? <Animated.View style={[styles.barFill, { backgroundColor: P.accent, width }]} /> : null}
+              </View>
             </TouchableOpacity>
           ))}
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={() => { hapticLight(); setPlaying((p) => !p); }} activeOpacity={0.5} hitSlop={8} accessibilityRole="button">
+        </View>
+        <View style={styles.controls}>
+          <TouchableOpacity onPress={() => { hapticLight(); setPlaying(p => !p); }} activeOpacity={0.5} hitSlop={8} accessibilityRole="button">
             <Text style={[styles.ctl, { color: P.accentText }]}>{t(playing ? 'maintenance.howto.pause' : 'maintenance.howto.play').toUpperCase()}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { hapticLight(); goTo(frame); }} activeOpacity={0.5} hitSlop={8} accessibilityRole="button">
+          <TouchableOpacity onPress={() => { hapticLight(); goTo(step); }} activeOpacity={0.5} hitSlop={8} accessibilityRole="button">
             <Text style={[styles.ctl, { color: P.accentText }]}>{t('maintenance.howto.replay').toUpperCase()}</Text>
           </TouchableOpacity>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            style={[styles.doneBtn, { backgroundColor: P.accent }]}
+            onPress={() => { hapticLight(); onClose(); }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.doneText, { color: P.onAccent }]}>{t('maintenance.howto.gotIt').toUpperCase()}</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[styles.doneBtn, { backgroundColor: P.accent }]}
-          onPress={() => { hapticLight(); onClose(); }}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.doneText, { color: P.onAccent }]}>{t('maintenance.howto.gotIt').toUpperCase()}</Text>
-        </TouchableOpacity>
       </ThemedBackground>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, paddingHorizontal: 16, gap: 14 },
-  header: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  title: { fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 1 },
-  headSub: { fontFamily: FONT_BODY, fontSize: 13 },
-  close: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  stageWrap: { flex: 1, justifyContent: 'center' },
-  stage: { gap: 8 },
-  coach: { borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, gap: 4 },
-  coachKick: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4, opacity: 0.8 },
-  coachText: { fontFamily: FONT_BODY, fontSize: 14, lineHeight: 19 },
-  tk: { flexDirection: 'row', borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
-  stub: { width: 82, paddingVertical: 12, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1.5, borderStyle: 'dashed' },
-  stubN: { fontFamily: FONT_DISPLAY, fontSize: 30, lineHeight: 32 },
-  stubU: { fontFamily: FONT_DISPLAY, fontSize: 9.5, letterSpacing: 1.2 },
-  stubWord: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
-  tkBody: { flex: 1, paddingVertical: 11, paddingHorizontal: 12, justifyContent: 'center' },
-  tkTitle: { fontFamily: FONT_BODY, fontSize: 14, fontWeight: '700' },
-  tkSub: { fontFamily: FONT_BODY, fontSize: 11.5, marginTop: 1 },
-  sug: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-  miniBtn: { borderWidth: 1.5, borderRadius: 100, paddingVertical: 7, paddingHorizontal: 12 },
-  miniBtnText: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1 },
-  pressed: { transform: [{ scale: 0.92 }], opacity: 0.7 },
-  hint: { fontFamily: FONT_BODY, fontSize: 12.5, marginTop: 6, minHeight: 18 },
-  card: { borderRadius: 28, padding: 20 },
-  bigRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 8 },
-  big: { fontFamily: FONT_DISPLAY, fontSize: 64, lineHeight: 68 },
-  bigUnit: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 1.4 },
-  cardTitle: { fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: 0.8, marginTop: 4 },
-  cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  cardBtn: { borderWidth: 1.5, borderRadius: 100, paddingVertical: 10, paddingHorizontal: 14 },
-  cardBtnText: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
+  screen: { flex: 1, paddingHorizontal: 16, gap: 10 },
+  top: { flexDirection: 'row', alignItems: 'center' },
+  heading: { fontFamily: FONT_DISPLAY, fontSize: 20, letterSpacing: 1 },
+  close: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  stage: { flex: 1 },
+  // The copy of the screen: clipped at the bottom like a phone screen.
+  frame: { flex: 1, borderRadius: 28, borderWidth: 1, overflow: 'hidden' },
+  inner: { padding: 14, gap: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  circ: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  title: { fontFamily: FONT_DISPLAY, fontSize: 20, letterSpacing: 1 },
+  toast: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 3 },
+  toastKick: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4, opacity: 0.85 },
+  toastText: { fontFamily: FONT_BODY, fontSize: 14 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, padding: 11 },
+  bannerText: { fontFamily: FONT_BODY, fontSize: 13, flex: 1 },
+  scrim: { justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.28)' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderBottomWidth: 0, padding: 16, paddingTop: 10, gap: 10 },
+  grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
+  sheetTitle: { fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: 0.8 },
+  sheetLabel: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   input: { borderWidth: 1, borderRadius: 100, paddingVertical: 11, paddingHorizontal: 16 },
   inputText: { fontFamily: FONT_BODY, fontSize: 14 },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  stepValue: { fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: 0.8 },
+  repeat: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.8, paddingVertical: 6, paddingHorizontal: 4 },
+  hint: { fontFamily: FONT_BODY, fontSize: 13, textAlign: 'center', minHeight: 18 },
   caption: { fontFamily: FONT_BODY, fontSize: 15, lineHeight: 21, minHeight: 42 },
-  controls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotOn: { width: 22 },
-  ctl: { fontFamily: FONT_DISPLAY, fontSize: 11.5, letterSpacing: 1.2, marginLeft: 8 },
-  doneBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center' },
+  bars: { flexDirection: 'row', gap: 6 },
+  barHit: { flex: 1, paddingVertical: 8 },
+  bar: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 2 },
+  controls: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  ctl: { fontFamily: FONT_DISPLAY, fontSize: 11.5, letterSpacing: 1.2 },
+  doneBtn: { borderRadius: 100, paddingVertical: 13, paddingHorizontal: 26, alignItems: 'center' },
   doneText: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 1 },
 });

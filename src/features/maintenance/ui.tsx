@@ -58,6 +58,11 @@ export function SectionLabel({ text, P }: { text: string; P: AppTheme }) {
   return <Text style={[ui.label, { color: P.sub }]}>{text}</Text>;
 }
 
+/** A section heading with how many are in it: "NEEDS ATTENTION · 2". */
+export function countedLabel(label: string, count: number): string {
+  return `${label.toUpperCase()} · ${count}`;
+}
+
 export type PillTone = 'accent' | 'bad' | 'warn' | 'ok' | 'mute';
 
 export function Pill({ text, tone, P, S }: { text: string; tone: PillTone; P: AppTheme; S: SemanticColors }) {
