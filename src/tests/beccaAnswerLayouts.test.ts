@@ -1,6 +1,6 @@
 import {
   getProviderDepositPoliciesByDisplayNames,
-  getProviderReschedulePolicyByDisplayName,
+  getProviderReschedulePolicyById,
 } from "../services/databaseService";
 import { chooseLayout } from "../services/becca/engine";
 import { getCapability } from "../services/becca/registry";
@@ -9,6 +9,7 @@ import { BookingStatus, type ConfirmedBooking } from "../types/booking";
 
 jest.mock("../services/databaseService", () => ({
   getProviderReschedulePolicyByDisplayName: jest.fn(),
+  getProviderReschedulePolicyById: jest.fn(),
   getProviderDepositPoliciesByDisplayNames: jest.fn(),
 }));
 
@@ -61,7 +62,7 @@ describe("Becca picks a reply's shape from what the answer is", () => {
 
 describe("The answers that now have a shape", () => {
   it("states a reschedule rule as a headline, from the provider's real policy", async () => {
-    (getProviderReschedulePolicyByDisplayName as jest.Mock).mockResolvedValue({ maxReschedules: 2, rescheduleNoticeHours: 48 });
+    (getProviderReschedulePolicyById as jest.Mock).mockResolvedValue({ maxReschedules: 2, rescheduleNoticeHours: 48, sameMonthOnly: false });
     const result = await getCapability("provider.reschedule_policy", "client")!.run(ctx(lola));
     expect(result.headline).toEqual({ value: "2 moves", label: "per booking, with 48h notice" });
     expect(result.work).toEqual(["Opened Lola Studio’s policies", "Read the rescheduling rules"]);
@@ -74,9 +75,16 @@ describe("The answers that now have a shape", () => {
     const yes = await getCapability("provider.deposit", "client")!.run(ctx(lola));
     expect(yes.headline).toEqual({ value: "Yes", label: "£15 deposit" });
 
-    (getProviderDepositPoliciesByDisplayNames as jest.Mock).mockResolvedValue({});
+    (getProviderDepositPoliciesByDisplayNames as jest.Mock).mockResolvedValue({
+      "Lola Studio": { depositAvailable: false, depositType: "fixed", depositAmount: 0, depositOnly: false },
+    });
     const no = await getCapability("provider.deposit", "client")!.run(ctx(lola));
     expect(no.headline?.value).toBe("No");
+
+    (getProviderDepositPoliciesByDisplayNames as jest.Mock).mockResolvedValue({});
+    const unavailable = await getCapability("provider.deposit", "client")!.run(ctx(lola));
+    expect(unavailable.headline).toBeUndefined();
+    expect(unavailable.text).toContain("couldn't check");
   });
 
   it("shows the next appointment as a card, with what it checked", async () => {

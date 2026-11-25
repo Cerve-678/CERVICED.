@@ -1258,8 +1258,13 @@ const automations: Capability = {
     const depositAmount = num("depositAmount");
     const depositType = str("depositType");
     const cancelNotice = num("cancelNotice");
-    const rescheduleNotice = num("rescheduleNotice");
-    const maxReschedules = num("maxReschedules");
+    const noticeSetting = str("rescheduleNotice");
+    const rescheduleNotice = noticeSetting === "same_day" ? 0
+      : /^(24|48|72)h$/.test(noticeSetting ?? "") ? Number.parseInt(noticeSetting!, 10) : undefined;
+    const maxSetting = str("maxReschedules");
+    const maxReschedules = maxSetting === "unlimited" ? "unlimited"
+      : maxSetting === "1" || maxSetting === "2" ? maxSetting : undefined;
+    const sameMonthOnly = str("rescheduleWithin") === "same_month";
     const noShowGrace = num("noShowGraceMinutes");
 
     const rows: { title: string; detail?: string; tag?: string }[] = [
@@ -1269,13 +1274,17 @@ const automations: Capability = {
       cancelNotice != null
         ? { title: "Cancellations", tag: `${cancelNotice}h`, detail: "notice" }
         : { title: "Cancellations", detail: "No notice period set" },
-      rescheduleNotice != null
+      rescheduleNotice != null || maxReschedules != null || sameMonthOnly
         ? {
           title: "Reschedules",
-          tag: `${rescheduleNotice}h`,
-          detail: maxReschedules != null ? `notice, up to ${maxReschedules} per booking` : "notice",
+          ...(rescheduleNotice != null ? { tag: rescheduleNotice === 0 ? "Same day" : `${rescheduleNotice}h` } : {}),
+          detail: [
+            rescheduleNotice != null ? "notice" : undefined,
+            maxReschedules != null ? `${maxReschedules === "unlimited" ? "unlimited moves" : `up to ${maxReschedules} per booking`}` : undefined,
+            sameMonthOnly ? "new date in same month" : undefined,
+          ].filter(Boolean).join(", "),
         }
-        : { title: "Reschedules", detail: "No notice period set" },
+        : { title: "Reschedules", detail: "No rescheduling limits set" },
       ...(noShowGrace != null ? [{ title: "No-shows", tag: `${noShowGrace} min`, detail: "marked after" }] : []),
     ];
 

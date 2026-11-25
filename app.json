@@ -72,7 +72,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "This app uses your location to show nearby beauty service providers.",
+          "locationWhenInUsePermission": "CERVICED uses your location to show providers near you, and where you are on the map next to today's appointments.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
           "locationFullAccuracyPermission": false,

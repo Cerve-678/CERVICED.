@@ -416,7 +416,8 @@ export async function getProviderDepositPoliciesByDisplayNames(
     .in("display_name", displayNames)
     .eq("is_claimed", true); // never an imported directory listing
 
-  if (error || !data) return {};
+  if (error) throw error;
+  if (!data) return {};
 
   const defaultPolicy: ProviderDepositPolicy = {
     depositType: "percentage",
