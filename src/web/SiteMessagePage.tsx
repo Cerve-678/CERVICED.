@@ -51,8 +51,8 @@ export function SiteMessagePage({ title, body }: { title: string; body: string }
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   wordmark: { fontFamily: 'BakbakOne-Regular', fontSize: 22, letterSpacing: 1.76, marginBottom: 32 },
-  title: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 26, textAlign: 'center', marginBottom: 10 },
-  body: { fontFamily: 'JosefinSans_400Regular', fontSize: 16, lineHeight: 24, textAlign: 'center', maxWidth: 420, marginBottom: 28 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 26, textAlign: 'center', marginBottom: 10 },
+  body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, lineHeight: 24, textAlign: 'center', maxWidth: 420, marginBottom: 28 },
   button: { paddingHorizontal: 22, paddingVertical: 12, borderRadius: 999 },
-  buttonText: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 15 },
+  buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15 },
 });
