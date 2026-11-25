@@ -120,7 +120,11 @@ const BOOKING_PREP_FOLLOW_UP_RE = /\b(?:prep|prepare|preparation|form|forms|inta
 // Becca can help with beauty and booking context, but she is not a clinician.
 // Keep this ahead of routing so a model, matcher, or future capability can
 // never turn a symptom or diagnosis request into advice.
-const MEDICAL_OR_DERMATOLOGY_RE = /\b(?:diagnos(?:e|is|ed|ing)|medical|dermatolog(?:y|ist|ical)|skin\s+(?:condition|rash|infection|reaction|disease)|eczema|psoriasis|acne|rosacea|fung(?:al|us)|allerg(?:y|ic)|swelling|burn(?:ing|ed)?|bleed(?:ing)?|hives|infection|medication|prescription|antibiotic|treat(?:ment|ing)|cure)\b/i;
+// "Treatment" is not on this list: in a beauty app it means a service ("suggest
+// a treatment for me", "what treatments does Lola do"), and listing it turned
+// those into a refusal to give medical advice. A medical ask still names the
+// condition, the medicine or the symptom, and those stay.
+const MEDICAL_OR_DERMATOLOGY_RE = /\b(?:diagnos(?:e|is|ed|ing)|medical|dermatolog(?:y|ist|ical)|skin\s+(?:condition|rash|infection|reaction|disease)|eczema|psoriasis|acne|rosacea|fung(?:al|us)|allerg(?:y|ic)|swelling|burn(?:ing|ed)?|bleed(?:ing)?|hives|infection|medication|prescription|antibiotic|cure)\b/i;
 
 // A provider often replies with the verb from the immediately preceding
 // capacity answer — e.g. “set”, “set it”, or “yes, set that”. It is only
@@ -212,6 +216,15 @@ function carryForward(
 
 /** A pronoun standing in for the provider under discussion. */
 const PRONOUN_RE = /\b(they|them|their|theirs|she|her|hers|he|him|his|it)\b/i;
+
+/**
+ * "How much are they?" right after a search: "they" is every provider just
+ * shown, and the answer is their prices side by side (discover.followup_price).
+ * Asking "which one?" here made the most natural follow-up to a search a
+ * question back instead of an answer.
+ */
+const GROUP_PRONOUN_RE = /\b(they|them|their)\b/i;
+const PRICE_ASK_RE = /\b(?:how much|prices?|pricing|cost|costs|charge|expensive|pricey|cheap|cheapest|affordable)\b/i;
 
 /** "the first one", "that one", "the second", "number 2". */
 const ORDINALS: Record<string, number> = {
@@ -565,13 +578,19 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // for the single provider just discussed. Only when exactly one was shown:
   // with several, "they" is genuinely ambiguous and the capability's own
   // missing-entity prompt is the better answer.
+  const priceOfAllShown = !entities.provider
+    && entities.service != null
+    && (conversation?.lastProviders?.length ?? 0) > 1
+    && GROUP_PRONOUN_RE.test(message)
+    && PRICE_ASK_RE.test(message);
   if (!entities.provider && PRONOUN_RE.test(message)) {
     const shown = conversation?.lastProviders ?? [];
-    // Several shown: "they" is genuinely ambiguous. Ask which, rather than
+    // Several shown: "they" is genuinely ambiguous (except a price question
+    // about all of them, see GROUP_PRONOUN_RE). Ask which, rather than
     // silently answering about one of them — the same rule as everywhere
     // else in this engine. Without this the message falls through to a
     // capability that doesn't need a provider and answers the wrong question.
-    if (shown.length > 1) {
+    if (shown.length > 1 && !priceOfAllShown) {
       entities = {
         ...entities,
         ambiguous: [
@@ -630,6 +649,16 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   if (answered && (understanding.confidence === "low" || !understanding.capabilityId)) {
     understanding = answeredUnderstanding(answered, entities, ask);
   }
+  if (priceOfAllShown && !answered) {
+    understanding = {
+      capabilityId: "discover.followup_price",
+      entities,
+      confidence: "high",
+      score: 1,
+      alternatives: [],
+      rawMessage: ask,
+    };
+  }
 
   // Ambiguity outranks everything: if we don't know WHICH booking or provider
   // they meant, answering about the wrong one is worse than asking.
@@ -669,6 +698,30 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
 
   // A required entity that never resolved means we can't run the capability
   // honestly — ask for the missing piece instead of running it half-blind.
+  // With only one upcoming appointment there is nothing to choose between:
+  // "where's my aftercare?" means that appointment. Asking "which
+  // appointment?" with a single option on the list reads as not listening.
+  if (
+    hat === "client"
+    && !entities.booking
+    && !entities.ambiguous?.some((entry) => entry.kind === "booking")
+    && capability.needs?.some((n) => n.kind === "booking" && n.required)
+  ) {
+    const upcoming = bookings.filter((b) => b.status === BookingStatus.UPCOMING);
+    const only = upcoming.length === 1 ? upcoming[0] : undefined;
+    if (only) {
+      entities = {
+        ...entities,
+        booking: {
+          kind: "booking",
+          value: only,
+          confidence: 0.9,
+          sourceText: "your only upcoming appointment",
+          label: `${only.serviceName} with ${only.providerName}`,
+        },
+      };
+    }
+  }
   const missing = (capability.needs ?? []).find(
     (n) => n.required && entities[n.kind as keyof EntityBag] == null,
   );

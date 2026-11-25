@@ -9,6 +9,9 @@ import type { EntityBag } from "../services/becca/types";
 jest.mock("../services/databaseService", () => ({
   searchProviders: jest.fn(async () => []),
   getBookmarkedProviders: jest.fn(async () => []),
+  getBookingCancelNoticeHours: jest.fn(async () => 24),
+  getProviderCancellationPolicy: jest.fn(async () => 24),
+  getProviderReschedulePolicyByDisplayName: jest.fn(async () => undefined),
 }));
 
 /**
@@ -24,6 +27,7 @@ const booking = {
   status: BookingStatus.UPCOMING,
   bookingDate: "2026-11-10",
   bookingTime: "10:00:00",
+  price: 35,
 } as unknown as ConfirmedBooking;
 
 /** What the resolver produces for a message naming this booking. */
@@ -76,12 +80,20 @@ describe("Becca's follow-up cards land where their label says", () => {
   );
 });
 
+const secondBooking = {
+  ...booking,
+  id: "b2",
+  providerName: "Glow Room",
+  serviceName: "Lash lift",
+  bookingDate: "2026-11-20",
+} as unknown as ConfirmedBooking;
+
 describe("When Becca understood the question but not which appointment", () => {
   it("lists the upcoming appointments, each re-asking the same question about that one", async () => {
     const reply = await respond({
       message: "Break down an appointment and its policies",
       hat: "client",
-      bookings: [booking],
+      bookings: [booking, secondBooking],
       now: new Date("2026-11-02T12:00:00Z"),
     });
     expect(reply.content).toMatch(/Which appointment do you mean/);
@@ -89,5 +101,18 @@ describe("When Becca understood the question but not which appointment", () => {
       message: "Break down an appointment and its policies",
       bookingId: "b1",
     });
+  });
+});
+
+describe("When there is only one upcoming appointment", () => {
+  it("answers about it instead of asking which one", async () => {
+    const reply = await respond({
+      message: "Break down an appointment and its policies",
+      hat: "client",
+      bookings: [booking],
+      now: new Date("2026-11-02T12:00:00Z"),
+    });
+    expect(reply.content).not.toMatch(/Which appointment do you mean/);
+    expect(reply.understood?.capabilityId).toBe("booking.details");
   });
 });

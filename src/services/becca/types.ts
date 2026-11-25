@@ -400,6 +400,18 @@ export interface Capability {
    */
   excludeWhen?: RegExp;
   /**
+   * True when the detail alone, with none of the phrases, is a complete ask
+   * for this capability: a bare "gel nails" is a search, a bare "Lola Studio"
+   * is "tell me about them".
+   *
+   * Left unset, a capability's details only count once one of its phrases
+   * has matched. Without that rule a detail on its own won the message: a
+   * client booked with Lola Studio asking "where is Lola Studio" or "is Lola
+   * Studio any good" got that booking's details, because the booking resolved
+   * from the name and booking.details scored on it with no words of its own.
+   */
+  answersBareEntity?: boolean;
+  /**
    * Provider hat only: true when this capability fits a link-only provider
    * (`providers.booking_mode = 'external'`), who takes bookings on their own
    * booking site rather than through CERVICED.

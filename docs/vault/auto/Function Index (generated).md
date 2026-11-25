@@ -5,7 +5,7 @@
 
 #generated
 
-**4380 functions** across **644 files**.
+**4383 functions** across **645 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -538,7 +538,7 @@
 - `askNormaliser.ts` — **normalizeAsk**
 - `engine.ts` — answeredUnderstanding · answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · holdQuestion · interpretWithTimeout · isAskableKind · **isConfirmToken** · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · settled · suggestionFitsLinkOnly · understandWithFallback · verifyComposition · withoutAwaiting
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
-- `matcher.ts` — containsGappedPhrase · containsPhraseWithTypos · escape · isKnownWord · phraseWords · plainAsk · scoreEntities · scorePhrases · **understand** · wordsOf
+- `matcher.ts` — containsGappedPhrase · containsPhraseLoosely · containsPhraseWithTypos · escape · isKnownWord · phraseStems · phraseWords · plainAsk · scoreEntities · scorePhrases · stem · **understand** · wordsOf
 - `missLog.ts` — **abandonMiss** · offeredOptions · **trackTurn**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
 - `nvidiaInterpreter.ts` — validComposition · validInterpretation

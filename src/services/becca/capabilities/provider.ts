@@ -93,11 +93,14 @@ const appNavigation: Capability = {
 const todaySchedule: Capability = {
   id: "pv.today",
   hat: "provider",
+  // The week's diary and the price menu have their own answers.
+  excludeWhen: /\b(?:this week|next week|menu)\b/i,
   describe: "What's on today / my schedule",
   thinking: ["Checking today’s diary…", "Reading the appointment details…"],
   phrases: [
     "today", "what's on", "whats on", "my day", "schedule", "agenda",
     "diary", "appointments", "bookings", "who's coming", "whos coming", "next client",
+    "clients today", "bookings today", "today's", "todays", "who's next", "whos next",
   ],
   async run({ now, entities }): Promise<CapabilityResult> {
     const ymd = entities.date?.value.ymd ?? dateToYMD(now);
@@ -174,12 +177,16 @@ const todaySchedule: Capability = {
 const weekAhead: Capability = {
   id: "pv.week",
   hat: "provider",
+  // Which days are quiet is pv.gaps, even within this week.
+  excludeWhen: /\b(?:slow|quiet|gaps?|empty)\b/i,
   describe: "How busy am I this week",
   thinking: ["Checking this week’s diary…", "Counting your bookings…"],
   phrases: [
     "this week", "how busy", "week ahead", "rest of the week", "next few days",
     "how's my week", "hows my week", "busy week", "what's my week like",
     "whats my week like", "coming week", "next 7 days", "how many this week",
+    "my week", "show my week", "week looking like", "how full", "bookings this week",
+    "appointments this week",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -257,6 +264,9 @@ const scheduleGaps: Capability = {
     "where are my gaps", "where are the gaps", "my gaps", "quiet days",
     "quiet day", "empty days", "free days", "slow days", "days with space",
     "when am i quiet", "where can i fit someone in", "fill my diary",
+    "days are quiet", "free slots", "fit more clients", "gaps", "gaps in my", "need filling", "got space", "space this week", "quiet",
+    "diary empty", "empty",
+    "days are slow", "slow",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -321,6 +331,7 @@ const waitlist: Capability = {
     "waitlist", "waiting list", "cancellation list", "who's waiting",
     "whos waiting", "fill a gap", "anyone waiting", "who wants a slot",
     "my waitlist", "people waiting", "queue", "anyone on the list",
+    "are waiting",
   ],
   async run(): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -366,12 +377,16 @@ const waitlist: Capability = {
 const clientele: Capability = {
   id: "pv.clients",
   hat: "provider",
+  // A question about a day's bookings, the daily limit or followers names
+  // clients without asking for the client list.
+  excludeWhen: /\b(?:today|tomorrow|this week|can i (?:take|fit)|a day|per day|follow(?:s|ers?)?)\b/i,
   describe: "My clients / clientele",
   thinking: ["Opening your client list…"],
   phrases: [
     "my clients", "clientele", "how many clients", "regulars", "client list",
     "customers", "my customers", "client base", "who are my clients",
     "how many customers", "my regulars", "client count",
+    "top clients", "best clients", "biggest clients",
   ],
   async run(): Promise<CapabilityResult> {
     const members = await getProviderClientele();
@@ -411,6 +426,7 @@ const inbox: Capability = {
     "messages", "inbox", "unread", "replies", "anyone messaged", "dm",
     "any messages", "unread messages", "has anyone messaged", "my inbox",
     "client messages", "anyone got in touch", "new messages",
+    "dms", "messaged me", "who's messaged", "whos messaged",
   ],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
@@ -467,12 +483,17 @@ const inbox: Capability = {
 const outstandingForms: Capability = {
   id: "pv.forms",
   hat: "provider",
+  // "My forms" / "what forms do I have" is the form library (pv.infopacks),
+  // not who still has one to fill in.
+  excludeWhen: /\bmy (?:\w+ )?forms\b|\bwhat forms\b/i,
   describe: "Which clients haven't filled their forms in",
   thinking: ["Checking your intake forms…", "Finding who hasn’t filled theirs in…"],
   phrases: [
     "forms", "intake", "consultation form", "not filled", "outstanding forms",
     "consent", "who hasn't filled", "who hasnt filled", "missing forms",
     "pending forms", "incomplete forms", "waiting on forms",
+    "fill out the form", "filled in", "fill in", "signed the form", "hasn't signed", "hasnt signed", "form status", "still needs to fill",
+    "their form", "done their form", "outstanding",
   ],
   async run(): Promise<CapabilityResult> {
     const forms = await getMyProviderIntakeForms();
@@ -512,6 +533,9 @@ const lapsedClients: Capability = {
   phrases: [
     "hasn't been back", "havent been back", "lapsed", "haven't seen",
     "havent seen", "win back", "not returned", "stopped coming", "quiet clients",
+    "haven't been back", "hasn't booked", "hasnt booked", "in a while", "in ages", "overdue", "reach out", "hasn't rebooked", "hasnt rebooked", "not rebooked", "old clients", "due a rebook", "due back", "lost clients",
+    "for a while", "been in for",
+    "haven't rebooked", "havent rebooked",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const members = await getProviderClientele();
@@ -582,6 +606,8 @@ const myServices: Capability = {
     "my services", "my prices", "my price list", "what do i charge",
     "my menu", "what do i offer", "my treatments", "how much do i charge",
     "list my services", "what are my prices",
+    "services do i offer", "what treatments do i", "treatments do i", "am i charging", "charging for",
+    "on my menu",
   ],
   excludeWhen: /\b(edit|add|change|update|remove|delete|new)\b/i,
   async run(): Promise<CapabilityResult> {
@@ -633,6 +659,8 @@ const providerNotifications: Capability = {
     "notifications", "any updates", "have i missed", "anything new", "alerts",
     "what did i miss", "any news", "catch me up", "what's new", "whats new",
     "anything i should know", "any alerts",
+    "miss anything", "latest updates", "updates",
+    "what's happened", "whats happened",
   ],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
@@ -694,6 +722,7 @@ const timeOff: Capability = {
   phrases: [
     "day off", "days off", "time off", "am i off", "blocked out",
     "holiday", "annual leave", "closed on", "not working",
+    "blocked days", "closed days", "working tomorrow", "am i working", "off this week", "off tomorrow", "when's my holiday", "whens my holiday",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -748,6 +777,8 @@ const myReviews: Capability = {
   phrases: [
     "my reviews", "my rating", "what are clients saying", "my feedback",
     "how am i rated", "my stars", "any new reviews", "what do clients say",
+    "latest reviews", "average rating", "reviews", "rating", "rated",
+    "stars",
   ],
   async run(): Promise<CapabilityResult> {
     const rows = await getMyProviderReviews();
@@ -798,8 +829,11 @@ const myHours: Capability = {
   phrases: [
     "my hours", "my working hours", "when am i open", "what time do i open",
     "what time do i close", "my opening hours", "my working days",
+    "what time do i start", "time do i start", "time do i finish", "when do i open", "when do i close", "hours have i set", "opening times", "what days do i work", "days do i work", "what time do i",
+    "when do i finish", "am i open",
   ],
-  excludeWhen: /\b(set|change|update|edit|add)\b/i,
+  // "What hours have I set?" asks for the hours; "set my hours" asks to change them.
+  excludeWhen: /\b(?:change|update|edit|add)\b|^\s*set\b|\bset (?:my|the|up|new|some)\b/i,
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -858,6 +892,7 @@ const myCapacity: Capability = {
   phrases: [
     "how many bookings a day", "my daily limit", "am i full", "my capacity",
     "max bookings", "booking limit", "how many can i take", "fully booked",
+    "how many bookings can i take", "how many clients can i fit", "at capacity", "take more bookings", "can i take more", "full tomorrow", "full today", "per day", "a day",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -923,6 +958,8 @@ const myReach: Capability = {
     "how many services do i have", "my reach", "my audience",
     "who follows me", "my following", "how visible am i",
     "how many people see me", "my profile reach", "am i getting seen",
+    "saves", "how many saves", "follower count", "followers", "saved me", "follow me",
+    "saved my profile", "people saved",
   ],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
@@ -965,6 +1002,8 @@ const myAddress: Capability = {
   phrases: [
     "my address", "what address", "my location", "where do clients think",
     "my studio address", "do clients see my address",
+    "business address", "clients see", "address on my", "address",
+    "location on my", "location is on",
   ],
   async run(): Promise<CapabilityResult> {
     const address = await getMyProviderFullAddress();
@@ -1105,6 +1144,8 @@ const services: Capability = {
 const analytics: Capability = {
   id: "pv.analytics",
   hat: "provider",
+  // This week's diary, today's and the daily limit have their own answers.
+  excludeWhen: /\b(?:this week|next week|today|tomorrow|can i take|a day|per day|capacity)\b/i,
   describe: "How my business is doing — booking volume and patterns",
   thinking: ["Looking through your bookings…", "Spotting the patterns…"],
   phrases: [
@@ -1113,6 +1154,7 @@ const analytics: Capability = {
     "how many bookings", "booking trends", "busiest day", "my numbers",
     "how was last month", "how many clients this month", "am i growing",
     "my busiest", "how many appointments",
+    "how's my business", "hows my business", "business doing", "how much have i made", "made this", "most popular service", "popular service", "earned",
   ],
   async run({ now }): Promise<CapabilityResult> {
     // MONEY BOUNDARY: this answers booking VOLUME and patterns only, and
@@ -1215,6 +1257,7 @@ const automations: Capability = {
     "cancellation policy", "my cancellation policy", "reschedule policy",
     "do i take a deposit", "how much notice do i need", "notice period",
     "what's my policy", "whats my policy", "no show policy", "my terms",
+    "late fee", "no show fee", "no-show fee", "cancellation fee", "my fees",
   ],
   async run(): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -1299,6 +1342,8 @@ const automations: Capability = {
 const infoPacks: Capability = {
   id: "pv.infopacks",
   hat: "provider",
+  // Forms still to be filled in by clients are pv.forms.
+  excludeWhen: /\b(?:outstanding|missing|pending|incomplete|not (?:filled|done))\b/i,
   describe: "Info packs, forms and message templates I send clients",
   thinking: ["Finding your info packs and templates…"],
   phrases: [
@@ -1307,6 +1352,8 @@ const infoPacks: Capability = {
     "my forms", "my form library", "intake forms", "consent forms",
     "message templates", "my templates", "canned replies", "quick replies",
     "saved replies", "what forms do i have",
+    "consultation forms", "my consultation forms", "clients get sent", "get sent",
+    "templates",
   ],
   async run(): Promise<CapabilityResult> {
     // Both are self-scoped (own provider id resolved inside), and independent.
@@ -1359,7 +1406,7 @@ const help: Capability = {
   hat: "provider",
   describe: "What can Becca do for my business",
   thinking: ["Getting my options ready…"],
-  phrases: ["what can you do", "help", "how do you work", "what are you", "who are you"],
+  phrases: ["what can you do", "help", "how do you work", "what are you", "who are you", "what can i ask", "what can you", "what you can do", "what do you do", "what are you for", "how can you help", "how do i use you", "use you"],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
     if (linkOnly) {

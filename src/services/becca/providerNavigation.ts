@@ -15,7 +15,7 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
     destination: { title: "Walk-ins welcome", path: "Business Details → Scheduling & Availability → Availability", screen: "bookingRules", detail: "Switch on Walk-ins welcome, then save your changes.", fullBookingOnly: true },
   },
   {
-    topic: /\b(?:working hours|opening hours|business hours|hours|schedule|diary|calendar|blocked dates?|days? off|time off|holidays?|breaks?)\b/i,
+    topic: /\b(?:working hours|opening hours|opening times|working times|business hours|hours|schedule|diary|calendar|blocked dates?|days? off|time off|holidays?|breaks?)\b/i,
     destination: { title: "Working hours & blocked dates", path: "Schedule", screen: "schedule", detail: "Set your weekly hours, breaks or blocked dates there." },
   },
   {
@@ -23,7 +23,7 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
     destination: { title: "Scheduling & Availability", path: "Business Details → Scheduling & Availability", screen: "bookingRules", detail: "Change your booking rules and availability options, then save.", fullBookingOnly: true },
   },
   {
-    topic: /\b(?:services?|prices?|price list|menu|portfolio|photos?|specialit(?:y|ies))\b/i,
+    topic: /\b(?:services?|treatments?|prices?|price list|menu|portfolio|photos?|specialit(?:y|ies))\b/i,
     destination: { title: "My Services", path: "My Services", screen: "services", detail: "Edit your services, prices and portfolio there.", fullBookingOnly: true },
   },
   {
@@ -75,5 +75,9 @@ export function isProviderNavigationAsk(message: string): boolean {
   // The analytics capability already opens Analytics while adding a useful
   // business summary; keep that established route for this exact command.
   if (/^open\s+(?:my\s+)?analytics\b/i.test(message)) return false;
+  // Questions about the diary or the profile, not about where a control is:
+  // "where can I fit more clients", "where do clients think I am", "what
+  // hours have I set". Each has its own answer (gaps, address, hours).
+  if (/\bfit\b|\bclients? (?:see|think)\b|\bset\s*[?.!]*$/i.test(message)) return false;
   return /\b(?:where (?:do|can|is)|how (?:do|can)|show me where|take me to|open|find|go to|navigate|set|change|edit|update|switch|turn (?:on|off)|enable|disable|manage|add|remove|block out)\b/i.test(message);
 }

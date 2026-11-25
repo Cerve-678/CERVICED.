@@ -148,6 +148,37 @@ shown on screen). If the AI router picks a question whose detail is missing,
 Becca asks for it the same way rather than discarding the pick.
 `beccaFollowUpQuestions.test.ts` covers it.
 
+**Understanding everyday asks (2026-11-25).** Everything Becca can do was
+asked 1,266 ways people actually type (`beccaEverySkillAsks.data.ts`, run
+through the whole engine by `beccaEverySkillAsks.test.ts`). On a set written
+blind, before any tuning, main got 73% to the right answer; after this pass,
+92% on the same set, and every ask in the file passes. Five rules came out of
+it, beyond the extra phrases:
+
+- **A detail only counts alongside the capability's own words.** A client
+  booked with Lola Studio asking "where is Lola Studio" or "is Lola Studio any
+  good" used to get that booking's details: the booking resolved from the
+  name and `booking.details` scored on it with no matching words. The same
+  happened with "nails" + a day pulling availability asks into
+  `discover.followup_day`. Only `discover.find` (bare "gel nails") and
+  `discover.pick` (bare "Lola Studio") answer a detail on its own
+  (`Capability.answersBareEntity`).
+- **Words in any order.** A phrase also matches, at 0.8 of its strength and
+  never "high" on its own, when all its meaningful words (two or more) are in
+  the message in any order and form: "did Lola accept my reschedule" holds
+  "reschedule accepted". This did more for asks Becca had never seen than
+  phrases did.
+- **One upcoming appointment is the appointment.** A question that needs an
+  appointment uses the only upcoming one instead of asking which.
+- **"How much are they?" after a search** compares the prices of everyone
+  shown, instead of asking which one (`GROUP_PRONOUN_RE` in `engine.ts`).
+- **"Treatment" is not a medical word.** It was in the medical-boundary
+  check, so "suggest a treatment for me" got "I can't give medical advice".
+
+When changing routing, compare where every existing phrase lands before and
+after (as done for #764 and this pass), not just the suite: a short generic
+phrase added to one capability can quietly take another's question.
+
 **Learning from misses.** Every reply carries `understood` (the capability
 that answered, or `null` for the fallback). `missLog.ts` holds a typed miss
 until the person's next move, then records it once through
@@ -427,8 +458,9 @@ questions* the data can answer number in the low hundreds at most, and Becca
 now covers a large share of them.
 
 Hit rate comes from the **second** axis: how many ways of asking each
-capability recognises. That's phrases, not capabilities — currently **569
-across 56 capabilities (avg 10.2)**, up from 350. Prefer expanding a phrase
+capability recognises. That's phrases, not capabilities — currently **1,713
+across 75 capabilities (avg 22.8)** as of 2026-11-25, up from 350 — plus
+any-order matching of each phrase's words (see "Understanding everyday asks"). Prefer expanding a phrase
 list over adding a capability whenever the underlying answer is the same.
 
 ### The write boundary (moved 2026-08-04)

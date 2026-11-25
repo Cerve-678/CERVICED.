@@ -156,6 +156,72 @@ function containsPhraseWithTypos(messageWords: string[], phrase: string): boolea
 }
 
 /**
+ * Words that carry no meaning on their own for matching purposes. Question
+ * words that DO decide the ask ("where", "when", "who", "much", "many") are
+ * deliberately not on this list.
+ */
+const LOOSE_STOPWORDS = new Set([
+  "a", "an", "the", "my", "me", "i", "i'm", "im", "i've", "ive", "i'd", "you", "your",
+  "it", "its", "it's", "is", "are", "am", "was", "were", "be", "been", "do", "does", "did",
+  "to", "for", "of", "in", "on", "at", "by", "with", "and", "or", "but", "so", "if",
+  "please", "pls", "can", "could", "would", "will", "should", "what", "whats", "what's",
+  "how", "which", "that", "this", "there", "their", "they", "them", "she", "he", "her",
+  "his", "have", "has", "had", "got", "get", "any", "some", "just", "up", "our", "we",
+  "us", "ok", "okay", "hi", "hey", "yeah", "still", "too", "very", "now", "then",
+]);
+
+/**
+ * The same word in its other forms: "accepted"/"accept", "bookings"/"booking"
+ * /"booked", "services"/"service". Crude on purpose — it only has to make two
+ * forms of a word meet, never to be a correct English stem.
+ */
+function stem(word: string): string {
+  let w = word.replace(/'s$/, "");
+  if (w.length > 4 && w.endsWith("ies")) w = `${w.slice(0, -3)}y`;
+  else if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
+  if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
+  else if (w.length > 4 && w.endsWith("ed")) w = w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("e")) w = w.slice(0, -1);
+  return w;
+}
+
+const looseStemCache = new Map<string, string[]>();
+
+/** A phrase's meaningful words, stemmed. */
+function phraseStems(phrase: string): string[] {
+  let stems = looseStemCache.get(phrase);
+  if (!stems) {
+    stems = [...new Set(phraseWords(phrase).filter((w) => !LOOSE_STOPWORDS.has(w)).map(stem))];
+    looseStemCache.set(phrase, stems);
+  }
+  return stems;
+}
+
+/**
+ * Every meaningful word of the phrase is in the message, in any order and
+ * any form: "did Lola accept my reschedule" holds both words of "reschedule
+ * accepted", and "is my appointment paid" both of "appointment paid".
+ *
+ * Exact matching needs the phrase's words side by side, so a question asked
+ * in a slightly different shape missed a phrase it plainly contained. This
+ * reads the same words without the word order. Only phrases with two or more
+ * meaningful words take part: a single word anywhere in a message is far too
+ * weak a signal on its own.
+ */
+function containsPhraseLoosely(messageStems: Set<string>, phrase: string): boolean {
+  if (phrase.includes("*")) return false;
+  const stems = phraseStems(phrase);
+  return stems.length >= 2 && stems.every((s) => messageStems.has(s));
+}
+
+/**
+ * A loose match counts for less than the phrase as written, and never
+ * reaches "high" on its own: the words are all there, but not in the order
+ * that made the phrase certain.
+ */
+const LOOSE_DISCOUNT = 0.8;
+
+/**
  * A phrase matched through a typo counts for less than the same phrase typed
  * right, and never reaches "high" on its own: Becca reads the slip, but an
  * exact match elsewhere still wins, and the reading isn't treated as certain.
@@ -171,20 +237,28 @@ const TYPO_CEILING = CONFIDENCE_THRESHOLDS.high - 0.01;
  * containsPhrase) — plain substring matching produced false hits like "tint"
  * inside "maintenance".
  */
-function scorePhrases(message: string, messageWords: string[], phrases: string[]): number {
+function scorePhrases(
+  message: string,
+  messageWords: string[],
+  messageStems: Set<string>,
+  phrases: string[],
+): number {
   const lower = message.toLowerCase();
   let best = 0;
   for (const phrase of phrases) {
     const gapped = phrase.includes("*");
     const exact = gapped ? containsGappedPhrase(lower, phrase) : containsPhrase(lower, phrase);
     const slipped = !exact && !gapped && containsPhraseWithTypos(messageWords, phrase);
-    if (!exact && !slipped) continue;
+    const loose = !exact && !slipped && containsPhraseLoosely(messageStems, phrase);
+    if (!exact && !slipped && !loose) continue;
     // Normalise by phrase length: a 20-char match is a much stronger signal
     // than a 4-char one, but cap so one long phrase can't dominate outright.
     // A gap counts for nothing — only the words actually matched do.
     const length = gapped ? phrase.replace(/\s*\*\s*/g, " ").trim().length : phrase.length;
     const full = Math.min(0.6, 0.25 + length / 40);
-    const strength = exact ? full : Math.min(TYPO_CEILING, full * TYPO_DISCOUNT);
+    const strength = exact
+      ? full
+      : Math.min(TYPO_CEILING, full * (slipped ? TYPO_DISCOUNT : LOOSE_DISCOUNT));
     if (strength > best) best = strength;
   }
   return best;
@@ -242,6 +316,8 @@ const ASK_FOR_DETAIL_MIN = 0.4;
  * this is a genuine toss-up, and the honest fallback offers both.
  */
 const ASK_FOR_DETAIL_MARGIN = 0.1;
+/** Scores are sums of decimals: 0.525 - 0.425 is 0.0999…, not 0.1. */
+const SCORE_EPSILON = 1e-9;
 
 /** Builds the full Understanding for a message. */
 export function understand(
@@ -279,13 +355,14 @@ export function understand(
   }
 
   const messageWords = wordsOf(message);
+  const messageStems = new Set(messageWords.map(stem));
   const scored = capabilitiesFor(hat)
     // A capability's veto removes it from contention outright — it's for
     // modifiers that flip the intent ("edit my services" is not a request to
     // list them), which a score adjustment would only ever make close.
     .filter((c) => !c.excludeWhen?.test(message))
     .map((c) => {
-      const phrase = scorePhrases(message, messageWords, c.phrases);
+      const phrase = scorePhrases(message, messageWords, messageStems, c.phrases);
       return {
         capabilityId: c.id,
         phrase,
@@ -297,7 +374,9 @@ export function understand(
         lacksDetail: (c.needs ?? []).filter(
           (n) => n.required && entities[n.kind as keyof EntityBag] == null,
         ).length === 1,
-        score: phrase + scoreEntities(entities, c.needs),
+        // A detail counts toward a capability its words actually asked for:
+        // see Capability.answersBareEntity for the hijack this prevents.
+        score: phrase > 0 || c.answersBareEntity ? phrase + scoreEntities(entities, c.needs) : 0,
       };
     });
   const ranked = scored
@@ -324,8 +403,8 @@ export function understand(
       .sort((a, b) => b.phrase - a.phrase);
     if (
       best &&
-      best.phrase - score >= ASK_FOR_DETAIL_MARGIN &&
-      (!next || best.phrase - next.phrase >= ASK_FOR_DETAIL_MARGIN)
+      best.phrase - score >= ASK_FOR_DETAIL_MARGIN - SCORE_EPSILON &&
+      (!next || best.phrase - next.phrase >= ASK_FOR_DETAIL_MARGIN - SCORE_EPSILON)
     ) {
       return {
         capabilityId: best.capabilityId,
