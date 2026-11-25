@@ -311,6 +311,14 @@ interface PaymentModalProps {
    *  or has failed. While it is, leaving the Cart must not cancel the checkout:
    *  the card may already be approved (CartScreen abandonOutstandingCheckout). */
   onPaymentInFlight?: (inFlight: boolean) => void;
+  /** Which opening of this sheet is current. The Cart moves it on when the
+   *  client leaves (which closes the sheet) and each time it opens the sheet,
+   *  so a payment still going through can tell it has been left behind. */
+  getSheetOpenId?: () => number;
+  /** A payment the client had left failed, and its checkout is cancelled.
+   *  message is what went wrong, or null when there's nothing to tell them
+   *  (it never reached Stripe, or they cancelled it themselves). */
+  onPaymentFailedAway?: (checkoutBatchId: string, message: string | null) => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -1500,6 +1508,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // fail. Abandoning is therefore skipped while this is set.
   const isClaimingRef = useRef(false);
   const paymentInFlightRef = useRef(false);
+  // Moved on each time the client leaves the Cart and each time the payment
+  // sheet opens (StripePaymentSheet getSheetOpenId). Set here, in the same
+  // tick as the leave, so a payment can't slip past it.
+  const paymentSheetOpenIdRef = useRef(0);
 
   /**
    * Give back the slots this checkout is holding.
@@ -1554,6 +1566,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       // problem as the success modal above, and leaving it up over another
       // screen would let the client pay for a hold that no longer exists.
       setShowPaymentModal(false);
+      paymentSheetOpenIdRef.current += 1;
       abandonOutstandingCheckout();
     });
     return unsubscribe;
@@ -3885,6 +3898,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       // "booking actually inserted" that the claim RPC's
                       // insert-time-only conflict check leaves open for
                       // the whole payment-sheet interaction.
+                      //
+                      // Not while the last payment is still going through (the
+                      // client left the Cart mid-payment and came back): its
+                      // held times would make this one say they're taken.
+                      if (paymentInFlightRef.current) {
+                        setShowBookingSummaryModal(false);
+                        showAlert('Your last payment is still going through', "We'll let you know as soon as it's settled. Please don't pay again in the meantime.");
+                        return;
+                      }
                       setIsReservingSlots(true);
                       try {
                         if (USE_STRIPE_PAYMENTS) {
@@ -3943,6 +3965,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           setHoldBatchId(batchId);
                         }
                         setShowBookingSummaryModal(false);
+                        paymentSheetOpenIdRef.current += 1;
                         setShowPaymentModal(true);
                       } catch (err) {
                         logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
@@ -4175,6 +4198,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
                 onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}
                 onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}
+                getSheetOpenId={() => paymentSheetOpenIdRef.current}
+                onPaymentFailedAway={(checkoutBatchId, message) => {
+                  // Forget it only if it's still the Cart's checkout; the
+                  // client may have started a new one since.
+                  if (serverCheckoutBatchIdRef.current === checkoutBatchId) {
+                    serverCheckoutBatchIdRef.current = null;
+                    setServerCheckoutBatchId(null);
+                  }
+                  // Shown over whichever screen they're on now: no
+                  // notification is sent for a payment that never went through.
+                  if (message === null) return;
+                  showAlert("Payment didn't go through", [message, "You haven't been charged, and your cart is still here if you'd like to try again."].filter(Boolean).join(' '));
+                }}
                 onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);

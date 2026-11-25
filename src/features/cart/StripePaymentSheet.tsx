@@ -90,6 +90,14 @@ export interface StripePaymentSheetProps {
    *  or has failed. While it is, leaving must not cancel the checkout: the
    *  card may already be approved. */
   onPaymentInFlight?: (inFlight: boolean) => void;
+  /** Which opening of this sheet is current. The caller moves it on when the
+   *  client leaves (which closes the sheet) and each time it opens the sheet,
+   *  so a payment still going through can tell it has been left behind. */
+  getSheetOpenId?: () => number;
+  /** A payment the client had left failed, and its checkout is cancelled.
+   *  message is what went wrong, or null when there's nothing to tell them
+   *  (it never reached Stripe, or they cancelled it themselves). */
+  onPaymentFailedAway?: (checkoutBatchId: string, message: string | null) => void;
   /** Shown by the caller's own dialog host, not this sheet's: an alert
    *  nested inside this Modal would close with it. */
   onBookingFailed: (message: string) => void;
@@ -108,6 +116,8 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
     onPaymentPending,
     onCheckoutPaid,
     onPaymentInFlight,
+    getSheetOpenId,
+    onPaymentFailedAway,
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
@@ -261,7 +271,37 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
       setPayError(null);
 
       let paymentStarted = false;
+      let handedToStripe = false;
       let createdIntentId: string | undefined;
+      const openId = getSheetOpenId?.();
+      // A failure nobody can see: the client left the Cart while the payment
+      // was going through, which closed this sheet (and may have opened a new
+      // one since). Nothing else would cancel the checkout until its hold ran
+      // out, and the database counts the client's own hold as busy, so paying
+      // again would be told the time is taken. Cancel it as × does (the server
+      // cancels the checkout too) and say so. Doesn't touch the Cart's current
+      // checkout, which may be a newer one. False while this attempt's sheet
+      // is still up: the error is shown in it.
+      const releaseIfSheetLeft = async (message: string | null): Promise<boolean> => {
+        if (getSheetOpenId?.() === openId) return false;
+        const intentId = createdIntentId;
+        if (intentId && openIntentRef.current === intentId) openIntentRef.current = null;
+        if (intentId && checkoutBatchId) {
+          try { await cancelPaymentIntent(checkoutBatchId, intentId); }
+          catch (err) {
+            logger.error('[checkout] could not cancel a failed payment after the Cart was left', err);
+            // 409: the card was approved after all, and the server finishes it.
+            if ((err as { context?: { status?: number } } | null)?.context?.status === 409) {
+              onPaymentPending?.('unknown');
+              return true;
+            }
+            // Anything else: Stripe did refuse it, so nothing was charged, and
+            // the hold runs out on its own.
+          }
+        }
+        if (checkoutBatchId) onPaymentFailedAway?.(checkoutBatchId, message);
+        return true;
+      };
       try {
         if (!checkoutBatchId) {
           throw new Error('Checkout has expired. Please review your booking and try again.');
@@ -278,6 +318,9 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
         const { clientSecret, paymentIntentId, paypalAvailable } = await createPaymentIntent(checkoutBatchId);
         createdIntentId = paymentIntentId;
         openIntentRef.current = paymentIntentId;
+        // Left while the payment was being set up: the Cart has already
+        // cancelled the checkout, so don't hand the card to Stripe for it.
+        if (await releaseIfSheetLeft(null)) return;
         if (method === 'paypal' && !paypalAvailable) {
           // The server decides; nothing is authorised, so card still works.
           setPayError('PayPal isn\'t available for this booking. Please pay by card.');
@@ -287,6 +330,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
         let confirmError: { code: string; message: string; localizedMessage?: string; declineCode?: string; type?: string } | undefined;
         // From here the card can be approved at any moment, so leaving the
         // Cart must not cancel the checkout (cleared in finally).
+        handedToStripe = true;
         onPaymentInFlight?.(true);
         if (method === 'wallet') {
           // The wallet sheet shows the amount it's given, so give it the
@@ -296,6 +340,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
             // Nothing has been authorised yet — keep the checkout and let
             // them try again rather than releasing the hold over a blip.
             logger.error(`[${timestamp()}] could not read the payment amount`, retrieveError);
+            if (await releaseIfSheetLeft('We couldn\'t start Apple Pay or Google Pay.')) return;
             setPayError('We couldn\'t start Apple Pay or Google Pay. Please try again.');
             return;
           }
@@ -333,11 +378,15 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
         if (confirmError) {
           // Nothing was authorised, so the intent can be retried as-is.
           // Leave the sheet open rather than throwing the checkout away.
+          // Card errors (declines, wrong CVC, failed bank check) are written
+          // by Stripe for the cardholder; anything else is ours to word.
+          const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
+          const cardMessage = isCardError ? (confirmError.localizedMessage || confirmError.message) : '';
           if (confirmError.code !== 'Canceled') {
             logger.error(`[${timestamp()}] payment confirmation failed`, confirmError);
-            // Card errors (declines, wrong CVC, failed bank check) are written
-            // by Stripe for the cardholder; anything else is ours to word.
-            const isCardError = confirmError.type === 'card_error' || !!confirmError.declineCode;
+          }
+          if (await releaseIfSheetLeft(confirmError.code === 'Canceled' ? null : cardMessage)) return;
+          if (confirmError.code !== 'Canceled') {
             setPayError(isCardError
               ? (confirmError.localizedMessage || confirmError.message)
               : method === 'paypal'
@@ -386,6 +435,8 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
           onPaymentPending?.('unknown');
           return;
         }
+        // onClose below would clear whatever checkout the Cart has now.
+        if (await releaseIfSheetLeft(handedToStripe ? '' : null)) return;
         if (createdIntentId && checkoutBatchId) {
           try { await cancelPaymentIntent(checkoutBatchId, createdIntentId); }
           catch { onPaymentPending?.('unknown'); return; }
@@ -398,7 +449,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
         setConfirming(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, onPaymentInFlight, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, onPaymentInFlight, getSheetOpenId, onPaymentFailedAway, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
