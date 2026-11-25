@@ -6304,7 +6304,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
-            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
+            value={providerData.scheduleReleaseDay ?? null}
             time={providerData.scheduleReleaseTime}
             onSelectTime={(time) => { releaseTimeEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseTime: time })); }}
             accentColor={adaptiveAccentColor}
