@@ -5,7 +5,7 @@
 
 #generated
 
-**4443 functions** across **652 files**.
+**4442 functions** across **652 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -227,7 +227,7 @@
 ### `src/features/maintenance/` (12)
 - `AddReminderSheet.tsx` — **AddReminderSheet** · addWeeksFromToday · chipFor · datePill · onPickDate · pick · submit
 - `ItemMenuSheet.tsx` — **ItemMenuSheet** · markDone · onPickDate · run · saveChanges
-- `MaintenanceHowTo.tsx` — act · addDays · Appear · DemoScreen · goTo · groups · items · list · **MaintenanceHowTo** · nextUp · noop · sample · start · StepActions · StepAdd · StepBooked · StepCountdown · useBeats
+- `MaintenanceHowTo.tsx` — addDays · Appear · DemoScreen · goTo · groups · items · lashes · list · **MaintenanceHowTo** · nextUp · noop · sample · StepAdd · StepBooked · StepDue · trim · useBeats
 - `MaintenanceItemCard.tsx` — iconFor · **itemPill** · MaintenanceItemCardImpl · **primaryActionFor** · subline
 - `MaintenanceView.tsx` — book · filterCounts · groups · **MaintenanceView** · markDone · nextUp · NoteText · onPickPatch · openMenu · renderItems · renderNote · S · snooze · tryScroll · turnOnReminders · visibleItems
 - `NextUpCard.tsx` — DueBody · header · **intervalText** · **NextUpCard** · shell · solid · weeksText

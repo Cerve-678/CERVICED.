@@ -70,7 +70,7 @@ interface Props {
   demoTap?: DemoTap;
 }
 
-export type DemoTap = 'book' | 'done' | 'snooze' | null;
+export type DemoTap = 'book' | null;
 
 export function NextUpCard({ nextUp, P, t, compact, onOpenAll, onBook, onDone, onSnooze, busyItemId, demoTap = null }: Props) {
   const on = { color: P.onAccent };
@@ -140,7 +140,7 @@ function DueBody({
   const on = { color: P.onAccent };
   const soft = { color: P.onAccent, opacity: 0.85 };
 
-  const solid = (key: DemoTap, label: string, onPress: () => void) => (
+  const solid = (label: string, onPress: () => void, tapped = false) => (
     <TouchableOpacity
       style={[styles.btn, { backgroundColor: P.onAccent, borderColor: P.onAccent }, busy && styles.dim]}
       onPress={() => { hapticMedium(); onPress(); }}
@@ -150,7 +150,7 @@ function DueBody({
       accessibilityLabel={`${label}, ${item.title}`}
     >
       <Text style={[styles.btnText, { color: P.accent }]}>{label.toUpperCase()}</Text>
-      {demoTap === key ? <TapMark colour={P.accent} /> : null}
+      {tapped ? <TapMark colour={P.accent} /> : null}
     </TouchableOpacity>
   );
 
@@ -165,8 +165,8 @@ function DueBody({
       {interval ? <Text style={[styles.line, soft]}>{interval}</Text> : null}
       <View style={[styles.actions, compact && styles.actionsCompact]}>
         {busy ? <ActivityIndicator color={P.onAccent} style={styles.busy} /> : null}
-        {solid('book', t('maintenance.action.book'), () => onBook(item))}
-        {solid('done', t('maintenance.action.doneIt'), () => onDone(item))}
+        {solid(t('maintenance.action.book'), () => onBook(item), demoTap === 'book')}
+        {solid(t('maintenance.action.doneIt'), () => onDone(item))}
         {snooze ? (
           <TouchableOpacity
             style={[styles.btn, { borderColor: P.onAccent }, busy && styles.dim]}
@@ -177,7 +177,6 @@ function DueBody({
             accessibilityLabel={`${t('maintenance.action.snoozeWeek')}, ${item.title}`}
           >
             <Text style={[styles.btnText, on]}>{t('maintenance.action.snoozeWeek').toUpperCase()}</Text>
-            {demoTap === 'snooze' ? <TapMark colour={P.onAccent} /> : null}
           </TouchableOpacity>
         ) : null}
       </View>
