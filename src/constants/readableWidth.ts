@@ -6,9 +6,10 @@ import { Platform, type ViewStyle } from 'react-native';
  * Every screen in the app was designed at phone width. On an iPad (or any
  * wide window: landscape, Stage Manager, half of Split View) they used to
  * stretch edge to edge, so rows ran 1,000pt wide and a toggle sat a whole
- * screen away from its label. Past this width a screen sits in a centred
- * column (`ReadableWidth`), and the floating tab bar is capped to match.
- * At phone widths nothing changes.
+ * screen away from its label. On an iPad held upright, past this width a
+ * screen sits in a centred column (`ReadableWidth`); in landscape it fills the
+ * display. The floating tab bar and pop-ups are capped either way. At phone
+ * widths nothing changes.
  */
 export const READABLE_MAX_WIDTH = 720;
 
