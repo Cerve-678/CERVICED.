@@ -70,7 +70,7 @@ serve(async (req) => {
       .select(
         'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
         'client_address, booking_date, booking_time, provider_id, ' +
-        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request, cancelled_by, declined_at',
+        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request, declined_at',
       )
       .eq('id', bookingId)
       .maybeSingle();
@@ -79,7 +79,7 @@ serve(async (req) => {
     if (!booking.customer_email) return json({ skipped: 'no customer email' });
 
     // A request that ended without being accepted: the provider declined it,
-    // or it expired unanswered. queue_booking_confirmation_email asks for this
+    // or it expired unanswered, which is treated as declined. queue_booking_confirmation_email asks for this
     // as the request is cancelled; declined_at (stamped in the same write, by
     // a trigger that runs after the queueing one) is what tells it apart from
     // the client withdrawing it, which gets nothing. Sent once, by the
@@ -92,13 +92,12 @@ serve(async (req) => {
         status === 'authorised' || status === 'not_charged' ? 'released'
           : ['fully_paid', 'deposit_paid', 'refund_pending', 'refunded', 'partially_refunded'].includes(status)
             ? 'refunded' : 'none';
-      const reason = booking.cancelled_by === 'provider' ? 'declined' : 'expired';
+      // No answer in time counts as declined, the same as the app's label.
       const { subject, html } = requestNotAcceptedEmail({
         providerName: booking.provider_name_snapshot?.trim() || 'your provider',
         service: booking.service_name_snapshot || 'your appointment',
         date: formatLongDate(booking.booking_date),
         time: formatTime12(booking.booking_time),
-        reason,
         money: { kind, amount },
       });
       const sent = await fetch('https://api.resend.com/emails', {
@@ -114,7 +113,7 @@ serve(async (req) => {
         console.error(`[booking-confirmation] request-ended ${booking.id} failed: ${await sent.text()}`);
         return json({ error: 'Send failed.' }, 502);
       }
-      return json({ sent: true, kind: `request ${reason}` });
+      return json({ sent: true, kind: 'request declined' });
     }
 
     // A mobile provider travels to the client, so the address that belongs in

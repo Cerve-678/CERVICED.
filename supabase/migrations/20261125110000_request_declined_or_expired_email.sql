@@ -10,9 +10,10 @@
 -- from 'pending' to 'cancelled' by anyone but the client (the same test
 -- stamp_booking_cancellation() uses for declined_at; that trigger runs after
 -- this one, so the column isn't set yet here). The function re-checks
--- declined_at once the write has landed, says "declined" when the provider
--- cancelled it and "expired" when the system did, and says what became of
--- the money (hold released, or a refund for an older charged request).
+-- declined_at once the write has landed and sends "Request declined", with
+-- what became of the money (hold released, or a refund for an older charged
+-- request). No answer in time is treated as declined (user decision
+-- 2026-11-25), the same as the app's "Declined" label.
 --
 -- Sent once, from here. The confirmation stamps and their retry job are left
 -- alone. A client withdrawing their own request gets nothing, as before.
