@@ -27,6 +27,8 @@ import {
 import type { CirclePerson } from '../features/social/types';
 import TabIcon from './TabIcon';
 import { readableSheet } from '../constants/readableWidth';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const FACE = 20;
 const OVERLAP = 7;
@@ -145,11 +147,13 @@ function CircleSheet({
   providerName?: string | undefined;
   onClose: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
+      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel={tr('common.close')} />
       <View
         style={[
           styles.sheet,
@@ -158,7 +162,7 @@ function CircleSheet({
       >
         <View style={[styles.grabber, { backgroundColor: P.border }]} />
         <Text style={[styles.sheetTitle, { color: P.text }]}>
-          {people.some((p) => !p.isMe) ? 'People you follow' : 'Your recommendation'}
+          {people.some((p) => !p.isMe) ? tr('shared.newc.peopleYouFollow') : tr('shared.newc.yourRecommendation')}
         </Text>
         {providerName ? (
           <Text style={[styles.sheetSub, { color: P.sub }]} numberOfLines={1}>
@@ -176,7 +180,7 @@ function CircleSheet({
               heartFill="#FF2D78"
             />
             <Text style={[styles.sheetName, { color: P.text }]} numberOfLines={1}>
-              {person.isMe ? 'You' : firstName(person.name)}
+              {person.isMe ? tr('profile.youFallback') : firstName(person.name)}
             </Text>
             <Text style={[styles.sheetLine, { color: person.recommends ? P.accentText : P.sub }]}>
               {circleLine(person)}

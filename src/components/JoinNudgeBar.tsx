@@ -2,6 +2,8 @@ import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 // The floating "Want them on CERVICED? [Nudge] ✕" bar a client sees on a page
 // for a business they can't book here: a link-only provider's profile, and a
@@ -39,7 +41,7 @@ export const JoinNudgeBar = memo<Props>(({
   <View style={[styles.bar, { bottom }]}>
     <Ionicons name={sent ? 'checkmark-circle' : 'megaphone-outline'} size={18} color="#FFFFFF" />
     <Text style={styles.text} numberOfLines={1}>
-      {sent ? sentLabel : 'Want them on CERVICED?'}
+      {sent ? sentLabel : tr('shared.newc.wantThemOnCerviced')}
     </Text>
     {!sent && (
       <TouchableOpacity
@@ -48,9 +50,9 @@ export const JoinNudgeBar = memo<Props>(({
         disabled={pending}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel={`Nudge ${businessName} to take bookings on CERVICED`}
+        accessibilityLabel={tr('shared.newc2.nudgeTake', { name: businessName })}
       >
-        <Text style={styles.buttonText}>{pending ? 'Sending…' : 'Nudge'}</Text>
+        <Text style={styles.buttonText}>{pending ? tr('shared.newc.sending') : tr('shared.newc.nudge')}</Text>
       </TouchableOpacity>
     )}
     <TouchableOpacity
@@ -58,7 +60,7 @@ export const JoinNudgeBar = memo<Props>(({
       onPress={() => { Haptics.selectionAsync().catch(() => {}); onDismiss(); }}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel="Dismiss"
+      accessibilityLabel={tr('shared.notifications.dismiss')}
     >
       <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
     </TouchableOpacity>
@@ -86,6 +88,8 @@ export const JoinNudgeSideToast = memo<SideProps>(({
   sentLabel = 'Nudge sent',
   onNudge,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [width, setWidth] = useState(0);
   // null until it first slides in, then open or tucked.
   const [open, setOpen] = useState<boolean | null>(null);
@@ -126,7 +130,7 @@ export const JoinNudgeSideToast = memo<SideProps>(({
       >
         <Ionicons name={sent ? 'checkmark-circle' : 'megaphone-outline'} size={18} color="#FFFFFF" />
         <Text style={styles.sideText} numberOfLines={2}>
-          {sent ? sentLabel : 'Want them on CERVICED?'}
+          {sent ? sentLabel : tr('shared.newc.wantThemOnCerviced')}
         </Text>
         {!sent && (
           <TouchableOpacity
@@ -135,9 +139,9 @@ export const JoinNudgeSideToast = memo<SideProps>(({
             disabled={pending}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={`Nudge ${businessName} to take bookings on CERVICED`}
+            accessibilityLabel={tr('shared.newc2.nudgeTake', { name: businessName })}
           >
-            <Text style={styles.buttonText}>{pending ? 'Sending…' : 'Nudge'}</Text>
+            <Text style={styles.buttonText}>{pending ? tr('shared.newc.sending') : tr('shared.newc.nudge')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -147,7 +151,7 @@ export const JoinNudgeSideToast = memo<SideProps>(({
           onPress={expand}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={sent ? sentLabel : `Nudge ${businessName} to join CERVICED`}
+          accessibilityLabel={sent ? sentLabel : tr('shared.newc2.nudgeJoin', { name: businessName })}
         />
       )}
     </Animated.View>

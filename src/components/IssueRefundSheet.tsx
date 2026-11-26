@@ -17,6 +17,8 @@ import { logger } from '../utils/logger';
 import { toUserMessage } from '../utils/userFacingError';
 import { isDarkColor } from '../constants/providerThemes';
 import { readableSheet } from '../constants/readableWidth';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 // ── Issue Refund sheet ──────────────────────────────────────────────────────
 // The provider's one refund surface, opened from a booking's detail screen and
@@ -84,6 +86,8 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
   onRefunded: (result: RefundIssued) => void;
   onCancelAppointment?: (() => Promise<void>) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const requestId = useRef<string>(newRequestId());
@@ -237,7 +241,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
               {clientRequest && requestSteps && (
                 <View style={[styles.card, { backgroundColor: P.card, gap: 8, marginBottom: 12 }]}>
                   <Text style={{ color: P.text, fontWeight: '700', fontSize: 14 }}>
-                    {first ? `${first}'s refund request` : 'Refund request'}
+                    {first ? `${first}'s refund request` : tr('shared.newc.refundRequest')}
                   </Text>
                   {!!clientRequest.message && (
                     <Text style={{ color: P.sub, fontSize: 13, lineHeight: 18 }}>“{clientRequest.message}”</Text>
@@ -250,7 +254,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 <View style={[styles.card, { backgroundColor: P.card }]}>
                   <Text style={{ color: P.text, fontSize: 14 }}>Couldn't load this booking's payment.</Text>
                   <TouchableOpacity onPress={() => void loadState()} activeOpacity={0.7} style={{ marginTop: 8 }}>
-                    <Text style={{ color: P.accent, fontWeight: '600' }}>Try again</Text>
+                    <Text style={{ color: P.accent, fontWeight: '600' }}>{tr('common.tryAgain')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : !state ? (
@@ -444,7 +448,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                             </View>
                             <TextInput
                               style={[styles.noteInput, { color: P.text, backgroundColor: P.card, borderColor: P.border }]}
-                              placeholder={reason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
+                              placeholder={reason === 'Other' ? tr('shared.newc.addANoteRequired') : tr('shared.newc.addANoteOptional')}
                               placeholderTextColor={P.text + '44'}
                               value={note}
                               onChangeText={setNote}
@@ -480,7 +484,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
             <View style={[styles.foot, { borderTopColor: P.border }]}>
               {summaryOnly ? (
                 <TouchableOpacity style={[styles.cta, { backgroundColor: P.accent }]} activeOpacity={0.8} onPress={onClose}>
-                  <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>Done</Text>
+                  <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{tr('common.done')}</Text>
                 </TouchableOpacity>
               ) : (
                 <>
@@ -496,10 +500,10 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                   >
                     {busy
                       ? <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
-                      : <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{state && state.heldPence > 0 && !reason ? 'Choose a reason' : confirming ? 'Yes, issue refund' : ctaLabel}</Text>}
+                      : <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{state && state.heldPence > 0 && !reason ? tr('shared.newc.chooseAReason') : confirming ? 'Yes, issue refund' : ctaLabel}</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity style={{ alignItems: 'center', padding: 8 }} disabled={busy} onPress={confirming ? () => setConfirming(false) : onClose} activeOpacity={0.7}>
-                    <Text style={{ color: P.sub, fontSize: 14 }}>{confirming ? 'Go back' : 'Cancel'}</Text>
+                    <Text style={{ color: P.sub, fontSize: 14 }}>{confirming ? tr('shared.newc2.goBack') : tr('common.cancel')}</Text>
                   </TouchableOpacity>
                 </>
               )}

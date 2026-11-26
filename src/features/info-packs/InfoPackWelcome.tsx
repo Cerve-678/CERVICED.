@@ -3,6 +3,8 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HowItWorksSheet, type StoryAt, type StoryStep } from '../../components/HowItWorksSheet';
 import { BAKBAK, type InfoPackPalette } from './infoPackPalette';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // "How Info Packs work", shown once per account (tour key
 // provider_info_packs) and reopened from the screen's ⓘ.
@@ -13,10 +15,10 @@ import { BAKBAK, type InfoPackPalette } from './infoPackPalette';
 // notification lands and the pack opens with their booking.
 
 const STEPS: readonly StoryStep[] = [
-  { start: 0, end: 3.4, caption: 'Write your aftercare, prep or what-to-bring notes once.' },
-  { start: 3.4, end: 6.4, caption: 'Pick the services it goes with.' },
-  { start: 6.4, end: 8.6, caption: 'Send it to clients already booked, or keep it for new bookings.' },
-  { start: 8.6, end: 14, caption: 'They get a notification and read it with their booking. New bookings get it automatically.' },
+  { start: 0, end: 3.4, get caption() { return tr('providerBusiness.newp.writeYourAftercarePrepOrWhat'); } },
+  { start: 3.4, end: 6.4, get caption() { return tr('providerBusiness.newp.pickTheServicesItGoesWith'); } },
+  { start: 6.4, end: 8.6, get caption() { return tr('providerBusiness.newp.sendItToClientsAlreadyBooked'); } },
+  { start: 8.6, end: 14, get caption() { return tr('providerBusiness.newp.theyGetANotificationAndRead'); } },
 ];
 
 export function InfoPackWelcome({
@@ -30,6 +32,8 @@ export function InfoPackWelcome({
   onStart: () => void;
   onClose: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const chips = serviceChips.length > 0 ? serviceChips.slice(0, 3) : ['Your service'];
   const lines = exampleLines.slice(0, 3);
 
@@ -66,7 +70,7 @@ export function InfoPackWelcome({
             ))}
             <Animated.View style={[st.sentPill, { backgroundColor: P.accent }, sentPill]}>
               <Ionicons name="paper-plane" size={11} color={P.onAccent} />
-              <Text style={[st.sentPillText, { color: P.onAccent }]}>Sent</Text>
+              <Text style={[st.sentPillText, { color: P.onAccent }]}>{tr('providerBusiness.newp.sent')}</Text>
             </Animated.View>
           </View>
           <Animated.View style={[st.chips, chipsIn]}>
@@ -85,7 +89,7 @@ export function InfoPackWelcome({
         <Animated.View style={[st.phone, { borderColor: P.text, backgroundColor: P.bg }, phoneIn]}>
           <View style={[st.phoneBooking, { backgroundColor: P.card }]}>
             <Text style={[st.phoneBookingTitle, { color: P.text }]} numberOfLines={1}>{chips[0]}</Text>
-            <Text style={[st.phoneBookingMeta, { color: P.sub }]}>Your booking</Text>
+            <Text style={[st.phoneBookingMeta, { color: P.sub }]}>{tr('providerBusiness.newp.yourBooking')}</Text>
           </View>
           <Text style={[st.phoneLabel, { color: P.sub }]}>INFO PACKS</Text>
           <Animated.View style={[st.phoneRow, { backgroundColor: P.card }, packRow]}>
@@ -95,8 +99,8 @@ export function InfoPackWelcome({
             <Animated.View style={[st.tapRing, { borderColor: P.accent }, tapRing]} />
           </Animated.View>
           <Animated.View style={[st.notif, { backgroundColor: P.card, shadowColor: P.shadow }, notif]}>
-            <Text style={[st.notifTitle, { color: P.text }]}>Info From Your Provider</Text>
-            <Text style={[st.notifBody, { color: P.sub }]} numberOfLines={1}>Sent you “{exampleTitle}”</Text>
+            <Text style={[st.notifTitle, { color: P.text }]}>{tr('providerBusiness.newp.infoFromYourProvider')}</Text>
+            <Text style={[st.notifBody, { color: P.sub }]} numberOfLines={1}>{tr('providerBusiness.newp2.sentYou', { title: exampleTitle })}</Text>
           </Animated.View>
           <Animated.View style={[st.phoneSheet, { backgroundColor: P.card }, packOpen]}>
             <Text style={[st.phoneSheetTitle, { color: P.text }]} numberOfLines={1}>{exampleTitle}</Text>
@@ -113,10 +117,10 @@ export function InfoPackWelcome({
     <HowItWorksSheet
       visible={visible}
       P={P}
-      heading="Write it once. We send it."
+      heading={tr('providerBusiness.newp.writeItOnceWeSendIt')}
       headingFont={BAKBAK}
       steps={STEPS}
-      primaryLabel="Start from an example"
+      primaryLabel={tr('providerBusiness.newp.startFromAnExample')}
       onPrimary={onStart}
       onClose={onClose}
       renderStage={renderStage}

@@ -17,6 +17,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { formatLongDateNoYear, MONTH_NAMES_FULL, toLocalDate } from '../utils/dateUtils';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const LIGHT = {
   card: '#FFFFFF',
@@ -157,6 +159,8 @@ export default function FullyBookedCertificate({
   onDone,
   onManageSchedule,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const P = isDarkMode ? DARK : LIGHT;
   const { width, height } = useWindowDimensions();
   // null until the setting is read, so confetti never flashes up for someone
@@ -227,13 +231,13 @@ export default function FullyBookedCertificate({
               <Text style={[st.brand, { color: P.accent }]}>CERVICED</Text>
               <Text style={[st.eyebrow, { color: P.label }]}>CERTIFICATE OF</Text>
               <Text style={[st.title, { color: isDarkMode ? P.text : P.accent }]} accessibilityRole="header">
-                Fully Booked
+                {tr('achievements.name.fullyBookedFirst')}
               </Text>
               <View style={[st.rule, { backgroundColor: P.accent }]} />
-              <Text style={[st.congrats, { color: P.text }]}>Congratulations</Text>
+              <Text style={[st.congrats, { color: P.text }]}>{tr('shared.newc.congratulations')}</Text>
               <Text style={[st.name, { color: P.text }]}>{providerName}</Text>
               <Text style={[st.line, { color: P.sub }]}>{fullyBookedLine(throughDate)}</Text>
-              <Svg width={84} height={84} viewBox="0 0 84 84" style={st.seal} accessibilityLabel="CERVICED seal">
+              <Svg width={84} height={84} viewBox="0 0 84 84" style={st.seal} accessibilityLabel={tr('shared.newc.cervicedSeal')}>
                 <Circle cx={42} cy={42} r={38} fill="none" stroke={P.accent} strokeWidth={5} strokeDasharray="1 7.95" strokeLinecap="round" />
                 <Circle cx={42} cy={42} r={31} fill={P.accent} />
                 <Circle cx={42} cy={42} r={26} fill="none" stroke={P.secondaryBg} strokeWidth={1} />
@@ -248,7 +252,7 @@ export default function FullyBookedCertificate({
             activeOpacity={0.8}
             accessibilityRole="button"
           >
-            <Text style={[st.primaryText, { color: P.onAccent }]}>Done</Text>
+            <Text style={[st.primaryText, { color: P.onAccent }]}>{tr('common.done')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[st.secondary, { backgroundColor: P.card }]}
@@ -256,7 +260,7 @@ export default function FullyBookedCertificate({
             activeOpacity={0.8}
             accessibilityRole="button"
           >
-            <Text style={[st.secondaryText, { color: isDarkMode ? P.text : P.accent }]}>Manage my schedule</Text>
+            <Text style={[st.secondaryText, { color: isDarkMode ? P.text : P.accent }]}>{tr('shared.newc.manageMySchedule')}</Text>
           </TouchableOpacity>
         </Animated.View>
 

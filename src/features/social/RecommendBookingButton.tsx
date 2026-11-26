@@ -13,6 +13,8 @@ import { logger } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { hapticSelection, hapticSuccess } from '../maintenance/ui';
 import type { ProviderSharing } from './types';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   userId: string | null;
@@ -26,6 +28,8 @@ interface Props {
 }
 
 export function RecommendBookingButton({ userId, providerId, providerName, refreshKey, textColour, borderColour, onError }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [sharing, setSharing] = useState<ProviderSharing | null>(null);
   const [saving, setSaving] = useState(false);
   const seq = useRef(0);
@@ -71,13 +75,13 @@ export function RecommendBookingButton({ userId, providerId, providerName, refre
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityState={{ selected: on }}
-        accessibilityLabel={on ? `Recommended ${providerName}. Tap to undo` : `Recommend ${providerName}`}
+        accessibilityLabel={on ? tr('shared.newc2.recommendedUndo', { name: providerName }) : tr('shared.newc2.recommendName', { name: providerName })}
       >
         {saving ? <ActivityIndicator size="small" color={textColour} /> : (
           <>
             <Ionicons name={on ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={textColour} />
             <Text style={[styles.text, { color: textColour }]} numberOfLines={1}>
-              {on ? 'Recommended' : 'Recommend'}
+              {on ? tr('shared.newc.recommended') : tr('shared.newc.recommend')}
             </Text>
           </>
         )}

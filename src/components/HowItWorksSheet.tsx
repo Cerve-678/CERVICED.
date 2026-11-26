@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { readableSheet } from '../constants/readableWidth';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 // The animated "how it works" sheet behind the Info Packs and Forms welcomes.
 // Each welcome supplies only its stage (what is drawn) and its story steps; the
@@ -109,6 +111,8 @@ export function HowItWorksSheet({
   onClose: () => void;
   renderStage: (at: StoryAt) => React.ReactNode;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const total = steps[steps.length - 1]!.end;
   const t = useRef(new Animated.Value(0)).current;
@@ -180,7 +184,7 @@ export function HowItWorksSheet({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <View style={st.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel="Close" />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel={tr('common.close')} />
         <Animated.View
           style={[st.sheet, { backgroundColor: P.card, paddingBottom: Math.max(24, insets.bottom + 12), transform: [{ translateY: sheetY }] }]}
           accessibilityViewIsModal
@@ -197,7 +201,7 @@ export function HowItWorksSheet({
           <View style={st.controls}>
             <View style={st.dots}>
               {steps.map((s, i) => (
-                <TouchableOpacity key={s.start} onPress={() => jumpTo(i)} hitSlop={8} accessibilityLabel={`Step ${i + 1}`}>
+                <TouchableOpacity key={s.start} onPress={() => jumpTo(i)} hitSlop={8} accessibilityLabel={tr('maintenance.howto.frameN', { n: i + 1 })}>
                   <View style={[st.dot, { backgroundColor: i === step ? P.accent : P.border, width: i === step ? 18 : 6 }]} />
                 </TouchableOpacity>
               ))}
@@ -207,7 +211,7 @@ export function HowItWorksSheet({
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); if (playing) pause(); else play(ended ? 0 : valueRef.current); }}
                 style={[st.playBtn, { backgroundColor: P.iconBg }]}
                 activeOpacity={0.75}
-                accessibilityLabel={playing ? 'Pause' : 'Play'}
+                accessibilityLabel={playing ? tr('maintenance.howto.pause') : tr('maintenance.howto.play')}
               >
                 <Ionicons name={playing ? 'pause' : ended ? 'refresh' : 'play'} size={14} color={P.text} />
               </TouchableOpacity>
@@ -218,7 +222,7 @@ export function HowItWorksSheet({
             <Text style={[st.primaryText, { color: P.onAccent }]}>{primaryLabel}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={st.secondary} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} activeOpacity={0.7}>
-            <Text style={[st.secondaryText, { color: P.accent }]}>Not now</Text>
+            <Text style={[st.secondaryText, { color: P.accent }]}>{tr('common.notNow')}</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>

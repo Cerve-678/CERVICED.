@@ -397,6 +397,228 @@ export const providerBusiness = {
   'providerBusiness.ui2.clearFilters': 'Clear filters',
   'providerBusiness.ui2.bookedYouOrTurnedOnYour': 'Booked you, or turned on your bell',
   'providerBusiness.ui2.peopleWhoTurnedOnYourBell': 'People who turned on your bell',
+  'providerBusiness.newp.addAQuestion': '+ Add a question',
+  'providerBusiness.newp.addAnotherAddOn': '+ Add another add-on',
+  'providerBusiness.newp.addToThisService': '+ Add to this service',
+  'providerBusiness.newp.aClientAskingForMoneyBack':
+    'A client asking for money back or disputing a fee',
+  'providerBusiness.newp.aClientAskingToMoveTheir': 'A client asking to move their appointment',
+  'providerBusiness.newp.aDailyCountOfPeopleWho': 'A daily count of people who saved you',
+  'providerBusiness.newp.aLineOrTwoOnWhat':
+    'A line or two on what the client gets. It shows under the name.',
+  'providerBusiness.newp.aMorningRecapOfTheDay': 'A morning recap of the day ahead',
+  'providerBusiness.newp.achievements': 'Achievements',
+  'providerBusiness.newp.addACategoryFirst': 'Add a category first.',
+  'providerBusiness.newp.addAServiceFirst': 'Add a service first.',
+  'providerBusiness.newp.addAddOn': 'Add add-on',
+  'providerBusiness.newp.addOnChangesGoLiveWhen':
+    'Add-on changes go live when you tap Save & Publish. You can also tick add-ons, or make a new one, while you edit a service.',
+  'providerBusiness.newp.addOnName': 'Add-on name',
+  'providerBusiness.newp.afterEachVisitWeRemindThem':
+    "After each visit we remind them when they're due, with a Rebook button straight back to you.",
+  'providerBusiness.newp.aftercare': 'Aftercare',
+  'providerBusiness.newp.allOfBranding': 'All of Branding',
+  'providerBusiness.newp.anExtraClientsCanAddTo':
+    'An extra clients can add to a service when they book.',
+  'providerBusiness.newp.announcements': 'Announcements',
+  'providerBusiness.newp.appointmentReminders': 'Appointment Reminders',
+  'providerBusiness.newp.arriving': 'Arriving',
+  'providerBusiness.newp.availableThisWeek': 'Available this week',
+  'providerBusiness.newp.before': 'Before',
+  'providerBusiness.newp.bookingRequests': 'Booking Requests',
+  'providerBusiness.newp.bookingsWaitingForYouToAccept': 'Bookings waiting for you to accept',
+  'providerBusiness.newp.cancellationsRefill': 'Cancellations refill',
+  'providerBusiness.newp.cancelledBookingsAndRescheduleOutcomes':
+    'Cancelled bookings and reschedule outcomes',
+  'providerBusiness.newp.categories': 'Categories',
+  'providerBusiness.newp.changeItHereAndItChanges':
+    'Change it here and it changes on every service. Bookings already made keep the price the client paid.',
+  'providerBusiness.newp.changesCancellations': 'Changes & Cancellations',
+  'providerBusiness.newp.chooseADay': 'Choose a day',
+  'providerBusiness.newp.chooseADifferentPhoto': 'Choose a different photo',
+  'providerBusiness.newp.chooseReleaseDayTime': 'Choose release day & time',
+  'providerBusiness.newp.chooseWhereItGoes': 'Choose where it goes',
+  'providerBusiness.newp.chooseWhichServicesClientsCanAdd':
+    'Choose which services clients can add it to.',
+  'providerBusiness.newp.clientForms': 'Client Forms',
+  'providerBusiness.newp.clientsAddItWhenTheyBook': 'Clients add it when they book',
+  'providerBusiness.newp.clientsCanAddItWhenThey':
+    'Clients can add it when they book. Switch off to pause it everywhere without deleting it.',
+  'providerBusiness.newp.clientsGetAReminderTheDay':
+    'Clients get a reminder the day before their appointment.',
+  'providerBusiness.newp.clientsRemindedToRebookYou': 'Clients reminded to rebook you',
+  'providerBusiness.newp.clientsSeeThisNameAndPrice':
+    'Clients see this name and price when they book. The price is the same on every service it goes on.',
+  'providerBusiness.newp.clientsSee': 'Clients see',
+  'providerBusiness.newp.closeReleaseDayPicker': 'Close release day picker',
+  'providerBusiness.newp.couldnTLoadYourBookings': "Couldn't load your bookings.",
+  'providerBusiness.newp.deleteAddOn': 'Delete add-on',
+  'providerBusiness.newp.descriptionOptional': 'Description (optional)',
+  'providerBusiness.newp.earningsOverTimeYourTopServices':
+    'Earnings over time, your top services, completions and no-shows, and ratings by service.',
+  'providerBusiness.newp.everySearchFilter': 'Every Search filter',
+  'providerBusiness.newp.everyColourSetFontAndHero':
+    'Every colour set, font and hero finish, or build your own colours.',
+  'providerBusiness.newp.everyService': 'Every service',
+  'providerBusiness.newp.everyServiceWholeCategoriesOrOnly':
+    'Every service, whole categories, or only the services you pick. A whole category also covers services you add to it later.',
+  'providerBusiness.newp.extraTime': 'Extra time',
+  'providerBusiness.newp.extrasClientsCanAddToA':
+    'Extras clients can add to a service when they book. One price everywhere.',
+  'providerBusiness.newp.followersHearWhenYouReFree': "Followers hear when you're free",
+  'providerBusiness.newp.fullAnalytics': 'Full analytics',
+  'providerBusiness.newp.fullDay': 'Full day',
+  'providerBusiness.newp.hideThisTip': 'Hide this tip',
+  'providerBusiness.newp.howAddOnsWork': 'How add-ons work',
+  'providerBusiness.newp.infoFromYourProvider': 'Info From Your Provider',
+  'providerBusiness.newp.itComesOffEveryServiceBookings':
+    'It comes off every service. Bookings already made keep it, at the price the client paid.',
+  'providerBusiness.newp.justThisService': 'Just this service',
+  'providerBusiness.newp.keepIt': 'Keep it',
+  'providerBusiness.newp.knowThemBeforeTheyArrive': 'Know them before they arrive',
+  'providerBusiness.newp.list': 'List',
+  'providerBusiness.newp.lookAfterEveryClient': 'Look after every client',
+  'providerBusiness.newp.makeItOnce': 'Make it once',
+  'providerBusiness.newp.makeYourFirstAddOn': 'Make your first add-on',
+  'providerBusiness.newp.makesTheAppointmentLongerWhenA':
+    "Makes the appointment longer when a client picks it. They'll only see times when you're free for the whole thing.",
+  'providerBusiness.newp.makingItLast': 'Making it last',
+  'providerBusiness.newp.matching': 'Matching',
+  'providerBusiness.newp.messageAllYourClientsOrJust':
+    'Message all your clients, or just repeat, new or lapsed ones, straight away or scheduled for later.',
+  'providerBusiness.newp.messages': 'Messages',
+  'providerBusiness.newp.moreClientsFindYou': 'More clients find you',
+  'providerBusiness.newp.nameItEGParking': 'Name it, e.g. Parking',
+  'providerBusiness.newp.name': 'Name',
+  'providerBusiness.newp.newBookings': 'New Bookings',
+  'providerBusiness.newp.newMessagesAndUnreadReminders': 'New messages and unread reminders',
+  'providerBusiness.newp.newSavedWithThisService': 'New · saved with this service',
+  'providerBusiness.newp.nextAppointment': 'Next appointment',
+  'providerBusiness.newp.noExtraTime': 'No extra time',
+  'providerBusiness.newp.noOtherUpcomingBookings': 'No other upcoming bookings.',
+  'providerBusiness.newp.noReleaseDayUseARolling': 'No release day, use a rolling window',
+  'providerBusiness.newp.noUpcomingBookingsForTheseServices':
+    'No upcoming bookings for these services yet.',
+  'providerBusiness.newp.offerItToClients': 'Offer it to clients',
+  'providerBusiness.newp.onePriceEverywhere': 'One price everywhere',
+  'providerBusiness.newp.otherUpcoming': 'Other upcoming',
+  'providerBusiness.newp.pauseInsteadOfDeleting': 'Pause instead of deleting',
+  'providerBusiness.newp.paused': 'Paused',
+  'providerBusiness.newp.pausedHiddenOnEveryServiceUntil':
+    'Paused: hidden on every service until you switch it back on.',
+  'providerBusiness.newp.pickADayAndATime': 'Pick a day and a time',
+  'providerBusiness.newp.pickServices': 'Pick services',
+  'providerBusiness.newp.pickTheServicesItGoesWith': 'Pick the services it goes with.',
+  'providerBusiness.newp.pinchToZoomDragToMove': 'Pinch to zoom, drag to move.',
+  'providerBusiness.newp.prepAndAftercareNotesForA':
+    "Prep and aftercare notes for a service, waiting on the client's booking.",
+  'providerBusiness.newp.priceInPounds': 'Price in pounds',
+  'providerBusiness.newp.price': 'Price',
+  'providerBusiness.newp.priceAvailabilityRatingAndHairType':
+    'Price, availability, rating and hair type, not just category, speciality and area.',
+  'providerBusiness.newp.pricesExtraTimeAndWhereElse':
+    'Prices, extra time and where else an add-on goes are changed under Your add-ons on the services page.',
+  'providerBusiness.newp.promotions': 'Promotions',
+  'providerBusiness.newp.publishToGoLive': 'Publish to go live',
+  'providerBusiness.newp.questions': 'Questions',
+  'providerBusiness.newp.refundRequestsDisputes': 'Refund Requests & Disputes',
+  'providerBusiness.newp.releaseDay': 'Release day',
+  'providerBusiness.newp.releaseTime': 'Release time',
+  'providerBusiness.newp.reminders': 'Reminders',
+  'providerBusiness.newp.rescheduleRequests': 'Reschedule Requests',
+  'providerBusiness.newp.reviews': 'Reviews',
+  'providerBusiness.newp.runAFlashSaleALoyalty':
+    'Run a flash sale, a loyalty reward or a new-client offer, and tell your clients and followers about it.',
+  'providerBusiness.newp.saveAddOn': 'Save add-on',
+  'providerBusiness.newp.saves': 'Saves',
+  'providerBusiness.newp.sealsForMilestonesLikeYourFirst':
+    'Seals for milestones like your first booking, five-star reviews and fully booked months.',
+  'providerBusiness.newp.sendInfoPack': 'Send Info Pack',
+  'providerBusiness.newp.sendItToClientsAlreadyBooked':
+    'Send it to clients already booked, or keep it for new bookings.',
+  'providerBusiness.newp.sent': 'Sent',
+  'providerBusiness.newp.showUpOnClientsHomeWhen': "Show up on clients' Home when you have space.",
+  'providerBusiness.newp.showWholeLogo': 'Show whole logo',
+  'providerBusiness.newp.startFromAnExample': 'Start from an example',
+  'providerBusiness.newp.takesItOffEveryServiceBookings':
+    'Takes it off every service. Bookings already made keep it.',
+  'providerBusiness.newp.tapAddOnAtTheTop':
+    'Tap + Add-on at the top of this page. Give it a name, a price, and any extra time it needs.',
+  'providerBusiness.newp.theAddOn': 'The add-on',
+  'providerBusiness.newp.theAppointmentGetsThisMuchLonger':
+    'The appointment gets this much longer when a client picks it.',
+  'providerBusiness.newp.theDayBeforeAndFormsNot': 'The day before, and forms not sent yet',
+  'providerBusiness.newp.thePriceIsAddedToTheir':
+    "The price is added to their total and the appointment gets longer by the extra time. They only see start times when you're free for the whole thing.",
+  'providerBusiness.newp.theQuestion': 'The question',
+  'providerBusiness.newp.theirHairSkinAndPreferencesFor':
+    'Their hair, skin and preferences for that treatment, with allergies and medical notes flagged.',
+  'providerBusiness.newp.theyGetANotificationAndRead':
+    'They get a notification and read it with their booking. New bookings get it automatically.',
+  'providerBusiness.newp.tickAll': 'Tick all',
+  'providerBusiness.newp.todaySSchedule': 'Today’s Schedule',
+  'providerBusiness.newp.turnYourWaitlistOnAndA':
+    'Turn your waitlist on and a cancelled slot goes to it first.',
+  'providerBusiness.newp.untickAll': 'Untick all',
+  'providerBusiness.newp.waitlist': 'Waitlist',
+  'providerBusiness.newp.week': 'Week',
+  'providerBusiness.newp.whatClientsShouldKnow': 'What clients should know',
+  'providerBusiness.newp.whatToBring': 'What to bring',
+  'providerBusiness.newp.whatToExpect': 'What to expect',
+  'providerBusiness.newp.whenAClientBooksWithYou': 'When a client books with you',
+  'providerBusiness.newp.whenAClientFillsInA': 'When a client fills in a form',
+  'providerBusiness.newp.whenAClientLeavesAReview': 'When a client leaves a review',
+  'providerBusiness.newp.whenEverySlotYouVeOpened':
+    'When every slot you’ve opened is booked, with your certificate',
+  'providerBusiness.newp.whenSomeoneJoinsYourWaitlist': 'When someone joins your waitlist',
+  'providerBusiness.newp.whenYouVeBeenFullyBooked':
+    "When you've been fully booked and space opens up, everyone who rang your bell gets told.",
+  'providerBusiness.newp.whereItGoes': 'Where it goes',
+  'providerBusiness.newp.writeItOnceWeSendIt': 'Write it once. We send it.',
+  'providerBusiness.newp.writeYourAftercarePrepOrWhat':
+    'Write your aftercare, prep or what-to-bring notes once.',
+  'providerBusiness.newp.youAlreadyHaveThisOne': 'You already have this one',
+  'providerBusiness.newp.yourSections': 'Your Sections',
+  'providerBusiness.newp.yourAddOnsDidnTLoad':
+    "Your add-ons didn't load, so they can't be changed right now. Saving keeps them as they are. Close this page and open it again to edit them.",
+  'providerBusiness.newp.yourAddOnsDidnTLoad2':
+    "Your add-ons didn't load, so they can't be changed right now. Saving keeps them as they are.",
+  'providerBusiness.newp.yourAnswer': 'Your answer',
+  'providerBusiness.newp.yourBooking': 'Your booking',
+  'providerBusiness.newp.yourBrandAndYourNumbers': 'Your brand and your numbers',
+  'providerBusiness.newp.yourDiaryFillsItself': 'Your diary fills itself',
+  'providerBusiness.newp.yourOwnSectionsEachShownOn':
+    'Your own sections, each shown on your profile under Additional Information. Add only what you need.',
+  'providerBusiness.newp.eGDoYouDoChildren': "e.g. Do you do children's hair?",
+  'providerBusiness.newp.eGLashRemoval': 'e.g. Lash removal',
+  'providerBusiness.newp.eGSafeRemovalOfYour':
+    'e.g. Safe removal of your old set before the new one',
+  'providerBusiness.newp.eGYesFromAge8': 'e.g. Yes, from age 8 with a parent there.',
+  'providerBusiness.newp2.customNameA11y': 'Custom section {n} name',
+  'providerBusiness.newp2.customSection': 'Custom section {n}',
+  'providerBusiness.newp2.sectionText': '{name} text',
+  'providerBusiness.newp2.writtenBy': 'Shows "Written by" with your name on your profile.',
+  'providerBusiness.newp2.removeQuestion': 'Remove question {n}',
+  'providerBusiness.newp2.questionN': 'Question {n}',
+  'providerBusiness.newp2.answerN': 'Answer {n}',
+  'providerBusiness.newp2.addName': 'Add {name}',
+  'providerBusiness.newp2.dayOfMonth': '{day} of the month',
+  'providerBusiness.newp2.alreadySent': '{name}, already sent',
+  'providerBusiness.newp2.sentYou': 'Sent you “{title}”',
+  'providerBusiness.newp2.deleteQ': 'Delete {name}?',
+  'providerBusiness.newp2.tickAll': 'Tick all {name}',
+  'providerBusiness.newp2.untickAll': 'Untick all {name}',
+  'providerBusiness.newp2.maxAddOns': "You've reached {count} add-ons, the most you can have.",
+  'providerBusiness.newp2.profileLogoA11y': 'Your profile logo. Pinch to zoom, drag to move.',
+  'providerBusiness.newp2.logoOnA11y': 'Your logo on the {where}. Pinch to zoom, drag to move.',
+  'providerBusiness.newp2.duplicate':
+    'You already have "{name}". Tick it above, or give this one a different name.',
+  'providerBusiness.newp2.useOnService': 'Use {name} on this service',
+  'providerBusiness.newp2.use': 'Use',
+  'providerBusiness.newp2.allOf': 'All {name}',
+  'providerBusiness.newp2.extra': '{time} extra',
+  'providerBusiness.newp.switchOffOfferItTo':
+    'Switch off "Offer it to clients" to hide it on every service. Switch it back on whenever you like.',
 } as const;
 
 /** Keys in this area HELD IN ENGLISH in every language (legal, refund,

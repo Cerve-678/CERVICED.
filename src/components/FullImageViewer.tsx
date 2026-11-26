@@ -6,6 +6,8 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReAnimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 interface FullImageViewerProps {
   /** One image (a logo) or several pages (a policy), in reading order. */
@@ -32,6 +34,8 @@ const DOUBLE_TAP_ZOOM = 2.5;
  * document the same way.
  */
 export function FullImageViewer({ uris, visible, onClose, label }: FullImageViewerProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   // Pages currently zoomed. Scrolling stops while any is, so a drag moves
@@ -85,13 +89,13 @@ export function FullImageViewer({ uris, visible, onClose, label }: FullImageView
           {pages.map((uri, index) => (
             <View key={`${resetKey}:${uri}`}>
               {multiple && (
-                <Text style={styles.pageLabel}>Page {index + 1} of {pages.length}</Text>
+                <Text style={styles.pageLabel}>{tr('shared.newc.page')} {index + 1} of {pages.length}</Text>
               )}
               <ZoomablePage
                 uri={uri}
                 width={width}
                 fallbackHeight={height * 0.7}
-                label={multiple ? `${label}, page ${index + 1} of ${pages.length}` : label}
+                label={multiple ? tr('shared.newc2.labelPageOf', { label, n: index + 1, total: pages.length }) : label}
                 onZoomChange={zoomed => onZoomChange(index, zoomed)}
               />
             </View>
@@ -100,7 +104,7 @@ export function FullImageViewer({ uris, visible, onClose, label }: FullImageView
 
         <View pointerEvents="none" style={[styles.hint, { bottom: insets.bottom + 16 }]}>
           <Text style={styles.hintText}>
-            {anyZoomed ? 'Pinch out or double-tap to go back' : 'Pinch or double-tap to zoom'}
+            {anyZoomed ? tr('shared.newc.pinchOutOrDoubleTapTo') : tr('shared.newc.pinchOrDoubleTapToZoom')}
           </Text>
         </View>
 
@@ -110,7 +114,7 @@ export function FullImageViewer({ uris, visible, onClose, label }: FullImageView
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={`Close ${label.toLowerCase()}`}
+          accessibilityLabel={tr('shared.newc2.closeName', { name: label.toLowerCase() })}
         >
           <Ionicons name="close" size={26} color="#FFF" />
         </TouchableOpacity>

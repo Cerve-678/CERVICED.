@@ -7,6 +7,8 @@ import Svg, { ClipPath, Defs, LinearGradient, Path, RadialGradient, Stop } from 
 import { COLLECTION_PALETTES } from '../../constants/collectionColors';
 import type { CollectionColor } from '../../types/collections';
 import { FOLDER_PHOTO_COUNT } from '../../stores/useCollectionsStore';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 /**
  * A pastel "jelly" folder for an Explore collection (design chosen
@@ -142,6 +144,8 @@ export const CollectionFolder = memo(function CollectionFolder({
   onLongPress,
   accessibilityLabel,
 }: CollectionFolderProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const scale = width / DESIGN_W;
   const palette = COLLECTION_PALETTES[color];
   const gid = useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -165,7 +169,7 @@ export const CollectionFolder = memo(function CollectionFolder({
     ]).start();
   };
 
-  const countLabel = count === 0 ? 'Empty' : count === 1 ? '1 look' : `${count} looks`;
+  const countLabel = count === 0 ? tr('shared.newc.empty') : count === 1 ? tr('shared.newc.n1Look') : tr('shared.newc2.nLooks', { count });
 
   // Where the looks are, worked out from the folder's own position so the
   // fan's rotation doesn't skew the measurement. Newest first: that's the

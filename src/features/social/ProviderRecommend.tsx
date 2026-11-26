@@ -46,6 +46,8 @@ import { RecommendAfterRatingBar } from './RecommendAfterRating';
 import { shouldOfferOnProfile, withAnswer, withAsked } from './circleMoments';
 import { readMomentsMemory, updateMomentsMemory } from './momentsMemory';
 import type { ProviderSharing } from './types';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 /** Lets the page settle before the bar slides up. */
 const BAR_DELAY_MS = 1200;
@@ -312,6 +314,8 @@ export interface RecommendBadgeTheme {
 export function RecommendBadge({
   recommended, glowing, busy, providerName, onPress, anchorRef, theme,
 }: RecommendHeartProps & { theme: RecommendBadgeTheme }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const ink = recommended ? theme.onAccent : theme.text;
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -350,8 +354,8 @@ export function RecommendBadge({
         activeOpacity={0.75}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={recommended ? `You recommend ${providerName}` : `Recommend ${providerName}`}
-        accessibilityHint="Opens your recommend options"
+        accessibilityLabel={recommended ? tr('shared.newc2.youRecommend', { name: providerName }) : tr('shared.newc2.recommendName', { name: providerName })}
+        accessibilityHint={tr('shared.newc.opensYourRecommendOptions')}
       >
         {busy ? (
           <ActivityIndicator size="small" color={ink} />
@@ -372,6 +376,8 @@ export function ProviderRecommendLayer({
   onBarYes, onBarClose, onDismissHint, onToggleRecommend, onToggleHidden, bottomOffset,
   theme,
 }: ProviderRecommendLayerProps & { bottomOffset: number; theme: RecommendBadgeTheme }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -427,7 +433,7 @@ export function ProviderRecommendLayer({
         onClose={onBarClose}
         P={P}
         bottomOffset={bottomOffset}
-        subtitle="You've been here"
+        subtitle={tr('shared.newc.youVeBeenHere')}
         colors={theme}
         autoHideMs={15_000}
       />
@@ -466,10 +472,10 @@ export function ProviderRecommendLayer({
             activeOpacity={0.7}
             accessibilityRole="switch"
             accessibilityState={{ checked: recommended, disabled: saving !== null || sharing.hidden }}
-            accessibilityLabel={`Recommend ${providerName}`}
+            accessibilityLabel={tr('shared.newc2.recommendName', { name: providerName })}
           >
             <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={19} color={P.text} />
-            <Text style={[styles.rowText, { color: P.text }]}>{recommended ? 'Recommended' : 'Recommend'}</Text>
+            <Text style={[styles.rowText, { color: P.text }]}>{recommended ? tr('shared.newc.recommended') : tr('shared.newc.recommend')}</Text>
             {saving === 'recommend' ? (
               <ActivityIndicator size="small" color={P.sub} />
             ) : recommended ? (
@@ -484,10 +490,10 @@ export function ProviderRecommendLayer({
             activeOpacity={0.7}
             accessibilityRole="switch"
             accessibilityState={{ checked: sharing.hidden, disabled: saving !== null }}
-            accessibilityLabel={`Don't show me on ${providerName}'s cards`}
+            accessibilityLabel={tr('shared.newc2.dontShowOn', { name: providerName })}
           >
             <Ionicons name="eye-off-outline" size={19} color={P.text} />
-            <Text style={[styles.rowText, { color: P.text }]}>Don't show me on their cards</Text>
+            <Text style={[styles.rowText, { color: P.text }]}>{tr('shared.newc.donTShowMeOnTheir')}</Text>
             {saving === 'hidden' ? (
               <ActivityIndicator size="small" color={P.sub} />
             ) : sharing.hidden ? (

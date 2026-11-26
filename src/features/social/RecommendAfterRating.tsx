@@ -22,6 +22,8 @@ import { FONT_DISPLAY, hapticLight, hapticSuccess } from '../maintenance/ui';
 import { initialsFor } from './presentation';
 import { RECOMMEND_AFTER_RATING_MIN, withAnswer, withAsked } from './circleMoments';
 import { updateMomentsMemory } from './momentsMemory';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Offer { providerId: string; providerName: string }
 
@@ -103,6 +105,8 @@ export function RecommendAfterRatingBar({
   /** Optional auto-close for the provider-profile prompt. */
   autoHideMs?: number;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const fill = colors?.accent ?? P.accent;
   const ink = colors?.onAccent ?? P.onAccent;
   const insets = useSafeAreaInsets();
@@ -147,7 +151,7 @@ export function RecommendAfterRatingBar({
         </View>
       </View>
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: ink }]} numberOfLines={1}>Recommend {shown.providerName}?</Text>
+        <Text style={[styles.title, { color: ink }]} numberOfLines={1}>{tr('shared.newc.recommend')} {shown.providerName}?</Text>
         <Text style={[styles.sub, { color: ink }]} numberOfLines={1}>{subtitle}</Text>
       </View>
       <TouchableOpacity
@@ -156,7 +160,7 @@ export function RecommendAfterRatingBar({
         disabled={busy}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel={`Recommend ${shown.providerName}`}
+        accessibilityLabel={tr('shared.newc2.recommendName', { name: shown.providerName })}
       >
         {busy ? <ActivityIndicator size="small" color={fill} /> : (
           <>
@@ -169,7 +173,7 @@ export function RecommendAfterRatingBar({
         style={styles.close}
         onPress={() => { hapticLight(); onClose(); }}
         accessibilityRole="button"
-        accessibilityLabel="Close recommendation"
+        accessibilityLabel={tr('shared.newc.closeRecommendation')}
         activeOpacity={0.6}
       >
         <Ionicons name="close" size={18} color={ink} />

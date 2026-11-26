@@ -17,31 +17,32 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { withAlpha } from '../../constants/providerThemes';
 import { ADD_ON_FONTS, type AddOnPalette } from './addOnUi';
+import { tr } from '../../i18n';
 
 export const ADD_ON_GUIDE_STEPS: { title: string; body: string }[] = [
   {
-    title: 'Make it once',
-    body: 'Tap + Add-on at the top of this page. Give it a name, a price, and any extra time it needs.',
+    get title() { return tr('providerBusiness.newp.makeItOnce'); },
+    get body() { return tr('providerBusiness.newp.tapAddOnAtTheTop'); },
   },
   {
-    title: 'Choose where it goes',
-    body: 'Every service, whole categories, or only the services you pick. A whole category also covers services you add to it later.',
+    get title() { return tr('providerBusiness.newp.chooseWhereItGoes'); },
+    get body() { return tr('providerBusiness.newp.everyServiceWholeCategoriesOrOnly'); },
   },
   {
-    title: 'Clients add it when they book',
-    body: 'The price is added to their total and the appointment gets longer by the extra time. They only see start times when you\'re free for the whole thing.',
+    get title() { return tr('providerBusiness.newp.clientsAddItWhenTheyBook'); },
+    get body() { return tr('providerBusiness.newp.thePriceIsAddedToTheir'); },
   },
   {
-    title: 'One price everywhere',
-    body: 'Change it here and it changes on every service. Bookings already made keep the price the client paid.',
+    get title() { return tr('providerBusiness.newp.onePriceEverywhere'); },
+    get body() { return tr('providerBusiness.newp.changeItHereAndItChanges'); },
   },
   {
-    title: 'Pause instead of deleting',
-    body: 'Switch off "Offer it to clients" to hide it on every service. Switch it back on whenever you like.',
+    get title() { return tr('providerBusiness.newp.pauseInsteadOfDeleting'); },
+    get body() { return tr('providerBusiness.newp.switchOffOfferItTo'); },
   },
   {
-    title: 'Publish to go live',
-    body: 'Add-on changes go live when you tap Save & Publish. You can also tick add-ons, or make a new one, while you edit a service.',
+    get title() { return tr('providerBusiness.newp.publishToGoLive'); },
+    get body() { return tr('providerBusiness.newp.addOnChangesGoLiveWhen'); },
   },
 ];
 

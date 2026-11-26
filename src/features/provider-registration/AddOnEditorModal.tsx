@@ -45,6 +45,8 @@ import {
   type AddOnPalette,
 } from './addOnUi';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface AddOnEditorResult {
   item: AddOnLibraryItem;
@@ -68,9 +70,9 @@ interface Props<S extends AddOnServiceRef> {
 }
 
 const RULES: { value: ProviderAddOnAppliesTo; label: string }[] = [
-  { value: 'all', label: 'Every service' },
-  { value: 'categories', label: 'Categories' },
-  { value: 'services', label: 'Pick services' },
+  { value: 'all', get label() { return tr('providerBusiness.newp.everyService'); } },
+  { value: 'categories', get label() { return tr('providerBusiness.newp.categories'); } },
+  { value: 'services', get label() { return tr('providerBusiness.newp.pickServices'); } },
 ];
 
 function listNames(names: string[]): string {
@@ -89,6 +91,8 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
   onSave,
   onDelete,
 }: Props<S>) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const categoryNames = useMemo(() => Object.keys(categories), [categories]);
 
@@ -188,11 +192,11 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
     if (!item) return;
     tapWarn();
     Alert.alert(
-      `Delete ${item.name}?`,
-      'It comes off every service. Bookings already made keep it, at the price the client paid.',
+      tr('providerBusiness.newp2.deleteQ', { name: item.name }),
+      tr('providerBusiness.newp.itComesOffEveryServiceBookings'),
       [
-        { text: 'Keep it', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => onDelete(item.key) },
+        { text: tr('providerBusiness.newp.keepIt'), style: 'cancel' },
+        { text: tr('common.delete'), style: 'destructive', onPress: () => onDelete(item.key) },
       ],
     );
   };
@@ -202,7 +206,7 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
   return (
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => { tapLight(); onClose(); }} accessibilityLabel="Close" />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => { tapLight(); onClose(); }} accessibilityLabel={tr('common.close')} />
         <View style={[styles.sheet, { backgroundColor: palette.bg }]}>
           {/* Same frame as InfoReg's service sheet: grabber, a caps eyebrow
               over the live name, a close ✕, ruled sections, a hint under
@@ -220,30 +224,30 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
               activeOpacity={0.7}
               hitSlop={10}
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel={tr('common.close')}
             >
               <Ionicons name="close" size={22} color={palette.accent} />
             </TouchableOpacity>
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.section, { color: palette.text }]}>The add-on</Text>
-            <Text style={[styles.hint, styles.sectionHint, { color: palette.sub }]}>An extra clients can add to a service when they book.</Text>
+            <Text style={[styles.section, { color: palette.text }]}>{tr('providerBusiness.newp.theAddOn')}</Text>
+            <Text style={[styles.hint, styles.sectionHint, { color: palette.sub }]}>{tr('providerBusiness.newp.anExtraClientsCanAddTo')}</Text>
 
             <View style={styles.twoCol}>
               <View style={styles.nameCol}>
-                <Text style={[styles.label, { color: palette.sub }]}>Name</Text>
+                <Text style={[styles.label, { color: palette.sub }]}>{tr('providerBusiness.newp.name')}</Text>
                 <TextInput
                   value={name}
                   onChangeText={setName}
-                  placeholder="e.g. Lash removal"
+                  placeholder={tr('providerBusiness.newp.eGLashRemoval')}
                   placeholderTextColor={palette.sub}
                   maxLength={80}
                   style={[styles.input, field]}
                 />
               </View>
               <View style={styles.priceCol}>
-                <Text style={[styles.label, { color: palette.sub }]}>Price</Text>
+                <Text style={[styles.label, { color: palette.sub }]}>{tr('providerBusiness.newp.price')}</Text>
                 <View style={[styles.priceBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
                   <Text style={[styles.pound, { color: palette.sub }]}>£</Text>
                   <TextInput
@@ -252,27 +256,27 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
                     placeholder="0"
                     placeholderTextColor={palette.sub}
                     keyboardType="decimal-pad"
-                    accessibilityLabel="Price in pounds"
+                    accessibilityLabel={tr('providerBusiness.newp.priceInPounds')}
                     style={[styles.priceInput, { color: palette.text }]}
                   />
                 </View>
               </View>
             </View>
-            <Text style={[styles.hint, styles.fieldHint, { color: palette.sub }]}>Clients see this name and price when they book. The price is the same on every service it goes on.</Text>
+            <Text style={[styles.hint, styles.fieldHint, { color: palette.sub }]}>{tr('providerBusiness.newp.clientsSeeThisNameAndPrice')}</Text>
 
             <View style={styles.group}>
-              <Text style={[styles.label, { color: palette.sub }]}>Extra time</Text>
-              <Text style={[styles.hint, { color: palette.sub }]}>The appointment gets this much longer when a client picks it.</Text>
+              <Text style={[styles.label, { color: palette.sub }]}>{tr('providerBusiness.newp.extraTime')}</Text>
+              <Text style={[styles.hint, { color: palette.sub }]}>{tr('providerBusiness.newp.theAppointmentGetsThisMuchLonger')}</Text>
               <ExtraTimeChips value={extraMinutes} onChange={setExtraMinutes} palette={palette} />
             </View>
 
             <View style={styles.group}>
-              <Text style={[styles.label, { color: palette.sub }]}>Description (optional)</Text>
-              <Text style={[styles.hint, { color: palette.sub }]}>A line or two on what the client gets. It shows under the name.</Text>
+              <Text style={[styles.label, { color: palette.sub }]}>{tr('providerBusiness.newp.descriptionOptional')}</Text>
+              <Text style={[styles.hint, { color: palette.sub }]}>{tr('providerBusiness.newp.aLineOrTwoOnWhat')}</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="e.g. Safe removal of your old set before the new one"
+                placeholder={tr('providerBusiness.newp.eGSafeRemovalOfYour')}
                 placeholderTextColor={palette.sub}
                 maxLength={300}
                 multiline
@@ -281,8 +285,8 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
             </View>
 
             <View style={[styles.rule, { backgroundColor: palette.border }]} />
-            <Text style={[styles.section, { color: palette.text }]}>Where it goes</Text>
-            <Text style={[styles.hint, styles.sectionHint, { color: palette.sub }]}>Choose which services clients can add it to.</Text>
+            <Text style={[styles.section, { color: palette.text }]}>{tr('providerBusiness.newp.whereItGoes')}</Text>
+            <Text style={[styles.hint, styles.sectionHint, { color: palette.sub }]}>{tr('providerBusiness.newp.chooseWhichServicesClientsCanAdd')}</Text>
 
             <View style={styles.group}>
               <View style={[styles.segment, { backgroundColor: palette.surface }]}>
@@ -306,7 +310,7 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
               {appliesTo === 'categories' && (
                 <View style={styles.chipRow}>
                   {categoryNames.length === 0 ? (
-                    <Text style={[styles.hint, { color: palette.sub }]}>Add a category first.</Text>
+                    <Text style={[styles.hint, { color: palette.sub }]}>{tr('providerBusiness.newp.addACategoryFirst')}</Text>
                   ) : (
                     categoryNames.map(categoryName => (
                       <AddOnChip
@@ -340,9 +344,9 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
                             activeOpacity={0.7}
                             hitSlop={8}
                             accessibilityRole="button"
-                            accessibilityLabel={`${allHere ? 'Untick' : 'Tick'} all ${categoryName}`}
+                            accessibilityLabel={tr(allHere ? 'providerBusiness.newp2.untickAll' : 'providerBusiness.newp2.tickAll', { name: categoryName })}
                           >
-                            <Text style={[styles.groupAction, { color: palette.accent }]}>{allHere ? 'Untick all' : 'Tick all'}</Text>
+                            <Text style={[styles.groupAction, { color: palette.accent }]}>{allHere ? tr('providerBusiness.newp.untickAll') : tr('providerBusiness.newp.tickAll')}</Text>
                           </TouchableOpacity>
                         </View>
                         {services.map(service => {
@@ -367,7 +371,7 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
                     );
                   })}
                   {Object.values(categories).every(list => list.length === 0) && (
-                    <Text style={[styles.hint, styles.listEmpty, { color: palette.sub }]}>Add a service first.</Text>
+                    <Text style={[styles.hint, styles.listEmpty, { color: palette.sub }]}>{tr('providerBusiness.newp.addAServiceFirst')}</Text>
                   )}
                 </View>
               )}
@@ -378,9 +382,9 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
             <View style={[styles.rule, { backgroundColor: palette.border }]} />
             <View style={[styles.pauseRow, { borderColor: palette.border, backgroundColor: palette.card }]}>
               <View style={styles.listText}>
-                <Text style={[styles.rowName, { color: palette.text }]}>Offer it to clients</Text>
+                <Text style={[styles.rowName, { color: palette.text }]}>{tr('providerBusiness.newp.offerItToClients')}</Text>
                 <Text style={[styles.rowMeta, { color: palette.sub }]}>
-                  {isActive ? 'Clients can add it when they book. Switch off to pause it everywhere without deleting it.' : 'Paused: hidden on every service until you switch it back on.'}
+                  {isActive ? tr('providerBusiness.newp.clientsCanAddItWhenThey') : tr('providerBusiness.newp.pausedHiddenOnEveryServiceUntil')}
                 </Text>
               </View>
               <Switch
@@ -388,16 +392,16 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
                 onValueChange={value => { tapSelect(); setIsActive(value); }}
                 trackColor={{ true: palette.accent, false: withAlpha(palette.sub, 0.3) }}
                 thumbColor="#FFFFFF"
-                accessibilityLabel="Offer it to clients"
+                accessibilityLabel={tr('providerBusiness.newp.offerItToClients')}
               />
             </View>
 
             {item && (
               <View style={styles.deleteWrap}>
                 <TouchableOpacity onPress={handleDelete} activeOpacity={0.7} accessibilityRole="button" style={styles.deleteButton}>
-                  <Text style={styles.deleteText}>Delete add-on</Text>
+                  <Text style={styles.deleteText}>{tr('providerBusiness.newp.deleteAddOn')}</Text>
                 </TouchableOpacity>
-                <Text style={[styles.hint, styles.centre, { color: palette.sub }]}>Takes it off every service. Bookings already made keep it.</Text>
+                <Text style={[styles.hint, styles.centre, { color: palette.sub }]}>{tr('providerBusiness.newp.takesItOffEveryServiceBookings')}</Text>
               </View>
             )}
           </ScrollView>
@@ -405,7 +409,7 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             {preview && !error ? (
               <View style={[styles.preview, { borderColor: palette.border }]}>
-                <Text style={[styles.label, { color: palette.sub }]}>Clients see</Text>
+                <Text style={[styles.label, { color: palette.sub }]}>{tr('providerBusiness.newp.clientsSee')}</Text>
                 <View style={styles.previewRow}>
                   <View style={styles.listText}>
                     <Text style={[styles.rowName, { color: palette.text }]} numberOfLines={1}>{preview.name}</Text>
@@ -425,7 +429,7 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
               accessibilityRole="button"
               style={[styles.save, { backgroundColor: palette.accent }]}
             >
-              <Text style={[styles.saveText, { color: palette.onAccent }]}>{item ? 'Save add-on' : 'Add add-on'}</Text>
+              <Text style={[styles.saveText, { color: palette.onAccent }]}>{item ? tr('providerBusiness.newp.saveAddOn') : tr('providerBusiness.newp.addAddOn')}</Text>
             </TouchableOpacity>
           </View>
         </View>

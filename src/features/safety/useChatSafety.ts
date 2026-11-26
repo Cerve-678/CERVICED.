@@ -11,6 +11,7 @@ import { SUPPORT_EMAIL } from '../../constants/support';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 import { reportDeviceContext } from './reportContext';
+import { tr } from '../../i18n/translate';
 
 interface ChatDialogs {
   showConfirm: (title: string, message: string | undefined, buttons: DialogButton[], placement?: DialogPlacement) => void;
@@ -60,11 +61,11 @@ export function useChatSafety({
         ...reportDeviceContext(),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showAlert('Thanks for telling us', `We'll look into it. Your reference is #${ticketNumber}.`);
+      showAlert(tr('shared.newc.thanksForTellingUs'), tr('shared.newc2.refRef', { ref: ticketNumber }));
     } catch (err) {
       showAlert(
-        "Couldn't send your report",
-        `${toUserMessage(err, 'Please try again in a moment.', 'useChatSafety.sendReport')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+        tr('shared.reportProblem.failed.title'),
+        tr('shared.reportProblem.failed.body', { reason: toUserMessage(err, 'Please try again in a moment.', 'useChatSafety.sendReport'), email: SUPPORT_EMAIL }),
       );
     }
   }, [activeMode, showAlert]);
@@ -77,7 +78,7 @@ export function useChatSafety({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (err) {
       showAlert(
-        blocked ? `Couldn't block ${otherName}` : `Couldn't unblock ${otherName}`,
+        blocked ? tr('shared.newc2.blockFailed', { name: otherName }) : tr('shared.newc2.unblockFailed', { name: otherName }),
         toUserMessage(err, 'Please try again in a moment.', 'useChatSafety.setBlocked'),
       );
     }
@@ -85,11 +86,11 @@ export function useChatSafety({
 
   const confirmBlock = useCallback(() => {
     showConfirm(
-      `Block ${otherName}?`,
-      "Neither of you will be able to send messages in this chat. They won't be told. You can unblock them here at any time.",
+      tr('shared.newc2.blockQ', { name: otherName }),
+      tr('shared.newc.neitherOfYouWillBeAble'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Block', style: 'destructive', onPress: () => { void setBlocked(true); } },
+        { text: tr('common.cancel'), style: 'cancel' },
+        { text: tr('shared.newc.block'), style: 'destructive', onPress: () => { void setBlocked(true); } },
       ],
     );
   }, [otherName, setBlocked, showConfirm]);
@@ -97,11 +98,11 @@ export function useChatSafety({
   const confirmReportPerson = useCallback(() => {
     if (!conversationId) return;
     showConfirm(
-      `Report ${otherName}?`,
-      "We'll look at this chat. They won't know you reported them.",
+      tr('shared.newc2.reportQ', { name: otherName }),
+      tr('shared.newc.weLlLookAtThisChat'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Report', style: 'destructive', onPress: () => { void sendReport('conversation', conversationId); } },
+        { text: tr('common.cancel'), style: 'cancel' },
+        { text: tr('shared.newc.report'), style: 'destructive', onPress: () => { void sendReport('conversation', conversationId); } },
       ],
     );
   }, [conversationId, otherName, sendReport, showConfirm]);
@@ -112,11 +113,11 @@ export function useChatSafety({
     Haptics.selectionAsync().catch(() => {});
     const later = (fn: () => void) => () => { setTimeout(fn, NEXT_DIALOG_DELAY_MS); };
     showConfirm(otherName, undefined, [
-      { text: `Report ${otherName}`, style: 'destructive', onPress: later(confirmReportPerson) },
+      { text: tr('shared.newc2.reportName', { name: otherName }), style: 'destructive', onPress: later(confirmReportPerson) },
       blockedByMe
-        ? { text: `Unblock ${otherName}`, onPress: () => { void setBlocked(false); } }
-        : { text: `Block ${otherName}`, style: 'destructive', onPress: later(confirmBlock) },
-      { text: 'Cancel', style: 'cancel' },
+        ? { text: tr('shared.newc2.unblockName', { name: otherName }), onPress: () => { void setBlocked(false); } }
+        : { text: tr('shared.newc2.blockName', { name: otherName }), style: 'destructive', onPress: later(confirmBlock) },
+      { text: tr('common.cancel'), style: 'cancel' },
     ]);
   }, [blockedByMe, confirmBlock, confirmReportPerson, conversationId, otherName, setBlocked, showConfirm]);
 
@@ -124,11 +125,11 @@ export function useChatSafety({
   const confirmReportMessage = useCallback((messageId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     showConfirm(
-      'Report this message?',
-      "We'll look at it. They won't know you reported it.",
+      tr('shared.newc.reportThisMessage'),
+      tr('shared.newc.weLlLookAtItThey'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Report', style: 'destructive', onPress: () => { void sendReport('message', messageId); } },
+        { text: tr('common.cancel'), style: 'cancel' },
+        { text: tr('shared.newc.report'), style: 'destructive', onPress: () => { void sendReport('message', messageId); } },
       ],
     );
   }, [sendReport, showConfirm]);

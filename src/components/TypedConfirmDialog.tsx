@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 /** Case-insensitive, ignoring spaces either side. */
 export function matchesConfirmWord(input: string, word: string): boolean {
@@ -22,6 +24,8 @@ export interface TypedConfirmRequest {
  * Pass null to hide it.
  */
 export function TypedConfirmDialog({ request, onCancel }: { request: TypedConfirmRequest | null; onCancel: () => void }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode, palette: P } = useTheme();
   const [typed, setTyped] = useState('');
   const danger = isDarkMode ? '#E05050' : '#C0392B';
@@ -38,7 +42,7 @@ export function TypedConfirmDialog({ request, onCancel }: { request: TypedConfir
             <Text style={[styles.title, { color: P.text }]}>{request.title}</Text>
             <Text style={[styles.body, { color: P.text }]}>{request.message}</Text>
             <Text style={[styles.body, { color: P.sub }]}>
-              Type <Text style={{ fontWeight: '700', color: P.text }}>{request.word}</Text> to confirm.
+              {tr('shared.newc2.typePre')} <Text style={{ fontWeight: '700', color: P.text }}>{request.word}</Text> {tr('shared.newc2.typePost')}
             </Text>
             <TextInput
               value={typed}
@@ -48,12 +52,12 @@ export function TypedConfirmDialog({ request, onCancel }: { request: TypedConfir
               autoFocus
               placeholder={request.word}
               placeholderTextColor={P.sub}
-              accessibilityLabel={`Type ${request.word} to confirm`}
+              accessibilityLabel={tr('shared.newc2.typeToConfirm', { word: request.word })}
               style={[styles.input, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
             />
             <View style={styles.buttons}>
               <TouchableOpacity style={[styles.btn, { borderColor: P.border }]} onPress={onCancel} activeOpacity={0.7}>
-                <Text style={[styles.btnText, { color: P.text }]}>Cancel</Text>
+                <Text style={[styles.btnText, { color: P.text }]}>{tr('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, { backgroundColor: danger, borderColor: danger, opacity: ready ? 1 : 0.35 }]}

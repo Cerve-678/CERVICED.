@@ -6,6 +6,9 @@ import * as Haptics from 'expo-haptics';
 import { ordinalSuffix } from '../../utils/dateUtils';
 import { isDarkColor } from '../../constants/providerThemes';
 import { releaseTimeLabel } from '../../utils/bookingHorizon';
+import { tr } from '../../i18n';
+import { getLanguage } from '../../i18n/languageStore';
+import { useTranslation } from '../../i18n';
 
 const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
 /** On the hour, midnight to 11pm. A stored time off the hour (none today)
@@ -64,6 +67,8 @@ export function ReleaseDayPicker({
   allowClear = false,
   onClear,
 }: ReleaseDayPickerProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const hours = time == null || HOURS.includes(time) ? HOURS : [time, ...HOURS];
   const chosen = value != null && time != null;
   // iOS-only itemStyle is the only way to colour the wheel's own rows — the
@@ -83,16 +88,16 @@ export function ReleaseDayPicker({
           <View style={styles.releasePickerHeader}>
             <View>
               <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING RULES</Text>
-              <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day & time</Text>
+              <Text style={[styles.releasePickerTitle, { color: textColor }]}>{tr('providerBusiness.newp.chooseReleaseDayTime')}</Text>
             </View>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel="Close release day picker">
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel={tr('providerBusiness.newp.closeReleaseDayPicker')}>
               <Ionicons name="close" size={20} color={textColor} />
             </TouchableOpacity>
           </View>
           <Text style={[styles.releasePickerSubtext, { color: subColor }]}>{RELEASE_DAY_EXPLAINER}</Text>
           <View style={localStyles.wheels}>
             <View style={localStyles.dayColumn}>
-              <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>DAY</Text>
+              <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>{tr('providerProfile.didYouBook.day')}</Text>
               <Picker
                 selectedValue={value ?? NO_DAY}
                 onValueChange={(day) => {
@@ -100,17 +105,17 @@ export function ReleaseDayPicker({
                   Haptics.selectionAsync().catch(() => {});
                   onSelect(day);
                 }}
-                accessibilityLabel="Release day"
+                accessibilityLabel={tr('providerBusiness.newp.releaseDay')}
                 {...wheelProps}
               >
-                {value == null && <Picker.Item key="none" label="Choose a day" value={NO_DAY} color={subColor} />}
+                {value == null && <Picker.Item key="none" label={tr('providerBusiness.newp.chooseADay')} value={NO_DAY} color={subColor} />}
                 {DAYS.map(day => (
-                  <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
+                  <Picker.Item key={day} label={tr('providerBusiness.newp2.dayOfMonth', { day: getLanguage() === 'en' ? ordinalSuffix(day) : String(day) })} value={day} color={textColor} />
                 ))}
               </Picker>
             </View>
             <View style={localStyles.timeColumn}>
-              <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>TIME</Text>
+              <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>{tr('providerProfile.didYouBook.time')}</Text>
               <Picker
                 selectedValue={time ?? NO_TIME}
                 onValueChange={(next) => {
@@ -118,10 +123,10 @@ export function ReleaseDayPicker({
                   Haptics.selectionAsync().catch(() => {});
                   onSelectTime(next);
                 }}
-                accessibilityLabel="Release time"
+                accessibilityLabel={tr('providerBusiness.newp.releaseTime')}
                 {...wheelProps}
               >
-                {time == null && <Picker.Item key="none" label="Choose a time" value={NO_TIME} color={subColor} />}
+                {time == null && <Picker.Item key="none" label={tr('providerProfile.didYouBook.chooseTime')} value={NO_TIME} color={subColor} />}
                 {hours.map(hour => (
                   <Picker.Item key={hour} label={releaseTimeLabel(hour)} value={hour} color={textColor} />
                 ))}
@@ -134,7 +139,7 @@ export function ReleaseDayPicker({
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClear(); onClose(); }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day, use a rolling window</Text>
+              <Text style={[styles.releasePickerClearText, { color: subColor }]}>{tr('providerBusiness.newp.noReleaseDayUseARolling')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -143,7 +148,7 @@ export function ReleaseDayPicker({
             accessibilityState={{ disabled: !chosen }}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}
           >
-            <Text style={[styles.releasePickerDoneText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{chosen ? 'Done' : 'Pick a day and a time'}</Text>
+            <Text style={[styles.releasePickerDoneText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{chosen ? tr('common.done') : tr('providerBusiness.newp.pickADayAndATime')}</Text>
           </TouchableOpacity>
         </View>
       </View>
