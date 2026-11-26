@@ -19,6 +19,15 @@ export const DO_NOT_TRANSLATE: ReadonlySet<TranslationKey> = new Set<Translation
   'helpCentre.faq.cancel.a', // cancellation / refund policy
   'helpCentre.faq.payment.a', // payment handling
   'helpCentre.action.terms', // legal reference
+  'helpCentre.faq.request.a', // payment handling (card hold)
+  'helpCentre.faq.tip.a', // payment handling
+  'helpCentre.faq.beautyProfile.a', // who sees personal, health-adjacent details
+  'helpCentre.providerFaq.payouts.a', // payment handling
+  'helpCentre.providerFaq.deposits.a', // payment handling
+  'helpCentre.providerFaq.lateFees.a', // cancellation / no-show fees
+  'helpCentre.providerFaq.fee.a', // payment handling
+  'helpCentre.providerFaq.tips.a', // payment handling
+  'helpCentre.providerFaq.clientele.a', // who sees personal, health-adjacent details
   'profile.appInfo.terms.title', // legal reference
   'profile.appInfo.terms.sub', // legal reference
   'providerAccount.appInfo.terms.title', // legal reference
