@@ -506,7 +506,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
               style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
             >
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
-                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.mockPay.title')}</Text>
+                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.payment.title')}</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
                   disabled={isProcessing}
@@ -522,7 +522,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
 
               <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.mockPay.orderSummary')}</Text>
+                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.payment.orderSummary')}</Text>
                   {lines.map(line => (
                     <View key={line.id} style={styles.orderItem}>
                       <Text style={[styles.orderItemName, { color: theme.text }]}>
@@ -981,4 +981,3 @@ const styles = StyleSheet.create({
 });
 
 /** The sheet's order summary and header styles, shared with the Cart's older card-entry modal. */
-export { styles as paymentSheetStyles };

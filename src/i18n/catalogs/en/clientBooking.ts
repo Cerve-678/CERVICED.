@@ -393,18 +393,6 @@ export const clientBooking = {
   'clientBooking.reschedule.confirmNewTime': 'Confirm New Time',
   'clientBooking.reschedule.noneWork': 'None of these work',
 
-  // ── Checkout errors (BookingContext)
-  'clientBooking.checkout.couldNotConfirm': "Couldn't confirm this time is still available — please try again.",
-  'clientBooking.checkout.couldNotBook': "We couldn't book that time. Please pick another.",
-  'clientBooking.checkout.unlinkedNotPlaced': "We couldn't link {names} to a registered provider, so the booking wasn't placed. Please re-add the service from the provider's profile and try again.",
-  'clientBooking.checkout.unlinkedNotReserved': "We couldn't link {names} to a registered provider, so we couldn't reserve that time. Please re-add the service from the provider's profile and try again.",
-  'clientBooking.checkout.slotGoneWith': 'That time slot with {provider} is no longer available. Please choose a different time.',
-  'clientBooking.checkout.notPlacedWith': "Your booking with {provider} couldn't be placed. Please check your connection and try again.",
-  'clientBooking.checkout.notPlaced': "We couldn't place your booking just now. Please check your connection and try again.",
-  'clientBooking.checkout.missingDetails': 'Missing appointment details — please pick your time again.',
-  'clientBooking.checkout.slotGone': 'That time slot is no longer available. Please choose a different time.',
-  'clientBooking.checkout.serviceGone': "One of your services isn't offered any more. Pull down to refresh your cart, then remove the one that's flagged.",
-
   // ── Booked elsewhere detail (ExternalBookingDetailScreen)
   'clientBooking.external.thisProfessional': 'this professional',
   'clientBooking.external.pageFailed': "Couldn't open their booking page",
