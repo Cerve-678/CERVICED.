@@ -1,25 +1,7 @@
-// English UI catalog — the SOURCE OF TRUTH for every translation key.
-//
-// Every user-facing key the app can translate is declared here first; the
-// per-language catalogs (es.ts, fr.ts) are `Partial` maps that fill in what
-// they can and fall back to this file for anything missing. Keys are flat,
-// dot-namespaced by screen, and the object is `as const` so `keyof typeof en`
-// becomes the exact `TranslationKey` union — a typo in a screen's t('…') call
-// is then a compile error, not a silent English fallback at runtime.
-//
-// SCOPE: this is app-authored UI copy only. Provider-WRITTEN content (bios,
-// service names, notes) is never put here — it is translated live at runtime
-// via src/services/dynamicTranslationService.ts. And legal/health-safety copy
-// (Terms, refund/cancellation, payment, age, patch-test/pregnancy/aftercare)
-// is deliberately HELD IN ENGLISH: such keys are listed in DO_NOT_TRANSLATE in
-// ../translate.ts and are never machine-translated in es/fr until a
-// professional review exists.
-//
-// `{param}` tokens are interpolated by the resolver (see ../translate.ts).
+// English · settings — Text & Sizing, Language & Region, Help Centre, client Profile tab, provider Account tab.
+// Source of truth for this area's keys; see ./index.ts for the conventions.
 
-export const en = {
-  // ── Shared ────────────────────────────────────────────────────────────────
-  'common.cancel': 'Cancel',
+export const settings = {
 
   // ── Text & Sizing screen ────────────────────────────────────────────────────
   'textSizing.title': 'Text & Sizing',
@@ -36,17 +18,15 @@ export const en = {
   'languageRegion.subtitle': 'Set your preferred language and region.',
   'languageRegion.section.language': 'LANGUAGE',
   'languageRegion.languageFootnote':
-    'As translations roll out, more of Cerviced follows your chosen language. Legal and health information is always shown in English.',
+    "Cerviced follows your chosen language. Sign-in, legal and health information, notifications and emails stay in English, and providers' own words appear as they wrote them.",
   'languageRegion.section.region': 'REGION',
   'languageRegion.regionRowDates': 'Dates {date}',
   'languageRegion.regionFootnote':
     "Dates display in your selected region's format ({date}). Prices are always shown in pounds (£), wherever you are.",
 
   // ── Help Centre screen ──────────────────────────────────────────────────────
-  // Which questions each hat sees: src/features/help/helpTopics.ts.
   'helpCentre.title': 'Help Centre',
   'helpCentre.subtitle': 'Answers to common questions',
-
   'helpCentre.section.booking': 'BOOKING',
   'helpCentre.section.yourProviders': 'YOUR PROVIDERS',
   'helpCentre.section.yourProfile': 'YOUR PROFILE',
@@ -55,12 +35,10 @@ export const en = {
   'helpCentre.section.gettingPaid': 'GETTING PAID',
   'helpCentre.section.clients': 'CLIENTS',
 
-  // Client hat.
   'helpCentre.faq.book.q': 'How do I book an appointment?',
   'helpCentre.faq.book.a':
     "Open a provider's page from Home, Search or Explore, pick a service and a time, and add it to your cart. You pay at checkout, and you can book with more than one provider at once.",
   'helpCentre.faq.request.q': 'Why does my booking say Request sent?',
-  // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.faq.request.a':
     "Some providers check each booking before saying yes. Your card is held, not charged, until they accept. If they decline or don't reply in time, the hold is released and you're not charged.",
   'helpCentre.faq.cancel.q': 'Can I reschedule or cancel?',
@@ -73,6 +51,12 @@ export const en = {
   'helpCentre.faq.address.q': "When will I see the provider's address?",
   'helpCentre.faq.address.a':
     'It shows on your booking once your provider shares it. Some share it straight away, others nearer the day.',
+  'helpCentre.faq.becca.q': 'How does Becca work?',
+  'helpCentre.faq.becca.a':
+    'Becca is your AI beauty assistant. Ask her anything — she can recommend providers, explain services, and help you find the right look.',
+  'helpCentre.faq.points.q': 'How do I earn points?',
+  'helpCentre.faq.points.a':
+    'Complete a booking or leave a review, plus bonuses for your first booking, your first review and your birthday. Your balance is in Points on your Profile.',
   'helpCentre.faq.payment.q': 'Is my payment info secure?',
   // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.faq.payment.a':
@@ -87,27 +71,17 @@ export const en = {
   'helpCentre.faq.reviews.a':
     "Once your appointment is done, leave a review from Bookings. You can post it anonymously if you'd rather.",
   'helpCentre.faq.tip.q': 'Can I leave a tip?',
-  // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.faq.tip.a':
     "Yes, from your booking, for 48 hours after the appointment. Your provider gets the whole tip. Tips can't be refunded.",
   'helpCentre.faq.notOnCerviced.q': 'What does "Not on CERVICED yet" mean?',
   'helpCentre.faq.notOnCerviced.a':
     "That business hasn't joined yet, so you can't book them here. Tap Nudge to show you'd like them on CERVICED.",
   'helpCentre.faq.beautyProfile.q': 'What is my Beauty Profile?',
-  // HELD IN ENGLISH (who sees personal, health-adjacent details) — see DO_NOT_TRANSLATE.
   'helpCentre.faq.beautyProfile.a':
     "Your hair, skin, nails and what you like, all in one place. Once a provider accepts a booking from you, they see the parts that matter for what you've booked, so they're ready for you.",
   'helpCentre.faq.maintenance.q': 'What are Maintenance reminders?',
   'helpCentre.faq.maintenance.a':
     "We'll remind you when you're due to rebook things like nails, lashes or brows. Turn them on in your notification settings.",
-  'helpCentre.faq.points.q': 'How do I earn points?',
-  'helpCentre.faq.points.a':
-    'Complete a booking or leave a review, plus bonuses for your first booking, your first review and your birthday. Your balance is in Points on your Profile.',
-  'helpCentre.faq.becca.q': 'How does Becca work?',
-  'helpCentre.faq.becca.a':
-    'Becca is your AI beauty assistant. Ask her anything — she can recommend providers, explain services, and help you find the right look.',
-
-  // Provider hat, for a pro whose clients book and pay in the app.
   'helpCentre.providerFaq.live.q': 'How do I go live?',
   'helpCentre.providerFaq.live.a':
     "Your Home screen shows what's left to do. Once every step is done, clients can find you in Search.",
@@ -117,12 +91,9 @@ export const en = {
   'helpCentre.providerFaq.branding.q': 'How do I change how my page looks?',
   'helpCentre.providerFaq.branding.a':
     'Tap the palette button on My Profile. Pick a page style, colours and font, and see your page change as you go.',
-  'helpCentre.providerFaq.becca.q': 'How can Becca help my business?',
-  'helpCentre.providerFaq.becca.a':
-    "Ask Becca about your day, your week, your clients, your reviews, your messages or your hours, and she'll answer or take you to the right screen.",
   'helpCentre.providerFaq.book.q': 'How do clients book with me?',
   'helpCentre.providerFaq.book.a':
-    "Clients pick a service and a time on your page and check out in the app. New bookings show on your Home screen and in your notifications.",
+    'Clients pick a service and a time on your page and check out in the app. New bookings show on your Home screen and in your notifications.',
   'helpCentre.providerFaq.autoConfirm.q': 'Do I have to accept every booking?',
   'helpCentre.providerFaq.autoConfirm.a':
     'Only if you want to. Turn on Auto-confirm bookings in Business Profile → Automations & Preferences. With it off, you accept or decline each request.',
@@ -131,7 +102,7 @@ export const en = {
     'Go to Business Profile → Business Details → Scheduling & Availability. Set your working hours, gaps between appointments and how far ahead clients can book.',
   'helpCentre.providerFaq.timeOff.q': 'How do I take time off?',
   'helpCentre.providerFaq.timeOff.a':
-    'Use Close my schedule on your hours screen. Clients can\'t book until you reopen, and you choose what happens to the bookings you already have.',
+    "Use Close my schedule on your hours screen. Clients can't book until you reopen, and you choose what happens to the bookings you already have.",
   'helpCentre.providerFaq.calendar.q': 'Can my phone calendar block out times?',
   'helpCentre.providerFaq.calendar.a':
     "Yes. Turn on Calendar sync in Scheduling & Availability and pick your calendars. Clients can't book when you're busy there, and they never see what the event is.",
@@ -139,38 +110,23 @@ export const en = {
   'helpCentre.providerFaq.waitlist.a':
     'Turn on Enable waitlist in Automations & Preferences. When a slot frees up, Auto offers it to the next person waiting. With Auto off, you offer it yourself from Bookings.',
   'helpCentre.providerFaq.payouts.q': 'When do I get paid?',
-  // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.providerFaq.payouts.a':
     'Usually a day after each appointment, your money moves to your Stripe account. Stripe then pays your bank on the schedule you pick in Payments & payouts.',
   'helpCentre.providerFaq.deposits.q': 'Can I take a deposit?',
-  // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.providerFaq.deposits.a':
-    "Yes. In Payments & payouts, under How you take payments, choose whether clients pay a deposit or the full price when they book. Anything left is between you and your client.",
+    'Yes. In Payments & payouts, under How you take payments, choose whether clients pay a deposit or the full price when they book. Anything left is between you and your client.',
   'helpCentre.providerFaq.lateFees.q': 'What about late cancellations and no-shows?',
-  // HELD IN ENGLISH (cancellation / refund policy) — see DO_NOT_TRANSLATE.
   'helpCentre.providerFaq.lateFees.a':
     "Set your rules in Business Details → Policies & Info. If a client cancels late or doesn't turn up, you can charge the fee from that booking.",
   'helpCentre.providerFaq.fee.q': 'Do I pay CERVICED a fee?',
-  // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.providerFaq.fee.a':
     "No commission. Clients pay a small booking fee on top at checkout, so it never comes out of your prices. The only thing taken is Stripe's card fee on late and no-show fees.",
   'helpCentre.providerFaq.tips.q': 'Can clients tip me?',
-  // HELD IN ENGLISH (payment handling) — see DO_NOT_TRANSLATE.
   'helpCentre.providerFaq.tips.a':
     "Yes, in the app for 48 hours after an appointment. You get the whole tip, paid out like a booking. Tips can't be refunded.",
-  'helpCentre.providerFaq.messages.q': 'How do messages work?',
-  'helpCentre.providerFaq.messages.a':
-    "Clients can message you from your profile. You get a notification for new messages, and a reminder if a message is still waiting for a reply after a couple of hours.",
-  'helpCentre.providerFaq.clientele.q': "Can I see a client's Beauty Profile?",
-  // HELD IN ENGLISH (who sees personal, health-adjacent details) — see DO_NOT_TRANSLATE.
-  'helpCentre.providerFaq.clientele.a':
-    "Yes. Open Clientele and tap a client. Once you've accepted a booking from them, you'll see the parts of their Beauty Profile that matter for what they booked. You can keep your own private notes there too.",
   'helpCentre.providerFaq.saves.q': 'What happens when someone saves me?',
   'helpCentre.providerFaq.saves.a':
-    "Once a day you get a notification saying how many people saved you, never who. You can turn it off in your notification settings. Your analytics show your saves over time.",
-
-  // Provider hat, for a pro who takes bookings through their own link. The
-  // questions are shared with the set above where the answer is the same.
+    'Once a day you get a notification saying how many people saved you, never who. You can turn it off in your notification settings. Your analytics show your saves over time.',
   'helpCentre.linkFaq.live.a':
     "Your Home screen shows what's left to do: your logo, your About, your opening hours and at least one portfolio photo. Once they're done, clients can find you in Search.",
   'helpCentre.linkFaq.book.a':
@@ -183,6 +139,15 @@ export const en = {
     'Open What full CERVICED adds in your Account to see what changes when clients book and pay in the app.',
   'helpCentre.linkFaq.becca.a':
     "Ask Becca about your messages, your hours or your notifications, and she'll answer or take you to the right screen.",
+  'helpCentre.providerFaq.messages.q': 'How do messages work?',
+  'helpCentre.providerFaq.messages.a':
+    'Clients can message you from your profile. You get a notification for new messages, and a reminder if a message is still waiting for a reply after a couple of hours.',
+  'helpCentre.providerFaq.clientele.q': "Can I see a client's Beauty Profile?",
+  'helpCentre.providerFaq.clientele.a':
+    "Yes. Open Clientele and tap a client. Once you've accepted a booking from them, you'll see the parts of their Beauty Profile that matter for what they booked. You can keep your own private notes there too.",
+  'helpCentre.providerFaq.becca.q': 'How can Becca help my business?',
+  'helpCentre.providerFaq.becca.a':
+    "Ask Becca about your day, your week, your clients, your reviews, your messages or your hours, and she'll answer or take you to the right screen.",
 
   'helpCentre.action.contact': 'Contact Support',
   'helpCentre.action.report': 'Report a Problem',
@@ -293,9 +258,11 @@ export const en = {
   'providerAccount.linkOnly.policies.sub': 'Optional — shown on your profile if added',
   'providerAccount.linkOnly.achievements.sub': 'Part of the full CERVICED experience',
   'providerAccount.linkOnly.achievements.lockedTitle': 'Unlock Achievements',
-  'providerAccount.linkOnly.achievements.lockedBody': 'Full members earn achievements for bookings, five-star reviews and fully booked months.',
+  'providerAccount.linkOnly.achievements.lockedBody':
+    'Full members earn achievements for bookings, five-star reviews and fully booked months.',
   'providerAccount.linkOnly.fullCerviced.title': 'What full CERVICED adds',
-  'providerAccount.linkOnly.fullCerviced.sub': 'Client profiles, announcements, automations and more',
+  'providerAccount.linkOnly.fullCerviced.sub':
+    'Client profiles, announcements, automations and more',
   'providerAccount.linkOnly.notifications.sub': 'Messages and saves',
 
   'providerAccount.businessProfile.title': 'Business Profile',
@@ -347,6 +314,8 @@ export const en = {
   'providerAccount.appInfo.report.sub': 'Bugs, feedback',
 
   'providerAccount.logout': 'Log Out',
+  'providerAccount.a11y.locked': '{title}, locked. {subtitle}',
+  'providerAccount.a11y.todo': '{title}, something to do',
   'providerAccount.error.title': 'Error',
   'providerAccount.error.biometric': 'Could not enable {method}. Please try again.',
 
@@ -358,283 +327,6 @@ export const en = {
   'providerAccount.logoutModal.title': 'Log Out',
   'providerAccount.logoutModal.body': 'Are you sure you want to log out?',
   'providerAccount.logoutModal.confirm': 'Yes, log out',
-
-  // ── Beauty Profile (landing + My Profile) ──────────────────────────────────
-  'beautyProfile.myProfile': 'My Profile',
-  'beautyProfile.edit': 'Edit',
-  'beautyProfile.cancel': 'Cancel',
-  'beautyProfile.save': 'Save profile',
-  'beautyProfile.allCategories': 'All categories',
-  'beautyProfile.percentComplete': '{percent}% complete',
-  'beautyProfile.sectionsStarted': '{started} of {total} sections',
-  'beautyProfile.startAny': 'Start with any section',
-  'beautyProfile.notStarted': 'Not started',
-  'beautyProfile.photosOn': 'Photos: on',
-  'beautyProfile.photosOff': 'Photos: off',
-  'beautyProfile.feedsLegend': 'Feeds your maintenance suggestions',
-  'beautyProfile.health.title': 'Health & safety',
-  'beautyProfile.health.onFile': '{count} allergens flagged. Always shared with providers.',
-  'beautyProfile.health.notStarted': "Not started — the one section we'd fill in first.",
-  'beautyProfile.card.scalp': '{condition} scalp',
-  'beautyProfile.card.medicalNote': 'Medical note',
-  'beautyProfile.card.allergies': '{count} allergies on file',
-  'beautyProfile.card.allergiesOne': '1 allergy on file',
-  'beautyProfile.card.noAllergies': 'No known allergies',
-  'beautyProfile.card.medicalOnly': 'Medical note on file',
-  'beautyProfile.card.addHealth': 'Add allergies',
-  'beautyProfile.card.add': 'Add',
-  'beautyProfile.circle.title': 'Your circle',
-  'beautyProfile.hello.title': 'Hello {name}',
-  'beautyProfile.hello.there': 'there',
-  'beautyProfile.hello.look': 'Your look',
-  'beautyProfile.hello.routine': 'Getting ready',
-  'beautyProfile.hello.lookSub': 'Tap to change your style & vibe.',
-  'beautyProfile.hello.ringA11y': 'Your beauty profile is {percent}% complete. Tap to see all of it',
-  'beautyProfile.hello.complete': 'Complete',
-  'beautyProfile.hello.seeAll': 'See all',
-  'beautyProfile.hello.hair': 'Hair',
-  'beautyProfile.hello.skin': 'Skin',
-  'beautyProfile.hello.lashes': 'Lashes & brows',
-  'beautyProfile.hello.nails': 'Nails',
-  'beautyProfile.hello.makeup': 'Makeup',
-  'beautyProfile.hello.finish': 'Finish this',
-  'beautyProfile.hello.healthPrivate': 'Seen only once a provider accepts',
-  'beautyProfile.hello.schedule': 'Maintenance schedule',
-  'beautyProfile.hello.scheduleSub': "{done} of {total} up to date · we'll nudge you when each is due",
-  'beautyProfile.hello.scheduleEmpty': "Set up your schedule and we'll nudge you when things are due",
-  'beautyProfile.hello.scheduleClear': 'Nothing on your schedule right now',
-  'beautyProfile.hello.scheduleOpen': 'See all',
-  'beautyProfile.hello.booked': 'Booked · {provider}',
-  'beautyProfile.hello.every': 'Every {weeks} weeks',
-  'beautyProfile.hello.dueA11y': 'due now',
-  'beautyProfile.hello.book': 'Book',
-  'beautyProfile.suited.title': 'Suited to you',
-  'beautyProfile.suited.sub': 'Picked from your answers. Tap one to see who does it.',
-  'beautyProfile.suited.find': 'Find',
-  'beautyProfile.circle.requestsOne': '1 follow request',
-  'beautyProfile.circle.requests': '{count} follow requests',
-  'beautyProfile.todo.title': 'Still to fill in',
-  'beautyProfile.todo.a11y': 'Still to fill in: {fields}',
-  'beautyProfile.todo.hairType': 'Hair type',
-  'beautyProfile.todo.skinType': 'Skin type',
-  'beautyProfile.todo.skinConcerns': 'Skin concerns',
-  'beautyProfile.todo.styleVibe': 'Style vibe',
-  'beautyProfile.todo.allergies': 'Allergies',
-  'beautyProfile.todo.treatmentHistory': 'Treatment history',
-  'beautyProfile.todo.dob.title': 'Date of birth',
-  'beautyProfile.todo.dob.sub': 'Add it in your account details',
-  'maintenance.countdown.daysOver': 'days over',
-  'maintenance.countdown.dayOver': 'day over',
-  'maintenance.countdown.today': 'Today',
-  'maintenance.countdown.day': 'day',
-  'maintenance.countdown.days': 'days',
-  'maintenance.countdown.weeks': 'weeks',
-  'maintenance.countdown.booked': 'Booked',
-  'maintenance.countdown.bookNow': 'Book now',
-  'maintenance.countdown.noDate': 'No date',
-
-  // ── Beauty Maintenance ──────────────────────────────────────────────────────
-  // Health-adjacent keys (patch test, prep, aftercare, the disclaimer) are held
-  // in English via DO_NOT_TRANSLATE in ../translate.ts.
-  'maintenance.title': 'Maintenance',
-  'maintenance.back': 'Back',
-  'maintenance.addMine': 'Add mine',
-  'maintenance.optional': 'Optional',
-  'maintenance.tryAgain': 'Try again',
-  'maintenance.turnOn': 'Turn on',
-  'maintenance.weeks.one': '1 week',
-  'maintenance.weeks.many': '{count} weeks',
-  'maintenance.weeksIn.one': 'In for 1 week',
-  'maintenance.weeksIn.many': 'In for {count} weeks',
-  // UNREVIEWED legal placeholder — not final copy (legal-flagger, 2026-10-10).
-  'maintenance.disclaimer': "Reminders are prompts, not medical advice. Always follow your provider's own instructions.",
-  'maintenance.firstRun.note': "When you book, don't worry — CERVICED can remind you when you're due for your maintenance.",
-  'maintenance.finishSetup': 'Finish setting up your maintenance schedule',
-  'maintenance.picked.one': '1 picked for you from your Beauty Card',
-  'maintenance.picked.many': '{count} picked for you from your Beauty Card',
-  'maintenance.remindersOff': "Push reminders are off, so nothing here will notify you. You'll still see everything on this screen.",
-  'maintenance.empty.title': 'Nothing on your schedule yet',
-  'maintenance.empty.bookingNote': 'When you book, your completed appointments are added here.',
-  'maintenance.next.title': 'Next up',
-  'maintenance.next.all': 'All',
-  'maintenance.next.allClear': 'All clear',
-  'maintenance.next.nothingDue': 'Nothing due',
-  'maintenance.next.upcoming': 'Next up: {title} in {when}.',
-  'maintenance.next.empty': 'Add something to Maintenance to start a countdown.',
-  'maintenance.strip.setUp': 'Set up',
-  'maintenance.action.book': 'Book',
-  'maintenance.action.doneIt': 'Done it',
-  'maintenance.action.snoozeWeek': 'Snooze +7 days',
-  'maintenance.howto.link': 'How this works',
-  'maintenance.howto.close': 'Close',
-  'maintenance.howto.gotIt': 'Got it',
-  'maintenance.howto.pause': 'Pause',
-  'maintenance.howto.play': 'Play',
-  'maintenance.howto.replay': 'Replay',
-  'maintenance.howto.frameN': 'Step {n}',
-  'maintenance.howto.frame1': 'After your appointment, it becomes a reminder.',
-  'maintenance.howto.frame2': "When it's due, it moves to the top. Tap Book to book again.",
-  'maintenance.howto.frame3': 'Add your own and choose how often.',
-  'maintenance.howto.done': 'Appointment done',
-  'maintenance.howto.sampleAppointment': 'Lash infill · Studio Noor',
-  'maintenance.howto.everyWeeks': 'Every {weeks} weeks',
-  'maintenance.howto.sample.lashes': 'Lash infill',
-  'maintenance.howto.sample.trim': 'Trim',
-  'maintenance.howto.sample.own': 'Scalp massage',
-  'maintenance.rhythm.learned': 'Your last {from} bookings were about {weeks} weeks apart',
-  'maintenance.rhythm.provider': '{provider} recommends every {weeks} weeks',
-  'maintenance.rhythm.client': 'Every {weeks} weeks, set by you',
-  'maintenance.action.snooze': 'Snooze a week',
-  'maintenance.filter.all': 'All',
-  'maintenance.section.attention': 'Needs attention',
-  'maintenance.section.comingUp': 'Coming up',
-  'maintenance.section.bookings': 'Around your bookings',
-  'maintenance.section.patchEvents': 'Patch tests and events',
-  'maintenance.section.paused': 'Paused',
-  'maintenance.legend.booking': 'From a booking',
-  'maintenance.legend.mine': 'Added by you',
-  'maintenance.origin.booking': 'From booking',
-  'maintenance.origin.mine': 'Mine',
-  'maintenance.pill.paused': 'Paused',
-  'maintenance.pill.booked': 'Booked',
-  'maintenance.pill.noDate': 'No date',
-  'maintenance.pill.overdue': 'Overdue {count} days',
-  'maintenance.pill.overdueOne': 'Overdue 1 day',
-  'maintenance.pill.dueToday': 'Due today',
-  'maintenance.pill.dueTomorrow': 'Due tomorrow',
-  'maintenance.pill.dueIn': 'Due in {count} days',
-  'maintenance.pill.inDays': 'In {count} days',
-  'maintenance.pill.inWeeks': 'In {count} weeks',
-  'maintenance.pill.takedown': 'Plan your take-down',
-  'maintenance.pill.bookNow': 'Book now',
-  'maintenance.item.noProvider': 'No provider linked',
-  'maintenance.item.everyWeek': '{who} · every week',
-  'maintenance.item.everyWeeks': '{who} · every {count} weeks',
-  'maintenance.item.onDate': '{who} · on {date}',
-  'maintenance.item.takedownSub': 'Take-down around {date}',
-  'maintenance.item.eventSub': '{date}. Book by {bookBy}.',
-  'maintenance.item.menuA11y': 'Options for {title}',
-  'maintenance.action.rebook': 'Rebook',
-  'maintenance.action.find': 'Find a provider',
-  'maintenance.action.resume': 'Resume',
-  'maintenance.ctx.prepWhen': '{date} · {time}',
-  'maintenance.ctx.aftercareWhen': 'After your appointment on {date}',
-  'maintenance.ctx.serviceWith': '{service} with {provider}',
-  'maintenance.ctx.from': 'From {provider}:',
-  'maintenance.ctx.sent': 'Sent {date}',
-  'maintenance.ctx.currentNote': "Your provider's current aftercare note for this service",
-  'maintenance.ctx.viewBooking': 'View booking',
-  'maintenance.ctx.readMore': 'Read more',
-  'maintenance.ctx.showLess': 'Show less',
-  'maintenance.patch.title': 'Patch test',
-  'maintenance.patch.recorded': 'Last patch test: {date}, recorded by you.',
-  'maintenance.patch.change': 'Change date',
-  'maintenance.patch.check': 'Check with your provider',
-  'maintenance.menu.fromBooking': 'Made from your booking on {date}. Changes here stay when your next booking finishes.',
-  'maintenance.menu.mine': 'Added by you.',
-  'maintenance.menu.repeatEvery': 'Repeat every',
-  'maintenance.menu.date': 'Date',
-  'maintenance.menu.save': 'Save changes',
-  'maintenance.menu.done': "I've had it done",
-  'maintenance.menu.pause': 'Pause this reminder',
-  'maintenance.menu.pauseSub': 'Keeps it here, sends nothing',
-  'maintenance.menu.delete': 'Delete reminder',
-  'maintenance.menu.deleteConfirm': 'Delete this reminder? Your bookings are not affected.',
-  'maintenance.menu.deleteConfirmBooking': 'Delete this reminder? Your bookings are not affected. Your next booking for this service will make it again.',
-  'maintenance.menu.deleteYes': 'Delete',
-  'maintenance.menu.keep': 'Keep',
-  'maintenance.add.title': 'Add your own',
-  'maintenance.add.whatFor': 'What is it?',
-  'maintenance.add.namePlaceholder': 'e.g. Deep conditioning',
-  'maintenance.add.nameRequired': 'Give your reminder a name.',
-  'maintenance.add.type': 'Type',
-  'maintenance.add.type.hair': 'Hair',
-  'maintenance.add.type.lashes': 'Lashes',
-  'maintenance.add.type.nails': 'Nails',
-  'maintenance.add.type.skin': 'Skin',
-  'maintenance.add.type.brows': 'Brows',
-  'maintenance.add.type.other': 'Other',
-  'maintenance.add.when': 'When',
-  'maintenance.add.repeats': 'Repeats',
-  'maintenance.add.beforeEvent': 'Before an event',
-  'maintenance.add.justOnce': 'Just once',
-  'maintenance.add.lastDone': 'Last done',
-  'maintenance.add.lastDoneUnknown': 'Not sure (count from today)',
-  'maintenance.add.nextOn': 'Next one: {date}',
-  'maintenance.add.bookBy': "We'll remind you to book by {date}",
-  'maintenance.add.eventName': 'What is the event?',
-  'maintenance.add.eventPlaceholder': "e.g. Sophie's wedding",
-  'maintenance.add.eventNameRequired': 'Give your event a name.',
-  'maintenance.add.note': 'Note to self',
-  'maintenance.item.note': '“{note}”',
-  'maintenance.add.noteOnlyYou': 'Only you see this',
-  'maintenance.add.notePlaceholder': 'e.g. Go one shade lighter',
-  'maintenance.add.pick.waxing': 'Waxing',
-  'maintenance.add.pick.brazilian': 'Brazilian',
-  'maintenance.add.pick.browLamination': 'Brow lamination',
-  'maintenance.add.pick.browTint': 'Brow tint',
-  'maintenance.add.pick.threading': 'Threading',
-  'maintenance.add.pick.lashLift': 'Lash lift',
-  'maintenance.add.pick.pedicure': 'Pedicure',
-  'maintenance.add.pick.wigInstall': 'Wig install',
-  'maintenance.add.pick.frenchTips': 'French tips',
-  'maintenance.add.pick.washBlowDry': 'Wash and blow-dry',
-  'maintenance.add.pick.styleAndCut': 'Style and cut',
-  'maintenance.add.pick.sprayTan': 'Spray tan',
-  'maintenance.add.provider': 'Provider',
-  'maintenance.add.none': 'None',
-  'maintenance.add.providerHint': 'Link one to rebook in a tap.',
-  'maintenance.add.submit': 'Add reminder',
-  'maintenance.rebook.unavailableTitle': 'Not taking bookings right now',
-  'maintenance.rebook.unavailableBody': "{provider} isn't taking bookings on CERVICED at the moment. You can find someone else for this.",
-  'maintenance.rebook.yourProvider': 'Your provider',
-  'maintenance.error.title': 'Something went wrong',
-  'maintenance.error.load': "We couldn't load your maintenance.",
-  'maintenance.error.save': "That didn't save. Please try again.",
-  'maintenance.error.delete': "That reminder wasn't deleted. Please try again.",
-  'maintenance.error.rebook': "We couldn't open rebooking. Please try again.",
-  'maintenance.setup.title': 'Set up',
-  'maintenance.setup.skip': 'Skip',
-  'maintenance.setup.skipAll': 'Skip all',
-  'maintenance.setup.stepA11y': 'Step {step} of {total}',
-  'maintenance.setup.continue': 'Continue',
-  'maintenance.setup.justSuggestions': 'Just show me suggestions',
-  'maintenance.setup.seeSuggestions': 'See my suggestions',
-  'maintenance.setup.s1.title': "Let's build your schedule",
-  'maintenance.setup.s1.body': "We start from what you've told us in your Beauty Profile, then suggest services at a typical starting interval. You can change or remove anything.",
-  'maintenance.setup.s1.weUse': "We'll use",
-  'maintenance.setup.s1.nothing': "Your Beauty Profile doesn't have anything we can use yet. You can still answer a few questions.",
-  'maintenance.setup.s1.changeIn': 'Change these any time in My Profile.',
-  'maintenance.setup.s2.title': 'A few quick questions',
-  'maintenance.setup.q.style': 'Do you wear protective styles?',
-  'maintenance.setup.q.styleNo': 'No',
-  'maintenance.setup.q.wear': 'How long do you usually keep them in?',
-  'maintenance.setup.q.weeksIn': 'Is one in right now?',
-  'maintenance.setup.q.notInNow': 'Not right now',
-  'maintenance.setup.q.inNow': 'Yes',
-  'maintenance.setup.q.events': 'Any events coming up?',
-  'maintenance.setup.q.eventName': 'Event',
-  'maintenance.setup.q.eventDate': 'Date',
-  'maintenance.setup.q.addEvent': 'Add an event',
-  'maintenance.setup.q.removeEvent': 'Remove event',
-  'maintenance.setup.q.patch': 'When was your last patch test for tints or lash glue?',
-  'maintenance.setup.q.patchAdd': 'Add the date',
-  'maintenance.setup.q.patchClear': "I don't know",
-  'maintenance.setup.q.patchHint': 'Saved in Maintenance, not your Beauty Profile. Your provider decides when you need a new one.',
-  'maintenance.setup.s3.title': 'Your suggestions',
-  'maintenance.setup.s3.body': 'Typical starting points. Your provider may suggest something different, and you can edit each one later.',
-  'maintenance.setup.s3.none': 'Nothing to suggest yet. Booking a service, or filling in My Profile, will add to your schedule.',
-  'maintenance.setup.s3.everyWeek': 'Every week',
-  'maintenance.setup.s3.everyWeeks': 'Every {count} weeks',
-  'maintenance.setup.s3.onDate': 'Around {date}',
-  'maintenance.setup.s3.bookBy': 'Book by {date}',
-  'maintenance.setup.s3.fromAnswer': 'From your answer: {answer}',
-  'maintenance.setup.s3.includeA11y': 'Include {title}',
-  'maintenance.setup.optIn.title': 'Send me push reminders',
-  'maintenance.setup.optIn.sub': 'A notification when something is due. Off unless you turn it on; you can change it in Notification Settings.',
-  'maintenance.setup.add': 'Add {count} to my schedule',
-  'maintenance.setup.finish': 'Finish',
-
   'achievements.title': 'Achievements',
   'achievements.back': 'Go back',
   'achievements.latest': 'LATEST',
@@ -644,7 +336,8 @@ export const en = {
   'achievements.groupCount': '{earned} of {total}',
   'achievements.earnedOn': 'Earned {date}',
   'achievements.done': 'Done',
-  'achievements.loadFailed': 'We couldn’t load your achievements. Check your connection and try again.',
+  'achievements.loadFailed':
+    'We couldn’t load your achievements. Check your connection and try again.',
   'achievements.retry': 'Try again',
   'achievements.group.fullyBooked': 'FULLY BOOKED',
   'achievements.group.bookings': 'BOOKINGS',
@@ -698,7 +391,8 @@ export const en = {
   'achievements.how.returning': 'A client counts once they’ve completed a second booking with you.',
   'achievements.how.saves': 'Counts the people who have saved you to their providers.',
   'achievements.how.bell': 'Counts the people who have your bell turned on.',
-  'achievements.how.months': 'Complete at least one booking every calendar month, without missing one.',
+  'achievements.how.months':
+    'Complete at least one booking every calendar month, without missing one.',
   'achievements.how.busyDay': 'Complete 5 bookings in a single day.',
   'achievements.how.paid': 'Counts money paid out to you through CERVICED, including tips.',
   'achievements.how.waitlist': 'Counts freed slots that get booked from your waitlist.',
@@ -706,3 +400,24 @@ export const en = {
   'achievements.how.photos': 'Counts the photos in your portfolio.',
   'achievements.how.monthsOn': 'Counts from the day you joined CERVICED.',
 } as const;
+
+/** Keys in this area HELD IN ENGLISH in every language (legal, refund,
+ *  cancellation, payment, age and health-safety copy). See ../../translate.ts. */
+export const settingsHeld: readonly (keyof typeof settings)[] = [
+  'helpCentre.faq.cancel.a', // cancellation / refund policy
+  'helpCentre.faq.payment.a', // payment handling
+  'helpCentre.action.terms', // legal reference
+  'profile.appInfo.terms.title', // legal reference
+  'profile.appInfo.terms.sub', // legal reference
+  'providerAccount.appInfo.terms.title', // legal reference
+  'providerAccount.appInfo.terms.sub', // legal reference
+  'helpCentre.faq.request.a',
+  'helpCentre.faq.tip.a',
+  'helpCentre.faq.beautyProfile.a',
+  'helpCentre.providerFaq.payouts.a',
+  'helpCentre.providerFaq.deposits.a',
+  'helpCentre.providerFaq.lateFees.a',
+  'helpCentre.providerFaq.fee.a',
+  'helpCentre.providerFaq.tips.a',
+  'helpCentre.providerFaq.clientele.a',
+];

@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { useAuth } from './AuthContext';
 import { setTextAppearance } from '../utils/textAppearanceStore';
 import { setRegion as setRegionStore } from '../utils/regionStore';
+import { setLanguage as setLanguageStore } from '../i18n/languageStore';
 import {
   type FontChoiceKey,
   type DisplaySettingField,
@@ -128,6 +129,11 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
     setRegionStore(region);
   }, [region]);
 
+  // Mirror language into the module store that dateUtils and out-of-render
+  // translation (tr/trp) read. Set before children render so a screen's
+  // first paint at a new language already has localized dates.
+  setLanguageStore(language);
+
   // Display settings are only reachable signed in; with no account there is
   // nowhere to keep a change, so it lasts until the next sign-in.
   const persist = useCallback((field: DisplaySettingField, value: string) => {
@@ -178,6 +184,13 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
       {children}
     </DisplaySettingsContext.Provider>
   );
+}
+
+/** The active language, or null outside a DisplaySettingsProvider (an error
+ *  boundary, a screen rendered alone in a test). Unlike useDisplaySettings it
+ *  never throws — the i18n hook falls back to the language store instead. */
+export function useOptionalLanguage(): string | null {
+  return useContext(DisplaySettingsContext)?.language ?? null;
 }
 
 export function useDisplaySettings(): DisplaySettingsContextType {

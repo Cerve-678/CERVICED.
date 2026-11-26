@@ -212,7 +212,9 @@ export function BeautyProfileLanding({
 
         <View style={styles.helloRow} accessible accessibilityRole="header">
           <Text style={[styles.hello, { color: C.ink }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-            {t('beautyProfile.hello.title', { name: firstName.trim() || t('beautyProfile.hello.there') }).toUpperCase()}
+            {(firstName.trim()
+              ? t('beautyProfile.hello.title', { name: firstName.trim() })
+              : t('beautyProfile.hello.there')).toUpperCase()}
           </Text>
           <Ionicons name="sparkles" size={26} color={C.deep} style={styles.sparkle} />
         </View>

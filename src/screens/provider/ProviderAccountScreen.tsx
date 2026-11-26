@@ -90,28 +90,31 @@ interface SettingsOptionProps {
   locked?: boolean;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger, locked }: SettingsOptionProps) => (
-  <TouchableOpacity
-    style={[styles.row, locked && { opacity: 0.6 }]}
-    onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
-    activeOpacity={0.7}
-    accessibilityRole="button"
-    accessibilityLabel={locked ? `${title}, locked. ${subtitle}` : undefined}
-  >
-    <View style={styles.rowLeft}>
-      <View style={styles.rowIcon}>
-        <Icon name={icon} size={17} color={danger ? P.accent : P.sub} />
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger, locked }: SettingsOptionProps) => {
+  const { t } = useTranslation();
+  return (
+    <TouchableOpacity
+      style={[styles.row, locked && { opacity: 0.6 }]}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={locked ? t('providerAccount.a11y.locked', { title, subtitle }) : undefined}
+    >
+      <View style={styles.rowLeft}>
+        <View style={styles.rowIcon}>
+          <Icon name={icon} size={17} color={danger ? P.accent : P.sub} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.rowTitle, { color: danger ? P.accentText : P.text }]}>{title}</Text>
+          <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
+        </View>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.rowTitle, { color: danger ? P.accentText : P.text }]}>{title}</Text>
-        <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
-      </View>
-    </View>
-    {locked
-      ? <Icon name="lock" size={14} color={P.sub} />
-      : <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />}
-  </TouchableOpacity>
-));
+      {locked
+        ? <Icon name="lock" size={14} color={P.sub} />
+        : <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />}
+    </TouchableOpacity>
+  );
+});
 SettingsOption.displayName = 'SettingsOption';
 
 // ── My Business carousel card ───────────────────────────────────────────────
@@ -126,22 +129,25 @@ interface CarouselCardProps {
   todo?: boolean;
 }
 
-const CarouselCard = React.memo(({ icon, title, subtitle, onPress, P, todo }: CarouselCardProps) => (
-  <TouchableOpacity
-    style={[styles.carouselCard, { backgroundColor: P.card, borderColor: P.border }]}
-    onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
-    activeOpacity={0.7}
-    accessibilityRole="button"
-    accessibilityLabel={todo ? `${title}, something to do` : title}
-  >
-    {todo && <View style={styles.ccTodo}><TodoMark size={16} /></View>}
-    <View style={[styles.ccIcon, { backgroundColor: P.iconBg }]}>
-      <Icon name={icon} size={16} color={P.accent} />
-    </View>
-    <Text style={[styles.ccTitle, { color: P.text }]} numberOfLines={1}>{title}</Text>
-    <Text style={[styles.ccSub, { color: P.sub }]} numberOfLines={2}>{subtitle}</Text>
-  </TouchableOpacity>
-));
+const CarouselCard = React.memo(({ icon, title, subtitle, onPress, P, todo }: CarouselCardProps) => {
+  const { t } = useTranslation();
+  return (
+    <TouchableOpacity
+      style={[styles.carouselCard, { backgroundColor: P.card, borderColor: P.border }]}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={todo ? t('providerAccount.a11y.todo', { title }) : title}
+    >
+      {todo && <View style={styles.ccTodo}><TodoMark size={16} /></View>}
+      <View style={[styles.ccIcon, { backgroundColor: P.iconBg }]}>
+        <Icon name={icon} size={16} color={P.accent} />
+      </View>
+      <Text style={[styles.ccTitle, { color: P.text }]} numberOfLines={1}>{title}</Text>
+      <Text style={[styles.ccSub, { color: P.sub }]} numberOfLines={2}>{subtitle}</Text>
+    </TouchableOpacity>
+  );
+});
 CarouselCard.displayName = 'CarouselCard';
 
 // ── Main screen ──────────────────────────────────────────────────────────────

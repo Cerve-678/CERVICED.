@@ -1,0 +1,365 @@
+// French · settings. Typed against ../en/settings.ts; held keys are left out.
+import type { AreaCatalog } from '../../types';
+import type { settings as en } from '../en/settings';
+
+export const settings: AreaCatalog<typeof en> = {
+  'textSizing.title': 'Texte et taille',
+  'textSizing.subtitle': "Ajustez l'apparence du texte dans l'aperçu ci-dessous.",
+  'textSizing.section.preview': 'APERÇU',
+  'textSizing.preview.heading': 'Le vif renard brun',
+  'textSizing.preview.body':
+    'Réserver votre prochain rendez-vous devrait être simple. Voici comment le texte courant apparaîtra avec la taille et la police que vous choisissez.',
+  'textSizing.section.textSize': 'TAILLE DU TEXTE',
+  'textSizing.section.font': 'POLICE',
+
+  'languageRegion.title': 'Langue et région',
+  'languageRegion.subtitle': 'Choisissez votre langue et votre région préférées.',
+  'languageRegion.section.language': 'LANGUE',
+  'languageRegion.languageFootnote':
+    "Cerviced suit la langue que vous choisissez. La connexion, les informations légales et de santé, les notifications et les e-mails restent en anglais, et les textes des professionnels s'affichent tels qu'ils les ont écrits.",
+  'languageRegion.section.region': 'RÉGION',
+  'languageRegion.regionRowDates': 'Dates {date}',
+  'languageRegion.regionFootnote':
+    'Les dates sont affichées au format de votre région ({date}). Les prix sont toujours indiqués en livres (£), où que vous soyez.',
+
+  'helpCentre.title': "Centre d'aide",
+  'helpCentre.subtitle': 'Réponses aux questions fréquentes',
+  'helpCentre.section.booking': 'RÉSERVER',
+  'helpCentre.section.yourProviders': 'VOS PROFESSIONNELS',
+  'helpCentre.section.yourProfile': 'VOTRE PROFIL',
+  'helpCentre.section.gettingStarted': 'PREMIERS PAS',
+  'helpCentre.section.bookings': 'RÉSERVATIONS',
+  'helpCentre.section.gettingPaid': 'ÊTRE PAYÉ',
+  'helpCentre.section.clients': 'CLIENTS',
+
+  'helpCentre.faq.book.q': 'Comment réserver un rendez-vous ?',
+  'helpCentre.faq.book.a':
+    'Ouvrez la page d’un professionnel depuis Accueil, Rechercher ou Explorer, choisissez une prestation et un horaire, et ajoutez-la au panier. Vous payez au moment du paiement, et pouvez réserver avec plusieurs professionnels à la fois.',
+  'helpCentre.faq.request.q': 'Pourquoi ma réservation indique-t-elle Demande envoyée ?',
+  'helpCentre.faq.cancel.q': 'Puis-je reporter ou annuler ?',
+  'helpCentre.faq.becca.q': 'Comment fonctionne Becca ?',
+  'helpCentre.faq.becca.a':
+    "Becca est votre assistante beauté dotée d'une IA. Posez-lui n'importe quelle question : elle peut recommander des professionnels, expliquer des services et vous aider à trouver le bon look.",
+  'helpCentre.faq.points.q': 'Comment gagner des points ?',
+  'helpCentre.faq.points.a':
+    'Terminez une réservation ou laissez un avis, avec des bonus pour votre première réservation, votre premier avis et votre anniversaire. Votre solde est dans Points, sur votre Profil.',
+  'helpCentre.faq.payment.q': 'Mes informations de paiement sont-elles sécurisées ?',
+
+  'helpCentre.action.contact': 'Contacter le support',
+  'helpCentre.action.report': 'Signaler un problème',
+  'helpCentre.action.about': 'À propos de Cerviced',
+
+  'profile.greeting': 'Bonjour,',
+  'profile.youFallback': 'Vous',
+
+  'profile.card.saved.label': 'Enregistrés',
+  'profile.card.saved.sub': 'Vos favoris',
+  'profile.card.bookings.label': 'Réservations',
+  'profile.card.bookings.sub': 'Rendez-vous',
+  'profile.card.points.label': 'Points',
+  'profile.card.points.sub': 'Vos récompenses',
+
+  'profile.section.account': 'Gestion du compte',
+  'profile.forYou.activity.title': "Centre d'activité",
+  'profile.forYou.activity.sub': 'Remboursements, reports et tout ce que vous avez à faire',
+  'profile.forYou.activity.count': '{count} à faire',
+  'profile.forYou.activity.todo': 'Quelque chose vous attend',
+  'profile.forYou.messages.title': 'Messages',
+  'profile.forYou.messages.sub': 'Discussions avec vos professionnels',
+  'profile.account.account.title': 'Compte',
+  'profile.account.account.sub': 'Nom, téléphone, date de naissance',
+  'profile.forYou.beauty.title': 'Profil beauté',
+  'profile.forYou.beauty.todo': 'Il reste quelque chose à compléter',
+  'profile.account.password.title': 'Changer le mot de passe',
+  'profile.account.password.sub': 'Mettre à jour les identifiants',
+  'profile.account.payment.title': 'Moyens de paiement',
+  'profile.account.payment.sub': 'Cartes, Apple Pay',
+
+  'profile.section.preferences': 'Préférences',
+  'profile.pref.notifications.title': 'Notifications',
+  'profile.pref.notifications.sub': 'Réservations, rappels, marketing',
+  'profile.pref.darkMode.title': 'Mode sombre',
+  'profile.pref.darkMode.sub': 'Apparence',
+  'profile.pref.biometric.sub.available': 'Connexion rapide',
+  'profile.pref.biometric.sub.unavailable': 'Non disponible sur cet appareil',
+
+  'profile.section.accessibility': 'Accessibilité et support',
+  'profile.access.textSizing.title': 'Texte et taille',
+  'profile.access.textSizing.sub': 'Taille et police du texte',
+  'profile.access.language.title': 'Langue et région',
+  'profile.access.language.sub': 'Langue et région',
+  'profile.access.help.title': "Centre d'aide",
+  'profile.access.help.sub': 'Questions fréquentes, contacter le support',
+
+  'profile.section.professionals': 'Pour les professionnels',
+  'profile.pro.switch.title': 'Passer en mode professionnel',
+  'profile.pro.switch.sub': 'Accéder à votre tableau de bord professionnel',
+  'profile.pro.become.title': 'Devenir professionnel',
+  'profile.pro.become.sub': 'Proposez vos services sur Cerviced',
+
+  'profile.section.appInfo': "Infos de l'app et mentions légales",
+  'profile.appInfo.about.title': 'À propos de Cerviced',
+  'profile.appInfo.about.sub': 'Qui nous sommes et ce que nous construisons',
+  'profile.appInfo.report.title': 'Signaler un problème',
+  'profile.appInfo.report.sub': 'Bugs, commentaires',
+
+  'profile.logout': 'Se déconnecter',
+  'profile.error.title': 'Erreur',
+  'profile.error.biometric': "Impossible d'activer {method}. Veuillez réessayer.",
+
+  'profile.becomeModal.title': 'Devenir professionnel',
+  'profile.becomeModal.body':
+    'Nous ajouterons un profil professionnel à votre compte actuel — même identifiant, mêmes informations. Vous pouvez basculer entre le mode client et le mode professionnel à tout moment.',
+  'profile.becomeModal.cta': 'Configurer mon profil professionnel',
+
+  'profile.logoutModal.title': 'Se déconnecter',
+  'profile.logoutModal.body': 'Voulez-vous vraiment vous déconnecter ?',
+  'profile.logoutModal.confirm': 'Oui, se déconnecter',
+
+  // Écran Compte professionnel. Les deux clés « Conditions » sont volontairement
+  // absentes (maintenues en anglais par DO_NOT_TRANSLATE) ; le nom de
+  // l'entreprise est rédigé par le professionnel et géré par DynamicText.
+  'providerAccount.badge': 'PROFESSIONNEL',
+  'providerAccount.hero.sub':
+    'Votre entreprise, vos réservations et l\'apparence de Cerviced, le tout au même endroit.',
+  'providerAccount.hero.analytics': 'Statistiques',
+  'providerAccount.hero.analyticsSub': 'Revenus et chiffres',
+  'providerAccount.hero.promotions': 'Promotions',
+  'providerAccount.hero.promotionsSub': 'Offres et réductions',
+  'providerAccount.hero.clientele': 'Clientèle',
+  'providerAccount.hero.clienteleSub': 'Clients fidèles',
+
+  'providerAccount.businessProfile.title': "Profil de l'entreprise",
+  'providerAccount.businessProfile.sub': 'Profil, informations et communications',
+
+  'providerAccount.section.myBusiness': 'MON ENTREPRISE',
+  'providerAccount.myBusiness.payouts.title': 'Versements',
+  'providerAccount.myBusiness.payouts.sub': 'Vos paiements et dates de versement',
+  'providerAccount.myBusiness.inbox.title': 'Boîte de réception',
+  'providerAccount.myBusiness.inbox.sub': 'Demandes et messages des clients',
+  'providerAccount.myBusiness.history.title': 'Historique des réservations',
+  'providerAccount.myBusiness.history.sub': 'Voir les réservations passées',
+
+  'providerAccount.pref.darkMode': 'Mode sombre',
+
+  'providerAccount.section.account': 'COMPTE',
+  'providerAccount.account.password.title': 'Changer le mot de passe',
+  'providerAccount.account.password.sub': 'Mettre à jour les identifiants',
+  'providerAccount.account.info.title': 'Informations du compte',
+  'providerAccount.account.info.sub': 'Nom, téléphone, date de naissance et e-mail de connexion',
+  'providerAccount.account.notifications.title': 'Notifications',
+  'providerAccount.account.notifications.sub': 'Réservations, messages, rappels',
+  'providerAccount.account.achievements.title': 'Réussites',
+  'providerAccount.account.achievements.sub': 'Ce que vous avez obtenu jusqu’ici',
+
+  'providerAccount.section.accessibility': 'ACCESSIBILITÉ ET SUPPORT',
+  'providerAccount.access.textSizing.title': 'Taille et police du texte',
+  'providerAccount.access.textSizing.sub': 'Taille et police',
+  'providerAccount.access.language.title': 'Langue et région',
+  'providerAccount.access.language.sub': 'Langue et région',
+  'providerAccount.access.help.title': "Centre d'aide",
+  'providerAccount.access.help.sub': 'Questions fréquentes, contacter le support',
+
+  'providerAccount.section.forClients': 'POUR LES CLIENTS',
+  'providerAccount.forClients.switch.title': 'Passer en mode client',
+  'providerAccount.forClients.switch.sub': 'Parcourez Cerviced en tant que client',
+  'providerAccount.forClients.create.title': 'Créer un compte client',
+  'providerAccount.forClients.create.sub': 'Configurez votre profil client pour explorer',
+  'providerAccount.forClients.checking.title': 'Mode client',
+  'providerAccount.forClients.checking.sub': 'Vérification de votre compte…',
+
+  'providerAccount.section.appInfo': "INFOS DE L'APP ET MENTIONS LÉGALES",
+  'providerAccount.appInfo.about.title': 'À propos de Cerviced',
+  'providerAccount.appInfo.about.sub': 'Qui nous sommes et ce que nous construisons',
+  'providerAccount.appInfo.report.title': 'Signaler un problème',
+  'providerAccount.appInfo.report.sub': 'Bugs, commentaires',
+
+  'providerAccount.logout': 'Se déconnecter',
+  'providerAccount.a11y.locked': '{title}, verrouillé. {subtitle}',
+  'providerAccount.a11y.todo': '{title}, quelque chose à faire',
+  'providerAccount.error.title': 'Erreur',
+  'providerAccount.error.biometric': "Impossible d'activer {method}. Veuillez réessayer.",
+
+  'providerAccount.clientModal.title': 'Devenir client',
+  'providerAccount.clientModal.body':
+    'Nous ajouterons un profil client à votre compte actuel — même identifiant, mêmes informations. Vous pouvez basculer entre le mode professionnel et le mode client à tout moment.',
+  'providerAccount.clientModal.cta': 'Configurer mon profil client',
+
+  'providerAccount.logoutModal.title': 'Se déconnecter',
+  'providerAccount.logoutModal.body': 'Voulez-vous vraiment vous déconnecter ?',
+  'providerAccount.logoutModal.confirm': 'Oui, se déconnecter',
+  'profile.section.forYou': 'Pour vous',
+  'profile.forYou.beauty.sub': "Rappels d'entretien, cheveux, peau et plus",
+  'profile.forYou.beauty.due': '{count} à faire',
+  'providerAccount.linkOnly.hero.sub': 'Votre profil, comment les clients vous trouvent et votre compte, au même endroit.',
+  'providerAccount.linkOnly.hero.edit': 'Modifier le profil',
+  'providerAccount.linkOnly.hero.branding': 'Image de marque',
+  'providerAccount.section.yourBusiness': 'VOTRE ACTIVITÉ',
+  'providerAccount.linkOnly.businessInfo.title': "Infos sur l'activité",
+  'providerAccount.linkOnly.businessInfo.sub': 'Nom, type de service, lien de réservation, e-mails',
+  'providerAccount.linkOnly.hours.title': "Horaires d'ouverture",
+  'providerAccount.linkOnly.hours.sub': 'Affichés dans votre onglet À propos',
+  'providerAccount.linkOnly.policies.title': 'Conditions',
+  'providerAccount.linkOnly.policies.sub': 'Facultatif : affichées sur votre profil si vous les ajoutez',
+  'providerAccount.linkOnly.achievements.sub': "Inclus dans l'expérience CERVICED complète",
+  'providerAccount.linkOnly.achievements.lockedTitle': 'Débloquez les succès',
+  'providerAccount.linkOnly.achievements.lockedBody':
+    'Les membres complets obtiennent des succès pour leurs réservations, leurs avis cinq étoiles et leurs mois complets.',
+  'providerAccount.linkOnly.fullCerviced.title': 'Ce que CERVICED complet ajoute',
+  'providerAccount.linkOnly.fullCerviced.sub': 'Fiches clients, annonces, automatisations et plus',
+  'providerAccount.linkOnly.notifications.sub': 'Messages et enregistrements',
+  'helpCentre.providerFaq.live.q': 'Comment publier mon profil ?',
+  'helpCentre.providerFaq.live.a':
+    'Votre écran d’accueil indique ce qu’il reste à faire. Une fois toutes les étapes terminées, les clients peuvent vous trouver dans Rechercher.',
+  'helpCentre.providerFaq.share.q': 'Comment partager ma page ?',
+  'helpCentre.providerFaq.share.a':
+    'Touchez le bouton QR code dans Mon profil. Imprimez-le ou gardez-le près de votre fauteuil, ou copiez votre lien pour le partager partout.',
+  'helpCentre.providerFaq.branding.q': 'Comment changer l’apparence de ma page ?',
+  'helpCentre.providerFaq.branding.a':
+    'Touchez le bouton palette dans Mon profil. Choisissez un style de page, des couleurs et une police, et voyez votre page changer en direct.',
+  'helpCentre.providerFaq.book.q': 'Comment les clients réservent-ils avec moi ?',
+  'helpCentre.providerFaq.book.a':
+    'Les clients choisissent une prestation et un créneau sur votre page et paient dans l’app. Les nouvelles réservations apparaissent sur votre écran d’accueil et dans vos notifications.',
+  'helpCentre.providerFaq.autoConfirm.q': 'Dois-je accepter chaque réservation ?',
+  'helpCentre.providerFaq.autoConfirm.a':
+    'Seulement si vous le souhaitez. Activez Confirmer automatiquement dans Profil de l’activité → Automatisations et préférences. Sinon, vous acceptez ou refusez chaque demande.',
+  'helpCentre.providerFaq.hours.q': 'Comment définir mes horaires ?',
+  'helpCentre.providerFaq.hours.a':
+    'Allez dans Profil de l’activité → Détails de l’activité → Planning et disponibilités. Définissez vos horaires, les pauses entre rendez-vous et jusqu’où les clients peuvent réserver.',
+  'helpCentre.providerFaq.timeOff.q': 'Comment prendre des congés ?',
+  'helpCentre.providerFaq.timeOff.a':
+    'Utilisez Fermer mon planning sur l’écran des horaires. Les clients ne peuvent pas réserver avant la réouverture, et vous choisissez quoi faire des réservations existantes.',
+  'helpCentre.providerFaq.calendar.q':
+    'Le calendrier de mon téléphone peut-il bloquer des créneaux ?',
+  'helpCentre.providerFaq.calendar.a':
+    'Oui. Activez la synchronisation dans Planning et disponibilités et choisissez vos calendriers. Les clients ne peuvent pas réserver quand vous y êtes occupé, et ne voient jamais l’événement.',
+  'helpCentre.providerFaq.waitlist.q': 'Comment fonctionne la liste d’attente ?',
+  'helpCentre.providerFaq.waitlist.a':
+    'Activez la liste d’attente dans Automatisations et préférences. Quand un créneau se libère, Auto le propose à la personne suivante. Sans Auto, vous le proposez vous-même depuis Réservations.',
+  'helpCentre.providerFaq.payouts.q': 'Quand suis-je payé ?',
+  'helpCentre.providerFaq.saves.q': "Que se passe-t-il quand quelqu'un m'enregistre ?",
+  'helpCentre.providerFaq.saves.a':
+    'Une fois par jour, vous recevez une notification indiquant combien de personnes vous ont enregistré, jamais qui. Vous pouvez la désactiver dans vos réglages de notifications. Vos statistiques montrent vos enregistrements au fil du temps.',
+  'helpCentre.linkFaq.live.a':
+    'Votre écran d’accueil indique ce qu’il reste : votre logo, À propos, vos horaires et au moins une photo de portfolio. Ensuite, les clients peuvent vous trouver dans Rechercher.',
+  'helpCentre.linkFaq.book.a':
+    'Le bouton Réserver de votre profil ouvre votre propre site de réservation. Les clients réservent là-bas, et CERVICED ne voit ni ne gère ces réservations.',
+  'helpCentre.linkFaq.hours.q': 'Comment définir mes horaires d’ouverture ?',
+  'helpCentre.linkFaq.hours.a':
+    'Ouvrez Horaires d’ouverture dans votre Compte. Les clients les voient sur votre profil.',
+  'helpCentre.linkFaq.full.q': 'Qu’apporterait CERVICED complet ?',
+  'helpCentre.linkFaq.full.a':
+    'Ouvrez Ce que CERVICED complet ajoute dans votre Compte pour voir ce qui change quand les clients réservent et paient dans l’app.',
+  'helpCentre.linkFaq.becca.a':
+    'Posez à Becca des questions sur vos messages, vos horaires ou vos notifications : elle répond ou vous emmène au bon écran.',
+  'helpCentre.providerFaq.messages.q': 'Comment fonctionnent les messages ?',
+  'helpCentre.providerFaq.messages.a':
+    'Les clients peuvent vous écrire depuis votre profil. Vous recevez une notification pour chaque nouveau message, et un rappel si un message attend toujours une réponse après quelques heures.',
+  'helpCentre.providerFaq.clientele.q': 'Puis-je voir le profil beauté d’un client ?',
+  'helpCentre.providerFaq.becca.q': 'Comment Becca peut-elle aider mon activité ?',
+  'helpCentre.providerFaq.becca.a':
+    'Posez à Becca des questions sur votre journée, votre semaine, vos clients, vos avis, vos messages ou vos horaires : elle répond ou vous emmène au bon écran.',
+  'achievements.title': 'Succès',
+  'achievements.back': 'Retour',
+  'achievements.latest': 'DERNIER',
+  'achievements.summary': '{earned} sur {total} obtenus',
+  'achievements.private': 'Vous seul pouvez les voir',
+  'achievements.none': "Aucun pour l'instant. Votre premier apparaîtra ici.",
+  'achievements.groupCount': '{earned} sur {total}',
+  'achievements.earnedOn': 'Obtenu le {date}',
+  'achievements.done': 'Terminé',
+  'achievements.loadFailed':
+    'Impossible de charger vos succès. Vérifiez votre connexion et réessayez.',
+  'achievements.retry': 'Réessayer',
+  'achievements.group.fullyBooked': 'COMPLET',
+  'achievements.group.bookings': 'RÉSERVATIONS',
+  'achievements.group.clientLove': 'CLIENTS CONQUIS',
+  'achievements.group.busy': 'SÉRIES CHARGÉES',
+  'achievements.group.earnings': 'REVENUS',
+  'achievements.group.waitlist': "LISTE D'ATTENTE",
+  'achievements.group.established': 'BIEN INSTALLÉ',
+  'achievements.progress.count': '{current} sur {target}',
+  'achievements.progress.busyDay': '{current} sur {target} en une journée',
+  'achievements.progress.months': '{current} sur {target} mois',
+  'achievements.progress.slots': '{current} sur {target} créneaux',
+  'achievements.progress.reviews': '{current} sur {target} avis',
+  'achievements.progress.ratingShort': 'Note de {rating}, il faut 4,8',
+  'achievements.name.fullyBookedFirst': 'Complet',
+  'achievements.name.fullyBooked3': 'Complet 3 fois',
+  'achievements.name.fullyBookedMonths3': '3 mois de suite',
+  'achievements.name.bookingFirst': 'Première réservation',
+  'achievements.name.bookings10': '10 réservations',
+  'achievements.name.bookings50': '50 réservations',
+  'achievements.name.bookings100': '100 réservations',
+  'achievements.name.bookings500': '500 réservations',
+  'achievements.name.fiveStarFirst': 'Premier avis 5 étoiles',
+  'achievements.name.fiveStar10': '10 avis cinq étoiles',
+  'achievements.name.fiveStar50': '50 avis cinq étoiles',
+  'achievements.name.rating48': 'Note de 4,8 ou plus',
+  'achievements.name.tipFirst': 'Premier pourboire',
+  'achievements.name.returning10': '10 clients fidèles',
+  'achievements.name.saves25': '25 enregistrements',
+  'achievements.name.saves100': '100 enregistrements',
+  'achievements.name.bell10': '10 abonnés à la cloche',
+  'achievements.name.bell50': '50 abonnés à la cloche',
+  'achievements.name.months3': '3 mois avec des réservations',
+  'achievements.name.months6': '6 mois avec des réservations',
+  'achievements.name.months12': '12 mois avec des réservations',
+  'achievements.name.busyDay': 'Journée chargée',
+  'achievements.name.payoutFirst': 'Premier versement',
+  'achievements.name.paid1000': '1 000 £ versés',
+  'achievements.name.paid10000': '10 000 £ versés',
+  'achievements.name.waitlistHero': "Héros de la liste d'attente",
+  'achievements.name.live': 'En ligne sur CERVICED',
+  'achievements.name.photos20': '20 photos de portfolio',
+  'achievements.name.monthsOn6': '6 mois',
+  'achievements.name.monthsOn12': '1 an',
+  'achievements.how.fullyBooked':
+    'Obtenu quand tous les créneaux que vous avez ouverts sont réservés.',
+  'achievements.how.fullyBookedMonths': 'Soyez complet 3 mois civils de suite.',
+  'achievements.how.bookings': "Une réservation compte une fois qu'elle est terminée.",
+  'achievements.how.fiveStar': "Compte chaque avis 5 étoiles qu'un client vous laisse.",
+  'achievements.how.rating': 'Gardez une note de 4,8 ou plus sur au moins 25 avis.',
+  'achievements.how.tip':
+    "Obtenu la première fois qu'un client vous laisse un pourboire dans l'app.",
+  'achievements.how.returning':
+    "Un client compte une fois qu'il a terminé une deuxième réservation avec vous.",
+  'achievements.how.saves':
+    'Compte les personnes qui vous ont enregistré dans leurs professionnels.',
+  'achievements.how.bell': 'Compte les personnes qui ont activé votre cloche.',
+  'achievements.how.months':
+    'Terminez au moins une réservation chaque mois civil, sans en manquer un.',
+  'achievements.how.busyDay': 'Terminez 5 réservations en une seule journée.',
+  'achievements.how.paid': "Compte l'argent qui vous a été versé via CERVICED, pourboires compris.",
+  'achievements.how.waitlist': "Compte les créneaux libérés réservés depuis votre liste d'attente.",
+  'achievements.how.live': 'Obtenu quand votre profil est mis en ligne.',
+  'achievements.how.photos': 'Compte les photos de votre portfolio.',
+  'achievements.how.monthsOn': 'Compte à partir du jour où vous avez rejoint CERVICED.',
+  'helpCentre.faq.waitlist.q': 'Et s’il est complet ?',
+  'helpCentre.faq.waitlist.a':
+    'Touchez Rejoindre la liste d’attente sur sa page et choisissez les dates qui vous conviennent. Si une place se libère, nous vous préviendrons.',
+  'helpCentre.faq.address.q': 'Quand verrai-je l’adresse du professionnel ?',
+  'helpCentre.faq.address.a':
+    'Elle apparaît sur votre réservation dès que le professionnel la partage. Certains la partagent tout de suite, d’autres plus près du jour J.',
+  'helpCentre.faq.messages.q': 'Comment écrire à un professionnel ?',
+  'helpCentre.faq.messages.a':
+    'Touchez Prendre contact sur sa page. Vos discussions sont dans Messages, sur votre Profil.',
+  'helpCentre.faq.bell.q': 'Puis-je être prévenu quand un professionnel a de la place ?',
+  'helpCentre.faq.bell.a':
+    'Touchez la cloche sur sa page. Nous vous préviendrons quand il ouvre de nouvelles dates ou a de nouveau de la place.',
+  'helpCentre.faq.reviews.q': 'Comment fonctionnent les avis ?',
+  'helpCentre.faq.reviews.a':
+    'Une fois votre rendez-vous terminé, laissez un avis depuis Réservations. Vous pouvez le publier anonymement si vous préférez.',
+  'helpCentre.faq.tip.q': 'Puis-je laisser un pourboire ?',
+  'helpCentre.faq.notOnCerviced.q': 'Que signifie « Pas encore sur CERVICED » ?',
+  'helpCentre.faq.notOnCerviced.a':
+    'Cette activité n’a pas encore rejoint l’app, vous ne pouvez donc pas réserver ici. Touchez Relancer pour montrer que vous aimeriez la voir sur CERVICED.',
+  'helpCentre.faq.beautyProfile.q': 'Qu’est-ce que mon profil beauté ?',
+  'helpCentre.faq.maintenance.q': 'Que sont les rappels d’entretien ?',
+  'helpCentre.faq.maintenance.a':
+    'Nous vous rappellerons quand reprendre rendez-vous pour vos ongles, cils ou sourcils. Activez-les dans vos réglages de notifications.',
+  'helpCentre.providerFaq.deposits.q': 'Puis-je demander un acompte ?',
+  'helpCentre.providerFaq.lateFees.q': 'Et les annulations tardives et absences ?',
+  'helpCentre.providerFaq.fee.q': 'Dois-je payer des frais à CERVICED ?',
+  'helpCentre.providerFaq.tips.q': 'Les clients peuvent-ils me donner un pourboire ?',
+};

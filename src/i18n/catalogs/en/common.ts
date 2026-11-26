@@ -1,0 +1,72 @@
+// English · common — Generic words shared by every area (Cancel, Save, Error…).
+// Source of truth for this area's keys; see ./index.ts for the conventions.
+//
+// FROZEN during the area-by-area rollout so parallel work never edits the same
+// file: when a screen needs a word that isn't here, add a key to its own area.
+
+export const common = {
+  'common.cancel': 'Cancel',
+  'common.ok': 'OK',
+  'common.done': 'Done',
+  'common.save': 'Save',
+  'common.saveChanges': 'Save changes',
+  'common.saving': 'Saving…',
+  'common.back': 'Back',
+  'common.next': 'Next',
+  'common.continue': 'Continue',
+  'common.close': 'Close',
+  'common.edit': 'Edit',
+  'common.delete': 'Delete',
+  'common.remove': 'Remove',
+  'common.add': 'Add',
+  'common.confirm': 'Confirm',
+  'common.yes': 'Yes',
+  'common.no': 'No',
+  'common.notNow': 'Not now',
+  'common.gotIt': 'Got it',
+  'common.tryAgain': 'Try again',
+  'common.retry': 'Retry',
+  'common.loading': 'Loading…',
+  'common.search': 'Search',
+  'common.seeAll': 'See all',
+  'common.viewAll': 'View all',
+  'common.showMore': 'Show more',
+  'common.showLess': 'Show less',
+  'common.optional': 'Optional',
+  'common.required': 'Required',
+  'common.submit': 'Submit',
+  'common.send': 'Send',
+  'common.skip': 'Skip',
+  'common.share': 'Share',
+  'common.select': 'Select',
+  'common.apply': 'Apply',
+  'common.clear': 'Clear',
+  'common.change': 'Change',
+  'common.copy': 'Copy',
+  'common.copied': 'Copied',
+  'common.open': 'Open',
+  'common.none': 'None',
+  'common.all': 'All',
+  'common.free': 'Free',
+  'common.new': 'New',
+  'common.settings': 'Settings',
+  'common.error': 'Error',
+  'common.somethingWentWrong': 'Something went wrong',
+  'common.pleaseTryAgain': 'Please try again.',
+  'common.noConnection': "You're offline. Check your connection and try again.",
+
+  // Relative dates and times — read by src/utils/dateUtils.ts.
+  'common.date.today': 'Today',
+  'common.date.tomorrow': 'Tomorrow',
+  'common.date.yesterday': 'Yesterday',
+  'common.time.justNow': 'Just now',
+  'common.time.minutesAgo': '{count}m ago',
+  'common.time.hoursAgo': '{count}h ago',
+  'common.time.daysAgo': '{count}d ago',
+  'common.duration.hours': '{count}h',
+  'common.duration.minutes': '{count}m',
+} as const;
+
+/** Keys in this area HELD IN ENGLISH in every language (legal, refund,
+ *  cancellation, payment, age and health-safety copy). See ../../translate.ts. */
+export const commonHeld: readonly (keyof typeof common)[] = [];
