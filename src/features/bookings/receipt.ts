@@ -53,7 +53,7 @@ const PROVIDER_LETTERHEAD: Letterhead = {
   mark: CVD_MARK_CHOCOLATE,
 };
 
-type Line = { label: string; amount: number; kind?: 'addon' | 'fee' };
+type Line = { label: string; amount: number; kind?: 'addon' | 'fee' | 'discount' };
 type PaymentRow = { label: string; amount: number; strong?: boolean };
 
 type DocumentContent = {
@@ -77,7 +77,7 @@ type DocumentContent = {
  *  hat's colour with the CVD mark, then services, total and payment. */
 function renderDocument(theme: Letterhead, doc: DocumentContent): string {
   const lineRows = doc.lines.map(line => `
-      <div class="line ${line.kind ?? 'main'}"><span class="name">${escapeHtml(line.label)}</span><span class="amt">${money(line.amount)}</span></div>`).join('');
+      <div class="line ${line.kind ?? 'main'}"><span class="name">${escapeHtml(line.label)}</span><span class="amt">${line.kind === 'discount' ? `−${money(line.amount)}` : money(line.amount)}</span></div>`).join('');
   const paymentRows = doc.paymentRows.map(row => `
       <div class="pline${row.strong ? ' strong' : ''}"><span>${escapeHtml(row.label)}</span><span class="amt">${money(row.amount)}</span></div>`).join('');
 
@@ -110,7 +110,7 @@ function renderDocument(theme: Letterhead, doc: DocumentContent): string {
     .line{padding:2.4mm 0}
     .amt{white-space:nowrap;font-weight:700}
     .line.main{font-weight:700}
-    .line.addon,.line.fee{color:${theme.sub}}
+    .line.addon,.line.fee,.line.discount{color:${theme.sub}}
     .line.addon .name:before{content:"+ "}
     .rule{height:1px;background:${theme.hair};margin:2mm 0}
     .line.total{align-items:center;padding-top:3.8mm}
@@ -160,9 +160,12 @@ function renderDocument(theme: Letterhead, doc: DocumentContent): string {
   </main></body></html>`;
 }
 
-const serviceLines = (booking: ConfirmedBooking, servicePrice: number): Line[] => [
-  { label: booking.serviceName ?? 'Service', amount: servicePrice },
+// The service at its full price, its add-ons, then any promo discount (an
+// amount taken off, shown with a minus; the total already reflects it).
+const serviceLines = (booking: ConfirmedBooking, payment: { listPrice: number; promoDiscount: number }): Line[] => [
+  { label: booking.serviceName ?? 'Service', amount: payment.listPrice },
   ...(booking.addOns ?? []).map(addOn => ({ label: addOn.name, amount: Number(addOn.price) || 0, kind: 'addon' as const })),
+  ...(payment.promoDiscount > 0 ? [{ label: tr('cart.promoDiscount'), amount: payment.promoDiscount, kind: 'discount' as const }] : []),
 ];
 
 const appointmentWhen = (booking: ConfirmedBooking) =>
@@ -220,7 +223,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     issued: formatShortDate(booking.createdAt ? new Date(booking.createdAt) : new Date()),
     method: methodLabel(booking, payment.isUnpaid),
     lines: [
-      ...serviceLines(booking, payment.servicePrice),
+      ...serviceLines(booking, payment),
       ...(payment.serviceCharge > 0 ? [{ label: 'Cerviced platform fee', amount: payment.serviceCharge, kind: 'fee' as const }] : []),
     ],
     total: payment.total,
@@ -271,7 +274,7 @@ export function buildProviderInvoiceHTML(booking: ConfirmedBooking): string {
     reference: formatBookingRef(booking),
     issued: formatShortDate(new Date()),
     method: methodLabel(booking, payment.isUnpaid),
-    lines: serviceLines(booking, payment.servicePrice),
+    lines: serviceLines(booking, payment),
     total: providerTotal,
     state,
     paymentRows,

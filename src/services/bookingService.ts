@@ -266,6 +266,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     noShowDisputeReason: db.no_show_dispute_reason ?? undefined,
     // numeric columns arrive as strings from PostgREST; Number() both.
     refundedAmount: db.refunded_amount != null ? Number(db.refunded_amount) : undefined,
+    promoDiscount: db.promo_discount != null ? Number(db.promo_discount) : undefined,
     policyRetainedAmount: db.policy_retained_amount != null ? Number(db.policy_retained_amount) : undefined,
     lateRescheduleFrom: db.late_reschedule_from ?? undefined,
     lateRescheduleRuleApplies: db.late_reschedule_rule_applies ?? undefined,
