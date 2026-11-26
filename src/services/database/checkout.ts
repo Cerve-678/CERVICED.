@@ -1,146 +1,15 @@
-// Database access: Cart checkout slot holds and deposit policies.
+// Database access: booking status changes and deposit policies.
 // Part of the database layer. Screens and other code import from
 // ../databaseService, never from this file directly.
 import { supabase } from "../../lib/supabase";
 import type { DbBooking } from "../../types/database";
 import { depositNoteForClients, resolveDepositMode } from "../../utils/depositPolicy";
 
-// ─────────────────────────────────────────────────────────
-// CART CHECKOUT SLOT HOLDS
-// ─────────────────────────────────────────────────────────
-
-/** Minimal per-item shape hold_cart_booking_slots() needs to reserve a
- *  slot — just enough for the existing bookability/overlap triggers to
- *  evaluate it exactly as they would a real booking. */
-export interface CartHoldItem {
-  provider_id: string;
-  service_id: string | null;
-  booking_date: string;
-  booking_time: string;
-  end_time: string;
-  /** True when the client accepted the out-of-hours confirmation for this
-   *  time. Must be set HERE rather than at claim time: the hold is the insert
-   *  enforce_booking_bookability() fires on, so without it the trigger
-   *  rejects the very time the provider opted into accepting. */
-  is_emergency_request?: boolean;
-  /** The client ticked "I agree" to CERVICED's Terms and this provider's
-   *  cancellation policy. Asserted here, pre-payment, because that is where
-   *  the server records it — hold_cart_booking_slots() rejects the whole
-   *  batch without it and stamps policy_accepted_at from the DB clock. The
-   *  app never sends a timestamp: an unverifiable client clock is what let a
-   *  retry write the previous attempt's time over the real one. */
-  policy_accepted: boolean;
-  /** The same checkbox, reported separately because the server checks it
-   *  against a different fact — whether THIS service demands a patch test or
-   *  is flagged unsafe in pregnancy. The requirement is derived server-side
-   *  from the service row; this only reports that the person acknowledged it. */
-  safety_ack: boolean;
-}
-
-/** Reserve every cart item's slot as an on_hold booking row, all-or-
- *  nothing, right when the user commits to payment (taps "Confirm & Pay")
- *  — before the payment sheet opens. See
- *  supabase/fix_cart_checkout_slot_hold.sql. Any bookability/overlap
- *  failure on any item throws and none of the batch is held. */
-export async function holdCartBookingSlots(
-  holdBatchId: string,
-  items: CartHoldItem[],
-): Promise<void> {
-  const { error } = await supabase.rpc("hold_cart_booking_slots", {
-    p_hold_batch_id: holdBatchId,
-    p_items: items,
-  });
-  if (error) throw error;
-}
-
-/** Full per-item payload claim_cart_booking_slots() writes onto a held row
- *  when payment succeeds — this is the complete booking row, since the claim
- *  is now the only way a client booking reaches the table. */
-export type CartClaimItem = Omit<
-  DbBooking,
-  | "id"
-  | "user_id"
-  | "status"
-  | "created_at"
-  | "updated_at"
-  | "address_released_at"
-  | "occasion_type"
-  | "style_request"
-  | "reference_image_url"
-  // Written by hold_cart_booking_slots when the row is first held — that's
-  // where enforce_booking_bookability() fires, so it has to be set by then.
-  // The claim leaves both columns alone rather than re-sending them.
-  | "is_emergency_request"
-  | "emergency_ack_at"
-  // Same reasoning, different reason: these record consent given BEFORE
-  // payment, so the hold is both when they're true and the last point a
-  // rejection is still free. Re-sending policy_accepted_at from the client
-  // at claim time is exactly how a second checkout attempt used to overwrite
-  // a correct timestamp with the first attempt's stale one.
-  | "policy_accepted_at"
-  | "safety_ack_required"
-  | "safety_ack_at"
-  // The venue isn't the client's to send: the server stamps it into
-  // booking_venue_details from the provider's private details at hold time.
-  | "provider_address_snapshot"
-  | "provider_directions_snapshot"
-  | "provider_coordinates"
-  | "booking_venue_details"
->;
-
-/** One claimed slot's identity + the real booking id it now maps to. */
-export interface CartClaimResult {
-  provider_id: string;
-  booking_date: string;
-  booking_time: string;
-  booking_id: string;
-}
-
-/** Convert this batch's still-live held rows into real bookings in place.
- *  Items with no matching live hold (expired, or never held) are simply
- *  absent from the result; this never throws on a partial or empty match.
- *  There is no fallback insert — clients have no INSERT policy on bookings,
- *  so an absent item means that booking did not happen and the caller must
- *  report it as failed. */
-export async function claimCartBookingSlots(
-  holdBatchId: string,
-  items: (CartClaimItem & {
-    provider_id: string;
-    booking_date: string;
-    booking_time: string;
-  })[],
-): Promise<CartClaimResult[]> {
-  const { data, error } = await supabase.rpc("claim_cart_booking_slots", {
-    p_hold_batch_id: holdBatchId,
-    p_items: items,
-  });
-  if (error) throw error;
-  return (data ?? []) as CartClaimResult[];
-}
-
-/** Best-effort immediate release when the user backs out of payment
- *  (close button, booking failure, Stripe Payment Sheet 'Canceled'). Not
- *  the source of truth for cleanup — expire_cart_holds() cron sweep is —
- *  this just frees the slot sooner than the 5-minute TTL. Callers should
- *  catch-and-log, never let a release failure surface as a user error. */
-export async function releaseCartBookingSlots(
-  holdBatchId: string,
-): Promise<void> {
-  const { error } = await supabase.rpc("release_cart_booking_slots", {
-    p_hold_batch_id: holdBatchId,
-  });
-  if (error) throw error;
-}
-
-// createBooking() was deleted here on 2026-08-20. It did a direct client
-// INSERT into public.bookings, which no RLS policy has permitted since
-// 20260810180302_revoke_legacy_client_booking_writes — the only INSERT
-// policy is bookings_provider_insert. Its last caller was BookingContext's
-// post-payment fallback, which could therefore only ever produce an RLS
-// error; that path now reports the item as unbookable instead. Client
-// bookings go exclusively through hold_cart_booking_slots +
-// claim_cart_booking_slots; provider-side manual bookings go through
-// provider_create_manual_booking / insertDirectBooking.
+// Client bookings are made only by prepare_checkout + a Stripe payment
+// (create-payment-intent, finalize-payment-intent); provider-side manual
+// bookings go through provider_create_manual_booking / insertDirectBooking.
+// The old hold/claim route, which let the app book without a payment, was
+// removed with its RPCs' grants (20261126120000).
 
 /** Update booking status (provider-side confirm/start/complete/no-show — cancel
  *  goes through cancelOwnBooking/providerCancelOwnBooking instead). Routed
@@ -155,26 +24,6 @@ export async function updateBookingStatus(
     p_status: status,
   });
 
-  if (error) throw error;
-}
-
-/** Patch group-booking metadata on already-created bookings — used to
- *  reconcile is_group_booking/group_booking_id/group_booking_count after a
- *  multi-service checkout partially fails, since those fields are stamped
- *  from the original cart size before any item's outcome is known. */
-export async function updateBookingGroupInfo(
-  bookingIds: string[],
-  groupInfo: {
-    is_group_booking: boolean;
-    group_booking_id: string | null;
-    group_booking_count: number;
-  },
-): Promise<void> {
-  if (bookingIds.length === 0) return;
-  const { error } = await supabase
-    .from("bookings")
-    .update(groupInfo)
-    .in("id", bookingIds);
   if (error) throw error;
 }
 

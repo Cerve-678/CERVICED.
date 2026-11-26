@@ -555,9 +555,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const handleSubmit = useCallback(() => {
     if (!submitReady) return;
     // One batch id per submission, only when the grouped bucket actually has
-    // more than one service — a "group" of 1 is just a standalone booking,
-    // same convention createBookingsFromCart already uses for cart-wide
-    // grouping (cartItems.length > 1).
+    // more than one service — a "group" of 1 is just a standalone booking.
     const groupBatchId = groupServices.length > 1 ? generateUuid() : undefined;
     const items = services.map(service => {
       const key = serviceKeyOf(service);

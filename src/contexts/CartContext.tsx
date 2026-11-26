@@ -103,8 +103,8 @@ export interface CartItem {
    *  were marked "Schedule Separately" there (those are singletons, same as a
    *  standalone add). Scoped to one submission, not "same provider in cart" —
    *  two separate MultiBookingSheet visits for the same provider must not merge.
-   *  Purely a client-side/local grouping hint; createBookingsFromCart reads this
-   *  to decide which provider-scoped bookings.group_booking_id each item gets. */
+   *  Purely a client-side/local grouping hint: the cart and its review show
+   *  these items together. */
   bookingBatchId?: string;
   /** The provider's cancellation/booking policy AS IT READ when this item was
    *  added, frozen so the booking is judged by the terms the client actually

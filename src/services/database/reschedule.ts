@@ -2,8 +2,7 @@
 // Part of the database layer. Screens and other code import from
 // ../databaseService, never from this file directly.
 import { supabase } from "../../lib/supabase";
-import type { DbBookingRescheduleRequest, NotificationType } from "../../types/database";
-import { logger } from "../../utils/logger";
+import type { DbBookingRescheduleRequest } from "../../types/database";
 import { isUuid } from "./social";
 import { mapCancellationPolicyRow } from "./availability";
 import type { ProviderAddressPolicy } from "./addressRelease";
@@ -280,43 +279,6 @@ export async function declineGroupRescheduleOffer(
   });
   if (error) throw error;
   return (data ?? []).map((row: { booking_id: string }) => row.booking_id);
-}
-
-/** Send a notification to the user who made a booking (provider → user direction) */
-export async function insertBookingUserNotification(params: {
-  booking_id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  priority?: "high" | "medium" | "low";
-  is_actionable?: boolean;
-  provider_id?: string;
-}): Promise<void> {
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("user_id")
-    .eq("id", params.booking_id)
-    .single();
-  if (!booking?.user_id) return;
-
-  const { error } = await supabase.from("notifications").insert({
-    user_id: booking.user_id,
-    type: params.type,
-    title: params.title,
-    message: params.message,
-    priority: params.priority ?? "medium",
-    is_actionable: params.is_actionable ?? false,
-    booking_id: params.booking_id,
-    provider_id: params.provider_id ?? null,
-    recipient_role: "client",
-  });
-  if (error) {
-    logger.warn(
-      "[insertBookingUserNotification] insert failed:",
-      error.message,
-    );
-    throw error;
-  }
 }
 
 // ─────────────────────────────────────────────────────────

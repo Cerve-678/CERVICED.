@@ -237,6 +237,15 @@ describe('email templates', () => {
 });
 
 describe('booking confirmation money', () => {
+  it('lists a promo code as the full price less the discount, with the same total', () => {
+    // £65 service with £10 off: base_price is stored as £55.
+    const { html } = bookingConfirmationEmail({ ...BOOKING, basePrice: 55, promoDiscount: 10, amountPaid: 64.99 });
+    expect(html).toContain('£65.00');
+    expect(html).toContain('Promo discount');
+    expect(html).toContain('−£10.00');
+    expect(html).toContain('£64.99');
+  });
+
   it('itemises the services, the platform fee and a pay-in-full total', () => {
     const { html } = bookingConfirmationEmail(BOOKING);
     expect(html).toContain('Lash bath');
