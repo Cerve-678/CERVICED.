@@ -359,7 +359,7 @@ export const providerBusiness: AreaCatalog<typeof en> = {
   'providerBusiness.ui2.chooseHowFreedUpSpacesAre':
     'Choisissez comment gérer les places libérées. Vous pouvez combiner ces options.',
   'providerBusiness.ui2.thisAppliesWhenYourScheduleIs':
-    "Cela s'applique aussi quand votre planning est fermé : les clients peuvent toujours rejoindre votre liste d'attente.",
+    "Si votre planning est fermé pour cause de complet, automatiquement ou par vous, les places libérées peuvent encore être proposées à votre liste d'attente. Les autres fermetures suspendent les propositions jusqu'à la réouverture.",
   'providerBusiness.ui2.auto': 'Auto',
   'providerBusiness.ui2.closeMyScheduleWhenFullyBooked': 'Fermer mon planning quand il est complet',
   'providerBusiness.ui2.withBothOptionsOffAFreed':

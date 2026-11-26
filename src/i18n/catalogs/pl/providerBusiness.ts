@@ -378,7 +378,7 @@ export const providerBusiness: AreaCatalog<typeof en> = {
   'providerBusiness.ui2.chooseHowFreedUpSpacesAre':
     'Wybierz, co dzieje się ze zwolnionymi miejscami. Możesz łączyć te opcje.',
   'providerBusiness.ui2.thisAppliesWhenYourScheduleIs':
-    'Dotyczy to też zamkniętego grafiku: klienci nadal mogą zapisać się na listę oczekujących.',
+    'Jeśli grafik zostanie zamknięty z powodu pełnego obłożenia, automatycznie lub przez Ciebie, zwolnione miejsca nadal mogą trafić do osób z listy oczekujących. Inne zamknięcia wstrzymują oferty do czasu ponownego otwarcia.',
   'providerBusiness.ui2.auto': 'Automatycznie',
   'providerBusiness.ui2.closeMyScheduleWhenFullyBooked': 'Zamknij grafik, gdy będzie pełny',
   'providerBusiness.ui2.withBothOptionsOffAFreed':

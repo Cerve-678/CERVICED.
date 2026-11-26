@@ -360,7 +360,7 @@ export const providerBusiness = {
   'providerBusiness.ui2.chooseHowFreedUpSpacesAre':
     'Choose how freed-up spaces are handled. You can use any of these together.',
   'providerBusiness.ui2.thisAppliesWhenYourScheduleIs':
-    'This applies when your schedule is closed too: clients can still join your waitlist.',
+    'If your schedule auto-closes when full, or you close it with the Fully booked reason, freed slots can still go to your waitlist. Other closures pause waitlist offers until you reopen.',
   'providerBusiness.ui2.auto': 'Auto',
   'providerBusiness.ui2.closeMyScheduleWhenFullyBooked': 'Close my schedule when fully booked',
   'providerBusiness.ui2.withBothOptionsOffAFreed':
