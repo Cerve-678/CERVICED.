@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  fix/client-reminders-fixed-timing (20261126130000_client_reminders_fixed_timing, written + dry-run 2026-11-26, NOT applied — waiting for the user)
 ```
 
 ### Applied 2026-11-26 (home-based only, and the client is told to message the provider)

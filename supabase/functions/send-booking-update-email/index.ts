@@ -7,7 +7,7 @@
 // who turned notifications off, would never see them, so every client gets
 // them by email as well (user decision 2026-11-23). Hanging this off the
 // notification row means the email follows the notification's own rules:
-// the provider's release setting, their reminder timing, the client's
+// the provider's release setting, the fixed reminder timing, the client's
 // reminder switch, group bookings and the reminder throttle.
 //
 // CALLER: the service role only, as send-booking-confirmation.
@@ -16,7 +16,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { addressSharedEmail, appointmentReminderEmail } from '../_shared/emailTemplates.ts';
 import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
-import { emailedReminderTiming, londonToday, reminderIsDue, type ReminderTiming } from '../_shared/reminderEmailTiming.ts';
+import { EMAILED_REMINDER_TIMING, londonToday, reminderIsDue, type ReminderTiming } from '../_shared/reminderEmailTiming.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -90,7 +90,7 @@ serve(async (req) => {
       { data: venueRows, error: venueError },
       { data: clientAddressRow, error: clientAddressError },
     ] = await Promise.all([
-      supabase.from('providers').select('business_type, automation_settings').eq('id', booking.provider_id).maybeSingle(),
+      supabase.from('providers').select('business_type').eq('id', booking.provider_id).maybeSingle(),
       // Released venue only: the same check the app's client_bookings view
       // makes. An email can't be unsent, so it never carries an address the
       // client couldn't see in the app yet.
@@ -128,10 +128,10 @@ serve(async (req) => {
       });
     } else {
       const reminderTiming = timing ?? '24h';
-      if (reminderTiming !== emailedReminderTiming(provider?.automation_settings?.clientReminderTiming)) {
+      if (reminderTiming !== EMAILED_REMINDER_TIMING) {
         return json({ skipped: `reminder ${reminderTiming} is not the emailed one` });
       }
-      const daysAhead = reminderTiming === '72h' ? 3 : reminderTiming === '48h' ? 2 : 1;
+      const daysAhead = 1;
       if (!reminderIsDue(booking.booking_date, londonToday(), daysAhead)) {
         return json({ skipped: 'reminder outside its window' });
       }
