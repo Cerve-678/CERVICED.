@@ -130,6 +130,8 @@ const nextBooking: Capability = {
     "what have i got coming up", "what's coming up", "whats coming up",
     "when's my appointment", "when am i seeing", "next one",
     "how long until my", "when do i see",
+    // Named the way people ask about one booking: "what time is my nails on sunday".
+    "what time is my", "what time's my", "what day is my",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
     const upcoming = sortUpcoming(bookings);
@@ -185,6 +187,7 @@ const listBookings: Capability = {
   phrases: [
     "my bookings", "all my bookings", "my appointments", "show my bookings",
     "what have i got", "what do i have", "my schedule", "booked in",
+    "anything booked", "have i got anything", "do i have anything",
   ],
   async run({ bookings, entities }): Promise<CapabilityResult> {
     let upcoming = sortUpcoming(bookings);
@@ -269,6 +272,9 @@ const bookingDetails: Capability = {
     "tell me about my * appointment", "tell me about my * booking",
     "more about my * appointment", "more about my * booking",
     "break down my * appointment", "details of my * appointment",
+    // "What's the cancellation policy" is about the booking in hand: this answer
+    // already carries its policies.
+    "details of my", "cancellation policy", "charged if i cancel", "cancellation fee", "cancel fee", "late cancellation",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -349,6 +355,7 @@ const bookingInfoPacks: Capability = {
     "my information pack", "my info pack", "booking notes", "appointment notes",
     "instructions for my appointment", "what do i need to read",
     "what did * send me", "what has * sent me",
+    "did * send me", "has * sent me", "send me anything", "sent me anything",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -572,6 +579,7 @@ const rescheduleBooking: Capability = {
     "change the date", "different day", "another day", "different time",
     "another time", "push it back", "bring it forward", "shift my",
     "rearrange", "swap my appointment", "can i come a different",
+    "change my appointment", "push my appointment", "push my * back", "push back", "move my appointment",
   ],
   needs: [{ kind: "booking", required: false }],
   async run({ bookings, entities }): Promise<CapabilityResult> {
@@ -890,6 +898,9 @@ const bookingRoutine: Capability = {
     "what do i normally get", "what do i usually get", "my usual appointment",
     "my booking routine", "how often do i book", "when did i last get",
     "when was my last appointment", "what did i get last time", "my usual",
+    // Longer than discover.forme's "what do i usually", so the booking-history
+    // reading wins when the client asks what they BOOK.
+    "how often do i", "what do i usually book", "do i usually book",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
     const completed = bookings
@@ -968,6 +979,7 @@ const bookingHistory: Capability = {
     "everything i've booked", "everything ive booked", "all time",
     "how many appointments have i had", "how much have i booked",
     "my old bookings", "further back", "before that",
+    "last year", "had done", "done last year",
   ],
   async run({ bookings, now }): Promise<CapabilityResult> {
     // Anchor at the oldest booking already in context, so this genuinely
@@ -1142,6 +1154,8 @@ const findProviders: Capability = {
   excludeWhen: new RegExp(
     [
       String.raw`\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b`,
+      // "how often do i get my nails done" asks about their own routine.
+      String.raw`\bhow often\b`,
       RATING_ASK_RE.source,
       NEW_ASK_RE.source,
     ].join("|"),
@@ -1360,6 +1374,11 @@ const pickFromList: Capability = {
   // enough for this capability to win on the provider entity alone.
   excludeWhen: /\bmy (?:[\w'’-]+ ){0,5}(?:appointments?|bookings?)\b/i,
   needs: [{ kind: "provider", required: true }],
+  // "lola studio" on its own opens them. When the client also has a booking
+  // there, naming the provider resolves that booking too, and every booking
+  // capability tied this one on entity bonuses alone; the booking breakdown
+  // won on registration order.
+  answersBare: "provider",
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
     const dbId = await resolveProviderDbId(provider);
@@ -1561,7 +1580,8 @@ const findAvailable: Capability = {
     // remains live-provider gated, so this never exposes unpublished profiles.
     const dbProviders = await getProviders(service?.category);
     if (dbProviders.length === 0) {
-      return { text: `I couldn't find any ${label} providers at all.` };
+      // label is already "providers" when no service was named.
+      return { text: `I couldn't find any ${service ? `${label} providers` : label} at all.` };
     }
 
     // Availability is per-provider and genuinely expensive, so cap the fan-out
@@ -1797,6 +1817,8 @@ const providerServices: Capability = {
     "what are their prices", "how much would it be", "are they expensive",
     "their rates", "what do they cost", "how much do they cost",
     "price list", "menu",
+    // Named forms: "lola studio prices".
+    "prices", "price", "services", "rates", "cost",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2060,6 +2082,9 @@ const providerLocation: Capability = {
     "where are they", "where is the provider", "where is their salon", "their location",
     "their address", "where are you based", "where are they based", "do they travel",
     "mobile provider", "home visit", "home visits", "come to me",
+    // Named forms. Every phrase above is pronoun-shaped, so "where is lola
+    // studio" matched none of them and lost to the booking breakdown.
+    "where is", "where's", "based", "travel", "travels", "mobile", "address", "located", "location",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2126,6 +2151,7 @@ const bookingLocation: Capability = {
     "where is my appointment", "where's my appointment", "where is my booking",
     "where's my booking", "where am i going", "how do i get there", "directions",
     "where is it", "where's it",
+    "address for my", "the address for", "address of my",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2237,6 +2263,7 @@ const providerBookingTiming: Capability = {
     "how late can i book", "how far ahead can i book", "booking window",
     "minimum notice", "last minute booking", "same day booking", "book ahead",
     "when can i book", "how soon can i book",
+    "last minute", "how far ahead", "how far in advance", "same day",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2300,6 +2327,8 @@ const providerAvailability: Capability = {
     // The provider's name sits mid-phrase: "when is Lola Studio next free?"
     "when is * free", "when is * next free", "when is * available",
     "when is * next available", "when can i see *", "when can i book in with *",
+    // Named forms: "is lola studio free tomorrow", "lola studio availability".
+    "free", "available", "availability", "next free",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2356,7 +2385,7 @@ const myProviders: Capability = {
   hat: "client",
   describe: "Who are my saved providers",
   thinking: ["Opening your saved providers…"],
-  phrases: ["my providers", "saved providers", "bookmarked", "my usual", "my regulars", "favourites", "favorites"],
+  phrases: ["my providers", "saved providers", "bookmarked", "my usual", "my regulars", "favourites", "favorites", "have i saved", "i've saved", "ive saved"],
   async run(): Promise<CapabilityResult> {
     const rows = await getBookmarkedProviders();
     if (rows.length === 0) {
@@ -2519,6 +2548,9 @@ const messages: Capability = {
     "my messages", "messages", "any replies", "has anyone replied", "my inbox",
     "any messages", "unread messages", "did they reply", "have they replied",
     "heard back", "any word from", "check my messages", "dm", "chats",
+    // "did lola studio reply" names a provider, which also resolves the booking;
+    // the reply is still an inbox question.
+    "reply", "replied", "messaged me", "anyone messaged",
   ],
   async run(): Promise<CapabilityResult> {
     const convos = await getUserConversations();
@@ -2810,6 +2842,8 @@ const offers: Capability = {
     "whats on offer", "what's on offer", "anything on sale", "sales on",
     "special offers", "any bargains", "cheap deals", "money off",
     "anything discounted", "current offers", "discounted",
+    // Plural codes. discover.promocode owns checking ONE code at a provider.
+    "promo codes", "discount codes", "voucher codes", "any codes",
   ],
   // Optional: "any nail deals?" narrows by category, a bare "any offers?"
   // shows everything.
@@ -3142,6 +3176,7 @@ const rescheduleStatus: Capability = {
     "has my reschedule", "reschedule accepted", "reschedule approved",
     "heard back about", "any word on my reschedule", "reschedule status",
     "did they accept", "have they replied about",
+    "accept my new time", "accepted my new time", "accept my reschedule", "agreed to my new time",
   ],
   async run({ bookings, entities }): Promise<CapabilityResult> {
     // Only bookings actually awaiting a reschedule decision are relevant —
@@ -3213,6 +3248,8 @@ const providerContact: Capability = {
   phrases: [
     "how do i contact", "contact them", "their number", "phone number",
     "their email", "get in touch", "how do i reach", "whatsapp",
+    // Named forms: "message lola studio", "lola studio instagram".
+    "message", "contact", "number", "phone", "instagram", "insta", "email", "reach",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, bookings }): Promise<CapabilityResult> {
@@ -3462,6 +3499,8 @@ const promoCode: Capability = {
     "is this code valid", "does this code work", "coupon", "coupon code",
     "any discount", "any offers", "any deals", "do they have offers",
     "is there a discount", "redeem a code", "apply a code", "referral code",
+    // "use code SAVE10": the code itself is read off the verbatim message.
+    "use code", "use the code", "use a code", "apply code", "i have a code", "got a code",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, verbatimMessage }): Promise<CapabilityResult> {
@@ -3514,6 +3553,7 @@ const eventPlans: Capability = {
   phrases: [
     "my event", "event plan", "my wedding", "group booking",
     "my party", "event bookings", "my big day",
+    "group bookings", "hen party", "hen do", "bridal party", "birthday party",
   ],
   async run(): Promise<CapabilityResult> {
     const plans = await getMyEventPlans();
@@ -3734,6 +3774,7 @@ const saveProvider: Capability = {
     "save", "save this provider", "save them", "save provider",
     "bookmark", "bookmark them", "add to my providers",
     "add to my saved", "remember them", "keep them", "follow them",
+    "to my favourites", "to my favorites", "add * to my favourites", "add * to my favorites",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -3784,6 +3825,7 @@ const joinWaitlistAction: Capability = {
     "add me to the waitlist", "add me to their waitlist",
     "waiting list for", "let me know if something opens",
     "tell me if there's a cancellation", "notify me if",
+    "waitlist", "waiting list", "has a cancellation", "cancellation spot", "join * waitlist",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, userId }): Promise<CapabilityResult> {
@@ -3836,6 +3878,8 @@ const leaveReview: Capability = {
   phrases: [
     "leave a review", "write a review", "review my", "rate my",
     "give feedback", "rate them", "leave feedback",
+    // "rate lola studio". "rating" (their score) stays with discover.reviews.
+    "rate", "review",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
     const past = bookings
@@ -4032,6 +4076,7 @@ const appNavigation: Capability = {
     "my points", "loyalty points",
     "help centre", "help center", "report a problem", "report problem",
     "terms and conditions", "terms", "about the app", "about cerviced",
+    "contact support", "support", "settings", "open settings", "log out", "logout", "sign out",
   ],
   async run({ rawMessage }): Promise<CapabilityResult> {
     const message = rawMessage.toLowerCase();
