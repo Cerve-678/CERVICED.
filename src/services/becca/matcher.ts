@@ -279,7 +279,14 @@ export function understand(
   }
 
   const messageWords = wordsOf(message);
-  const scored = capabilitiesFor(hat)
+  const candidates = capabilitiesFor(hat);
+  // Which capabilities own a bare mention of an entity this message resolved.
+  const answersBare = new Set(
+    candidates
+      .filter((c) => c.answersBare && entities[c.answersBare] != null)
+      .map((c) => c.id),
+  );
+  const scored = candidates
     // A capability's veto removes it from contention outright — it's for
     // modifiers that flip the intent ("edit my services" is not a request to
     // list them), which a score adjustment would only ever make close.
@@ -302,7 +309,13 @@ export function understand(
     });
   const ranked = scored
     .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score)
+    // Equal scores: the one whose WORDS matched wins, then the declared owner
+    // of a bare entity ("lashes" alone is a search). Registration order is
+    // only the last resort, never the reason a question gets the wrong answer.
+    .sort((a, b) =>
+      b.score - a.score ||
+      b.phrase - a.phrase ||
+      Number(answersBare.has(b.capabilityId)) - Number(answersBare.has(a.capabilityId)))
     .map(({ capabilityId, score }) => ({ capabilityId, score }));
 
   const top = ranked[0];
