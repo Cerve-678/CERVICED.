@@ -32,6 +32,8 @@ import { logger, reportError } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -119,6 +121,8 @@ function monthLabel(date: string): string {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RescheduleScreen({ navigation, route }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   useFont();
   const { bookingId, knownPolicy } = route.params;
@@ -142,7 +146,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     navigation.setOptions({
       headerShown: true,
       headerTransparent: false,
-      headerTitle: 'Reschedule',
+      headerTitle: tr('clientBooking.detail.reschedule'),
       headerTitleAlign: 'center',
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: C.text },
       headerStyle: { backgroundColor: C.bg },
@@ -374,7 +378,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           providerRef, selectedDate, selectedTime, booking.duration, booking.serviceId,
         );
         if (staleCheck.hasConflict) {
-          showAlert('Time No Longer Available', staleCheck.message || 'Please choose a different time.');
+          showAlert(tr('clientBooking.reschedule.timeGoneTitle'), staleCheck.message || 'Please choose a different time.');
           setIsSubmitting(false);
           return;
         }
@@ -407,16 +411,16 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       // from Supabase) instead of leaving the user stuck on a dead screen.
       if (err?.message === 'Booking not found') {
         showConfirm(
-          'Booking No Longer Available',
-          "This booking couldn't be found — it may have changed since you opened this screen. Pull to refresh your bookings list.",
-          [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
+          tr('clientBooking.reschedule.goneTitle'),
+          tr('clientBooking.reschedule.notFoundBody'),
+          [{ text: tr('common.ok'), onPress: () => navigation.popTo('Bookings') }],
         );
       } else if (err?.code === '23505' || err?.code === '23P01') {
         // 23505 = exact same slot taken since this screen loaded; 23P01 =
         // the buffer/overlap exclusion constraint (prevent_overlapping_bookings.sql)
         // caught a different-start-time overlap. Either way this is a raw
         // Postgres error with no friendly .message — don't show it as-is.
-        showAlert('Time No Longer Available', 'Please choose a different time.');
+        showAlert(tr('clientBooking.reschedule.timeGoneTitle'), tr('clientBooking.reschedule.timeGone'));
       } else if (
         err?.message === 'Waiting for provider to respond with available dates' ||
         err?.message === 'A reschedule request is already in progress for this booking'
@@ -429,9 +433,9 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         // back so the parent list re-syncs and this screen would show the
         // pending view above if reopened.
         showConfirm(
-          'Reschedule Already Requested',
-          `You already have a reschedule request in for this booking. Waiting for ${booking.providerName} to respond.`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }],
+          tr('clientBooking.reschedule.alreadyRequestedTitle'),
+          tr('clientBooking.reschedule.alreadyRequested', { provider: booking.providerName }),
+          [{ text: tr('common.ok'), onPress: () => navigation.goBack() }],
         );
       } else if (err?.code === 'P0001' && /notice to reschedule/i.test(err?.message ?? '')) {
         // request_reschedule_own_booking() gates on the EXISTING booking's
@@ -442,26 +446,26 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         // the same friendly framing as that blocking screen instead of the
         // raw Postgres message, then bounce back since no chip here can work.
         showConfirm(
-          'Too Close to Reschedule',
-          `${booking.providerName} requires more notice than this appointment now has left. Message them directly if you need to change it.`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }],
+          tr('clientBooking.reschedule.tooCloseTitle'),
+          tr('clientBooking.reschedule.tooCloseAlert', { provider: booking.providerName }),
+          [{ text: tr('common.ok'), onPress: () => navigation.goBack() }],
         );
       } else if (err?.message === 'No bookings found in storage') {
         // Local cache is out of sync with the server (the booking was resolved
         // or removed elsewhere). "storage" is a developer term — never show it.
         showConfirm(
-          'Booking No Longer Available',
-          "This booking isn't available anymore. Pull down to refresh your bookings.",
-          [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
+          tr('clientBooking.reschedule.goneTitle'),
+          tr('clientBooking.reschedule.goneBody'),
+          [{ text: tr('common.ok'), onPress: () => navigation.popTo('Bookings') }],
         );
       } else if (err?.code === 'P0001' && /maximum of \d+ reschedule/i.test(err?.message ?? '')) {
         // request_reschedule_own_booking() enforces the provider's
         // max-reschedules-per-booking policy. Telling the client "try again"
         // would be a lie — no retry from this screen can ever succeed.
         showConfirm(
-          'No Reschedules Left',
-          `${booking.providerName} allows a limited number of reschedules per booking, and this one has used them. Message them directly if you need to change it.`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }],
+          tr('clientBooking.reschedule.noneLeftTitle'),
+          tr('clientBooking.reschedule.noneLeft', { provider: booking.providerName }),
+          [{ text: tr('common.ok'), onPress: () => navigation.goBack() }],
         );
       } else if (
         err?.message === 'Only upcoming bookings can be rescheduled' ||
@@ -477,12 +481,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         // again in 6 hours" used to reach the client as "That time is no
         // longer available" — advice for a problem they don't have.
         reportError(err, 'RescheduleScreen.submit');
-        showAlert("Can't Reschedule", err.message);
+        showAlert(tr('clientBooking.reschedule.cantTitle'), err.message);
       } else {
         // Anything else is unexpected/technical — devs see the real reason in
         // the logs; the client sees a calm, non-technical line.
         logger.error('[Reschedule] failed:', err);
-        showAlert('Reschedule Failed', "We couldn't reschedule that just now. Please try again.");
+        showAlert(tr('clientBooking.reschedule.failedTitle'), tr('clientBooking.reschedule.failed'));
       }
     } finally {
       setIsSubmitting(false);
@@ -494,14 +498,14 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     const groupSuffix = isGroupReschedule ? ` This applies to all ${groupSiblings.length} of your services with them.` : '';
     const cancelsBooking = !isGroupReschedule && booking.rescheduleRequest?.cancelIfDeclined === true;
     showConfirm(
-      'Decline These Times?',
+      tr('clientBooking.reschedule.declineTitle'),
       cancelsBooking
         ? `If you decline, this booking will be cancelled and any payment refunded in full. ${booking.providerName} will be notified.`
-        : `If you decline, your original appointment on ${formatDisplayDate(booking.bookingDate)} at ${formatTime12(booking.bookingTime)} stays booked. ${booking.providerName} will be notified.${groupSuffix}`,
+        : `${tr('clientBooking.reschedule.declineKeepsOnAt', { date: formatDisplayDate(booking.bookingDate), time: formatTime12(booking.bookingTime), provider: booking.providerName })}${groupSuffix}`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr('common.cancel'), style: 'cancel' },
         {
-          text: 'Decline',
+          text: tr('clientBooking.reschedule.decline'),
           style: 'destructive',
           onPress: async () => {
             setIsDeclining(true);
@@ -516,7 +520,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               // Our own guard (P0001) is written for the client, e.g. a
               // cancel-if-declined offer that closed when the appointment
               // started; anything technical gets the plain fallback.
-              showAlert('Could Not Decline', toUserMessageAllowingDbGuard(err, 'Something went wrong. Please try again.', 'RescheduleScreen.decline'));
+              showAlert(tr('clientBooking.reschedule.declineFailedTitle'), toUserMessageAllowingDbGuard(err, 'Something went wrong. Please try again.', 'RescheduleScreen.decline'));
             } finally {
               setIsDeclining(false);
             }
@@ -539,9 +543,9 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     return (
       <ThemedBackground>
         <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} edges={['bottom', 'left', 'right']}>
-          <Text style={{ color: C.sub, fontSize: 16 }}>Booking not found.</Text>
+          <Text style={{ color: C.sub, fontSize: 16 }}>{tr('clientBooking.detail.notFound')}</Text>
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
-            <Text style={{ color: C.accent, fontSize: 16 }}>Go Back</Text>
+            <Text style={{ color: C.accent, fontSize: 16 }}>{tr('clientBooking.detail.goBack')}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </ThemedBackground>
@@ -576,11 +580,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }} edges={['bottom', 'left', 'right']}>
           <Text style={{ fontSize: 56, marginBottom: 16 }}>✓</Text>
           <Text style={{ fontSize: 22, fontWeight: '800', color: C.text, textAlign: 'center', marginBottom: 8 }}>
-            {hasProviderResponse ? 'Booking Rescheduled!' : 'Request Sent!'}
+            {hasProviderResponse ? tr('clientBooking.reschedule.doneTitle') : tr('clientBooking.reschedule.sentTitle')}
           </Text>
           <Text style={{ fontSize: 15, color: C.sub, textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
             {isGroupReschedule
-              ? `All ${groupSiblings.length} of your services with ${booking.providerName} have been rescheduled to ${formatDisplayDate(selectedDate!)}.`
+              ? tr('clientBooking.reschedule.groupDone', { count: groupSiblings.length, name: booking.providerName, date: formatDisplayDate(selectedDate!) })
               : hasProviderResponse
               ? `Your appointment with ${booking.providerName} has been rescheduled to ${formatDisplayDate(selectedDate!)} at ${formatTime12(selectedTime!)}.`
               : `Your reschedule request has been sent to ${booking.providerName}. They have ${RESCHEDULE_REPLY_MINUTES} minutes to reply with available times. If they don't, your booking stays as it is.`}
@@ -595,7 +599,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             // Bookings is registered in every stack that hosts Reschedule.
             navigation.popTo('Bookings');
           }} activeOpacity={0.7}>
-            <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Back to Bookings</Text>
+            <Text style={[st.primaryBtnText, { color: C.onAccent }]}>{tr('clientBooking.reschedule.backToBookings')}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </ThemedBackground>
@@ -620,7 +624,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }} edges={['bottom', 'left', 'right']}>
           <Ionicons name="time-outline" size={40} color={C.sub} />
           <Text style={{ fontSize: 18, fontWeight: '800', color: C.text, textAlign: 'center', marginTop: 16, marginBottom: 8 }}>
-            Too Close to Reschedule
+            {tr('clientBooking.reschedule.tooCloseTitle')}
           </Text>
           <Text style={{ fontSize: 14, color: C.sub, textAlign: 'center', lineHeight: 20, marginBottom: 8 }}>
             {booking.providerName} requires {noticeHours} hours notice to reschedule, and this appointment is coming up too soon.
@@ -632,10 +636,10 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             </Text>
           </View>
           <Text style={{ fontSize: 13, color: C.sub, textAlign: 'center', lineHeight: 19, marginTop: 20 }}>
-            Message {booking.providerName} directly if you need to change this appointment.
+            {tr('clientBooking.reschedule.messageDirectly', { provider: booking.providerName })}
           </Text>
           <TouchableOpacity style={[st.primaryBtn, { backgroundColor: C.accent, width: '100%', marginTop: 28 }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-            <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Go Back</Text>
+            <Text style={[st.primaryBtnText, { color: C.onAccent }]}>{tr('clientBooking.detail.goBack')}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </ThemedBackground>
@@ -655,7 +659,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               <View style={[st.currentDateBadge, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Ionicons name="calendar-outline" size={14} color={C.sub} />
                 <Text style={[st.currentDateText, { color: C.sub }]}>
-                  Currently: {formatDisplayDate(booking.bookingDate)} at {formatTime12Safe(booking.bookingTime) ?? booking.bookingTime}
+                  {tr('clientBooking.reschedule.currently', { date: formatDisplayDate(booking.bookingDate), time: formatTime12Safe(booking.bookingTime) ?? booking.bookingTime })}
                 </Text>
               </View>
             </View>
@@ -663,17 +667,17 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             <View style={st.section}>
               <View style={{ backgroundColor: C.accentDim, borderColor: C.border, borderWidth: 1, borderRadius: 12, padding: 14 }}>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: C.accent, marginBottom: 4 }}>
-                  Reschedule Requested
+                  {tr('clientBooking.detail.reschedule.requested')}
                 </Text>
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
-                  You've already asked {booking.providerName} to reschedule this booking. You'll be notified as soon as they respond with available times — no need to request again.
+                  {tr('clientBooking.reschedule.alreadyAsked', { name: booking.providerName })}
                 </Text>
               </View>
             </View>
 
             {requestedDates.length > 0 && (
               <View style={st.section}>
-                <Text style={[st.sectionTitle, { color: C.sub }]}>YOU REQUESTED</Text>
+                <Text style={[st.sectionTitle, { color: C.sub }]}>{tr('clientBooking.reschedule.youRequested')}</Text>
                 <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                   {requestedDates.map((d, i) => (
                     <View
@@ -710,12 +714,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           <View style={st.headerInfo}>
             <Text style={[st.providerName, { color: C.text }]}>{booking.providerName}</Text>
             <Text style={[st.serviceName, { color: C.sub }]}>
-              {isGroupReschedule ? `${groupSiblings.length} services` : booking.serviceName}
+              {isGroupReschedule ? tr('clientBooking.reschedule.servicesCount', { count: groupSiblings.length }) : booking.serviceName}
             </Text>
             <View style={[st.currentDateBadge, { backgroundColor: C.card, borderColor: C.border }]}>
               <Ionicons name="calendar-outline" size={14} color={C.sub} />
               <Text style={[st.currentDateText, { color: C.sub }]}>
-                Currently: {formatDisplayDate(booking.bookingDate)} at {booking.bookingTime}
+                {tr('clientBooking.reschedule.currently', { date: formatDisplayDate(booking.bookingDate), time: booking.bookingTime })}
               </Text>
             </View>
           </View>
@@ -725,29 +729,29 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             {hasProviderResponse ? (
               <View style={{ backgroundColor: C.accentDim, borderColor: C.border, borderWidth: 1, borderRadius: 12, padding: 14 }}>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: C.accent, marginBottom: 4 }}>
-                  {booking.providerName} sent available times
+                  {tr('clientBooking.reschedule.sentTimes', { name: booking.providerName })}
                 </Text>
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
-                  Pick one of these provider-offered slots to confirm your new appointment.
+                  {tr('clientBooking.reschedule.pickOffered')}
                 </Text>
                 {!!booking.rescheduleRequest?.providerNote && (
                   <Text style={{ fontSize: 13, color: C.text, lineHeight: 19, marginTop: 8 }}>
-                    Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}
+                    {tr('clientBooking.reschedule.noteFrom', { name: booking.providerName, note: booking.rescheduleRequest.providerNote ?? '' })}
                   </Text>
                 )}
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 }}>
                   {booking.rescheduleRequest?.cancelIfDeclined
                     ? 'If you decline, this booking will be cancelled and any payment refunded in full.'
-                    : 'If you decline, your original appointment stays booked.'}
+                    : tr('clientBooking.reschedule.declineKeeps')}
                 </Text>
               </View>
             ) : (
               <View style={{ backgroundColor: 'rgba(255,149,0,0.08)', borderColor: 'rgba(255,149,0,0.22)', borderWidth: 1, borderRadius: 12, padding: 14 }}>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#FF9500', marginBottom: 4 }}>
-                  How rescheduling works
+                  {tr('clientBooking.reschedule.howTitle')}
                 </Text>
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
-                  Select your preferred date and time below. Your provider will be notified and will confirm or propose alternative times.
+                  {tr('clientBooking.reschedule.howBody')}
                 </Text>
               </View>
             )}
@@ -756,11 +760,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           {/* Reschedule policy info */}
           {reschedulePolicy && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>PROVIDER POLICY</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>{tr('clientBooking.reschedule.policyTitle')}</Text>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 {reschedulePolicy.maxReschedules !== null && (
                   <View style={[st.row, { borderBottomColor: C.border }]}>
-                    <Text style={[st.rowLabel, { color: C.sub }]}>Reschedules allowed</Text>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>{tr('clientBooking.reschedule.allowed')}</Text>
                     <Text style={[st.rowValue, { color: C.text }]}>
                       {booking.rescheduleRequest?.rescheduleCount ?? 0} / {reschedulePolicy.maxReschedules} used
                     </Text>
@@ -768,14 +772,14 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 )}
                 {reschedulePolicy.rescheduleNoticeHours > 0 && (
                   <View style={[st.row, reschedulePolicy.sameMonthOnly ? { borderBottomColor: C.border } : { borderBottomWidth: 0 }]}>
-                    <Text style={[st.rowLabel, { color: C.sub }]}>Notice required</Text>
-                    <Text style={[st.rowValue, { color: C.text }]}>{reschedulePolicy.rescheduleNoticeHours}h before</Text>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>{tr('clientBooking.reschedule.noticeRequired')}</Text>
+                    <Text style={[st.rowValue, { color: C.text }]}>{tr('clientBooking.reschedule.hoursBefore', { hours: reschedulePolicy.rescheduleNoticeHours })}</Text>
                   </View>
                 )}
                 {reschedulePolicy.sameMonthOnly && (
                   <View style={[st.row, { borderBottomWidth: 0 }]}>
-                    <Text style={[st.rowLabel, { color: C.sub }]}>New date</Text>
-                    <Text style={[st.rowValue, { color: C.text }]}>In {monthLabel(booking.bookingDate)}</Text>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>{tr('clientBooking.reschedule.newDateRow')}</Text>
+                    <Text style={[st.rowValue, { color: C.text }]}>{tr('clientBooking.reschedule.inMonth', { month: monthLabel(booking.bookingDate) })}</Text>
                   </View>
                 )}
               </View>
@@ -786,7 +790,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={st.sectionHeaderRow}>
               <Text style={[st.sectionTitle, { color: C.sub, marginBottom: 0 }]}>
-                {hasProviderResponse ? 'AVAILABLE DATES FROM PROVIDER' : 'SELECT A DATE'}
+                {hasProviderResponse ? tr('clientBooking.reschedule.datesFromProvider') : tr('clientBooking.reschedule.selectDate')}
               </Text>
               {!hasProviderResponse && (
                 <TouchableOpacity
@@ -796,37 +800,37 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   style={[st.customTimeBtn, { backgroundColor: C.accentDim, borderColor: C.accent }]}
                 >
                   <Ionicons name="calendar-outline" size={11} color={C.accent} />
-                  <Text style={[st.customTimeBtnText, { color: C.accent }]}>Request specific time</Text>
+                  <Text style={[st.customTimeBtnText, { color: C.accent }]}>{tr('clientBooking.reschedule.requestSpecific')}</Text>
                 </TouchableOpacity>
               )}
             </View>
             {loadingDates ? (
               <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                 <ActivityIndicator color={C.accent} />
-                <Text style={{ color: C.sub, marginTop: 8, fontSize: 13 }}>Loading available dates…</Text>
+                <Text style={{ color: C.sub, marginTop: 8, fontSize: 13 }}>{tr('clientBooking.reschedule.loadingDates')}</Text>
               </View>
             ) : dateOptions.length === 0 && providerUnpublished ? (
               <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                 <Ionicons name="calendar-clear-outline" size={28} color={C.sub} />
-                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>No current availability</Text>
+                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>{tr('clientBooking.reschedule.noAvailability')}</Text>
                 <Text style={{ color: C.sub, marginTop: 4, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 }}>
-                  Please check back later, or message {booking.providerName} directly.
+                  {tr('clientBooking.reschedule.checkBack', { name: booking.providerName })}
                 </Text>
               </View>
             ) : shownDateOptions.length === 0 && sameMonthOnly ? (
               <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                 <Ionicons name="calendar-clear-outline" size={28} color={C.sub} />
-                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>No open times left this month</Text>
+                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>{tr('clientBooking.reschedule.noTimesThisMonth')}</Text>
                 <Text style={{ color: C.sub, marginTop: 4, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 }}>
-                  {booking.providerName} only lets bookings move to another day in {monthLabel(booking.bookingDate)}. Use "Request specific time" to ask for a day that month, or message them directly.
+                  {tr('clientBooking.reschedule.sameMonthOnly', { name: booking.providerName, month: monthLabel(booking.bookingDate) })}
                 </Text>
               </View>
             ) : dateOptions.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                 <Ionicons name="calendar-clear-outline" size={28} color={C.sub} />
-                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>No open times right now</Text>
+                <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>{tr('clientBooking.reschedule.noOpenTimes')}</Text>
                 <Text style={{ color: C.sub, marginTop: 4, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 }}>
-                  {booking.providerName} has no availability {probeWindowLabel}. Try again later, use "Request specific time" to propose a date yourself, or message them directly.
+                  {tr('clientBooking.reschedule.noAvailabilityBody', { name: booking.providerName, window: probeWindowLabel })}
                 </Text>
               </View>
             ) : (
@@ -862,7 +866,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               <View style={[st.customTimeConfirm, { backgroundColor: C.accentDim, borderColor: C.accent }]}>
                 <Ionicons name="time-outline" size={14} color={C.accent} />
                 <Text style={[st.customTimeConfirmText, { color: C.accent }]}>
-                  Requesting {formatDisplayDate(selectedDate)} at {formatTime12(selectedTime)}
+                  {tr('clientBooking.reschedule.requesting', { date: formatDisplayDate(selectedDate), time: formatTime12(selectedTime) })}
                 </Text>
               </View>
             )}
@@ -878,7 +882,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 <View style={[st.pickerSheet, { backgroundColor: C.card, paddingBottom: Math.max(20, bottomInset + 16) }]}>
                   <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
                     <Text style={[st.pickerHeaderLabel, { color: C.text }]}>
-                      {customPickerStep === 'date' ? 'Select Date' : 'Select Time'}
+                      {customPickerStep === 'date' ? tr('clientBooking.reschedule.pickDate') : tr('clientBooking.reschedule.pickTime')}
                     </Text>
                     <TouchableOpacity onPress={() => {
                       if (customPickerStep === 'date' && customDate) {
@@ -890,7 +894,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                       }
                     }}>
                       <Text style={[st.pickerDoneLabel, { color: C.accent }]}>
-                        {customPickerStep === 'date' ? 'Next' : 'Done'}
+                        {customPickerStep === 'date' ? tr('common.next') : tr('common.done')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -946,7 +950,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           {/* Time selection */}
           {selectedDate && selectedDateOption && selectedDateOption.times.length > 0 && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>SELECT A TIME</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>{tr('clientBooking.reschedule.selectTime')}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {selectedDateOption.times.map(time => {
                   const isSelected = selectedTime === time;
@@ -968,10 +972,10 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           {/* Summary */}
           {selectedDate && selectedTime && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>YOUR SELECTION</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>{tr('clientBooking.reschedule.yourSelection')}</Text>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
-                  <Text style={[st.rowLabel, { color: C.sub }]}>New Date</Text>
+                  <Text style={[st.rowLabel, { color: C.sub }]}>{tr('clientBooking.reschedule.newDateRow')}</Text>
                   <Text style={[st.rowValue, { color: C.text, fontWeight: '700' }]}>{formatDisplayDate(selectedDate)}</Text>
                 </View>
                 {isGroupReschedule ? (
@@ -991,7 +995,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   })
                 ) : (
                   <View style={[st.row, { borderBottomWidth: 0 }]}>
-                    <Text style={[st.rowLabel, { color: C.sub }]}>New Time</Text>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>{tr('clientBooking.reschedule.newTime')}</Text>
                     <Text style={[st.rowValue, { color: C.text, fontWeight: '700' }]}>{formatTime12(selectedTime)}</Text>
                   </View>
                 )}
@@ -1013,7 +1017,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             {isSubmitting
               ? <ActivityIndicator size="small" color={C.onAccent} />
               : <Text style={[st.primaryBtnText, { color: selectedDate && selectedTime ? C.onAccent : C.sub }]}>
-                  {isGroupReschedule ? `Confirm All ${groupSiblings.length} Services` : hasProviderResponse ? 'Confirm New Time' : 'Request Reschedule'}
+                  {isGroupReschedule ? tr('clientBooking.reschedule.confirmAll', { count: groupSiblings.length }) : hasProviderResponse ? tr('clientBooking.reschedule.confirmNewTime') : tr('clientBooking.reschedule.request')}
                 </Text>}
           </TouchableOpacity>
           {hasProviderResponse && (
@@ -1025,7 +1029,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             >
               {isDeclining
                 ? <ActivityIndicator size="small" color="#FF3B30" />
-                : <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '600' }}>None of these work</Text>}
+                : <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '600' }}>{tr('clientBooking.reschedule.noneWork')}</Text>}
             </TouchableOpacity>
           )}
         </View>
