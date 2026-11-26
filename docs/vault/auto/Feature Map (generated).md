@@ -6,12 +6,12 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **165 files**
+Curated: [[Address Release]] · **170 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(126)_
 - `src/services/database/addressRelease.ts` _(94)_
-- `src/screens/provider/InfoRegScreen.tsx` _(93)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
+- `src/screens/provider/InfoRegScreen.tsx` _(88)_
 - `src/services/providerRegistrationService.ts` _(71)_
 - `src/screens/client/CartScreen.tsx` _(65)_
 - `src/components/AddressPicker.tsx` _(52)_
@@ -34,20 +34,20 @@ Curated: [[Address Release]] · **165 files**
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
 - `src/services/becca/capabilities/provider.ts` _(24)_
+- `src/i18n/catalogs/en/providerSetup.ts` _(23)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(22)_
 - `src/i18n/catalogs/en/clientAccount.ts` _(21)_
-- `src/features/providers/goLiveStatus.ts` _(20)_
-- … +135 more
+- … +140 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **291 files**
+Curated: [[Availability & Slots]] · **296 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(189)_
 - `src/services/database/availability.ts` _(182)_
 - `src/screens/provider/AddBookingScreen.tsx` _(156)_
 - `src/screens/client/SearchScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/provider/InfoRegScreen.tsx` _(97)_
+- `src/screens/provider/InfoRegScreen.tsx` _(98)_
 - `src/services/becca/capabilities/client.ts` _(92)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/contexts/BookingContext.tsx` _(76)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **291 files**
 - `src/i18n/catalogs/en/cart.ts` _(30)_
 - `src/types/database.ts` _(28)_
 - `src/i18n/catalogs/de/discover.ts` _(27)_
-- … +261 more
+- … +266 more
 
 ## Payments
 Curated: [[Payments]] · **252 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **252 files**
 - … +222 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **484 files**
+Curated: [[Booking Flow]] · **489 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(710)_
 - `src/screens/client/CartScreen.tsx` _(659)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **484 files**
 - `src/services/database/infoPacks.ts` _(110)_
 - `src/services/database/reschedule.ts` _(109)_
 - `src/types/booking.ts` _(109)_
-- … +454 more
+- … +459 more
 
 ## Notifications
 Curated: [[Notifications]] · **254 files**
