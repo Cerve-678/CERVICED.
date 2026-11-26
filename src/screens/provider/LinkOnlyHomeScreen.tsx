@@ -85,6 +85,8 @@ import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS } from '../../constants/
 import { joinNudgeBarDismissedKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Nav = NativeStackNavigationProp<ProviderHomeStackParamList, 'LinkOnlyHomeMain'>;
 
@@ -93,6 +95,8 @@ const DOWN = '#B0563C';
 const NOT_LIVE = '#B07A3C';
 
 export default function LinkOnlyHomeScreen() {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const navigation = useNavigation<Nav>();
   const { palette } = useTheme();
   const { user } = useAuth();
@@ -292,7 +296,7 @@ export default function LinkOnlyHomeScreen() {
       await openExternalBookingPage(profile.external_booking_url);
     } catch (error) {
       logger.error('[LinkOnlyHome] booking link did not open', error);
-      showToast("Your booking link didn't open. Check it in Business Info.", 'error');
+      showToast(tr('providerProfile.home.linkFailed'), 'error');
     }
   }, [profile?.external_booking_url, showToast]);
 
@@ -343,14 +347,14 @@ export default function LinkOnlyHomeScreen() {
               {status && (
                 <View style={styles.liveLine}>
                   <View style={[styles.liveDot, { backgroundColor: live ? UP : NOT_LIVE }]} />
-                  <Text style={styles.liveText}>{live ? 'Live on CERVICED' : 'Not live yet'}</Text>
+                  <Text style={styles.liveText}>{live ? tr('providerProfile.home.live') : tr('providerProfile.home.notLive')}</Text>
                 </View>
               )}
             </View>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Notifications'); }}
               style={styles.iconButton}
-              accessibilityLabel="Notifications"
+              accessibilityLabel={tr('providerProfile.home.notificationsA11y')}
               accessibilityRole="button"
             >
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
@@ -368,19 +372,19 @@ export default function LinkOnlyHomeScreen() {
 
           {loadFailed && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Couldn't load your profile</Text>
-              <Text style={styles.body}>Check your connection and pull back to this screen to try again.</Text>
+              <Text style={styles.cardTitle}>{tr('providerProfile.home.loadFailed')}</Text>
+              <Text style={styles.body}>{tr('providerProfile.home.loadFailedBody')}</Text>
             </View>
           )}
 
           {hasRow === false && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Set up your profile</Text>
+              <Text style={styles.cardTitle}>{tr('providerProfile.home.setupTitle')}</Text>
               <Text style={styles.body}>
-                Add your logo, a few lines about you, your booking link and some photos of your work — then clients can find you and book on your page.
+                {tr('providerProfile.home.setupBody')}
               </Text>
               <TouchableOpacity style={styles.primary} onPress={() => navigation.navigate('EditProfile')} activeOpacity={0.85}>
-                <Text style={styles.primaryText}>Get started</Text>
+                <Text style={styles.primaryText}>{tr('providerProfile.home.getStarted')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -388,7 +392,7 @@ export default function LinkOnlyHomeScreen() {
           {status && !live && (
             <View style={styles.card}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>Go live in {steps.length} steps</Text>
+                <Text style={styles.cardTitle}>{tr('providerProfile.ui.goLiveSteps', { count: steps.length })}</Text>
                 <Text style={styles.count}>{doneCount} of {steps.length}</Text>
               </View>
               <View style={styles.progress}>
@@ -416,7 +420,7 @@ export default function LinkOnlyHomeScreen() {
                   {!step.done && <Ionicons name="chevron-forward" size={16} color={P.sub} />}
                 </TouchableOpacity>
               ))}
-              <Text style={styles.footnote}>You won't appear in Search or Explore until all four are done.</Text>
+              <Text style={styles.footnote}>{tr('providerProfile.home.goLiveFootnote')}</Text>
             </View>
           )}
 
@@ -427,27 +431,27 @@ export default function LinkOnlyHomeScreen() {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('LinkOnlyAnalytics'); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Book taps this week. Open analytics"
+                accessibilityLabel={tr('providerProfile.home.tapsA11y')}
               >
                 <View>
-                  <Text style={styles.eyebrow}>Book taps this week</Text>
+                  <Text style={styles.eyebrow}>{tr('providerProfile.home.tapsTitle')}</Text>
                   {weekFailed ? (
-                    <Text style={styles.body}>Couldn't load your numbers.</Text>
+                    <Text style={styles.body}>{tr('providerProfile.home.numbersFailed')}</Text>
                   ) : !week ? (
                     <ActivityIndicator color={P.accent} style={styles.tileLoader} />
                   ) : (
                     <>
                       <Text style={styles.wideNum}>{week.comparison.thisWeek.bookTaps}</Text>
                       {tapsTrend ? (
-                        <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{tapsTrend.text} on last week</Text>
+                        <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{tr('providerProfile.ui.onLastWeek', { change: tapsTrend.text })}</Text>
                       ) : (
-                        <Text style={styles.stepHint}>Clients sent to your page</Text>
+                        <Text style={styles.stepHint}>{tr('providerProfile.home.tapsSub')}</Text>
                       )}
                     </>
                   )}
                 </View>
                 <View style={styles.wideRight}>
-                  <Text style={styles.count}>All analytics ›</Text>
+                  <Text style={styles.count}>{tr('providerProfile.home.allAnalytics')}</Text>
                   {week && (
                     <View style={styles.bars}>
                       {week.bars.map((bar, index) => (
@@ -473,11 +477,11 @@ export default function LinkOnlyHomeScreen() {
                   onPress={openMessages}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={`${enquiries?.unread ?? 0} new enquiries. Open messages`}
+                  accessibilityLabel={tr('providerProfile.ui.enquiriesA11y', { count: enquiries?.unread ?? 0 })}
                 >
                   <Ionicons name="chatbubble-outline" size={20} color={P.onAccent} />
                   <Text style={[styles.tileNum, styles.onAccent]}>{enquiries ? enquiries.unread : '–'}</Text>
-                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? 'New enquiry' : 'New enquiries'}</Text>
+                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? tr('providerProfile.home.newEnquiry') : tr('providerProfile.home.newEnquiries')}</Text>
                   <Text style={[styles.tileSub, styles.onAccentSoft]} numberOfLines={1}>{enquiryPreview}</Text>
                 </TouchableOpacity>
                 <StatTile
@@ -485,9 +489,9 @@ export default function LinkOnlyHomeScreen() {
                   P={P}
                   icon="bookmark-outline"
                   value={week?.savers}
-                  label="Saved you"
+                  label={tr('providerProfile.home.savedYou')}
                   // A running total, so the week shows as new saves, not a trend.
-                  sub={extras && extras.newSaversWeek > 0 ? `+${extras.newSaversWeek} this week` : 'Clients who saved you'}
+                  sub={extras && extras.newSaversWeek > 0 ? tr('providerProfile.home.newThisWeek', { count: extras.newSaversWeek }) : tr('providerProfile.home.savedYouSub')}
                   subUp={!!extras && extras.newSaversWeek > 0}
                 />
               </View>
@@ -499,7 +503,7 @@ export default function LinkOnlyHomeScreen() {
                   icon="eye-outline"
                   value={week?.comparison.thisWeek.profileViews}
                   before={week?.comparison.lastWeek.profileViews}
-                  label="Profile views"
+                  label={tr('providerProfile.analytics.tile.views')}
                 />
                 <StatTile
                   styles={styles}
@@ -507,8 +511,8 @@ export default function LinkOnlyHomeScreen() {
                   icon="checkmark-done-outline"
                   value={extras?.saidBookedWeek}
                   before={extras?.saidBookedLastWeek}
-                  label="Said they booked"
-                  sub="Clients who tapped Book"
+                  label={tr('providerProfile.home.saidBooked')}
+                  sub={tr('providerProfile.home.saidBookedSub')}
                 />
               </View>
 
@@ -517,21 +521,21 @@ export default function LinkOnlyHomeScreen() {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={`Clients are asking you to take bookings on CERVICED: ${week ? joinNudgeTotal : 0} in the last ${JOIN_NUDGE_WINDOW_DAYS} days. See the full CERVICED experience`}
+                accessibilityLabel={tr('providerProfile.ui.nudgesA11y', { count: week ? joinNudgeTotal : 0, days: JOIN_NUDGE_WINDOW_DAYS })}
               >
                 <View style={styles.tileIcon}><Ionicons name="megaphone-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
-                  <Text style={styles.nudgeTitle}>Clients are asking you to take bookings on CERVICED</Text>
+                  <Text style={styles.nudgeTitle}>{tr('providerProfile.ui.clientsAreAskingYouToTake')}</Text>
                   {weekFailed ? (
-                    <Text style={styles.tileSub}>Couldn't load your nudges.</Text>
+                    <Text style={styles.tileSub}>{tr('providerProfile.ui.couldnTLoadYourNudges')}</Text>
                   ) : week && joinNudgeTotal > 0 ? (
                     <Text style={joinNudgesThisWeek > 0 ? styles.trend : styles.tileSub} numberOfLines={1}>
                       {joinNudgesThisWeek > 0
-                        ? `+${joinNudgesThisWeek} this week`
-                        : `In the last ${JOIN_NUDGE_WINDOW_DAYS} days`}
+                        ? tr('providerProfile.home.newThisWeek', { count: joinNudgesThisWeek })
+                        : tr('providerProfile.ui.lastDays', { days: JOIN_NUDGE_WINDOW_DAYS })}
                     </Text>
                   ) : (
-                    <Text style={styles.tileSub} numberOfLines={2}>They can tap Nudge on your profile to ask.</Text>
+                    <Text style={styles.tileSub} numberOfLines={2}>{tr('providerProfile.ui.theyCanTapNudgeOnYour')}</Text>
                   )}
                 </View>
                 <Text style={[styles.tileNum, styles.nudgeNum]}>{week ? joinNudgeTotal : '–'}</Text>
@@ -556,10 +560,10 @@ export default function LinkOnlyHomeScreen() {
           {live && strength && nextStep && (
             <View style={styles.card}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>Profile strength</Text>
+                <Text style={styles.cardTitle}>{tr('providerProfile.home.strength')}</Text>
                 <Text style={styles.percent}>{strength.percent}%</Text>
               </View>
-              <View style={styles.track} accessibilityLabel={`Profile ${strength.percent}% complete`}>
+              <View style={styles.track} accessibilityLabel={tr('providerProfile.home.strengthA11y', { percent: strength.percent })}>
                 <View style={[styles.fill, { width: `${strength.percent}%` }]} />
               </View>
               <StrengthRow styles={styles} P={P} item={nextStep} eyebrow="Next" onPress={() => goToStep(nextStep.key)} />
@@ -573,7 +577,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.7}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.count}>{showAllSteps ? 'Show less' : restLine}</Text>
+                  <Text style={styles.count}>{showAllSteps ? tr('common.showLess') : restLine}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -584,7 +588,7 @@ export default function LinkOnlyHomeScreen() {
               <View style={styles.linkHead}>
                 <View style={styles.tileIcon}><Ionicons name="link-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>Your Book button</Text>
+                  <Text style={styles.cardTitle}>{tr('providerProfile.home.bookButton')}</Text>
                   <Text style={styles.stepHint} numberOfLines={1}>{bookingLink ?? 'No booking link yet'}</Text>
                 </View>
               </View>
@@ -596,7 +600,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.outlineButtonText}>Test it</Text>
+                  <Text style={styles.outlineButtonText}>{tr('providerProfile.home.testIt')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.softButton}
@@ -604,7 +608,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.outlineButtonText}>{bookingLink ? 'Change link' : 'Add link'}</Text>
+                  <Text style={styles.outlineButtonText}>{bookingLink ? tr('providerProfile.home.changeLink') : tr('providerProfile.home.addLink')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -614,26 +618,26 @@ export default function LinkOnlyHomeScreen() {
             <View style={[styles.card, styles.photoCard]}>
               <Image source={{ uri: extras.topPhoto.imageUrl }} style={styles.topPhoto} contentFit="cover" transition={0} />
               <View style={styles.flex}>
-                <Text style={styles.eyebrow}>Most-saved photo</Text>
+                <Text style={styles.eyebrow}>{tr('providerProfile.home.topPhoto')}</Text>
                 <Text style={styles.cardTitle} numberOfLines={1}>{extras.topPhoto.label ?? 'Your work'}</Text>
                 <Text style={styles.stepHint}>
-                  Saved {extras.topPhoto.saves === 1 ? 'once' : `${extras.topPhoto.saves} times`} in Explore
+                  {extras.topPhoto.saves === 1 ? tr('providerProfile.ui.savedOnce') : tr('providerProfile.ui.savedTimes', { count: extras.topPhoto.saves })}
                 </Text>
                 <TouchableOpacity onPress={() => goToStep('photos')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button">
-                  <Text style={[styles.count, styles.photoLink]}>Add more like this</Text>
+                  <Text style={[styles.count, styles.photoLink]}>{tr('providerProfile.home.addMoreLikeThis')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
 
           <View style={styles.shortcuts}>
-            <Shortcut styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
-            <Shortcut styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />
+            <Shortcut styles={styles} P={P} icon="camera-outline" label={tr('providerProfile.home.addWork')} onPress={() => goToStep('portfolio')} />
+            <Shortcut styles={styles} P={P} icon="time-outline" label={tr('providerProfile.home.hours')} onPress={() => goToStep('hours')} />
             <Shortcut
               styles={styles}
               P={P}
               icon="color-palette-outline"
-              label="Branding"
+              label={tr('providerProfile.home.branding')}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Branding'); }}
             />
           </View>
@@ -645,22 +649,22 @@ export default function LinkOnlyHomeScreen() {
               <View style={styles.linkHead}>
                 <View style={styles.tileIcon}><Ionicons name="calendar-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>Become a full member</Text>
-                  <Text style={styles.stepHint}>Keep the full price of every booking, and let CERVICED fill your diary.</Text>
+                  <Text style={styles.cardTitle}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
+                  <Text style={styles.stepHint}>{tr('providerProfile.ui.keepTheFullPriceOfEvery')}</Text>
                 </View>
               </View>
               <View style={styles.offerLine}>
                 <View style={styles.offerChip}><Text style={styles.offerChipText}>{FULL_MEMBER_FREE_MONTHS} MONTHS FREE</Text></View>
               </View>
               <TouchableOpacity style={styles.primary} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
-                <Text style={styles.primaryText}>Become a full member</Text>
+                <Text style={styles.primaryText}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
                 activeOpacity={0.7}
                 accessibilityRole="button"
               >
-                <Text style={styles.seeAll}>See the full CERVICED experience</Text>
+                <Text style={styles.seeAll}>{tr('providerProfile.ui.seeTheFullCervicedExperience')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -672,7 +676,7 @@ export default function LinkOnlyHomeScreen() {
         onPress={openBecca}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel="Ask Becca"
+        accessibilityLabel={tr('providerProfile.home.askBecca')}
       >
         <Ionicons name="sparkles" size={24} color={P.onAccent} />
       </TouchableOpacity>
@@ -680,15 +684,15 @@ export default function LinkOnlyHomeScreen() {
       {nudgeBarCount != null && (
         <View style={[styles.nudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE + 13 }]}>
           <TouchableOpacity style={styles.nudgeBarMain} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
-            <Text style={styles.nudgeBarTitle} numberOfLines={1}>Become a full member</Text>
-            <Text style={styles.nudgeBarSub} numberOfLines={1}>{nudgeBarCount} nudges from clients · {FULL_MEMBER_FREE_LINE}</Text>
+            <Text style={styles.nudgeBarTitle} numberOfLines={1}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
+            <Text style={styles.nudgeBarSub} numberOfLines={1}>{tr('providerProfile.ui.nudgesFromClients', { count: nudgeBarCount })} · {FULL_MEMBER_FREE_LINE}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.nudgeBarClose}
             onPress={dismissNudgeBar}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Hide"
+            accessibilityLabel={tr('providerProfile.myProfile.row.hide')}
           >
             <Ionicons name="close" size={16} color={P.accent} />
           </TouchableOpacity>

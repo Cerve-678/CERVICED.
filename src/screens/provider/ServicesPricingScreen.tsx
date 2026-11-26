@@ -29,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
 import {
   getMyProviderProfile,
   getProviderSpecialties,
@@ -52,6 +53,7 @@ import { toUserMessage } from '../../utils/userFacingError';
 export default function ServicesPricingScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
 
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -96,11 +98,11 @@ export default function ServicesPricingScreen({ navigation }: any) {
           try {
             setSpecialties(await getProviderSpecialties(providerData.id));
           } catch {
-            flash('Could not load specialties', 'error');
+            flash(tr('providerProfile.services.loadSpecialtiesFailed'), 'error');
           }
         }
       } catch {
-        flash('Could not load your practice details', 'error');
+        flash(tr('providerProfile.services.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -117,7 +119,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash(tr('providerProfile.common2.noProfile'), 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -144,7 +146,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'ServicesPricingScreen.save'), 'error');
+      flash(toUserMessage(e, tr('providerProfile.common2.saveFailed'), 'ServicesPricingScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -193,7 +195,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>Services & Pricing</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.services.title')}</Text>
             <TouchableOpacity
               style={[s.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -211,7 +213,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            <Card title="Your Specialties" sub="Select everything you're trained and experienced in. This drives search results.">
+            <Card title={t('providerProfile.services.specialties.title')} sub={t('providerProfile.services.specialties.sub')}>
               {serviceCategory ? (
                 <TouchableOpacity
                   style={[s.lockedChip, { backgroundColor: C.surface, borderColor: C.border, marginBottom: 12 }]}
@@ -223,7 +225,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 >
                   <Ionicons name="pricetag-outline" size={12} color={C.sub} />
                   <Text style={[s.lockedChipText, { color: C.text }]}>{serviceTypeLabel}</Text>
-                  <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>· Change</Text>
+                  <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>{t('providerProfile.services.change')}</Text>
                 </TouchableOpacity>
               ) : null}
               <ChipGroup
@@ -232,12 +234,12 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 onToggle={v => toggleChip(specialties, setSpecialties, v)}
               />
               <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>
-                These are the {serviceTypeLabel} specialties. Your service type is set in Business Info — changing it clears this list.
+                {t('providerProfile.services.specialtiesNote', { type: serviceTypeLabel })}
               </Text>
             </Card>
 
-            <Card title="Pricing & Team">
-              <SectionLabel text="Price range" />
+            <Card title={t('providerProfile.ui.pricingTeam')}>
+              <SectionLabel text={t('providerProfile.services.priceRange')} />
               <ChipGroup
                 options={PRICE_BANDS.map(band => band.label)}
                 selected={PRICE_BANDS.filter(band => priceBands.includes(band.value)).map(band => band.label)}
@@ -248,7 +250,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
               />
 
               <View style={{ height: 18 }} />
-              <SectionLabel text="Team size" />
+              <SectionLabel text={t('providerProfile.services.teamSize')} />
               <RadioGroup options={TEAM_SIZE_OPTS} value={teamSize} onChange={setTeamSize} />
             </Card>
 
@@ -257,7 +259,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 previously split across this screen, Automations and the
                 calendar with no single place to reason about it. */}
 
-            <Card title="Your Style">
+            <Card title={t('providerProfile.ui.yourStyle')}>
               <ChipGroup options={styleOptions} selected={styleAesthetic} onToggle={v => toggleChip(styleAesthetic, setStyleAesthetic, v)} />
             </Card>
 
@@ -265,7 +267,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 (Additional Information → Products), rather than sharing a box
                 with style: a client looking for "uses Olaplex" is asking a
                 different question from "does soft glam". */}
-            <Card title="Products I Work With" sub="Many clients look for providers who use certain brands. Pick the ones you use.">
+            <Card title={t('providerProfile.ui.productsIWorkWith')} sub={t('providerProfile.ui.manyClientsLookForProvidersWho')}>
               {brandSections.map((section, index) => (
                 <View key={section.category} style={index > 0 ? { marginTop: 18 } : undefined}>
                   <SectionLabel text={section.label} />
@@ -274,13 +276,13 @@ export default function ServicesPricingScreen({ navigation }: any) {
               ))}
               <View style={{ height: 14 }} />
               <Field
-                label="Anything else you use"
+                label={t('providerProfile.ui.anythingElseYouUse')}
                 value={otherProducts}
                 onChange={setOtherProducts}
-                placeholder="Brands that aren't listed, separated by commas"
+                placeholder={t('providerProfile.ui.brandsThatArenTListedSeparated')}
                 multiline
               />
-              <ToggleRow label="Vegan & cruelty-free products only" value={isVegan} onChange={setIsVegan} />
+              <ToggleRow label={t('providerProfile.services.vegan')} value={isVegan} onChange={setIsVegan} />
             </Card>
 
             <SaveButton saving={saving} onPress={handleSave} />

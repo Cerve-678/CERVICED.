@@ -9,13 +9,15 @@ import {
   THEME_COLLECTIONS,
 } from '../constants/providerThemes';
 import ColourWheelPicker from './ColourWheelPicker';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 // The three colours Custom builds a set from, in the order they're offered.
 type CustomPart = 'accent' | 'card' | 'backdrop';
 const CUSTOM_PARTS: { key: CustomPart; label: string }[] = [
-  { key: 'accent', label: 'Accent' },
-  { key: 'card', label: 'Card' },
-  { key: 'backdrop', label: 'Backdrop' },
+  { key: 'accent', get label() { return tr('providerProfile.ui.accent'); } },
+  { key: 'card', get label() { return tr('providerProfile.opt.pay.card'); } },
+  { key: 'backdrop', get label() { return tr('providerProfile.ui.backdrop'); } },
 ];
 
 export interface ThemeSelection {
@@ -77,6 +79,8 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
   value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor, unlockedThemes, onLockedPress,
   photoColours = [], photoColoursLoading = false, onChoosePhoto, onColourDraggingChange,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [editingPart, setEditingPart] = useState<CustomPart>('accent');
   const { themeChoice, customBackdrop, customCard, customAccent, sheetColor } = value;
   const isUnlocked = (key: string) => !unlockedThemes || unlockedThemes.includes(key);
@@ -161,7 +165,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
         <View style={styles.collectionHead}>
           {customLocked && <Ionicons name="lock-closed" size={10} color={subColor} />}
           <Text style={[styles.collectionName, { color: textColor }]}>MAKE YOUR OWN</Text>
-          <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>Pick each colour yourself</Text>
+          <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{tr('providerProfile.ui.pickEachColourYourself')}</Text>
         </View>
         <View style={styles.rail}>
           <TouchableOpacity
@@ -174,7 +178,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityState={{ selected: themeChoice === 'custom' }}
-            accessibilityLabel={customLocked ? 'Custom, locked' : 'Custom'}
+            accessibilityLabel={customLocked ? tr('providerProfile.ui.customLocked') : tr('providerProfile.themePicker.custom')}
             style={[
               styles.option,
               { borderColor: 'transparent' },
@@ -184,7 +188,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
           >
             <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} locked={customLocked} />
             <Text style={[styles.optionName, { color: themeChoice === 'custom' ? textColor : subColor }]} numberOfLines={1}>
-              Custom
+              {tr('providerProfile.themePicker.custom')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -217,7 +221,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Edit ${part.label} colour`}
+                    accessibilityLabel={tr('providerProfile.ui.editColourA11y', { part: part.label })}
                   >
                     <View style={[styles.partDot, { backgroundColor: partColour[part.key], borderColor }]} />
                     <Text style={[styles.partLabel, { color: active ? textColor : subColor }]}>{part.label}</Text>
@@ -240,7 +244,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
                         partColour[editingPart] === c && { borderColor: textColor, borderWidth: 2.5 },
                       ]}
                       accessibilityRole="button"
-                      accessibilityLabel={`Use ${c} from your photos`}
+                      accessibilityLabel={tr('providerProfile.ui.useFromPhotosA11y', { colour: c })}
                     />
                   ))}
                   {photoColoursLoading && <ActivityIndicator size="small" color={subColor} style={styles.swatchSpinner} />}
@@ -250,10 +254,10 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
                       style={[styles.choosePhoto, { borderColor }]}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel="Choose a photo to take colours from"
+                      accessibilityLabel={tr('providerProfile.ui.chooseAPhotoToTakeColours')}
                     >
                       <Ionicons name="image-outline" size={14} color={textColor} />
-                      <Text style={[styles.choosePhotoText, { color: textColor }]}>Choose a photo</Text>
+                      <Text style={[styles.choosePhotoText, { color: textColor }]}>{tr('providerProfile.ui.chooseAPhoto')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -274,7 +278,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
 
       {/* Content-area colour (the page behind the cards) */}
       <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
-        <Text style={[styles.rowLabel, { color: subColor }]}>CONTENT AREA</Text>
+        <Text style={[styles.rowLabel, { color: subColor }]}>{tr('providerProfile.themePicker.contentArea')}</Text>
         <View style={styles.swatchRow}>
           {SHEET_OPTIONS.map(opt => (
             <TouchableOpacity

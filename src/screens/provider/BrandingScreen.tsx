@@ -75,6 +75,8 @@ import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLo
 import { ImageCropModal } from '../../components/ImageCropModal';
 import { coloursFromPhoto } from '../../features/provider-registration/photoColours';
 import { logger } from '../../utils/logger';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -92,10 +94,10 @@ const DARK = {
 // where they make a plain page of their own (features/providers/CustomPageMaker).
 type BrandingPart = 'layout' | 'colours' | 'name' | 'custom';
 const BRANDING_PARTS: { key: BrandingPart; label: string }[] = [
-  { key: 'layout', label: 'Layout' },
-  { key: 'colours', label: 'Colours' },
-  { key: 'name', label: 'Name' },
-  { key: 'custom', label: 'Custom' },
+  { key: 'layout', get label() { return tr('providerProfile.ui.layout'); } },
+  { key: 'colours', get label() { return tr('providerProfile.ui.colours'); } },
+  { key: 'name', get label() { return tr('providerProfile.ui.name'); } },
+  { key: 'custom', get label() { return tr('providerProfile.themePicker.custom'); } },
 ];
 
 // Background gradients are derived from the Colour Theme's backdrop colour
@@ -122,6 +124,8 @@ async function uploadBackgroundImage(
 }
 
 export default function BrandingScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode } = useTheme();
   const { user, myBookingMode } = useAuth();
   const P = isDarkMode ? DARK : LIGHT;
@@ -275,13 +279,13 @@ export default function BrandingScreen({ navigation }: any) {
   }, [user?.id]);
 
   const pickImage = useCallback(async () => {
-    if (!userId) { Alert.alert('Not signed in'); return; }
+    if (!userId) { Alert.alert(tr('providerProfile.branding.notSignedIn')); return; }
     // Avoid asking the native permission service again once access is already
     // granted. That extra hop delayed the picker even for returning providers.
     let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (!permission.granted) permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow access to your photo library to set a background image.');
+      Alert.alert(tr('providerProfile.portfolio.permissionTitle'), tr('providerProfile.branding.permissionBody'));
       return;
     }
     // No allowsEditing: iOS's editor ignores `aspect` and only crops to a
@@ -324,7 +328,7 @@ export default function BrandingScreen({ navigation }: any) {
     let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (!permission.granted) permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow access to your photo library to take colours from a photo.');
+      Alert.alert(tr('providerProfile.portfolio.permissionTitle'), tr('providerProfile.ui.allowAccessToYourPhotoLibrary'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5 });
@@ -336,7 +340,7 @@ export default function BrandingScreen({ navigation }: any) {
       setPhotoColours(existing => [...new Set([...found, ...existing])].slice(0, 10));
     } catch (e) {
       logger.warn('[Branding] could not read colours from the chosen photo:', e);
-      Alert.alert('Couldn\u2019t read that photo', 'Try a different photo, or pick a colour on the square below.');
+      Alert.alert(tr('providerProfile.ui.couldnTReadThatPhoto'), tr('providerProfile.ui.tryADifferentPhotoOrPick'));
     } finally {
       setPhotoColoursLoading(false);
     }
@@ -356,7 +360,7 @@ export default function BrandingScreen({ navigation }: any) {
       setBackgroundImage(url);
     } catch (e: any) {
       setBackgroundImage(previousImage);
-      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
+      Alert.alert(tr('providerProfile.portfolio.uploadFailedTitle'), toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
     } finally {
       setUploadingImage(false);
     }
@@ -479,7 +483,7 @@ export default function BrandingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Save failed', toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
+      Alert.alert(tr('providerProfile.branding.saveFailedTitle'), toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
     } finally {
       setSaving(false);
     }
@@ -614,9 +618,9 @@ export default function BrandingScreen({ navigation }: any) {
           >
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: P.text }]}>Branding & Style</Text>
+          <Text style={[styles.title, { color: P.text }]}>{tr('providerProfile.businessProfile.branding.title')}</Text>
           <Text style={[styles.subtitle, { color: P.sub }]}>
-            Customise how your profile looks to clients
+            {tr('providerProfile.branding.subtitle')}
           </Text>
 
           {/* Live preview */}
@@ -643,17 +647,17 @@ export default function BrandingScreen({ navigation }: any) {
               }}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Preview your profile"
+              accessibilityLabel={tr('providerProfile.ui.previewYourProfile')}
             >
               <Ionicons name="eye-outline" size={15} color="#1F1A18" />
-              <Text style={styles.previewButtonText}>Preview</Text>
+              <Text style={styles.previewButtonText}>{tr('providerProfile.ui.preview')}</Text>
             </TouchableOpacity>
             <View style={styles.previewContent}>
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
-                <Text style={[styles.previewAccentLabel, { color: accentInk }]}>ACCENT</Text>
+                <Text style={[styles.previewAccentLabel, { color: accentInk }]}>{tr('providerProfile.themePicker.accent')}</Text>
               </View>
-              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont), fontSize: 20 * resolveProviderFontScale(brandFont), color: previewInk }, !previewOnLight && styles.previewShadow]}>Your Profile</Text>
-              <Text style={[styles.previewSub, { color: previewInk, opacity: 0.75 }]}>Background preview</Text>
+              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont), fontSize: 20 * resolveProviderFontScale(brandFont), color: previewInk }, !previewOnLight && styles.previewShadow]}>{tr('providerProfile.branding.previewName')}</Text>
+              <Text style={[styles.previewSub, { color: previewInk, opacity: 0.75 }]}>{tr('providerProfile.branding.previewSub')}</Text>
             </View>
           </View>
 
@@ -683,17 +687,17 @@ export default function BrandingScreen({ navigation }: any) {
             <>
               {/* Page style — the layout and decoration of the whole profile */}
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.ui.pageStyle')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  The layout of your whole profile. Your colours and font stay as you set them.
+                  {tr('providerProfile.ui.theLayoutOfYourWholeProfile')}
                 </Text>
                 {portfolioLoadState === 'ready' && portfolioItems.length === 0 ? (
                   <Text style={[styles.sectionSub, { color: P.sub }]}>
-                    Add work photos in My Services → Portfolio to show the portfolio on your profile.
+                    {tr('providerProfile.ui.addWorkPhotosInMyServices')}
                   </Text>
                 ) : portfolioLoadState === 'error' ? (
                   <Text style={[styles.sectionSub, { color: P.sub }]}>
-                    Your work photos could not be loaded. Reopen Branding to try again.
+                    {tr('providerProfile.ui.yourWorkPhotosCouldNotBe')}
                   </Text>
                 ) : null}
                 <PageStylePicker
@@ -715,7 +719,7 @@ export default function BrandingScreen({ navigation }: any) {
               {/* Your Photos (Editorial, Bow, Snapshot, Hush): the photos their hero opens on. */}
               {picksHeroPhotos && (
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Your Photos</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.ui.yourPhotos')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
                   {heroPickLimit === 1
                     ? `${getPageStyle(pageStyle).name} shows one of your photos at the top. Tap the one you want. Nothing picked? Your newest shows.`
@@ -746,9 +750,9 @@ export default function BrandingScreen({ navigation }: any) {
                   profile. Templates only: Classic keeps them behind the button. */}
               {pageStyle !== DEFAULT_PAGE_STYLE && (
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.ui.policyPictures')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  How the policy pictures you added in Policies show on your profile.
+                  {tr('providerProfile.ui.howThePolicyPicturesYouAdded')}
                 </Text>
                 <View style={styles.policyLookGrid}>
                   {POLICY_PICTURE_LOOKS.map(look => {
@@ -801,9 +805,9 @@ export default function BrandingScreen({ navigation }: any) {
 
               {/* Card shape — corners of the service cards and category pills */}
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.ui.cardShape')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  The corners of your service cards and category pills.
+                  {tr('providerProfile.ui.theCornersOfYourServiceCards')}
                 </Text>
                 <View style={styles.finishRow}>
                   {CARD_SHAPES.map(shape => {
@@ -848,9 +852,9 @@ export default function BrandingScreen({ navigation }: any) {
             <>
               {/* Profile theme — accent + card colour + backdrop sets */}
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.branding.theme')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  Two backdrop colours and an accent. Swipe a collection, or make your own.
+                  {tr('providerProfile.ui.twoBackdropColoursAndAnAccent')}
                 </Text>
                 <ProviderThemePicker
                   value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
@@ -870,11 +874,11 @@ export default function BrandingScreen({ navigation }: any) {
 
               {/* Hero finish — how the two backdrop colours are drawn */}
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.ui.heroFinish')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
                   {backgroundImage
-                    ? 'Your background photo is showing instead. Remove it to use a finish.'
-                    : 'How your two colours blend behind the top of your profile.'}
+                    ? tr('providerProfile.ui.yourBackgroundPhotoIsShowingInstead')
+                    : tr('providerProfile.ui.howYourTwoColoursBlendBehind')}
                 </Text>
                 {/* Dimmed while a photo is showing: the photo covers the finish. */}
                 <View style={[styles.finishRow, backgroundImage ? styles.finishRowCovered : null]}>
@@ -912,16 +916,16 @@ export default function BrandingScreen({ navigation }: any) {
 
               {/* Background image */}
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.branding.image')}</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  A photo shows behind your profile instead of your colours.
+                  {tr('providerProfile.ui.aPhotoShowsBehindYourProfile')}
                 </Text>
                 <View style={styles.imageRow}>
                   {backgroundImage ? (
                     <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
                   ) : (
                     <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
-                      <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>
+                      <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>{tr('providerProfile.branding.noImage')}</Text>
                     </View>
                   )}
                   <View style={styles.imageActions}>
@@ -934,7 +938,7 @@ export default function BrandingScreen({ navigation }: any) {
                       {uploadingImage ? (
                         <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} size="small" />
                       ) : (
-                        <Text style={[styles.imageBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
+                        <Text style={[styles.imageBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{backgroundImage ? tr('common.change') : tr('providerProfile.branding.chooseImage')}</Text>
                       )}
                     </TouchableOpacity>
                     {backgroundImage && (
@@ -943,7 +947,7 @@ export default function BrandingScreen({ navigation }: any) {
                         onPress={removeImage}
                         activeOpacity={0.8}
                       >
-                        <Text style={[styles.imageBtnText, { color: P.sub }]}>Remove</Text>
+                        <Text style={[styles.imageBtnText, { color: P.sub }]}>{tr('common.remove')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -973,13 +977,13 @@ export default function BrandingScreen({ navigation }: any) {
 
           {part === 'name' && (
             <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-              <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
+              <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('providerProfile.branding.font')}</Text>
               {fontShows ? (
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
                   {getPageStyle(pageStyle, customChoices).nameFontPickable
                     // Noir, Muse, Ledger, Hush, Quiet, Signature: Classic keeps their own lettering.
                     ? `How your business name appears on your profile. Leave it on Classic to keep ${getPageStyle(pageStyle).name}'s own lettering.`
-                    : 'How your business name appears on your profile.'}
+                    : tr('providerProfile.ui.howYourBusinessNameAppearsOn')}
                 </Text>
               ) : (
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
@@ -1014,7 +1018,7 @@ export default function BrandingScreen({ navigation }: any) {
             {saving ? (
               <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
             ) : (
-              <Text style={[styles.saveBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Save Changes</Text>
+              <Text style={[styles.saveBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{tr('providerProfile.kit.saveChanges')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1022,7 +1026,7 @@ export default function BrandingScreen({ navigation }: any) {
 
       <FullCervicedLockedSheet
         visible={lockedOpen}
-        title="Unlock the rest of your branding"
+        title={tr('providerProfile.ui.unlockTheRestOfYourBranding')}
         note="You can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish now."
         onClose={() => setLockedOpen(false)}
         onSeeMore={() => navigation.navigate('FullCervicedFeatures')}
@@ -1352,6 +1356,8 @@ function ProfilePreviewScreen({
   onLockedPress: () => void;
   accent: string;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
   const { width: screenWidth } = useWindowDimensions();
@@ -1376,12 +1382,12 @@ function ProfilePreviewScreen({
         onPress={onClose}
         hitSlop={10}
         accessibilityRole="button"
-        accessibilityLabel="Close the preview"
+        accessibilityLabel={tr('providerProfile.ui.closeThePreview')}
       >
         <Ionicons name="close" size={22} color="#1F1A18" />
       </TouchableOpacity>
       <View style={[previewStyles.badge, { top: insets.top + 14 }]} pointerEvents="none">
-        <Text style={previewStyles.badgeText}>PREVIEW</Text>
+        <Text style={previewStyles.badgeText}>{tr('textSizing.section.preview')}</Text>
       </View>
       {/* The page styles along the bottom: a tap swaps the style in place.
           Picking one here is the same as picking it in Page Style; nothing

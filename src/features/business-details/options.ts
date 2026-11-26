@@ -12,6 +12,8 @@
  */
 
 import type { BusinessType, ServiceCategory } from '../../types/database';
+import type { TranslationKey } from '../../i18n/types';
+import { tr } from '../../i18n/translate';
 
 // Specialities are the specific, often culturally-named things a provider is
 // known for — narrower than the macro service_category, broader than one
@@ -58,13 +60,13 @@ export const ALL_SPECIALTIES: string[] = [
  * with no entry there would show a provider an empty specialty list.
  */
 export const ALL_SERVICE_TYPE_OPTS: { value: ServiceCategory; label: string; sub: string }[] = [
-  { value: 'HAIR',       label: 'Hair',       sub: 'Cuts, colour, braids, extensions, styling' },
-  { value: 'NAILS',      label: 'Nails',      sub: 'Manicures, pedicures, extensions, nail art' },
-  { value: 'LASHES',     label: 'Lashes',     sub: 'Extensions, lifts, tints' },
-  { value: 'BROWS',      label: 'Brows',      sub: 'Shaping, lamination, microblading, tinting' },
-  { value: 'MUA',        label: 'Makeup',     sub: 'Bridal, occasion, editorial, SFX' },
-  { value: 'AESTHETICS', label: 'Aesthetics', sub: 'Facials, peels, microneedling, injectables' },
-  { value: 'OTHER',      label: 'Other',      sub: 'Massage, waxing, tanning, holistic therapies' },
+  { value: 'HAIR',       get label() { return tr('beautyProfile.hello.hair'); },       get sub() { return tr('providerProfile.opt.cat.hairSub'); } },
+  { value: 'NAILS',      get label() { return tr('beautyProfile.hello.nails'); },      get sub() { return tr('providerProfile.opt.cat.nailsSub'); } },
+  { value: 'LASHES',     get label() { return tr('maintenance.add.type.lashes'); },     get sub() { return tr('providerProfile.opt.cat.lashesSub'); } },
+  { value: 'BROWS',      get label() { return tr('maintenance.add.type.brows'); },      get sub() { return tr('providerProfile.opt.cat.browsSub'); } },
+  { value: 'MUA',        get label() { return tr('beautyProfile.hello.makeup'); },     get sub() { return tr('providerProfile.opt.cat.makeupSub'); } },
+  { value: 'AESTHETICS', get label() { return tr('providerProfile.opt.cat.aesthetics'); }, get sub() { return tr('providerProfile.opt.cat.aestheticsSub'); } },
+  { value: 'OTHER',      get label() { return tr('maintenance.add.type.misc'); },      get sub() { return tr('providerProfile.opt.cat.otherSub'); } },
 ];
 
 /**
@@ -158,9 +160,9 @@ export const ACCESSIBILITY_OPTS = ['Wheelchair accessible', 'Parking available',
 
 // Values match the live CHECK constraint providers_team_size_check.
 export const TEAM_SIZE_OPTS = [
-  { value: 'solo',       label: 'Just me' },
-  { value: 'small_team', label: '2–5 people' },
-  { value: 'large_team', label: '6+ people' },
+  { value: 'solo',       get label() { return tr('providerProfile.opt.team.solo'); } },
+  { value: 'small_team', get label() { return tr('providerProfile.opt.team.small'); } },
+  { value: 'large_team', get label() { return tr('providerProfile.opt.team.large'); } },
 ];
 
 // Canonical lowercase DB values with display labels. ChipGroup is string-only,
@@ -168,16 +170,16 @@ export const TEAM_SIZE_OPTS = [
 // the label — writing capitalized values into a lowercase enum column has
 // desynced this table before.
 export const PAYMENT_OPTS = [
-  { value: 'card',          label: 'Card' },
-  { value: 'cash',          label: 'Cash' },
-  { value: 'bank_transfer', label: 'Bank transfer' },
+  { value: 'card',          get label() { return tr('providerProfile.opt.pay.card'); } },
+  { value: 'cash',          get label() { return tr('providerProfile.opt.pay.cash'); } },
+  { value: 'bank_transfer', get label() { return tr('providerProfile.opt.pay.bank'); } },
 ];
 
 // Values match the live CHECK constraint providers_accepts_new_clients_check.
 export const NEW_CLIENTS_OPTS = [
-  { value: 'yes',      label: 'Yes, open to new clients' },
-  { value: 'waitlist', label: 'Waitlist only' },
-  { value: 'no',       label: 'Not currently taking new clients' },
+  { value: 'yes',      get label() { return tr('providerProfile.opt.newClients.yes'); } },
+  { value: 'waitlist', get label() { return tr('providerProfile.opt.newClients.waitlist'); } },
+  { value: 'no',       get label() { return tr('providerProfile.opt.newClients.no'); } },
 ];
 
 // ─── Scheduling ───────────────────────────────────────────────────────────────
@@ -188,12 +190,12 @@ export const NEW_CLIENTS_OPTS = [
 // ('0' meaning none/unlimited), not labels.
 
 export const BUFFER_OPTS = [
-  { value: '0',  label: 'None'   },
-  { value: '10', label: '10 min' },
-  { value: '15', label: '15 min' },
-  { value: '30', label: '30 min' },
-  { value: '45', label: '45 min' },
-  { value: '60', label: '1 hr'   },
+  { value: '0',  get label() { return tr('common.none'); }   },
+  { value: '10', get label() { return tr('providerProfile.opt.min10'); } },
+  { value: '15', get label() { return tr('providerProfile.opt.min15'); } },
+  { value: '30', get label() { return tr('providerProfile.opt.min30'); } },
+  { value: '45', get label() { return tr('providerProfile.opt.min45'); } },
+  { value: '60', get label() { return tr('providerProfile.opt.hr1'); }   },
 ];
 
 // The per-service buffer override in the service editor, derived from
@@ -209,45 +211,45 @@ export const BUFFER_OPTS = [
 // chip to follow the account default, and a separate '0' to say this service
 // specifically needs no gap after it. See bufferFromRow() in AvailabilityService.
 export const SERVICE_BUFFER_BEFORE_OPTS = [
-  { value: '', label: 'None' },
+  { value: '', get label() { return tr('common.none'); } },
   ...BUFFER_OPTS.filter(opt => opt.value !== '0'),
 ];
 
 export const SERVICE_BUFFER_AFTER_OPTS = [
-  { value: '', label: 'My default' },
+  { value: '', get label() { return tr('providerProfile.opt.myDefault'); } },
   ...BUFFER_OPTS,
 ];
 
 export const SLOT_INTERVAL_OPTS = [
-  { value: '15', label: 'Every 15 min' },
-  { value: '30', label: 'Every 30 min' },
-  { value: '60', label: 'Every hour'   },
+  { value: '15', get label() { return tr('providerProfile.opt.every15'); } },
+  { value: '30', get label() { return tr('providerProfile.opt.every30'); } },
+  { value: '60', get label() { return tr('providerProfile.opt.everyHour'); }   },
 ];
 
 export const MIN_NOTICE_OPTS = [
-  { value: '0',  label: 'None'   },
-  { value: '1',  label: '1 hr'   },
-  { value: '2',  label: '2 hrs'  },
-  { value: '4',  label: '4 hrs'  },
-  { value: '12', label: '12 hrs' },
-  { value: '24', label: '24 hrs' },
+  { value: '0',  get label() { return tr('common.none'); }   },
+  { value: '1',  get label() { return tr('providerProfile.opt.hr1'); }   },
+  { value: '2',  get label() { return tr('providerProfile.opt.hr2'); }  },
+  { value: '4',  get label() { return tr('providerProfile.opt.hr4'); }  },
+  { value: '12', get label() { return tr('providerProfile.opt.hr12'); } },
+  { value: '24', get label() { return tr('providerProfile.opt.hr24'); } },
 ];
 
 // '0' is "any time" here — updateProviderScheduleSettings falls back to 60 on
 // a parse failure, so the sentinel must stay a real '0', not an empty string.
 export const BOOKING_WINDOW_OPTS = [
-  { value: '14',  label: '2 weeks'  },
-  { value: '30',  label: '1 month'  },
-  { value: '60',  label: '2 months' },
-  { value: '90',  label: '3 months' },
-  { value: '180', label: '6 months' },
-  { value: '0',   label: 'Any time' },
+  { value: '14',  get label() { return tr('providerProfile.opt.weeks2'); }  },
+  { value: '30',  get label() { return tr('providerProfile.opt.month1'); }  },
+  { value: '60',  get label() { return tr('providerProfile.opt.months2'); } },
+  { value: '90',  get label() { return tr('providerProfile.opt.months3'); } },
+  { value: '180', get label() { return tr('providerProfile.opt.months6'); } },
+  { value: '0',   get label() { return tr('providerProfile.opt.anyTime'); } },
 ];
 
 // 'unlimited' is mapped to the integer 0 at the save boundary (the providers
 // column is an int, where 0 means no cap) — don't store the word.
 export const MAX_PER_DAY_OPTS = [
-  { value: 'unlimited', label: 'Unlimited' },
+  { value: 'unlimited', get label() { return tr('providerProfile.opt.unlimited'); } },
   { value: '4',         label: '4'         },
   { value: '6',         label: '6'         },
   { value: '8',         label: '8'         },
@@ -257,10 +259,10 @@ export const MAX_PER_DAY_OPTS = [
 
 // Values match the live CHECK constraint providers_patch_test_policy_check.
 export const PATCH_OPTS = [
-  { value: 'always',      label: 'Always required' },
-  { value: 'new_clients', label: 'New clients only' },
-  { value: 'optional',    label: 'Recommended but optional' },
-  { value: 'not_needed',  label: 'Not required for my services' },
+  { value: 'always',      get label() { return tr('providerProfile.ui.alwaysRequired'); } },
+  { value: 'new_clients', get label() { return tr('providerProfile.ui.newClientsOnly'); } },
+  { value: 'optional',    get label() { return tr('providerProfile.ui.recommendedButOptional'); } },
+  { value: 'not_needed',  get label() { return tr('providerProfile.ui.notRequiredForMyServices'); } },
 ];
 
 // ─────────────────────────────────────────────────────────
@@ -302,10 +304,10 @@ export const BUSINESS_TYPE_META: Record<BusinessType, {
   /** How a client should be told where this booking happens. */
   clientVenueLabel: string;
 }> = {
-  salon:      { label: 'Salon',       sub: 'Clients come to a commercial salon premises.',                                                       venue: 'provider', clientVenueLabel: 'You travel to the salon' },
-  studio:     { label: 'Studio',      sub: 'Clients come to a dedicated studio space.',                                                          venue: 'provider', clientVenueLabel: 'You travel to the studio' },
-  home_based: { label: 'Home Studio', sub: 'Clients come to your home — address stays private until you release it.',                            venue: 'provider', clientVenueLabel: 'You travel to the provider’s home studio' },
-  mobile:     { label: 'Mobile',      sub: 'You travel to the client. Your address is never sent automatically — only if you send it yourself.', venue: 'client',   clientVenueLabel: 'The provider travels to you' },
+  salon:      { get label() { return tr('providerProfile.opt.bt.salon'); },       get sub() { return tr('providerProfile.opt.bt.salonSub'); },                                                       venue: 'provider', get clientVenueLabel() { return tr('providerProfile.ui.youTravelToTheSalon'); } },
+  studio:     { get label() { return tr('providerProfile.opt.bt.studio'); },      get sub() { return tr('providerProfile.opt.bt.studioSub'); },                                                          venue: 'provider', get clientVenueLabel() { return tr('providerProfile.ui.youTravelToTheStudio'); } },
+  home_based: { get label() { return tr('providerProfile.opt.bt.homeBased'); }, get sub() { return tr('providerProfile.opt.bt.homeBasedSub'); },                            venue: 'provider', get clientVenueLabel() { return tr('providerProfile.ui.youTravelToTheProviderS'); } },
+  mobile:     { get label() { return tr('providerProfile.opt.bt.mobile'); },      get sub() { return tr('providerProfile.opt.bt.mobileSub'); }, venue: 'client',   get clientVenueLabel() { return tr('providerProfile.ui.theProviderTravelsToYou'); } },
 };
 
 export const BUSINESS_TYPE_OPTS: { value: BusinessType; label: string; sub: string }[] =
@@ -348,14 +350,14 @@ export function providerTravelsToClient(type: BusinessType | null | undefined): 
 }
 
 export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string; sub: string }[] = [
-  { value: 'always',            label: 'Always visible',  sub: 'Your full address shows in the Contact section of your profile.' },
-  { value: 'on_confirmation',   label: 'On confirmation', sub: 'Shared automatically when the booking is confirmed.' },
-  { value: 'day_before',        label: '24h before',      sub: 'Shared automatically 24 hours before the appointment.' },
-  { value: 'two_days_before',   label: '48h before',      sub: 'Shared automatically 48 hours before the appointment.' },
-  { value: 'three_days_before', label: '72h before',      sub: 'Shared automatically 72 hours before the appointment.' },
-  { value: 'five_days_before',  label: '5 days before',   sub: 'Shared automatically 5 days before the appointment.' },
-  { value: 'week_before',       label: '1 week before',   sub: 'Shared automatically 1 week before the appointment.' },
-  { value: 'manual',            label: 'Manual release',  sub: 'Nothing is sent automatically — you send your address per booking from that booking\u2019s detail page.' },
+  { value: 'always',            get label() { return tr('providerProfile.opt.release.always'); },  get sub() { return tr('providerProfile.ui.yourFullAddressShowsInThe'); } },
+  { value: 'on_confirmation',   get label() { return tr('providerProfile.opt.release.onConfirmation'); }, get sub() { return tr('providerProfile.opt.release.onConfirmationSub'); } },
+  { value: 'day_before',        get label() { return tr('providerProfile.opt.release.dayBefore'); },      get sub() { return tr('providerProfile.opt.release.dayBeforeSub'); } },
+  { value: 'two_days_before',   get label() { return tr('providerProfile.opt.release.twoDays'); },      get sub() { return tr('providerProfile.opt.release.twoDaysSub'); } },
+  { value: 'three_days_before', get label() { return tr('providerProfile.opt.release.threeDays'); },      get sub() { return tr('providerProfile.opt.release.threeDaysSub'); } },
+  { value: 'five_days_before',  get label() { return tr('providerProfile.opt.release.fiveDays'); },   get sub() { return tr('providerProfile.opt.release.fiveDaysSub'); } },
+  { value: 'week_before',       get label() { return tr('providerProfile.opt.release.week'); },   get sub() { return tr('providerProfile.opt.release.weekSub'); } },
+  { value: 'manual',            get label() { return tr('providerProfile.opt.release.manual'); },  get sub() { return tr('providerProfile.opt.release.manualSub'); } },
 ];
 
 /**
@@ -430,10 +432,130 @@ export function reconcileAddressReleasePolicy(
  *  NORMAL week. The provider approves every request either way; this only
  *  decides how much of the day is worth showing. */
 export const REQUEST_WINDOW_OPTS = [
-  { value: 'any', label: 'Any time' },
-  { value: '60',  label: '1 hr'   },
-  { value: '120', label: '2 hrs'  },
-  { value: '180', label: '3 hrs'  },
-  { value: '240', label: '4 hrs'  },
-  { value: '360', label: '6 hrs'  },
+  { value: 'any', get label() { return tr('providerProfile.opt.anyTime'); } },
+  { value: '60',  get label() { return tr('providerProfile.opt.hr1'); }   },
+  { value: '120', get label() { return tr('providerProfile.opt.hr2'); }  },
+  { value: '180', get label() { return tr('providerProfile.opt.hr3'); }  },
+  { value: '240', get label() { return tr('providerProfile.opt.hr4'); }  },
+  { value: '360', get label() { return tr('providerProfile.opt.hr6'); }  },
 ];
+
+// ── Display text ────────────────────────────────────────────────────────────
+// The English labels above are what gets stored and what signup (which stays
+// English) shows, so they never change. Screens show them through
+// optionText / localizeOptions, which look each one up here. Specialities,
+// style aesthetics, languages and the patch-test options (health) aren't
+// listed, so they show as written.
+
+const OPTION_TEXT_KEYS: Readonly<Record<string, TranslationKey>> = {
+  "Women": 'providerProfile.opt.women',
+  "Straight": 'providerProfile.opt.hair.straight',
+  "Wavy": 'providerProfile.opt.hair.wavy',
+  "Curly": 'providerProfile.opt.hair.curly',
+  "Coily": 'providerProfile.opt.hair.coily',
+  "Men": 'providerProfile.opt.men',
+  "Children": 'providerProfile.opt.children',
+  "Seniors": 'providerProfile.opt.seniors',
+  "Bridal & wedding parties": 'providerProfile.opt.bridalParties',
+  "All welcome": 'providerProfile.opt.allWelcome',
+  "Weekday mornings": 'providerProfile.opt.weekdayMornings',
+  "Weekday afternoons": 'providerProfile.opt.weekdayAfternoons',
+  "Weekday evenings": 'providerProfile.opt.weekdayEvenings',
+  "Saturdays": 'providerProfile.opt.saturdays',
+  "Sundays": 'providerProfile.opt.sundays',
+  "Same-day bookings": 'providerProfile.opt.sameDay',
+  "Wheelchair accessible": 'providerProfile.opt.wheelchair',
+  "Parking available": 'providerProfile.opt.parking',
+  "Ground floor access": 'providerProfile.opt.groundFloor',
+  "Home visits for mobility": 'providerProfile.opt.homeVisits',
+  "Step-free entrance": 'providerProfile.opt.stepFree',
+  "£  · Great value": 'providerProfile.opt.price.budget',
+  "££  · Mid-range": 'providerProfile.opt.price.mid',
+  "£££  · Premium": 'providerProfile.opt.price.premium',
+  "££££  · Luxury": 'providerProfile.opt.price.luxury',
+  "Just me": 'providerProfile.opt.team.solo',
+  "2–5 people": 'providerProfile.opt.team.small',
+  "6+ people": 'providerProfile.opt.team.large',
+  "Card": 'providerProfile.opt.pay.card',
+  "Cash": 'providerProfile.opt.pay.cash',
+  "Bank transfer": 'providerProfile.opt.pay.bank',
+  "Yes, open to new clients": 'providerProfile.opt.newClients.yes',
+  "Waitlist only": 'providerProfile.opt.newClients.waitlist',
+  "Not currently taking new clients": 'providerProfile.opt.newClients.no',
+  "None": 'providerProfile.opt.none',
+  "10 min": 'providerProfile.opt.min10',
+  "15 min": 'providerProfile.opt.min15',
+  "30 min": 'providerProfile.opt.min30',
+  "45 min": 'providerProfile.opt.min45',
+  "1 hr": 'providerProfile.opt.hr1',
+  "2 hrs": 'providerProfile.opt.hr2',
+  "3 hrs": 'providerProfile.opt.hr3',
+  "4 hrs": 'providerProfile.opt.hr4',
+  "6 hrs": 'providerProfile.opt.hr6',
+  "12 hrs": 'providerProfile.opt.hr12',
+  "24 hrs": 'providerProfile.opt.hr24',
+  "My default": 'providerProfile.opt.myDefault',
+  "Every 15 min": 'providerProfile.opt.every15',
+  "Every 30 min": 'providerProfile.opt.every30',
+  "Every hour": 'providerProfile.opt.everyHour',
+  "2 weeks": 'providerProfile.opt.weeks2',
+  "1 month": 'providerProfile.opt.month1',
+  "2 months": 'providerProfile.opt.months2',
+  "3 months": 'providerProfile.opt.months3',
+  "6 months": 'providerProfile.opt.months6',
+  "Any time": 'providerProfile.opt.anyTime',
+  "Unlimited": 'providerProfile.opt.unlimited',
+  "Hair": 'providerProfile.opt.cat.hair',
+  "Nails": 'providerProfile.opt.cat.nails',
+  "Lashes": 'providerProfile.opt.cat.lashes',
+  "Brows": 'providerProfile.opt.cat.brows',
+  "Makeup": 'providerProfile.opt.cat.makeup',
+  "Aesthetics": 'providerProfile.opt.cat.aesthetics',
+  "Other": 'providerProfile.opt.cat.somethingElse',
+  "Cuts, colour, braids, extensions, styling": 'providerProfile.opt.cat.hairSub',
+  "Manicures, pedicures, extensions, nail art": 'providerProfile.opt.cat.nailsSub',
+  "Extensions, lifts, tints": 'providerProfile.opt.cat.lashesSub',
+  "Shaping, lamination, microblading, tinting": 'providerProfile.opt.cat.browsSub',
+  "Bridal, occasion, editorial, SFX": 'providerProfile.opt.cat.makeupSub',
+  "Facials, peels, microneedling, injectables": 'providerProfile.opt.cat.aestheticsSub',
+  "Massage, waxing, tanning, holistic therapies": 'providerProfile.opt.cat.otherSub',
+  "Salon": 'providerProfile.opt.bt.salon',
+  "Studio": 'providerProfile.opt.bt.studio',
+  "Home Studio": 'providerProfile.opt.bt.homeBased',
+  "Mobile": 'providerProfile.opt.bt.mobile',
+  "Clients come to a commercial salon premises.": 'providerProfile.opt.bt.salonSub',
+  "Clients come to a dedicated studio space.": 'providerProfile.opt.bt.studioSub',
+  "Clients come to your home — address stays private until you release it.": 'providerProfile.opt.bt.homeBasedSub',
+  "You travel to the client. Your address is never sent automatically — only if you send it yourself.": 'providerProfile.opt.bt.mobileSub',
+  "Not set": 'providerProfile.opt.notSet',
+  "Always visible": 'providerProfile.opt.release.always',
+  "On confirmation": 'providerProfile.opt.release.onConfirmation',
+  "24h before": 'providerProfile.opt.release.dayBefore',
+  "48h before": 'providerProfile.opt.release.twoDays',
+  "72h before": 'providerProfile.opt.release.threeDays',
+  "5 days before": 'providerProfile.opt.release.fiveDays',
+  "1 week before": 'providerProfile.opt.release.week',
+  "Manual release": 'providerProfile.opt.release.manual',
+  "Your address is always visible to booked clients.": 'providerProfile.opt.release.alwaysSub',
+  "Shared automatically when the booking is confirmed.": 'providerProfile.opt.release.onConfirmationSub',
+  "Shared automatically 24 hours before the appointment.": 'providerProfile.opt.release.dayBeforeSub',
+  "Shared automatically 48 hours before the appointment.": 'providerProfile.opt.release.twoDaysSub',
+  "Shared automatically 72 hours before the appointment.": 'providerProfile.opt.release.threeDaysSub',
+  "Shared automatically 5 days before the appointment.": 'providerProfile.opt.release.fiveDaysSub',
+  "Shared automatically 1 week before the appointment.": 'providerProfile.opt.release.weekSub',
+  "Nothing is sent automatically — you send your address per booking from that booking’s detail page.": 'providerProfile.opt.release.manualSub',
+};
+
+/** An option label or sub-line in the app language (as written if unlisted). */
+export function optionText(text: string, t: (key: TranslationKey) => string): string {
+  const key = OPTION_TEXT_KEYS[text];
+  return key ? t(key) : text;
+}
+
+/** The same options with their label and sub-line in the app language. */
+export function localizeOptions<T extends { label: string; sub?: string }>(
+  opts: readonly T[],
+  t: (key: TranslationKey) => string,
+): T[] {
+  return opts.map(o => ({ ...o, label: optionText(o.label, t), ...(o.sub ? { sub: optionText(o.sub, t) } : {}) }));
+}
