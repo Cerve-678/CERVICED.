@@ -18,8 +18,14 @@ import type { BaseCatalog, Catalog, PluralKey, TranslationKey, TranslationParams
  * returns the English source for these keys, even if a language catalog were
  * to contain a translation for one. Each area declares its own held keys in
  * its `<area>Held` array (see ./catalogs/en/index.ts).
+ *
+ * Typed as a set of plain strings on purpose. A Set/ReadonlySet over the full
+ * TranslationKey union makes TypeScript match that union against itself pair
+ * by pair when it compares the generic Set methods. Past 4,096 keys the pairs
+ * overflow its internal Map and `tsc` crashes ("RangeError: Map maximum size
+ * exceeded"), which happened at 4,646 keys on 2026-11-26. Don't narrow it back.
  */
-export const DO_NOT_TRANSLATE: ReadonlySet<TranslationKey> = new Set<TranslationKey>(HELD_KEYS);
+export const DO_NOT_TRANSLATE: ReadonlySet<string> = new Set<string>(HELD_KEYS);
 
 /** Registered language catalogs, keyed by language code. */
 export const CATALOGS: Readonly<Record<string, Catalog>> = { en, es, fr, pl, de };
@@ -43,7 +49,7 @@ export function interpolate(template: string, params?: TranslationParams): strin
  */
 export function resolveTranslation(
   catalogs: Readonly<Record<string, Catalog>>,
-  doNotTranslate: ReadonlySet<TranslationKey>,
+  doNotTranslate: ReadonlySet<string>,
   base: BaseCatalog,
   lang: string,
   key: TranslationKey,
