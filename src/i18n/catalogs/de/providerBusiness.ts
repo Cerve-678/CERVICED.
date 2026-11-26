@@ -361,7 +361,7 @@ export const providerBusiness: AreaCatalog<typeof en> = {
   'providerBusiness.ui2.chooseHowFreedUpSpacesAre':
     'Wähle, wie frei gewordene Plätze behandelt werden. Du kannst sie kombinieren.',
   'providerBusiness.ui2.thisAppliesWhenYourScheduleIs':
-    'Das gilt auch bei geschlossenem Plan: Kundschaft kann sich weiterhin auf die Warteliste setzen.',
+    'Wenn dein Kalender wegen vollständiger Ausbuchung schließt, automatisch oder durch dich, können frei gewordene Termine weiterhin an die Warteliste vergeben werden. Bei anderen Schließungen pausieren Angebote bis zur Wiederöffnung.',
   'providerBusiness.ui2.auto': 'Automatisch',
   'providerBusiness.ui2.closeMyScheduleWhenFullyBooked': 'Plan schließen, wenn ausgebucht',
   'providerBusiness.ui2.withBothOptionsOffAFreed':

@@ -359,7 +359,7 @@ export const providerBusiness: AreaCatalog<typeof en> = {
   'providerBusiness.ui2.chooseHowFreedUpSpacesAre':
     'Elige cómo se gestionan los huecos que se liberan. Puedes usar cualquiera de estas opciones a la vez.',
   'providerBusiness.ui2.thisAppliesWhenYourScheduleIs':
-    'Esto también se aplica con tu agenda cerrada: los clientes pueden seguir apuntándose a tu lista de espera.',
+    'Si tu agenda se cierra por estar completa, automáticamente o por decisión tuya, los huecos que se liberen aún pueden ofrecerse a tu lista de espera. Otros cierres pausan las ofertas hasta que vuelvas a abrir.',
   'providerBusiness.ui2.auto': 'Automático',
   'providerBusiness.ui2.closeMyScheduleWhenFullyBooked': 'Cerrar mi agenda cuando esté completa',
   'providerBusiness.ui2.withBothOptionsOffAFreed':
