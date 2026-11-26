@@ -16,6 +16,7 @@ import { UK_CITIES } from '../constants/ukCities';
 import { getCityAreaData, searchPlaces, COUNTY_TOWNS, type CityAreaData } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { readableSheet } from '../constants/readableWidth';
+import { tr, useTranslation } from '../i18n';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -42,6 +43,8 @@ interface CityMultiSelectProps {
  * appending to this array instead of composing one string.
  */
 export function CityMultiSelect({ selected, onChange, palette: t, placeholder }: CityMultiSelectProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
@@ -124,7 +127,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
         onPress={() => setVisible(true)}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Choose cities"
+        accessibilityLabel={tr('discover.cities.chooseA11y')}
       >
         <Ionicons name="location-outline" size={18} color={t.sub} />
         <Text
@@ -142,8 +145,8 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
           <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: bottomInset + 16 }]}>
             <View style={[styles.handle, { backgroundColor: t.border }]} />
             <View style={styles.header}>
-              <Text style={[styles.title, { color: t.text }]}>Choose your cities</Text>
-              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel="Close city picker">
+              <Text style={[styles.title, { color: t.text }]}>{tr('discover.cities.title')}</Text>
+              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={tr('discover.cities.closeA11y')}>
                 <Ionicons name="close" size={22} color={t.text} />
               </TouchableOpacity>
             </View>
@@ -153,7 +156,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search a town, county or area..."
+                placeholder={tr('discover.area.searchCounty')}
                 placeholderTextColor={t.sub}
                 style={[styles.searchInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -169,7 +172,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={otherText}
                 onChangeText={setOtherText}
-                placeholder="Other city or town..."
+                placeholder={tr('discover.cities.otherPlaceholder')}
                 placeholderTextColor={t.sub}
                 style={[styles.otherInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -181,7 +184,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                 onPress={addOther}
                 disabled={!otherText.trim()}
                 hitSlop={8}
-                accessibilityLabel="Add city"
+                accessibilityLabel={tr('discover.cities.addA11y')}
               >
                 <Ionicons
                   name="add-circle"
@@ -213,7 +216,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.rowText, { color: t.text }]}>
-                            {match.kind === 'county' ? `All of ${match.name}` : entry}
+                            {match.kind === 'county' ? tr('discover.area.allOf', { place: match.name }) : entry}
                           </Text>
                           {isSelected && <Ionicons name="checkmark-circle" size={20} color={t.accent} />}
                         </TouchableOpacity>
@@ -242,9 +245,9 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                           style={styles.expandBtn}
                           onPress={() => toggleExpand(item)}
                           hitSlop={8}
-                          accessibilityLabel={`Pick a specific area of ${item}`}
+                          accessibilityLabel={tr('discover.area.pickSpecificA11y', { place: item })}
                         >
-                          <Text style={[styles.expandBtnText, { color: t.accent }]}>Area</Text>
+                          <Text style={[styles.expandBtnText, { color: t.accent }]}>{tr('discover.cities.area')}</Text>
                           <Ionicons
                             name={isExpanded ? 'chevron-up' : 'chevron-down'}
                             size={14}
@@ -306,7 +309,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                 );
               }}
               ListEmptyComponent={
-                <Text style={[styles.empty, { color: t.sub }]}>No cities match "{query}"</Text>
+                <Text style={[styles.empty, { color: t.sub }]}>{tr('discover.area.noCitiesMatch', { query })}</Text>
               }
             />
 

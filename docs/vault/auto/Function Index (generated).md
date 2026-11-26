@@ -5,11 +5,11 @@
 
 #generated
 
-**4458 functions** across **716 files**.
+**4475 functions** across **717 files**.
 
-### `src/components/` (69)
+### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
-- `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
+- `AddOnPickerModal.tsx` — **AddOnPickerModal** · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · runOnClose · showAlert · showConfirm · showToast · Toast · **useAppDialog**
@@ -28,6 +28,7 @@
 - `ColourWheelPicker.tsx` — ColourWheelPicker · commit · onBar · onHexText · onSquare
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
+- `ErrorBoundary.tsx` — component · DefaultFallback
 - `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar** · reassert
 - `FramedLogo.tsx` — **FramedLogo** · **LogoCircle**
 - `FullImageViewer.tsx` — clampX · clampY · close · **FullImageViewer** · onZoomChange · report · settle · ZoomablePage
@@ -96,9 +97,10 @@
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 - `useRevealNext.ts` — onScroll · onViewportLayout · reveal · **revealEase** · **revealOffset** · step · stopGlide · **useRevealNext**
 
-### `src/constants/` (13)
+### `src/constants/` (14)
 - `customPageStyle.ts` — **customHeadingFont** · **customPageStyle** · **customTextFont** · **encodeCustomChoices** · isCustomLayout · **matchingFontSet** · **matchingLook** · **parseCustomChoices** · **partsOf** · pick · **sameCustomChoices** · sameParts · **withPart**
-- `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
+- `hairTypes.ts` — **hairTypeLabel**
+- `maintenanceServiceTypes.ts` — **getMaintenanceServiceType** · **maintenanceTypeLabel**
 - `pageStyles.ts` — **chapterHeading** · **customHeadingPair** · **getPageStyle** · **headingPair** · **heroPhotoPickLimit** · **heroPhotoSlotAspect** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
@@ -108,7 +110,7 @@
 - `readableWidth.ts` — **readableAbsoluteSheet**
 - `reschedule.ts` — changes
 - `serviceTypes.ts` — **isServiceTypeKey** · **serviceTypeOptionsFor**
-- `skinTones.ts` — **matchesSkinTone**
+- `skinTones.ts` — **matchesSkinTone** · **skinToneLabel**
 - `support.ts` — **supportMailtoUrl**
 
 ### `src/contexts/` (8)
@@ -139,10 +141,10 @@
 - `BeautyProfileLanding.tsx` — **BeautyProfileLanding** · card · dateStub · go · groups · headline · ideas
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderCards · renderChips · renderTailored · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
 - `ClientBeautyProfileDetails.tsx` — catLabel · chipRow · chips · **ClientBeautyProfileDetails** · pick · row
-- `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
+- `highlights.ts` — **highlightCategory** · **leadingCategory** · o · orderedAnswers · os
 - `lookSummary.ts` — hairWord · listOf · **lookLine** · **lookTitle**
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
-- `options.ts` — **hairGoalsFor** · **hairTreatmentHistory**
+- `options.ts` — **beautyOptionLabel** · **hairGoalsFor** · **hairTreatmentHistory**
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**
 - `profileRow.ts` — **beautyDataFromRow**
 - `suitedIdeas.ts` — add · **allSuitedIdeas** · from · goal · hairIdeas · **isSuitedCategory** · lashBrowIdeas · makeupIdeas · nailIdeas · **suitedIdeas**
@@ -165,7 +167,7 @@
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `ExternalBookingCard.tsx` — createStyles · styles
-- `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · **splitExternalBookings**
+- `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · knownBookingSite · **splitExternalBookings**
 - `noShowDispute.ts` — **fileNoShowDispute**
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **cancelsWithRefund** · **describeCancelRefund** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
@@ -207,6 +209,9 @@
 ### `src/features/explore/` (1)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
 
+### `src/features/help/` (1)
+- `helpTopics.ts` — **helpAudienceFor** · **helpSectionsFor**
+
 ### `src/features/home/` (2)
 - `SkeletonSection.tsx` — **SkeletonSection**
 - `useRevealTogether.ts` — **allPartsDone** · markDone · **useRevealTogether**
@@ -221,7 +226,7 @@
 ### `src/features/intake-forms/` (4)
 - `formDeadline.ts` — **deadlineLabel** · **dueByLabel** · **isOverdue**
 - `FormsWelcome.tsx` — answers · **FormsWelcome** · renderStage · writeIn
-- `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst
+- `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst · **templateLabel** · **templateSubtitle**
 - `sendForms.ts` — **appointmentLabel** · **bookingsHoldingForm** · **formProblem** · **sentFormsMessage** · startMs · **upcomingForForms**
 
 ### `src/features/maintenance/` (12)
@@ -499,7 +504,7 @@
 - `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeCertificate · closeEditor · DashCard · DashEmpty · FindabilityCard · findabilityGaps · finishTour · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenBooking · handleOpenClientView · handleOpenPayments · handleOpenRecentActivity · handleOpenRelease · handleOpenTodayDay · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hidden · live · load · needing · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ProviderProfileLoadingShell · releaseQuickView · renderRow · row · ServiceCategoryCard · ServiceRow · serviceType · setup · startLowerSections · visibleTourSteps
 - `ProviderNotificationSettingsScreen.tsx` — ProviderNotificationSettingsScreen
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
-- `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
+- `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · scheduleTabs · timeToDate · toggleDay · toTime
 - `SchedulingScreen.tsx` — chooseHorizonMode · flash · handleSave · releaseStatus · saveReleaseChanges · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
@@ -611,7 +616,7 @@
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
-- `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
+- `beautyProfileStats.ts` — **categoryLabel** · **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `beautyProfileTodo.ts` — **beautyProfileTodo** · isBlank
 - `bookingHorizon.ts` — **bookableDayCount** · fromUkWall · **isBeyondHorizon** · **isMonthlyRelease** · **isReleaseTime** · **lastBookableDate** · lastSundayUtc · **nextReleaseMoment** · **parseBookingWindowDays** · releaseMinutes · releaseMomentFor · **releaseMomentInMonth** · **releaseSettingsPatch** · **releaseTimeLabel** · **rollingWindowExplainer** · **toReleaseDay** · **toReleaseTime** · **ukOffsetMinutes** · **ukTodayYMD** · ukWall · **whenDateOpens**
 - `bottomSafeGap.ts` — **useSystemBottomInset**
@@ -639,7 +644,7 @@
 - `legalPage.ts` — **legalPageUrl** · **openLegalPage**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
 - `logoFraming.ts` — **clampLogoFrame** · **logoFrameLayout** · **minLogoZoom**
-- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer · **scheduleNewReminder**
+- `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer · opt · said · **scheduleNewReminder**
 - `mapsLink.ts` — **directionsUrlFor** · **mapsUrlFor**
 - `masonryHeight.ts` — **getMasonryItemHeight** · hashToUnit
 - `mergeSavedExploreCards.ts` — **mergeSavedExploreCards**
@@ -661,7 +666,7 @@
 - `rescheduleWindow.ts` — **isSameMonth** · **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · **sameMonthLastDay** · to24HourTimeOrRaw · tomorrowMidnight
 - `roundRobinMix.ts` — alternateCategories · arrange · freshFirst · **roundRobinMix**
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
-- `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
+- `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · issue · **primaryIssue** · resolveSpan · toMinutes
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice
 - `serviceFilterMatch.ts` — **candidateServices** · **hasServiceCriteria** · **priceRangeAcrossServices** · **serviceMatchesCriteria** · **serviceRange**
 - `serviceImageDraft.ts` — **normalizeServiceImages**

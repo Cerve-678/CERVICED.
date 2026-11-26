@@ -89,6 +89,8 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
   onSubmit,
   onClose,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const { t } = useTranslation();
   const onAccent = isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740';

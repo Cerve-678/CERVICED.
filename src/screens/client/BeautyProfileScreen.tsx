@@ -419,7 +419,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
             onPress={() => { void loadProfile(); }}
             activeOpacity={0.75}
           >
-            <Text style={[styles.saveBtnText, { color: P.onAccent }]}>TRY AGAIN</Text>
+            <Text style={[styles.saveBtnText, { color: P.onAccent }]}>{t('common.tryAgain').toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
       </ThemedBackground>

@@ -41,6 +41,7 @@ import { env } from '../../utils/env';
 import { toArgbHex } from '../../utils/color';
 import { PAYPAL_MAX_CHECKOUT_TOTAL } from './platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { useTranslation, tr } from '../../i18n';
 
 /**
  * The card payment sheet for a checkout the server has already prepared
@@ -121,6 +122,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
+    const { t } = useTranslation();
     // See the mock PaymentModal above — same reason, same fix.
     const bottomInset = useSystemBottomInset();
     const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
@@ -309,7 +311,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
       };
       try {
         if (!checkoutBatchId) {
-          throw new Error('Checkout has expired. Please review your booking and try again.');
+          throw new Error(tr('cart.pay.expired'));
         }
         if (hasFees) {
           await acceptCheckoutFees(checkoutBatchId, {
@@ -333,7 +335,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
         if (await releaseIfSheetLeft(null)) return;
         if (method === 'paypal' && !paypalAvailable) {
           // The server decides; nothing is authorised, so card still works.
-          setPayError('PayPal isn\'t available for this booking. Please pay by card.');
+          setPayError(tr('cart.pay.paypalUnavailable'));
           return;
         }
 
@@ -351,7 +353,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
             // them try again rather than releasing the hold over a blip.
             logger.error(`[${timestamp()}] could not read the payment amount`, retrieveError);
             if (await releaseIfSheetLeft('We couldn\'t start Apple Pay or Google Pay.')) return;
-            setPayError('We couldn\'t start Apple Pay or Google Pay. Please try again.');
+            setPayError(tr('cart.pay.walletFailed'));
             return;
           }
           const amount = (paymentIntent.amount / 100).toFixed(2);
@@ -400,8 +402,8 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
             setPayError(isCardError
               ? (confirmError.localizedMessage || confirmError.message)
               : method === 'paypal'
-                ? 'That PayPal payment didn\'t go through. Please try again, or pay by card.'
-                : 'That payment didn\'t go through. Please check your details and try again.');
+                ? tr('cart.pay.paypalFailed')
+                : tr('cart.pay.failed'));
             // They've now seen this refusal, so the 5-minute cleanup mustn't
             // notify them of it again if they leave the sheet open past the
             // hold. Only a card error: that's the bank's own refusal shown
@@ -461,7 +463,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
           catch { onPaymentPending?.('unknown'); return; }
         }
         onClose();
-        onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
+        onBookingFailed(error instanceof PaymentRequestError ? error.message : tr('cart.pay.notCompleted'));
       } finally {
         onPaymentInFlight?.(false);
         setIsProcessing(false);
@@ -504,11 +506,11 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
               style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
             >
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
-                <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
+                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.mockPay.title')}</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
                   disabled={isProcessing}
-                  accessibilityLabel="Close payment"
+                  accessibilityLabel={t('cart.pay.closeA11y')}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     handleClose();
@@ -520,7 +522,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
 
               <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
+                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.mockPay.orderSummary')}</Text>
                   {lines.map(line => (
                     <View key={line.id} style={styles.orderItem}>
                       <Text style={[styles.orderItemName, { color: theme.text }]}>
@@ -532,7 +534,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      Total
+                      {t('cart.total')}
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -542,7 +544,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                   <TouchableOpacity accessibilityRole="button" onPress={() => setFeesAttempt(n => n + 1)}
                     style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                     <Text style={[styles.paymentMethodName, { color: theme.text }]}>
-                      We couldn't load this booking's fees. Tap to try again.
+                      {t('cart.pay.feesLoadFailed')}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -639,7 +641,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                       {paypalShown && (
                         <TouchableOpacity
                           accessibilityRole="button"
-                          accessibilityLabel="Pay with PayPal"
+                          accessibilityLabel={t('cart.pay.paypal')}
                           disabled={isProcessing || !canPay}
                           activeOpacity={0.7}
                           onPress={() => {
@@ -650,24 +652,24 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                             (isProcessing || !canPay) && styles.paypalButtonDisabled]}
                         >
                           <Ionicons name="logo-paypal" size={18} color={PAYPAL_NAVY} />
-                          <Text style={styles.paypalButtonText}>Pay with PayPal</Text>
+                          <Text style={styles.paypalButtonText}>{t('cart.pay.paypal')}</Text>
                         </TouchableOpacity>
                       )}
                       <View style={styles.payDivider}>
                         <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
-                        <Text style={[styles.payDividerText, { color: P.sub }]}>or pay by card</Text>
+                        <Text style={[styles.payDividerText, { color: P.sub }]}>{t('cart.pay.orCard')}</Text>
                         <View style={[styles.payDividerLine, { backgroundColor: P.border }]} />
                       </View>
                     </>
                   )}
                   {savedCards.length > 0 && (
                     <View accessibilityRole="radiogroup" style={styles.savedCardList}>
-                      <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Saved cards</Text>
+                      <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>{t('cart.pay.savedCards')}</Text>
                       {[...savedCards.map(card => ({
                         id: card.id,
                         title: `${savedCardBrandName(card.brand)} •••• ${card.last4}`,
                         sub: savedCardExpiryLabel(card),
-                      })), { id: 'new', title: 'Use a new card', sub: null as string | null }].map(option => {
+                      })), { id: 'new', title: t('cart.pay.newCard'), sub: null as string | null }].map(option => {
                         const selected = selectedCard === option.id;
                         return (
                           <TouchableOpacity
@@ -700,7 +702,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                   )}
                   {!payingWithSavedCard && (
                   <>
-                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Card details</Text>
+                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>{t('cart.pay.cardDetails')}</Text>
                   {/* Separate number / expiry / CVC / postcode boxes. On iOS,
                       backgroundColor paints the whole form behind Stripe's own
                       boxes, so it takes the sheet's colour and the boxes sit
@@ -735,7 +737,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                   )}
                   <View style={styles.paySecureRow}>
                     <Ionicons name="lock-closed" size={12} color={P.sub} />
-                    <Text style={[styles.paySecureText, { color: P.sub }]}>Card details go straight to Stripe</Text>
+                    <Text style={[styles.paySecureText, { color: P.sub }]}>{t('cart.pay.secure')}</Text>
                   </View>
                 </View>
               </ScrollView>
@@ -751,7 +753,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
                 {confirming ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <ActivityIndicator color={P.onAccent} size="small" />
-                    <Text style={[styles.payButtonText, { color: P.onAccent }]}>Confirming your payment…</Text>
+                    <Text style={[styles.payButtonText, { color: P.onAccent }]}>{t('cart.pay.confirming')}</Text>
                   </View>
                 ) : isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />

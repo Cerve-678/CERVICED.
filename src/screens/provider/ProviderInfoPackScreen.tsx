@@ -71,6 +71,7 @@ import { BAKBAK, INFO_PACK_DARK, INFO_PACK_LIGHT, type InfoPackPalette } from '.
 import { InfoPackSendSheet } from '../../features/info-packs/InfoPackSendSheet';
 import { InfoPackWelcome } from '../../features/info-packs/InfoPackWelcome';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr, trp, useTranslation } from '../../i18n';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -114,6 +115,8 @@ function PackCard({
   pack: InfoPack; P: InfoPackPalette; index: number; sent: number; opened: number;
   onEdit: () => void; onSend: () => void; onDelete: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const fade = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(12)).current;
   useEffect(() => {
@@ -126,7 +129,7 @@ function PackCard({
 
   return (
     <Animated.View style={{ opacity: fade, transform: [{ translateY: lift }] }}>
-      <TouchableOpacity activeOpacity={0.85} onPress={onEdit} accessibilityHint="Opens the pack to edit it">
+      <TouchableOpacity activeOpacity={0.85} onPress={onEdit} accessibilityHint={tr('providerBookings.pack.editHint')}>
         <View style={[pc.card, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.shadow }]}>
           <View style={pc.top}>
             <Ionicons name="document-text-outline" size={13} color={P.sub} />
@@ -140,19 +143,19 @@ function PackCard({
           <View style={pc.meta}>
             <Ionicons name="eye-outline" size={13} color={P.sub} />
             <Text style={[pc.metaText, { color: P.sub }]}>
-              {sent === 0 ? 'Not sent yet' : (
-                <>Sent to <Text style={[pc.metaStrong, { color: P.text }]}>{sent}</Text> · <Text style={[pc.metaStrong, { color: P.text }]}>{opened}</Text> opened</>
+              {sent === 0 ? tr('providerBookings.pack.notSent') : (
+                <>{tr('providerBookings.pack.sentTo')} <Text style={[pc.metaStrong, { color: P.text }]}>{sent}</Text> · <Text style={[pc.metaStrong, { color: P.text }]}>{opened}</Text> {tr('providerBookings.pack.opened')}</>
               )}
             </Text>
             <Text style={[pc.date, { color: P.sub }]}>{fmtDate(pack.createdAt)}</Text>
           </View>
           <View style={pc.actions}>
-            <TouchableOpacity style={[pc.delete, { backgroundColor: P.dangerBg }]} onPress={onDelete} activeOpacity={0.75} accessibilityLabel={`Delete ${pack.title}`}>
+            <TouchableOpacity style={[pc.delete, { backgroundColor: P.dangerBg }]} onPress={onDelete} activeOpacity={0.75} accessibilityLabel={tr('providerBookings.pack.deleteA11y', { title: pack.title })}>
               <Ionicons name="trash-outline" size={16} color={P.danger} />
             </TouchableOpacity>
             <TouchableOpacity style={[pc.send, { backgroundColor: P.accent }]} onPress={onSend} activeOpacity={0.85}>
               <Ionicons name="paper-plane-outline" size={15} color={P.onAccent} />
-              <Text style={[pc.sendText, { color: P.onAccent }]}>Send to client</Text>
+              <Text style={[pc.sendText, { color: P.onAccent }]}>{tr('providerBookings.infoPack.sendToClient')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -181,6 +184,8 @@ const pc = StyleSheet.create({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderInfoPackScreen({ navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode: dark } = useTheme();
   const { user } = useAuth();
   const { showToast, showConfirm, DialogHost } = useAppDialog();
@@ -342,7 +347,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
   const handleSave = useCallback(async () => {
     if (!editing || !user?.id || saving) return;
-    if (!title.trim() || !packHasContent(content)) { showToast('Add a title and write something under your headings first.', 'warning'); return; }
+    if (!title.trim() || !packHasContent(content)) { showToast(tr('providerBookings.pack.needContent'), 'warning'); return; }
     const fields = {
       title: title.trim(),
       // Legacy display label; matching runs on service_names.
@@ -356,12 +361,12 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
         const row = await updateInfoPack(editing.pack.id, fields);
         const updated = toPack(row);
         setPacks(prev => prev.map(p => (p.id === updated.id ? updated : p)));
-        showToast('Changes saved.', 'success');
+        showToast(tr('providerBookings.pack.saved'), 'success');
       } else {
         const willSend = sendNow && canSendNow;
         const row = await createInfoPack({ provider_id: user.id, ...fields, send_to_upcoming: willSend });
         setPacks(prev => [toPack(row), ...prev]);
-        showToast(willSend ? `Saved and sent to ${reachCount} upcoming client${reachCount === 1 ? '' : 's'}.` : 'Saved. New bookings will get it.', 'success');
+        showToast(willSend ? trp('providerBookings.pack.savedSent', reachCount) : tr('providerBookings.pack.savedFuture'), 'success');
         if (willSend) {
           getInfoPackDeliveries([row.id])
             .then(rows => setDeliveries(prev => [...prev.filter(d => d.infoPackId !== row.id), ...rows]))
@@ -385,17 +390,17 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     } catch (error) {
       logger.error('[InfoPacks] delete failed:', error);
-      showToast("Couldn't delete this pack. Please try again.", 'error');
+      showToast(tr('providerBookings.pack.deleteFailed'), 'error');
     }
   }, [showToast]);
 
   const handleDelete = useCallback((pack: InfoPack) => {
     showConfirm(
-      'Delete this pack?',
-      `"${pack.title}" will be deleted. Clients who already have it keep their copy.`,
+      tr('providerBookings.infoPack.delete.title'),
+      tr('providerBookings.pack.deleteBody', { title: pack.title }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => { void performDelete(pack.id); } },
+        { text: tr('common.cancel'), style: 'cancel' },
+        { text: tr('common.delete'), style: 'destructive', onPress: () => { void performDelete(pack.id); } },
       ],
     );
   }, [performDelete, showConfirm]);
@@ -414,7 +419,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       await attachInfoPackToBooking(booking.id, sending.id);
       setDeliveries(prev => [...prev, { infoPackId: sending.id, bookingId: booking.id, viewedAt: null }]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(`Sent to ${booking.customer_name || 'your client'}.`, 'success');
+      showToast(tr('providerBookings.infoPack.toast.sentTo', { name: booking.customer_name || 'your client' }), 'success');
     } catch (error) {
       logger.error('[InfoPacks] send failed:', error);
       showToast(toUserMessageAllowingDbGuard(error, "Couldn't send this pack. Please try again.", 'InfoPacks.send'), 'error');
@@ -447,14 +452,14 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
             onPress={() => (inForm ? closeForm() : navigation.goBack())}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-            accessibilityLabel={inForm ? 'Close' : 'Back'}
+            accessibilityLabel={inForm ? tr('common.close') : tr('common.back')}
           >
             <Ionicons name={inForm ? 'close' : 'chevron-back'} size={18} color={P.text} />
           </TouchableOpacity>
           <View style={s.titleWrap}>
             <Text style={[s.screenTitle, { color: P.text }]}>{headerTitle}</Text>
             {!inForm && (
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); welcome.show(); }} hitSlop={10} activeOpacity={0.7} style={[s.infoBtn, { backgroundColor: P.iconBg }]} accessibilityLabel="How Info Packs work">
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); welcome.show(); }} hitSlop={10} activeOpacity={0.7} style={[s.infoBtn, { backgroundColor: P.iconBg }]} accessibilityLabel={tr('providerBookings.pack.howA11y')}>
                 <Ionicons name="information" size={13} color={P.text} />
               </TouchableOpacity>
             )}
@@ -462,10 +467,10 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           {!inForm ? (
             <TouchableOpacity onPress={() => openCreate()} style={[s.newBtn, { backgroundColor: P.accent }]} activeOpacity={0.82}>
               <Ionicons name="add" size={16} color={P.onAccent} />
-              <Text style={[s.newBtnText, { color: P.onAccent }]}>New</Text>
+              <Text style={[s.newBtnText, { color: P.onAccent }]}>{tr('common.new')}</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={() => setPreviewing(draftPreview)} style={[s.iconBtn, { backgroundColor: P.iconBg }]} activeOpacity={0.8} accessibilityLabel="See it as your client will">
+            <TouchableOpacity onPress={() => setPreviewing(draftPreview)} style={[s.iconBtn, { backgroundColor: P.iconBg }]} activeOpacity={0.8} accessibilityLabel={tr('providerBookings.pack.previewA11y')}>
               <Ionicons name="eye-outline" size={18} color={P.text} />
             </TouchableOpacity>
           )}
@@ -488,10 +493,10 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                 <Ionicons name="cloud-offline-outline" size={30} color={P.sub} />
               </View>
-              <Text style={[s.emptyTitle, { color: P.text }]}>Couldn't load your packs</Text>
-              <Text style={[s.emptySub, { color: P.sub }]}>Check your connection and try again.</Text>
+              <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBookings.pack.loadFailed')}</Text>
+              <Text style={[s.emptySub, { color: P.sub }]}>{tr('providerBookings.checkConnection')}</Text>
               <TouchableOpacity style={[s.pillBtn, { backgroundColor: P.accent }]} onPress={() => void load()} activeOpacity={0.85}>
-                <Text style={[s.pillBtnText, { color: P.onAccent }]}>Try again</Text>
+                <Text style={[s.pillBtnText, { color: P.onAccent }]}>{tr('common.tryAgain')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -501,7 +506,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + 90 }]}
               showsVerticalScrollIndicator={false}
               ListHeaderComponent={packs.length > 0 ? (
-                <Text style={[s.listSub, { color: P.sub }]}>Sent automatically when a client books a matching service.</Text>
+                <Text style={[s.listSub, { color: P.sub }]}>{tr('providerBookings.pack.autoSent')}</Text>
               ) : undefined}
               renderItem={({ item, index }) => {
                 const r = reach[item.id] ?? EMPTY_REACH;
@@ -511,7 +516,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     onEdit={() => openEdit(item)}
                     onSend={() => {
                       // Never send an empty pack (one saved before this check).
-                      if (!packHasContent(item.content)) { showToast('This pack is empty. Edit it and add something first.', 'warning'); return; }
+                      if (!packHasContent(item.content)) { showToast(tr('providerBookings.pack.empty'), 'warning'); return; }
                       setSending(item);
                       if (upcomingState === 'error') void loadUpcoming();
                     }}
@@ -525,8 +530,8 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                       <Ionicons name="document-text-outline" size={30} color={P.sub} />
                     </View>
-                    <Text style={[s.emptyTitle, { color: P.text }]}>No info packs yet</Text>
-                    <Text style={[s.emptySub, { color: P.sub }]}>Write aftercare, prep and what-to-bring notes once. They go to clients automatically.</Text>
+                    <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBookings.infoPack.empty.title')}</Text>
+                    <Text style={[s.emptySub, { color: P.sub }]}>{tr('providerBookings.pack.emptySub')}</Text>
                   </View>
                   <Text style={[s.label, { color: P.sub }]}>STARTER PACKS</Text>
                   {starterTemplates.map(tpl => (
@@ -547,7 +552,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     </TouchableOpacity>
                   ))}
                   <TouchableOpacity style={s.textBtn} onPress={() => openCreate()} activeOpacity={0.7}>
-                    <Text style={[s.textBtnText, { color: P.accent }]}>Write your own</Text>
+                    <Text style={[s.textBtnText, { color: P.accent }]}>{tr('providerBookings.pack.writeOwn')}</Text>
                   </TouchableOpacity>
                 </View>
               }
@@ -589,11 +594,11 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               )}
 
               <View>
-                <Text style={[s.label, { color: P.sub }]}>TITLE</Text>
+                <Text style={[s.label, { color: P.sub }]}>{tr('providerBookings.infoPack.field.title')}</Text>
                 <View style={[s.inputWrap, { backgroundColor: P.card, borderColor: P.border }]}>
                   <TextInput
                     style={[s.input, { color: P.text }]}
-                    placeholder="e.g. Lash Lift aftercare"
+                    placeholder={tr('providerBookings.pack.titlePlaceholder')}
                     placeholderTextColor={P.sub}
                     value={title}
                     onChangeText={setTitle}
@@ -606,7 +611,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
               <View>
                 <View style={s.labelRow}>
-                  <Text style={[s.label, { color: P.sub, marginBottom: 0 }]}>ATTACHES TO SERVICES</Text>
+                  <Text style={[s.label, { color: P.sub, marginBottom: 0 }]}>{tr('providerBookings.infoPack.field.services')}</Text>
                   {myServices.length > 1 && (
                     <TouchableOpacity
                       onPress={() => {
@@ -617,19 +622,19 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                       hitSlop={8}
                     >
                       <Text style={[s.labelAction, { color: P.accent }]}>
-                        {selectedServices.length === myServices.length ? 'Clear all' : 'Select all'}
+                        {selectedServices.length === myServices.length ? tr('providerBookings.infoPack.field.clearAll') : tr('providerBookings.infoPack.field.selectAll')}
                       </Text>
                     </TouchableOpacity>
                   )}
                 </View>
                 <Text style={[s.hint, { color: P.sub }]}>
                   {selectedServices.length === 0
-                    ? 'None picked, so it goes with every booking.'
-                    : 'New bookings for these get it automatically.'}
+                    ? tr('providerBookings.pack.nonePicked')
+                    : tr('providerBookings.pack.pickedAuto')}
                 </Text>
                 <View style={s.chips}>
                   {myServices.length === 0 ? (
-                    <Text style={[s.hint, { color: P.sub }]}>No services on your profile yet.</Text>
+                    <Text style={[s.hint, { color: P.sub }]}>{tr('providerBookings.pack.noServices')}</Text>
                   ) : myServices.map(name => {
                     const on = selectedServices.includes(name);
                     return (
@@ -648,12 +653,12 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               </View>
 
               <View>
-                <Text style={[s.label, { color: P.sub }]}>CONTENT</Text>
+                <Text style={[s.label, { color: P.sub }]}>{tr('providerBookings.infoPack.field.content')}</Text>
                 <View style={[s.contentBox, { backgroundColor: P.card, borderColor: P.border }]}>
                   <TextInput
                     ref={contentRef}
                     style={[s.input, s.textArea, { color: P.text }]}
-                    placeholder="Write it in your own words."
+                    placeholder={tr('providerBookings.pack.bodyPlaceholder')}
                     placeholderTextColor={P.sub}
                     value={content}
                     onChangeText={setContent}
@@ -680,7 +685,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 </View>
                 {hasPlaceholder(content) && (
                   <Text style={[s.hint, { color: P.sub, marginTop: 8, marginBottom: 0 }]}>
-                    Replace the [bracketed] parts with your own details before saving.
+                    {tr('providerBookings.pack.replaceBrackets')}
                   </Text>
                 )}
               </View>
@@ -691,8 +696,8 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     <Ionicons name="lock-closed-outline" size={16} color={P.text} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.reachTitle, { color: P.text }]}>Clients who already have it keep their copy</Text>
-                    <Text style={[s.reachSub, { color: P.sub }]}>Changes apply to bookings from now on.</Text>
+                    <Text style={[s.reachTitle, { color: P.text }]}>{tr('providerBookings.pack.keepCopy')}</Text>
+                    <Text style={[s.reachSub, { color: P.sub }]}>{tr('providerBookings.pack.fromNowOn')}</Text>
                   </View>
                 </View>
               ) : (
@@ -703,7 +708,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                   <View style={{ flex: 1 }}>
                     <Text style={[s.reachTitle, { color: canSendNow ? P.text : P.sub }]}>
                       {upcomingState === 'loading'
-                        ? 'Checking your upcoming bookings…'
+                        ? tr('providerBookings.pack.checking')
                         : upcomingState === 'error'
                           ? "Couldn't check your upcoming bookings"
                           : canSendNow
@@ -711,7 +716,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                             : 'No upcoming bookings match yet'}
                     </Text>
                     <Text style={[s.reachSub, { color: P.sub }]} numberOfLines={2}>
-                      {canSendNow && sendNow ? `${reachNames} will get a notification.` : 'Bookings made from now on get it automatically.'}
+                      {canSendNow && sendNow ? tr('providerBookings.pack.willNotify', { names: reachNames }) : tr('providerBookings.pack.futureAuto')}
                     </Text>
                   </View>
                   <Switch
@@ -720,7 +725,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     disabled={!canSendNow}
                     trackColor={{ false: P.border, true: P.accent }}
                     thumbColor={Platform.OS === 'android' ? P.card : undefined}
-                    accessibilityLabel="Send to upcoming clients now"
+                    accessibilityLabel={tr('providerBookings.pack.sendNowA11y')}
                   />
                 </View>
               )}
@@ -733,7 +738,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               >
                 {saving
                   ? <ActivityIndicator color={P.onAccent} />
-                  : <Text style={[s.saveBtnText, { color: P.onAccent }]}>{editing.mode === 'edit' ? 'Save changes' : 'Save'}</Text>}
+                  : <Text style={[s.saveBtnText, { color: P.onAccent }]}>{editing.mode === 'edit' ? tr('common.saveChanges') : tr('common.save')}</Text>}
               </TouchableOpacity>
             </ScrollView>
           </KeyboardDismissView>
@@ -774,7 +779,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                   ))}
                 </ScrollView>
                 <TouchableOpacity style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 18 }]} activeOpacity={0.85} onPress={() => setPreviewing(null)}>
-                  <Text style={[s.saveBtnText, { color: P.onAccent }]}>Close</Text>
+                  <Text style={[s.saveBtnText, { color: P.onAccent }]}>{tr('common.close')}</Text>
                 </TouchableOpacity>
               </>
             )}

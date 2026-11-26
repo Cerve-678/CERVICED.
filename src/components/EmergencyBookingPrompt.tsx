@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import { describeEmergencyReason, type EmergencyReason } from '../services/AvailabilityService';
 import { formatLongDateNoYear } from '../utils/dateUtils';
 import { withAlpha } from '../constants/providerThemes';
+import { useTranslation } from '../i18n';
 
 interface EmergencyBookingPromptProps {
   visible: boolean;
@@ -74,12 +75,16 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
   // shorter notice than Ana normally accepts" — a slot can break more than
   // one rule at once (a blocked date beyond the booking window, say), and
   // naming only the first would misdescribe what's being asked for.
+  const { t } = useTranslation();
   const reasonText = useMemo(() => {
     const parts = reasons.map(reason => describeEmergencyReason(reason, providerName));
     if (parts.length === 0) return '';
     if (parts.length === 1) return parts[0]!;
-    return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]!}`;
-  }, [reasons, providerName]);
+    return t('clientBooking.emergency.listAnd', {
+      rest: parts.slice(0, -1).join(t('clientBooking.emergency.listSeparator')),
+      last: parts[parts.length - 1]!,
+    });
+  }, [reasons, providerName, t]);
 
   const handleConfirm = () => {
     if (!acknowledged) return;
@@ -92,19 +97,18 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
       <View style={styles.overlay}>
         <View style={[styles.card, { backgroundColor }]}>
           <ScrollView bounces={false} contentContainerStyle={styles.cardBody}>
-            <Text style={[styles.title, { color: textColor }]}>Scheduling conflict</Text>
+            <Text style={[styles.title, { color: textColor }]}>{t('clientBooking.emergency.title')}</Text>
 
             <Text style={[styles.lead, { color: textColor }]}>
-              {formatLongDateNoYear(date)} at {time} is {reasonText}.
+              {t('clientBooking.emergency.lead', { date: formatLongDateNoYear(date), time, reason: reasonText })}
             </Text>
 
             <Text style={[styles.question, { color: textColor }]}>
-              Do you want this to be considered an emergency booking?
+              {t('clientBooking.emergency.question')}
             </Text>
 
             <Text style={[styles.detail, { color: subColor }]}>
-              {providerName} has to accept it before it's confirmed — it won't be
-              booked automatically, and they may say no.
+              {t('clientBooking.emergency.detail', { provider: providerName })}
             </Text>
 
             {hasPolicy && (
@@ -113,10 +117,10 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
                 onPress={onReadPolicy}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Read ${providerName}'s emergency booking policy`}
+                accessibilityLabel={t('clientBooking.emergency.readPolicyA11y', { provider: providerName })}
               >
                 <Text style={[styles.policyText, { color: accentColor }]}>
-                  Read {providerName}'s Emergency Booking Policy first
+                  {t('clientBooking.emergency.readPolicy', { provider: providerName })}
                 </Text>
                 <Text style={[styles.policyChevron, { color: accentColor }]}>›</Text>
               </TouchableOpacity>
@@ -143,8 +147,8 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
               </View>
               <Text style={[styles.ackText, { color: textColor }]}>
                 {hasPolicy
-                  ? `I've read ${providerName}'s Emergency Booking Policy and want to request this time.`
-                  : `I understand this is outside ${providerName}'s normal availability and they have to accept it.`}
+                  ? t('clientBooking.emergency.ackWithPolicy', { provider: providerName })
+                  : t('clientBooking.emergency.ackNoPolicy', { provider: providerName })}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -156,7 +160,7 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
               activeOpacity={0.75}
               accessibilityRole="button"
             >
-              <Text style={[styles.buttonGhostText, { color: textColor }]}>Pick another time</Text>
+              <Text style={[styles.buttonGhostText, { color: textColor }]}>{t('clientBooking.emergency.pickAnother')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -170,7 +174,7 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
               accessibilityRole="button"
               accessibilityState={{ disabled: !acknowledged }}
             >
-              <Text style={styles.buttonPrimaryText}>Request this time</Text>
+              <Text style={styles.buttonPrimaryText}>{t('clientBooking.emergency.requestThisTime')}</Text>
             </TouchableOpacity>
           </View>
         </View>

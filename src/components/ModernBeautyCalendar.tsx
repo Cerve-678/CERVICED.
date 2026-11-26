@@ -13,6 +13,8 @@ import {
   type BookingHorizonSettings,
 } from '../utils/bookingHorizon';
 import { RequestTimePanel } from './RequestTimePanel';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
  *  other colour in this picker is derived from whatever sheet it's sitting in,
@@ -187,6 +189,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   providerLabel,
   allowRequests = false,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Popup border — a low-alpha tint of the text colour, so it reads as a
   // hairline on either a light or dark backdrop without a separate flag.
   const popupBorder = useMemo(() => withAlpha(textColor, 0.14), [textColor]);
@@ -736,7 +740,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           onPress={handleExpand}
           activeOpacity={0.75}
           accessibilityRole="button"
-          accessibilityLabel={`Selected ${formatLongDateNoYear(selectedDate)} at ${selectedTime}. Tap to change.`}
+          accessibilityLabel={tr('clientBooking.calendar.selectedA11y', { date: formatLongDateNoYear(selectedDate), time: selectedTime })}
         >
           <View style={styles.summaryTextWrap}>
             <Text style={[styles.summaryDate, { color: textColor }]} numberOfLines={1}>
@@ -744,7 +748,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             </Text>
             <Text style={[styles.summaryTime, { color: accentColor }]}>{selectedTime}</Text>
           </View>
-          <Text style={[styles.summaryChange, { color: accentColor }]}>Change</Text>
+          <Text style={[styles.summaryChange, { color: accentColor }]}>{tr('common.change')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -849,14 +853,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             <View style={styles.legendDoneRow}>
               <View style={styles.legendRow}>
                 <View style={[styles.legendDot, { backgroundColor: accentColor }]} />
-                <Text style={[styles.legendText, { color: subColor }]}>Available slots</Text>
+                <Text style={[styles.legendText, { color: subColor }]}>{tr('clientBooking.calendar.availableSlots')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setShowFullCalendar(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={[styles.calendarDoneButton, { backgroundColor: accentColor }]}
               >
-                <Text style={styles.calendarDoneText}>Done</Text>
+                <Text style={styles.calendarDoneText}>{tr('common.done')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -885,7 +889,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {providerFound === false && (
         <View style={styles.notFoundBanner}>
           <Text style={[styles.notFoundText, { color: textColor }]}>
-            We couldn't find this provider's schedule. Try reopening their profile and scheduling again.
+            {tr('clientBooking.calendar.scheduleNotFound')}
           </Text>
         </View>
       )}
@@ -900,7 +904,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {providerFound === true && providerUnpublished && (
         <View style={styles.notFoundBanner}>
           <Text style={[styles.notFoundText, { color: textColor }]}>
-            No current availability — please check back later.
+            {tr('clientBooking.calendar.noAvailability')}
           </Text>
         </View>
       )}
@@ -1000,10 +1004,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
-              accessibilityLabel={`Request a specific time from ${who}`}
+              accessibilityLabel={tr('clientBooking.calendar.requestA11y', { provider: who })}
             >
               <Text style={[styles.requestLinkText, { color: EMERGENCY_OUTLINE }]}>
-                Request a time
+                {tr('clientBooking.calendar.requestATime')}
               </Text>
               <Text style={[styles.requestLinkChevron, { color: EMERGENCY_OUTLINE }]}>⌄</Text>
           </TouchableOpacity>
@@ -1122,10 +1126,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     accessibilityState={{ disabled: blocked }}
                     accessibilityLabel={
                       blocked
-                        ? `${slot.time}, ${slot.blocked === 'booked' ? 'already booked'
+                        ? tr('clientBooking.calendar.blockedSlotA11y', { time: slot.time, reason: slot.blocked === 'booked' ? 'already booked'
                             : slot.blocked === 'past' ? 'already passed'
                             : slot.blocked === 'tight' ? 'not enough time free here'
-                            : 'too soon to book'}`
+                            : 'too soon to book' })
                         : slot.time
                     }
                   >
@@ -1174,14 +1178,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
             {!showRequestPanel && dayBadge === 'Fully booked' && (
               <Text style={[styles.fullDayHint, { color: subColor }]}>
-                Try another day, or join the waitlist on this provider's profile to be told if a space opens.
+                {tr('clientBooking.calendar.fullyBookedHint')}
               </Text>
             )}
 
             {selectedIsRequest && !showRequestPanel && (
               <View style={[styles.selectedRequestBanner, { borderColor: EMERGENCY_OUTLINE }]}>
                 <Text style={[styles.selectedRequestText, { color: EMERGENCY_OUTLINE }]}>
-                  {selectedTime} is a request — {who} has to accept it
+                  {tr('clientBooking.calendar.isRequest', { time: selectedTime, name: who })}
                 </Text>
               </View>
             )}

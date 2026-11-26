@@ -71,6 +71,7 @@ import {
   type ServiceFilterCriteria,
 } from '../../utils/serviceFilterMatch';
 
+import { trp, tr, useTranslation } from '../../i18n';
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
   id: string;
@@ -251,11 +252,11 @@ const SEARCH_ROW_BATCH = 10;
 type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'audience' | 'practice' | 'specialty';
 
 const SORT_OPTIONS = [
-  { value: 'recommended', label: 'Recommended' },
-  { value: 'rating', label: 'Top Rated' },
-  { value: 'price-low', label: 'Price: Low to High' },
-  { value: 'price-high', label: 'Price: High to Low' },
-  { value: 'distance', label: 'Nearest' },
+  { value: 'recommended', get label() { return tr('discover.home.sort.recommended'); } },
+  { value: 'rating', get label() { return tr('discover.home.sort.topRated'); } },
+  { value: 'price-low', get label() { return tr('discover.search.sort.priceLow'); } },
+  { value: 'price-high', get label() { return tr('discover.search.sort.priceHigh'); } },
+  { value: 'distance', get label() { return tr('discover.home.sort.nearest'); } },
 ] as const;
 
 const PRICE_OPTIONS = [
@@ -269,21 +270,21 @@ const RATING_OPTIONS = [
   { label: '4.5+ ★', value: 4.5 },
   { label: '4.0+ ★', value: 4.0 },
   { label: '3.5+ ★', value: 3.5 },
-  { label: 'Any rating', value: 0 },
+  { get label() { return tr('discover.search.anyRating'); }, value: 0 },
 ];
 
 const DISTANCE_OPTIONS = [
-  { label: 'Under 1 mile', value: 1 },
-  { label: 'Under 3 miles', value: 3 },
-  { label: 'Under 5 miles', value: 5 },
-  { label: 'Any distance', value: 999 },
+  { get label() { return trp('discover.search.underMiles', 1); }, value: 1 },
+  { get label() { return trp('discover.search.underMiles', 3); }, value: 3 },
+  { get label() { return trp('discover.search.underMiles', 5); }, value: 5 },
+  { get label() { return tr('discover.search.anyDistance'); }, value: 999 },
 ];
 
 // Derived from BUSINESS_TYPE_OPTS rather than restated: the types a client can
 // filter by must be exactly the types a provider can register as, with the same
 // labels the provider saw when picking one.
 const SERVICE_TYPE_OPTIONS: { label: string; value: 'all' | BusinessType }[] = [
-  { label: 'All', value: 'all' },
+  { get label() { return tr('common.all'); }, value: 'all' },
   ...BUSINESS_TYPE_OPTS.map(o => ({ label: o.label, value: o.value })),
 ];
 
@@ -302,9 +303,9 @@ const FILTER_PILL_LABEL: Record<FilterKey, string> = {
 };
 
 const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
-  { label: 'Women', value: 'women' },
-  { label: 'Men', value: 'men' },
-  { label: 'Kids', value: 'kids' },
+  { get label() { return tr('discover.search.audience.women'); }, value: 'women' },
+  { get label() { return tr('discover.search.audience.men'); }, value: 'men' },
+  { get label() { return tr('discover.search.audience.kids'); }, value: 'kids' },
 ];
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
@@ -358,6 +359,8 @@ async function loadListingCards(query: string, category?: string): Promise<Provi
 
 // ── Provider Card — vertical, sits two-up (three-up on iPad) in the results grid ──────────────────
 const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, dark, widthStyle }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const slideAnim = useRef(new Animated.Value(24)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const availInfo = provider.availability ? AVAILABILITY_INFO[provider.availability] : null;
@@ -414,11 +417,11 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, dar
 
           {provider.isListing ? (
             <View style={styles.metaRow}>
-              <Text style={[styles.reviewCount, { color: P.sub }]}>Not on CERVICED yet</Text>
+              <Text style={[styles.reviewCount, { color: P.sub }]}>{tr('discover.notOnCerviced')}</Text>
             </View>
           ) : provider.isLinkOnly ? (
             <View style={styles.metaRow}>
-              <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
+              <Text style={[styles.reviewCount, { color: P.sub }]}>{tr('discover.search.booksOwnPage')}</Text>
             </View>
           ) : (
           <View style={styles.metaRow}>
@@ -468,7 +471,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, dar
 
       {/* Book Now — a listing can't be booked here, so it just opens */}
       <TouchableOpacity style={[styles.bookBtn, { backgroundColor: P.accent }]} onPress={onPress} activeOpacity={0.8}>
-        <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{provider.isListing ? 'View' : 'Book Now'}</Text>
+        <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{provider.isListing ? tr('discover.view') : tr('discover.image.bookNow')}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -491,6 +494,8 @@ interface ServiceResultCardProps {
 }
 
 const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rating, availability, highlightQuery, onPress, onProviderPress, P }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const availInfo = availability ? AVAILABILITY_INFO[availability] : null;
   const price = service.isLinkOnly || service.price == null
     ? null
@@ -512,7 +517,7 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
         onPress={() => onPress(service)}
         activeOpacity={0.88}
         accessibilityRole="button"
-        accessibilityLabel={`${service.name} with ${service.providerName}`}
+        accessibilityLabel={tr('discover.search.serviceWithA11y', { service: service.name, provider: service.providerName })}
       >
         <View style={styles.serviceEyebrowRow}>
           <Text style={[styles.serviceEyebrow, { color: P.sub }]}>SERVICE</Text>
@@ -557,7 +562,7 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
           onPress={() => onProviderPress(service)}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={`View ${service.providerName}`}
+          accessibilityLabel={tr('discover.search.viewA11y', { name: service.providerName })}
         >
           {service.providerLogoUrl ? (
             <ProviderLogoCircle providerId={service.providerId} uri={service.providerLogoUrl} style={styles.serviceCardLogo} />
@@ -578,7 +583,7 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
           accessibilityRole="button"
           accessibilityLabel={`${service.isLinkOnly ? 'View' : 'Book'} ${service.name}`}
         >
-          <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{service.isLinkOnly ? 'View' : 'Book'}</Text>
+          <Text style={[styles.bookBtnText, { color: P.onAccent }]}>{service.isLinkOnly ? tr('discover.view') : tr('beautyProfile.hello.book')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -588,6 +593,8 @@ ServiceResultCard.displayName = 'ServiceResultCard';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   useHideTabBar();
   const bottomInset = useSystemBottomInset();
   // Concrete pixel cap for the filter sheet's scroll area. A percentage
@@ -848,7 +855,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setServiceResults([]);
         setCorrectedQuery(null);
         setListingData([]);
-        setProvidersError('Could not refresh providers. Pull down to try again.');
+        setProvidersError(tr('discover.search.refreshFailed'));
       } finally {
         if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
       }
@@ -1381,7 +1388,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setServiceResults([]);
         setCorrectedQuery(null);
         setListingData([]);
-        setProvidersError('Could not refresh providers. Pull down to try again.');
+        setProvidersError(tr('discover.search.refreshFailed'));
       })
       .finally(() => {
         if (requestId === providerRequestIdRef.current) {
@@ -1558,7 +1565,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       chips.push({ key: 'serviceType', label: opt?.label ?? 'Type' });
     }
     if (activeFilters.availableOnly) {
-      chips.push({ key: 'availableOnly', label: 'Available now' });
+      chips.push({ key: 'availableOnly', label: tr('discover.search.availableNow') });
     }
     if (activeFilters.city?.length) {
       chips.push({ key: 'city', label: activeFilters.city.join(', ') });
@@ -1567,7 +1574,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       chips.push({ key: 'specialty', label: activeFilters.specialty.join(', ') });
     }
     if (activeFilters.skinTone) {
-      chips.push({ key: 'skinTone', label: `${activeFilters.skinTone} skin tone` });
+      chips.push({ key: 'skinTone', label: tr('discover.search.skinToneChip', { tone: activeFilters.skinTone }) });
     }
     if (activeFilters.hairType) {
       chips.push({ key: 'hairType', label: activeFilters.hairType });
@@ -1577,13 +1584,13 @@ export default function SearchScreen({ navigation, route }: Props) {
       chips.push({ key: 'audience', label: opt?.label ?? 'For' });
     }
     if (activeFilters.walkInsWelcome) {
-      chips.push({ key: 'walkInsWelcome', label: 'Walk-ins welcome' });
+      chips.push({ key: 'walkInsWelcome', label: tr('discover.search.walkIns') });
     }
     if (activeFilters.groupBookingsAvailable) {
-      chips.push({ key: 'groupBookingsAvailable', label: 'Group bookings' });
+      chips.push({ key: 'groupBookingsAvailable', label: tr('discover.search.groupBookings') });
     }
     if (activeFilters.veganCrueltyFree) {
-      chips.push({ key: 'veganCrueltyFree', label: 'Vegan / cruelty-free' });
+      chips.push({ key: 'veganCrueltyFree', label: tr('discover.search.vegan') });
     }
     return chips;
   }, [activeFilters]);
@@ -1625,7 +1632,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       // the field via setOptions' merge) is what's needed here.
       headerSearchBarOptions: undefined as any,
       headerBackVisible: true,
-      headerTitle: 'SEARCH',
+      headerTitle: tr('discover.search.title'),
       headerTitleAlign: 'center',
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
@@ -1642,7 +1649,7 @@ export default function SearchScreen({ navigation, route }: Props) {
           }}
           activeOpacity={0.6}
           accessibilityRole="button"
-          accessibilityLabel="What things mean"
+          accessibilityLabel={tr('discover.search.legendA11y')}
         >
           <Ionicons name="information-circle-outline" size={20} color={P.sub} />
         </TouchableOpacity>
@@ -1671,13 +1678,13 @@ export default function SearchScreen({ navigation, route }: Props) {
     <>
       {!providersLoading && correctedQuery ? (
         <Text style={[styles.correctedText, { color: P.sub }]} accessibilityLiveRegion="polite">
-          Showing results for <Text style={[styles.correctedQuery, { color: P.text }]}>{correctedQuery}</Text>
+          {tr('discover.search.showingResultsFor')} <Text style={[styles.correctedQuery, { color: P.text }]}>{correctedQuery}</Text>
         </Text>
       ) : null}
       <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
         <Text style={[styles.countText, { color: P.sub }]}>
           {providersLoading
-            ? 'Searching…'
+            ? tr('discover.search.searching')
             : [
                 visibleServices.length > 0
                   ? `${visibleServices.length} ${visibleServices.length === 1 ? 'service' : 'services'}`
@@ -1699,8 +1706,8 @@ export default function SearchScreen({ navigation, route }: Props) {
           <TabIcon name="magnifying-glass" size={16} color={P.sub} />
           <TextInput
             style={[styles.searchInput, { color: P.text, fontFamily: 'Jura-VariableFont_wght' }]}
-            placeholder="Try 'nail art in Manchester'"
-            accessibilityLabel="Search providers, services or places"
+            placeholder={tr('discover.search.placeholder')}
+            accessibilityLabel={tr('discover.search.inputA11y')}
             placeholderTextColor={P.sub}
             value={searchQuery}
             onChangeText={handleSearchChange}
@@ -1757,7 +1764,7 @@ export default function SearchScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={styles.activeChipClearAll} onPress={resetFilters} activeOpacity={0.7}>
-              <Text style={[styles.activeChipClearAllText, { color: P.sub }]}>Clear all</Text>
+              <Text style={[styles.activeChipClearAllText, { color: P.sub }]}>{tr('discover.search.clearAll')}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -1788,14 +1795,14 @@ export default function SearchScreen({ navigation, route }: Props) {
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => setFilterModalVisible(false)}
-            accessibilityLabel="Close filters"
+            accessibilityLabel={tr('discover.search.closeFiltersA11y')}
           />
           <View style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(20, bottomInset + 16) }]}>
             <View style={styles.filterModalHeader}>
-              <Text style={[styles.filterModalTitle, { color: P.text }]}>FILTERS</Text>
+              <Text style={[styles.filterModalTitle, { color: P.text }]}>{tr('discover.home.filters')}</Text>
               {hasActiveFilters && (
                 <TouchableOpacity onPress={resetFilters}>
-                  <Text style={[styles.filterModalReset, { color: P.accentText }]}>Reset</Text>
+                  <Text style={[styles.filterModalReset, { color: P.accentText }]}>{tr('discover.search.reset')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1825,7 +1832,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.availableOnly ? P.onAccent : P.text }]}>
-                    Available now
+                    {tr('discover.search.availableNow')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1912,8 +1919,8 @@ export default function SearchScreen({ navigation, route }: Props) {
               {locationState !== 'available' && (
                 <Text style={[styles.filterAvailabilityHint, { color: P.sub }]}>
                   {locationState === 'loading'
-                    ? 'Finding your location…'
-                    : 'Enable location permission to sort or filter by distance.'}
+                    ? tr('discover.search.findingLocation')
+                    : tr('discover.search.enableLocation')}
                 </Text>
               )}
 
@@ -1944,7 +1951,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   selected={activeFilters.city ?? []}
                   onChange={updateCityFilter}
                   palette={P}
-                  placeholder="Any city"
+                  placeholder={tr('discover.search.anyCity')}
                 />
               </View>
 
@@ -1986,14 +1993,14 @@ export default function SearchScreen({ navigation, route }: Props) {
                       onChange={updateSpecialtyFilter}
                       options={specialityOptions}
                       palette={P}
-                      placeholder="Any speciality"
+                      placeholder={tr('discover.search.anySpeciality')}
                     />
                   </View>
                 </>
               )}
 
               <View style={styles.filterSectionHead}>
-                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>Skin Tone</Text>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{tr('discover.search.skinTone')}</Text>
               </View>
               <View style={styles.pillGrid}>
                 {SKIN_TONES.map(tone => {
@@ -2044,7 +2051,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.walkInsWelcome ? P.onAccent : P.text }]}>
-                    Walk-ins welcome
+                    {tr('discover.search.walkIns')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2057,7 +2064,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.groupBookingsAvailable ? P.onAccent : P.text }]}>
-                    Group bookings
+                    {tr('discover.search.groupBookings')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2070,7 +2077,7 @@ export default function SearchScreen({ navigation, route }: Props) {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.filterPillText, { color: activeFilters.veganCrueltyFree ? P.onAccent : P.text }]}>
-                    Vegan / cruelty-free
+                    {tr('discover.search.vegan')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2081,7 +2088,7 @@ export default function SearchScreen({ navigation, route }: Props) {
               activeOpacity={0.75}
             >
               <Text style={[styles.filterModalDoneText, { color: P.onAccent }]}>
-                Show {filteredProviders.length} {filteredProviders.length === 1 ? 'result' : 'results'}
+                {tr('discover.search.showResults', { results: trp('discover.explore.results', filteredProviders.length) })}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2126,12 +2133,12 @@ export default function SearchScreen({ navigation, route }: Props) {
               || (hasServiceCriteria(serviceCriteria) && !serviceMatchByProviderId) ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
-                <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>{tr('discover.search.checking')}</Text>
               </>
             ) : (
               <>
                 <TabIcon name="magnifying-glass" size={44} color={P.border} />
-                <Text style={[styles.emptyTitle, { color: P.text }]}>{providersError ? 'Couldn’t load providers' : 'No providers found'}</Text>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>{providersError ? tr('discover.search.loadFailed') : tr('discover.search.noneFound')}</Text>
                 {/* Name what actually emptied the grid. "Try adjusting your
                     filters" was the same sentence whether one filter was on or
                     six, and whether the search itself had matched nothing —
@@ -2144,13 +2151,13 @@ export default function SearchScreen({ navigation, route }: Props) {
                 </Text>
                 {providersError && (
                   <TouchableOpacity accessibilityRole="button" onPress={handleRefresh} style={styles.emptyClearBtn}>
-                    <Text style={[styles.emptyClearText, { color: P.accent }]}>Try again</Text>
+                    <Text style={[styles.emptyClearText, { color: P.accent }]}>{tr('common.tryAgain')}</Text>
                   </TouchableOpacity>
                 )}
                 {!providersError && activeFilterChips.length > 0 && (
                   <TouchableOpacity onPress={resetFilters} activeOpacity={0.7} style={styles.emptyClearBtn}>
                     <Text style={[styles.emptyClearText, { color: P.accent }]}>
-                      Clear {activeFilterChips.length === 1 ? 'this filter' : 'all filters'}
+                      {tr(activeFilterChips.length === 1 ? 'discover.search.clearThisFilter' : 'discover.search.clearAllFilters')}
                     </Text>
                   </TouchableOpacity>
                 )}

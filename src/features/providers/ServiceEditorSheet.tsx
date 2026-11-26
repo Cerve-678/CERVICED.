@@ -239,6 +239,8 @@ export default function ServiceEditorSheet({
   onSaveAndOpen?: (draft: MyServiceDraft, kind: PackFormKind) => void;
   onClose: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const { t } = useTranslation();
   const [value, setValue] = useState<ServiceEditorValue>(initial);

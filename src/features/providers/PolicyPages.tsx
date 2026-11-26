@@ -47,6 +47,8 @@ import {
   WaveEdge,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ── Edge colours ─────────────────────────────────────────────────────────────
 
@@ -213,6 +215,8 @@ export function PolicyPagesCompact({
   /** Opens every page in the zoomable reader (the button). */
   onOpenAll: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   if (urls.length === 0) return null;
   const ink = sheetInk(palette.background);
   const pageCount = urls.length === 1 ? "1 page" : `${urls.length} pages`;
@@ -237,7 +241,7 @@ export function PolicyPagesCompact({
                 <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" transition={0} />
               </View>
               <Text style={[styles.thumbLabel, { color: ink.sub }]} numberOfLines={1}>
-                {urls.length === 1 ? "Policy" : `Page ${index + 1}`}
+                {urls.length === 1 ? tr('discover.profile.tab.policy') : `Page ${index + 1}`}
               </Text>
             </TouchableOpacity>
           ))}
@@ -474,6 +478,8 @@ export function PolicyStoryRings({
   sheet: string;
   onOpen: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const first = urls[0];
   if (!first) return null;
   const ink = sheetInk(sheet);
@@ -494,7 +500,7 @@ export function PolicyStoryRings({
             <Image source={{ uri: first }} style={styles.ringImage} contentFit="cover" contentPosition="top" transition={0} />
           </View>
         </LinearGradient>
-        <Text style={[styles.ringLabel, { color: ink.text }]} numberOfLines={1}>Policy</Text>
+        <Text style={[styles.ringLabel, { color: ink.text }]} numberOfLines={1}>{tr('discover.profile.tab.policy')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -549,6 +555,8 @@ function StoryBody({
   onClose: () => void;
   onZoom: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(Math.min(startIndex, Math.max(urls.length - 1, 0)));
   const url = urls[index];
@@ -620,7 +628,7 @@ function StoryBody({
           activeOpacity={0.8}
           accessibilityRole="button"
         >
-          <Text style={[styles.storyButtonText, { color: edge.top }]}>Done</Text>
+          <Text style={[styles.storyButtonText, { color: edge.top }]}>{tr('common.done')}</Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>
