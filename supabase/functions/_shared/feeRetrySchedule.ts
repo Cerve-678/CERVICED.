@@ -7,7 +7,8 @@
 export const RETRY_DAYS = [1, 3, 6] as const;
 
 /** Fee terms versions whose wording allows automatic retries. */
-const RETRY_TERMS_VERSIONS = new Set(['2026-10-19-retries']);
+// '2026-11-13-late-cancel' keeps the same retry sentence (src/constants/feeTerms.ts).
+const RETRY_TERMS_VERSIONS = new Set(['2026-10-19-retries', '2026-11-13-late-cancel']);
 
 export function termsAllowRetries(version: string | null | undefined): boolean {
   return !!version && RETRY_TERMS_VERSIONS.has(version);

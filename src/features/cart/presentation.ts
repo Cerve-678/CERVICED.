@@ -1,6 +1,7 @@
 import { parseDurationToMinutes } from '../../services/AvailabilityService';
 import { tr, type TranslationKey } from '../../i18n';
 import { formatDurationMinutes } from '../../utils/dateUtils';
+import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
 
 /** Sort key for 12- or 24-hour booking times. Invalid values deliberately sort last. */
 export function to24hMinutes(time: string | undefined): number {
@@ -61,6 +62,10 @@ export interface CartIssueEntry {
   date: string | undefined;
   time: string | undefined;
   duration: string | undefined;
+  /** The service belongs to the signed-in account's own provider profile.
+   *  The database refuses these at checkout; flagging them here means the
+   *  card says so the moment the item is in the cart. */
+  ownProvider?: boolean;
 }
 
 /** Every reason a cart card can be flagged with, in one place.
@@ -73,6 +78,10 @@ export interface CartIssueEntry {
  *  CartScreen maps the service's phrasings onto these via toCartIssue(). */
 const CART_ISSUE_KEYS = {
   noSchedule: 'cart.issue.noSchedule',
+  // Every way in to the cart that a provider could take with their own
+  // business (a rebook, Becca, a cart saved before they claimed the listing)
+  // ends at the same database refusal, so it outranks the rest on the card.
+  ownProvider: 'cart.issue.ownProvider',
   overlap: 'cart.issue.overlap',
   clientClash: 'cart.issue.clientClash',
   crossProviderClash: 'cart.issue.crossProviderClash',
@@ -86,6 +95,9 @@ const CART_ISSUE_KEYS = {
   depositNoLongerOffered: 'cart.issue.depositNoLongerOffered',
   depositNowRequired: 'cart.issue.depositNowRequired',
   takenWhilePaying: 'cart.issue.takenWhilePaying',
+  // A waitlist slot's hold ran out. Its time can't be changed, and the
+  // client has come off that waitlist, so removing it is the only fix.
+  waitlistHoldEnded: 'cart.issue.waitlistHoldEnded',
   bookingFailed: 'cart.issue.bookingFailed',
 } as const satisfies Record<string, TranslationKey>;
 
@@ -99,16 +111,58 @@ export const CART_ISSUE: Readonly<Record<CartIssueCode, string>> = Object.define
   Object.fromEntries(
     (Object.keys(CART_ISSUE_KEYS) as CartIssueCode[]).map(code => [
       code,
-      { get: () => tr(CART_ISSUE_KEYS[code]), enumerable: true },
+      { get: () => tr(CART_ISSUE_KEYS[code], { minutes: WAITLIST_HOLD_MINUTES }), enumerable: true },
     ]),
   ),
 );
+
+/** What the client reads when reserving the cart's slots fails. */
+export const RESERVE_FAILURE = {
+  slotJustTaken: 'Someone has just booked one of these times. Pick another time and try again.',
+  noConnection: "We couldn't connect just now. Check your connection and try again.",
+  serverBusy: "We're having trouble connecting right now. Please try again in a moment.",
+  generic: "We couldn't reserve that time. Please try again.",
+} as const;
+
+/** Turns a failed slot reservation into the alert the client sees.
+ *
+ *  A deliberate DB guard (a plain RAISE EXCEPTION, SQLSTATE P0001) is written
+ *  for the client, so its own words are shown. Any other Postgres code is a
+ *  technical failure and never shown raw — but the ones with a known cause get
+ *  a sentence that says what happened instead of the catch-all:
+ *  - 23505 / 23P01: the exact slot or the overlap rule was beaten by another
+ *    booking landing at the same moment, which the availability check missed.
+ *  - 57014: the statement ran past its time limit because the database was
+ *    overloaded. Nothing about the cart is wrong; trying again works.
+ *  - An empty code is the client library's own fetch failure ("TypeError:
+ *    Network request failed"), which used to be shown word for word. */
+export function describeReserveFailure(err: unknown): { title: string; message: string } {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === '23505' || code === '23P01') {
+    return { title: tr('cart.checkout.conflictTitle'), message: RESERVE_FAILURE.slotJustTaken };
+  }
+  if (code === '57014') {
+    return { title: tr('cart.checkout.notCompletedTitle'), message: RESERVE_FAILURE.serverBusy };
+  }
+  if (code === '') {
+    return { title: tr('cart.checkout.notCompletedTitle'), message: RESERVE_FAILURE.noConnection };
+  }
+  if (typeof code === 'string' && code !== 'P0001') {
+    return { title: tr('cart.checkout.notCompletedTitle'), message: RESERVE_FAILURE.generic };
+  }
+  if (err instanceof Error && err.message) {
+    return { title: tr('cart.checkout.notCompletedTitle'), message: err.message.replace(/^Error:\s*/, '') };
+  }
+  return { title: tr('cart.checkout.notCompletedTitle'), message: RESERVE_FAILURE.generic };
+}
 
 /** Everything wrong with a cart that can be found WITHOUT a network call, as
  *  itemId → reason. Runs on every render, so a cart that cannot possibly check
  *  out says so before the client taps anything.
  *
- *  Ordered by what the client should fix first: a line with no time at all
+ *  Ordered by what the client should fix first: a service from the client's
+ *  own business can't be fixed at all, only removed, so it reports that and
+ *  nothing else. Then a line with no time at all
  *  can't also be judged for overlapping something, so it reports that and
  *  nothing else. A time that has already passed is the same shape of finding
  *  — it's reported on its own, and the item drops out of the overlap pass.
@@ -136,6 +190,10 @@ export function findCartItemIssues(
   const spans: { itemId: string; date: string; start: number; end: number }[] = [];
 
   for (const entry of entries) {
+    if (entry.ownProvider) {
+      issues.set(entry.itemId, CART_ISSUE.ownProvider);
+      continue;
+    }
     if (!entry.date || !entry.time) {
       issues.set(entry.itemId, CART_ISSUE.noSchedule);
       continue;

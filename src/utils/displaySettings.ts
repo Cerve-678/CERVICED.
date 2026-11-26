@@ -14,11 +14,15 @@ export interface TextScaleStep {
   readonly label: string;
 }
 
+// Kept deliberately close together: each step is roughly one point on body
+// text. The layouts are drawn for the default size, and the old 1.15/1.3 steps
+// made Large and Larger break them (2026-11-13). Saved values snap to the
+// nearest step on load, so anyone on the old sizes lands on Larger.
 export const TEXT_SCALE_STEPS: readonly TextScaleStep[] = [
-  { value: 0.85, label: 'Small' },
+  { value: 0.92, label: 'Small' },
   { value: 1.0, label: 'Default' },
-  { value: 1.15, label: 'Large' },
-  { value: 1.3, label: 'Larger' },
+  { value: 1.06, label: 'Large' },
+  { value: 1.12, label: 'Larger' },
 ] as const;
 
 export const DEFAULT_TEXT_SCALE = 1.0;
@@ -138,4 +142,60 @@ export const DEFAULT_REGION = 'GB';
 
 export function isRegionCode(value: string): boolean {
   return REGION_OPTIONS.some((r) => r.code === value);
+}
+
+// ── Per-account storage ──────────────────────────────────────────────────────
+
+// Every display setting belongs to the signed-in account, so each is stored
+// under that account's id. These were once device-wide keys, which made one
+// person's choice every account's choice on a shared phone; the old keys are
+// kept here only so an existing choice can be handed over once.
+
+export type DisplaySettingField = 'textScale' | 'fontChoice' | 'language' | 'region';
+
+export const DISPLAY_SETTING_FIELDS: readonly DisplaySettingField[] = [
+  'textScale',
+  'fontChoice',
+  'language',
+  'region',
+] as const;
+
+export const LEGACY_DISPLAY_SETTING_KEYS: Readonly<Record<DisplaySettingField, string>> = {
+  textScale: '@cerviced_text_scale',
+  fontChoice: '@cerviced_font_choice',
+  language: '@cerviced_language',
+  region: '@cerviced_region',
+};
+
+export function displaySettingStorageKey(field: DisplaySettingField, userId: string): string {
+  return `${LEGACY_DISPLAY_SETTING_KEYS[field]}:${userId}`;
+}
+
+export interface DisplaySettingsValues {
+  readonly textScale: number;
+  readonly fontChoice: FontChoiceKey;
+  readonly language: string;
+  readonly region: string;
+}
+
+export const DEFAULT_DISPLAY_SETTINGS: DisplaySettingsValues = {
+  textScale: DEFAULT_TEXT_SCALE,
+  fontChoice: DEFAULT_FONT_CHOICE,
+  language: DEFAULT_LANGUAGE,
+  region: DEFAULT_REGION,
+};
+
+/** Missing, corrupt or retired stored values read as the defaults. */
+export function resolveStoredDisplaySettings(
+  raw: Readonly<Record<DisplaySettingField, string | null>>,
+): DisplaySettingsValues {
+  const font = raw.fontChoice;
+  const language = raw.language;
+  const region = raw.region;
+  return {
+    textScale: raw.textScale !== null ? snapTextScaleToStep(Number(raw.textScale)) : DEFAULT_TEXT_SCALE,
+    fontChoice: font !== null && isFontChoiceKey(font) ? font : DEFAULT_FONT_CHOICE,
+    language: language !== null && isLanguageCode(language) ? language : DEFAULT_LANGUAGE,
+    region: region !== null && isRegionCode(region) ? region : DEFAULT_REGION,
+  };
 }

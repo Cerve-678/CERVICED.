@@ -6,13 +6,14 @@ import {
   LayoutChangeEvent,
   Modal,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import type { ScrollViewInstance } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -24,10 +25,16 @@ import { invokeSendAccountEmail, signUpWithEmail } from '../../services/database
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { useRevealNext, type CardLayout } from '../../components/signup/useRevealNext';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
+import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
+import AreaPicker from '../../components/AreaPicker';
+import { serviceLocationsFromArea } from '../../utils/clientArea';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 import { logger } from '../../utils/logger';
 import {
   Chip, ChipWrap, FormCard, PrimaryButton, QuestionCard, ScreenTitle, SectionLabel, SwitchRow, useFieldInputStyle,
@@ -36,7 +43,6 @@ import {
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
-const LOCATIONS = ['Birmingham', 'Manchester', 'London'];
 const FREQUENCIES = ['Every week', 'Bi-weekly', 'Monthly', '3 months', 'Occasionally'];
 const REFERRAL_SOURCES = ['Instagram', 'TikTok', 'Snapchat', 'X', 'Referral', 'Google', 'YouTube', 'Friend', 'Other'];
 
@@ -78,14 +84,14 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const { data, updateData, resetData, totalSteps } = useRegistration();
   const { user, upgradeToProvider, addClientProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
-  const servicesY  = useRef(0);
-  const locationY  = useRef(0);
-  const frequencyY = useRef(0);
-  const referralY  = useRef(0);
-  const accessibilityY = useRef(0);
-  const languagesY     = useRef(0);
-  const specialtiesY   = useRef(0);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const servicesY  = useRef<CardLayout>({ y: 0, height: 0 });
+  const locationY  = useRef<CardLayout>({ y: 0, height: 0 });
+  const frequencyY = useRef<CardLayout>({ y: 0, height: 0 });
+  const referralY  = useRef<CardLayout>({ y: 0, height: 0 });
+  const accessibilityY = useRef<CardLayout>({ y: 0, height: 0 });
+  const languagesY     = useRef<CardLayout>({ y: 0, height: 0 });
+  const specialtiesY   = useRef<CardLayout>({ y: 0, height: 0 });
   const [isLoading,  setIsLoading]  = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   // Which hat was just added, or null for "not celebrating". Doubles as the
@@ -125,7 +131,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
   // Client-only (services/location moved to Step 4 for providers)
   const [selectedInterests, setSelectedInterests] = useState<string[]>(data.serviceInterests);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>(data.serviceLocations);
+  // One area, picked the same way as Account > Your area (users.client_area).
+  // service_locations is kept filled with its town — see utils/clientArea.
+  const [selectedArea, setSelectedArea] = useState<string>(data.clientArea);
+  const selectedLocations = serviceLocationsFromArea(selectedArea);
   const [selectedFrequency, setSelectedFrequency] = useState<string>(data.maintenanceFrequency);
   const [selectedReferral,  setSelectedReferral]  = useState<string>(data.referralSource);
   // Provider-only "Tell me more"
@@ -138,19 +147,22 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   // provider picks here is exactly what clients filter on. Picked in the same
   // searchable sheet as the filter; a term typed that isn't listed can still
   // be added, which replaces the old "Other" box.
-  const specialtyOptions = React.useMemo(() => {
+  const curatedSpecialtyOptions = React.useMemo(() => {
     const combined = data.serviceInterests.flatMap(cat => SPECIALTIES_MAP[cat] ?? []);
     return combined.length ? [...new Set(combined)] : ALL_SPECIALTIES;
   }, [data.serviceInterests]);
+  const specialtyOptions = useSpecialityOptionsWithLearned(curatedSpecialtyOptions, data.serviceInterests);
   // Personalisation — optional, affects home feed section gating
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
   const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
 
-  const onLayoutFor = (yRef: React.MutableRefObject<number>) =>
-    (e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; };
+  const onLayoutFor = (yRef: React.MutableRefObject<CardLayout>) =>
+    (e: LayoutChangeEvent) => { yRef.current = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height }; };
 
-  const scrollTo = (yRef: React.MutableRefObject<number>) => {
-    scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
+  const { onScroll, onViewportLayout, onScrollBeginDrag, reveal } = useRevealNext(scrollRef);
+
+  const scrollTo = (yRef: React.MutableRefObject<CardLayout>) => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current.y - 24), animated: true });
   };
 
   const toggleInterest = (category: string) => {
@@ -158,20 +170,21 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       ? selectedInterests.filter(c => c !== category)
       : [...selectedInterests, category];
     setSelectedInterests(next);
-    if (!selectedInterests.length && next.length === 1) setTimeout(() => scrollTo(locationY), 150);
   };
 
-  const toggleLocation = (location: string) => {
-    const next = selectedLocations.includes(location)
-      ? selectedLocations.filter(l => l !== location)
-      : [...selectedLocations, location];
-    setSelectedLocations(next);
-    if (!selectedLocations.length && next.length === 1) setTimeout(() => scrollTo(frequencyY), 150);
-  };
-
+  // A single-pick answer moves on gently, as on Step 4 (useRevealNext):
+  // only when the next question is unanswered and off screen. Multi-pick
+  // toggles (services, accessibility, languages) never move the page.
   const selectFrequency = (freq: string) => {
+    const changed = freq !== selectedFrequency;
     setSelectedFrequency(freq);
-    setTimeout(() => scrollTo(referralY), 150);
+    if (changed && !selectedReferral) reveal(referralY.current);
+  };
+
+  const selectArea = (area: string) => {
+    const changed = area !== selectedArea;
+    setSelectedArea(area);
+    if (changed && !selectedFrequency) reveal(frequencyY.current);
   };
 
   const selectReferral = (source: string) => {
@@ -203,6 +216,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     } : {
       serviceInterests: selectedInterests,
       serviceLocations: selectedLocations,
+      clientArea: selectedArea,
       maintenanceFrequency: selectedFrequency,
       referralSource: selectedReferral,
       gender: selectedGender,
@@ -219,6 +233,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           styleVibe: data.styleVibe, allergies: data.allergies, treatmentHistory: data.treatmentHistory,
           medicalNotes: data.medicalNotes, photographyConsent: data.photographyConsent,
           serviceInterests: selectedInterests, serviceLocations: selectedLocations,
+          clientArea: selectedArea,
           maintenanceFrequency: selectedFrequency, referralSource: selectedReferral,
           gender: selectedGender,
           has_kids: hasKids,
@@ -242,13 +257,14 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
     if (data.fromProviderSwitch) {
       try {
-        await upgradeToProvider(data.businessName.trim(), data.businessEmail.trim(), {
+        await upgradeToProvider(data.businessName.trim(), data.businessEmail.trim() || null, {
           businessPhone: data.businessPhone, instagram: data.instagram, tiktok: data.tiktok, website: data.website,
           businessType: data.businessType,
           dobDay: data.dobDay, dobMonth: data.dobMonth, dobYear: data.dobYear,
           serviceInterests: data.serviceInterests, serviceLocations: data.serviceLocations,
           yearsExperience: data.yearsExperience,
           priceRange: data.priceRange,
+          priceBands: data.priceBands,
           externalBookingUrl: data.externalBookingUrl,
           preferredContactMethods: data.preferredContactMethods,
           preferredPaymentMethods: data.preferredPaymentMethods,
@@ -291,17 +307,19 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             business_type: data.businessType || null,
             business_phone: data.businessPhone || null, instagram: data.instagram || null,
             tiktok: data.tiktok || null, website: data.website || null,
-            hair_type: data.hairType || null, skin_type: data.skinType || null,
+            hair_type: toPickColumn(data.hairType), skin_type: toPickColumn(data.skinType),
             allergies: data.allergies, skin_concerns: data.skinConcerns,
-            style_vibe: data.styleVibe || null, treatment_history: data.treatmentHistory,
+            style_vibe: toPickColumn(data.styleVibe), treatment_history: data.treatmentHistory,
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
             service_interests: isProvider ? data.serviceInterests : selectedInterests,
             service_locations: isProvider ? data.serviceLocations : selectedLocations,
+            client_area: isProvider ? null : (selectedArea.trim() || null),
             location: isProvider ? (data.location || null) : null,
             years_experience: isProvider ? (data.yearsExperience || null) : null,
             maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
             gender: selectedGender || null, has_kids: hasKids,
             price_range: isProvider ? (data.priceRange || null) : null,
+            price_bands: isProvider ? data.priceBands : [],
             external_booking_url: isProvider ? (data.externalBookingUrl || null) : null,
             preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
             accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
@@ -334,7 +352,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     // Step 5's required fields before submitting. (Switches used to skip this.)
     const firstEmptyY = isProvider
       ? (!selectedAccessibility.length ? accessibilityY : !selectedLanguages.length ? languagesY : !selectedSpecialties.length ? specialtiesY : !selectedReferral ? referralY : null)
-      : (!selectedInterests.length ? servicesY : !selectedLocations.length ? locationY : !selectedFrequency ? frequencyY : !selectedReferral ? referralY : null);
+      : (!selectedInterests.length ? servicesY : !selectedArea.trim() ? locationY : !selectedFrequency ? frequencyY : !selectedReferral ? referralY : null);
 
     if (firstEmptyY) {
       setShowErrors(true);
@@ -346,7 +364,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   };
 
   const renderSection = (
-    yRef: React.MutableRefObject<number>,
+    yRef: React.MutableRefObject<CardLayout>,
     label: string,
     prompt: string,
     items: readonly string[],
@@ -370,12 +388,19 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
+      <KeyboardDismissView style={{ flex: 1 }}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        onScroll={onScroll}
+        onScrollBeginDrag={onScrollBeginDrag}
+        scrollEventThrottle={32}
+        onLayout={onViewportLayout}
       >
         <SignUpHeader onBack={() => navigation.goBack()} currentStep={5} totalSteps={totalSteps} />
 
@@ -426,6 +451,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 options={specialtyOptions}
                 palette={t}
                 placeholder="Search specialities"
+                showSelectedChips
               />
             </QuestionCard>
 
@@ -434,7 +460,19 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         ) : (
           <>
             {renderSection(servicesY, 'SERVICES', "Select all services you're interested in.", SERVICE_CATEGORIES, item => selectedInterests.includes(item), toggleInterest)}
-            {renderSection(locationY, 'LOCATION', 'Where are you willing to get services from?', LOCATIONS, item => selectedLocations.includes(item), toggleLocation)}
+            {/* Same picker and column as Account > Your area. */}
+            <QuestionCard
+              title="YOUR AREA"
+              prompt="Where are you based?"
+              error={showErrors && !selectedArea.trim()}
+              onLayout={onLayoutFor(locationY)}
+            >
+              <AreaPicker
+                value={selectedArea}
+                onChange={selectArea}
+                accentColor={t.accent}
+              />
+            </QuestionCard>
             {renderSection(frequencyY, 'FREQUENCY', 'How often do you get your maintenance done?', FREQUENCIES, item => selectedFrequency === item, selectFrequency)}
             {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral)}
 
@@ -464,6 +502,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           </TouchableOpacity>
         )}
       </ScrollView>
+      </KeyboardDismissView>
 
       {/* Second-hat celebration. Dismissing it is what completes the switch. */}
       <Modal

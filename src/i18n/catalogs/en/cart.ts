@@ -46,17 +46,9 @@ export const cart = {
   "cart.pay.notCompleted": "Payment could not be completed. Please review your booking and try again.",
   "cart.pay.closeA11y": "Close payment",
   "cart.pay.feesLoadFailed": "We couldn't load this booking's fees. Tap to try again.",
-  "cart.pay.feesHeading": "Late & no-show fees",
-  "cart.pay.lateFeeLine": "{amount} if you arrive more than {minutes} minutes late",
-  "cart.pay.noShowFeeLine": "{amount} if you don't turn up",
-  "cart.pay.hideTerms": "Hide the terms",
-  "cart.pay.readTerms": "Read the {heading} terms",
   "cart.pay.paypal": "Pay with PayPal",
   "cart.pay.orCard": "or pay by card",
-  "cart.pay.byCard": "Pay by card",
   "cart.pay.secure": "Card details go straight to Stripe",
-  "cart.pay.checkingTitle": "Checking your payment",
-  "cart.pay.checkingBody": "Your payment may have completed. Check your bookings before paying again. If the reservation expired, the payment will be refunded.",
   "cart.pay.bookingFailedTitle": "Booking Failed",
   // Cart cards
   "cart.remove.title": "Remove Service",
@@ -119,7 +111,6 @@ export const cart = {
   "cart.checkout.availabilityFailedTitle": "Could not check availability",
   "cart.checkout.availabilityFailed": "We couldn't check your appointment times. Please check your connection and try again.",
   "cart.checkout.incomplete": "Every service needs a provider, date and time before payment.",
-  "cart.checkout.reserveFailed": "We couldn't reserve that time. Please try again.",
   "cart.checkout.notCompletedTitle": "Booking Not Completed",
   // Confirm your details
   "cart.review.title": "Confirm Your Details",
@@ -161,9 +152,6 @@ export const cart = {
   "cart.empty.browse": "Browse Services",
   // Cart state messages (CartContext)
   "cart.context.updateFailed": "Something went wrong updating your cart. Please try again.",
-  "cart.context.itemsRemovedTitle": "Some items removed",
-  "cart.context.itemsRemoved.single": "{names} is no longer available, so we removed it from your cart.",
-  "cart.context.itemsRemoved.several": "{names} are no longer available, so we removed them from your cart.",
   "cart.context.providerUnavailableTitle": "Provider unavailable",
   "cart.context.providerUnavailable": "{provider} isn't available to book right now. Please try again from their profile a little later.",
   // Payment request errors (utils/paymentRequestError)
@@ -218,17 +206,55 @@ export const cart = {
   "cart.issue.depositNowRequired": "This provider now requires a deposit — pay in full is no longer available",
   "cart.issue.takenWhilePaying": "This time was taken while you were paying — pick a new time",
   "cart.issue.bookingFailed": "This service couldn't be booked — try again",
+  'cart.headerTitle': 'Cart ({count})',
+  'cart.accountLoadingTitle': 'One moment',
+  'cart.accountLoading': 'We’re still loading your account. Please try again shortly.',
+  'cart.provider.stats': '{count} appointments • {total}',
+  'cart.provider.attention.single': '1 service needs attention',
+  'cart.provider.attention.several': '{count} services need attention',
+  'cart.provider.show.one': 'Show {count} appointment',
+  'cart.provider.show.other': 'Show {count} appointments',
+  'cart.provider.hide': 'Hide',
+  'cart.summary.backToBack': '{count} services back-to-back',
+  'cart.card.heldA11y': 'Held for you, {date} at {time}',
+  'cart.card.heldFromWaitlist': 'Held for you from your waitlist',
+  'cart.review.mobile.single': '{names} is a mobile provider and will come to you',
+  'cart.review.mobile.several': '{names} are mobile providers and will come to you',
+  'cart.pay.stillGoingTitle': 'Your last payment is still going through',
+  'cart.pay.stillGoing':
+    "We'll let you know as soon as it's settled. Please don't pay again in the meantime.",
+  'cart.pay.stillConfirmingTitle': 'Still confirming your payment',
+  'cart.pay.stillConfirming':
+    "We'll send you a notification as soon as it's settled. Please don't pay again in the meantime.",
+  'cart.pay.savedCards': 'Saved cards',
+  'cart.pay.newCard': 'Use a new card',
+  'cart.pay.cardDetails': 'Card details',
+  'cart.pay.confirming': 'Confirming your payment…',
+  'cart.pay.holdAmount': 'Hold {amount}',
+  'cart.pay.payAndHold': 'Pay {pay} · Hold {hold}',
+  'cart.hold.confirm': 'Confirm with your bank',
+  'cart.hold.confirmA11y': 'Confirm the hold for the {service} request with your bank',
+  'cart.issue.ownProvider':
+    "This is your own business — you can't book yourself. Remove it to check out.",
+  'cart.issue.waitlistHoldEnded':
+    'This slot was held for {minutes} minutes and that time is up. Remove it to continue',
+  'cart.context.unavailable.title': 'Not accepting bookings',
+  'cart.context.unavailable.single':
+    '{names} is currently not accepting bookings. Would you like to remove this from your cart?',
+  'cart.context.unavailable.several':
+    '{names} are currently not accepting bookings. Would you like to remove their services from your cart?',
+  'cart.context.unavailable.keep': 'Keep',
+  'cart.context.unavailable.remove': 'Remove',
+  'cart.checkout.ownBusinessTitle': "You can't book yourself",
+  'cart.checkout.ownBusiness':
+    'Your cart has a service from your own business. Remove it to check out.',
+  'cart.checkout.waitlistCardOnly':
+    'A waitlist slot can only be paid for by card in this version of the app.',
 } as const;
 
 /** Keys in this area HELD IN ENGLISH in every language (legal, refund,
  *  cancellation, payment, age and health-safety copy). See ../../translate.ts. */
 export const cartHeld: readonly (keyof typeof cart)[] = [
-  'cart.pay.feesHeading',
-  'cart.pay.lateFeeLine',
-  'cart.pay.noShowFeeLine',
-  'cart.pay.hideTerms',
-  'cart.pay.readTerms',
-  'cart.pay.checkingBody',
   'cart.methods.explainer',
   'cart.methods.stripeNote',
   'cart.methods.paypalSub',

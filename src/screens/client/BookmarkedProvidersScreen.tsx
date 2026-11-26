@@ -6,11 +6,12 @@ import {
   FlatList,
   type ListRenderItem,
   TouchableOpacity,
-  StatusBar,
   Platform,
   Animated,
   Easing,
+  useWindowDimensions,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
+import { masonryColumnsForWidth } from '../../components/MasonryGrid';
 import { logger } from '../../utils/logger';
 
 
@@ -218,6 +220,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     navigation.navigate('ProviderProfile', { providerId: provider.slug });
   }, [navigation]);
 
+  // Two columns on a phone, more as the screen widens (an iPad, or one turned
+  // sideways), so the cards stay card-sized instead of growing to fill two.
+  const { width: windowWidth } = useWindowDimensions();
+  const gridColumns = masonryColumnsForWidth(windowWidth);
+  const gridCardWidth = (windowWidth - GRID_SIDE_PADDING * 2 - GRID_GAP * (gridColumns - 1)) / gridColumns;
+
   const renderProviderCard: ListRenderItem<Provider> = useCallback(({ item, index }) => (
     <BookmarkGridCard
       provider={item}
@@ -227,8 +235,9 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       P={P}
       onPress={handleViewProfile}
       onRemove={handleRemoveBookmark}
+      cardWidth={gridCardWidth}
     />
-  ), [P, appointmentCounts, handleRemoveBookmark, handleViewProfile, providerIdsWithOffers]);
+  ), [P, appointmentCounts, gridCardWidth, handleRemoveBookmark, handleViewProfile, providerIdsWithOffers]);
 
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
@@ -260,7 +269,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
   if (loading) {
     return (
       <ThemedBackground>
-        <StatusBar barStyle={theme.statusBar} />
+        <FocusAwareStatusBar barStyle={theme.statusBar} />
         <SafeAreaView style={styles.container}>
           <View style={[styles.gridRow, { paddingTop: insets.top + 48, paddingHorizontal: 16 }]}>
             {[1, 2, 3, 4, 5, 6].map(k => (
@@ -274,7 +283,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <SafeAreaView style={styles.container} edges={['bottom']}>
 
         {/* ── Header (tabs only — title now lives in the nav bar) ── */}
@@ -304,7 +313,10 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           data={filteredProviders}
           renderItem={renderProviderCard}
           keyExtractor={provider => provider.id}
-          numColumns={2}
+          // FlatList can't change numColumns while mounted, so a new count
+          // (rotating an iPad) remounts it under a new key.
+          key={`grid-${gridColumns}`}
+          numColumns={gridColumns}
           columnWrapperStyle={styles.gridColumnWrapper}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -329,9 +341,11 @@ interface BookmarkGridCardProps {
   P: AppTheme;
   onPress: (provider: Provider) => void;
   onRemove: (provider: Provider) => void;
+  /** Sized by the screen from its column count, so cards fill the row evenly. */
+  cardWidth: number;
 }
 
-const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
+const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove, cardWidth }: BookmarkGridCardProps) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -344,7 +358,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
   }, [fadeAnim, index, slideAnim]);
 
   return (
-    <Animated.View style={[styles.gridCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View style={[styles.gridCard, { width: cardWidth, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       <TouchableOpacity
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -428,6 +442,10 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
   );
 });
 
+/** Space between grid cards, and either side of the grid. */
+const GRID_GAP = 12;
+const GRID_SIDE_PADDING = 16;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
@@ -466,7 +484,7 @@ const styles = StyleSheet.create({
   scrollContainer: { flex: 1 },
   scrollContent: {
     paddingTop: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: GRID_SIDE_PADDING,
     paddingBottom: Platform.OS === 'android' ? 120 : 140,
   },
 
@@ -477,10 +495,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   gridColumnWrapper: {
-    justifyContent: 'space-between',
+    columnGap: GRID_GAP,
   },
   gridCard: {
-    width: '48%',
     marginBottom: 20,
   },
   imageWrap: {

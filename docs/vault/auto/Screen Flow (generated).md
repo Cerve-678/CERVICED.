@@ -5,7 +5,7 @@
 
 #generated
 
-**78 screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].
+**84 screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].
 
 ## Entry points
 _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
@@ -23,7 +23,6 @@ _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[SignUpStep4Screen]]
 - [[SignUpStep5Screen]]
 - [[WelcomeScreen]]
-- [[BeautyBillingScreen]]
 - [[ExploreScreen]]
 - [[HomeScreen]]
 - [[UserProfileScreen]]
@@ -33,11 +32,15 @@ _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[ProviderAccountScreen]]
 - [[ProviderHomeScreen]]
 - [[ProviderMyProfileScreen]]
+- [[AdminCreatedAccountsScreen]]
+- [[AdminListingNudgesScreen]]
+- [[AdminMoneyScreen]]
 - [[BeccaScreen]]
 - [[ChangeCredentialsScreen]]
+- [[DevSettingsScreen]]
 - [[InfoScreen]]
 
 ## All screens
-**Provider:** [[ProviderChatScreen]] · [[ProviderProfileScreen]] · [[AboutYouScreen]] · [[AddBookingScreen]] · [[BrandingScreen]] · [[BusinessDetailsScreen]] · [[BusinessInfoScreen]] · [[BusinessProfileScreen]] · [[InfoRegScreen]] · [[LinkOnlyAnalyticsScreen]] · [[LinkOnlyHomeScreen]] · [[LinkOnlyPortfolioScreen]] · [[PaymentsScreen]] · [[PoliciesScreen]] · [[ProviderAccountInfoScreen]] · [[ProviderAccountScreen]] · [[ProviderAnalyticsScreen]] · [[ProviderAutomationsScreen]] · [[ProviderBookingDetailScreen]] · [[ProviderBookingHistoryScreen]] · [[ProviderClienteleScreen]] · [[ProviderCommunicationsScreen]] · [[ProviderConversationScreen]] · [[ProviderHomeScreen]] · [[ProviderInboxScreen]] · [[ProviderInfoPackScreen]] · [[ProviderIntakeFormScreen]] · [[ProviderMyProfileScreen]] · [[ProviderPromotionsScreen]] · [[ProviderScheduleScreen]] · [[SchedulingScreen]] · [[ServicesPricingScreen]]
+**Provider:** [[ProviderChatScreen]] · [[ProviderProfileScreen]] · [[AboutYouScreen]] · [[AddBookingScreen]] · [[BrandingScreen]] · [[BusinessDetailsScreen]] · [[BusinessInfoScreen]] · [[BusinessProfileScreen]] · [[FullCervicedFeaturesScreen]] · [[InfoRegScreen]] · [[LinkOnlyAnalyticsScreen]] · [[LinkOnlyHomeScreen]] · [[LinkOnlyPortfolioScreen]] · [[PaymentsScreen]] · [[PoliciesScreen]] · [[ProviderAccountInfoScreen]] · [[ProviderAccountScreen]] · [[ProviderAchievementsScreen]] · [[ProviderAnalyticsScreen]] · [[ProviderAutomationsScreen]] · [[ProviderBookingDetailScreen]] · [[ProviderBookingHistoryScreen]] · [[ProviderClienteleScreen]] · [[ProviderCommunicationsScreen]] · [[ProviderConversationScreen]] · [[ProviderHomeScreen]] · [[ProviderInboxScreen]] · [[ProviderInfoPackScreen]] · [[ProviderIntakeFormScreen]] · [[ProviderMyProfileScreen]] · [[ProviderNotificationSettingsScreen]] · [[ProviderPromotionsScreen]] · [[ProviderScheduleScreen]] · [[SchedulingScreen]] · [[ServicesPricingScreen]]
 
-**Client / shared:** [[AuthScreen]] · [[ClaimProviderScreen]] · [[EmailVerificationScreen]] · [[ForgotPasswordScreen]] · [[LoginScreen]] · [[NewPasswordScreen]] · [[ReactivateAccountScreen]] · [[ResetPasswordOTPScreen]] · [[SignUpStep1Screen]] · [[SignUpStep2Screen]] · [[SignUpStep3Screen]] · [[SignUpStep4Screen]] · [[SignUpStep5Screen]] · [[WelcomeScreen]] · [[BeautyBillingScreen]] · [[BeautyProfileScreen]] · [[BookingDetailScreen]] · [[BookingsScreen]] · [[BookmarkedProvidersScreen]] · [[CartScreen]] · [[ClientIntakeFormScreen]] · [[ExploreScreen]] · [[ExternalBookingDetailScreen]] · [[HomeScreen]] · [[MessagesScreen]] · [[NotificationsSettingsScreen]] · [[OffersScreen]] · [[PaymentMethodsScreen]] · [[PointsScreen]] · [[ProfileInfoScreen]] · [[RescheduleScreen]] · [[SearchScreen]] · [[SubscriptionScreen]] · [[UserProfileScreen]] · [[AboutScreen]] · [[BeccaScreen]] · [[ChangeCredentialsScreen]] · [[ChangePasswordScreen]] · [[DevSettingsScreen]] · [[HelpCentreScreen]] · [[InfoScreen]] · [[LanguageRegionScreen]] · [[NotificationsScreen]] · [[ReportProblemScreen]] · [[TermsScreen]] · [[TextSizingScreen]]
+**Client / shared:** [[AuthScreen]] · [[ClaimProviderScreen]] · [[EmailVerificationScreen]] · [[ForgotPasswordScreen]] · [[LoginScreen]] · [[NewPasswordScreen]] · [[ReactivateAccountScreen]] · [[ResetPasswordOTPScreen]] · [[SignUpStep1Screen]] · [[SignUpStep2Screen]] · [[SignUpStep3Screen]] · [[SignUpStep4Screen]] · [[SignUpStep5Screen]] · [[WelcomeScreen]] · [[ActivityCentreScreen]] · [[BeautyProfileScreen]] · [[BookingDetailScreen]] · [[BookingsScreen]] · [[BookmarkedProvidersScreen]] · [[CartScreen]] · [[CircleScreen]] · [[ClientIntakeFormScreen]] · [[ExploreScreen]] · [[ExternalBookingDetailScreen]] · [[HomeScreen]] · [[MessagesScreen]] · [[NotificationsSettingsScreen]] · [[OffersScreen]] · [[PaymentMethodsScreen]] · [[PointsScreen]] · [[ProfileInfoScreen]] · [[RescheduleScreen]] · [[SearchScreen]] · [[UserProfileScreen]] · [[AdminCreateAccountScreen]] · [[AdminCreatedAccountsScreen]] · [[AdminDashboardScreen]] · [[AdminListingNudgesScreen]] · [[AdminMoneyScreen]] · [[BeccaScreen]] · [[ChangeCredentialsScreen]] · [[ChangePasswordScreen]] · [[DevSettingsScreen]] · [[HelpCentreScreen]] · [[InfoScreen]] · [[LanguageRegionScreen]] · [[NotificationsScreen]] · [[ReportProblemScreen]] · [[TextSizingScreen]]

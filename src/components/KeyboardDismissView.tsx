@@ -16,6 +16,9 @@ interface KeyboardDismissViewProps {
   // Distance from the screen top to this component's parent coordinate
   // system (e.g. a native navigation header). Sibling custom headers already
   // contribute to its measured y position and must not be counted twice.
+  // Applies on both platforms: the app is edge-to-edge on Android, so the
+  // window no longer shrinks for the keyboard there either, and the keyboard's
+  // position arrives in window coordinates exactly as it does on iOS.
   extraOffset?: number;
   // Tap-outside-to-dismiss. Off by default because a ScrollView ancestor with
   // keyboardShouldPersistTaps="handled" (the app's existing convention on
@@ -49,7 +52,7 @@ export function KeyboardDismissView({
     <KeyboardAvoidingView
       style={style ?? { flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? extraOffset : 0}
+      keyboardVerticalOffset={extraOffset}
     >
       {children}
       {bottomPadding !== 0 && (

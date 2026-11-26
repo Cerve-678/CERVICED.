@@ -9,7 +9,7 @@
 //     so wiring a model in means swapping the parser — not rewriting the
 //     assistant. See BECCA_CAPABILITIES.md §3.1.
 
-import type { BeccaHat, Capability } from "./types";
+import type { BeccaHat, Capability, ThinkingTurn } from "./types";
 import { CLIENT_CAPABILITIES } from "./capabilities/client";
 import { PROVIDER_CAPABILITIES } from "./capabilities/provider";
 
@@ -35,11 +35,42 @@ export function getCapability(id: string, hat: BeccaHat): Capability | undefined
 }
 
 /**
+ * Whether a capability fits the user's setup.
+ *
+ * Only link-only providers are narrowed: they take bookings on their own
+ * booking site, so only capabilities marked `fitsLinkOnly` apply to them.
+ * Clients and full providers get everything their hat allows.
+ *
+ * Deliberately separate from `capabilitiesFor`: understanding (the matcher,
+ * or a model reading `toToolSchema`) still sees the whole hat, so "what's on
+ * today?" is recognised as a bookings question and answered honestly as "not
+ * part of your setup", rather than being forced onto the nearest fitting
+ * capability and answered as something it isn't.
+ */
+export function fitsSetup(capability: Capability, linkOnly: boolean): boolean {
+  if (!linkOnly || capability.hat !== "provider") return true;
+  return capability.fitsLinkOnly === true;
+}
+
+/** A capability's loading steps for this turn. At most three, so none flashes past. */
+export function thinkingFor(capability: Capability, turn: ThinkingTurn): string[] {
+  const steps = typeof capability.thinking === "function"
+    ? capability.thinking(turn)
+    : capability.thinking;
+  return steps.filter(Boolean).slice(0, 3);
+}
+
+/**
  * The registry as an LLM tool schema.
  *
  * Not called by the deterministic path — it exists so the eventual model
  * integration has a single, always-current source for what Becca can do,
  * rather than a hand-maintained prompt that drifts from the code.
+ *
+ * Always the whole hat, link-only providers included. The model's job is to
+ * recognise what was asked; whether that fits the user's setup is decided
+ * afterwards, in the engine, by `fitsSetup` — the same gate the deterministic
+ * matcher's answer goes through.
  */
 export function toToolSchema(hat: BeccaHat): {
   name: string;

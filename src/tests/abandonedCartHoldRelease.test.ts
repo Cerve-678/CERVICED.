@@ -7,6 +7,8 @@ const MIGRATION = readFileSync(
   'utf8',
 );
 const CART = readFileSync(join(REPO, 'src/screens/client/CartScreen.tsx'), 'utf8');
+// The Stripe sheet the Cart (and a waitlist ticket) opens.
+const PAY_SHEET = readFileSync(join(REPO, 'src/features/cart/StripePaymentSheet.tsx'), 'utf8');
 
 // Reproduced live on 2026-09-07: two "Confirm & Pay" taps left an on_hold row
 // each, neither released, and the client who placed them was then told their
@@ -86,5 +88,88 @@ describe('CartScreen hands the slots back on every exit it can see', () => {
     expect(fn.slice(0, 400)).toContain('if (isClaimingRef.current) return;');
     expect(CART).toContain('isClaimingRef.current = true;');
     expect(CART).toContain('isClaimingRef.current = false;');
+  });
+});
+
+describe('leaving the Cart while a payment is going through', () => {
+  // Found 2026-11-22: a client who left the Cart during "Confirming your
+  // payment…" (a tapped notification, say) cancelled their own checkout, so
+  // the server released the card they had just approved and dropped the booking.
+  const abandon = CART.slice(
+    CART.indexOf('const abandonOutstandingCheckout = useCallback'),
+    CART.indexOf('}, [releaseCartCheckoutSlots]);'),
+  );
+  const pay = PAY_SHEET.slice(PAY_SHEET.indexOf('export const StripePaymentSheet'));
+
+  it('does not cancel a checkout whose payment is in flight', () => {
+    expect(abandon).toContain('if (paymentInFlightRef.current) return;');
+    expect(abandon.indexOf('paymentInFlightRef.current')).toBeLessThan(abandon.indexOf('cancelCheckout('));
+  });
+
+  it('marks the payment in flight before Stripe is asked, and clears it however it ends', () => {
+    expect(pay.indexOf('onPaymentInFlight?.(true)')).toBeGreaterThan(-1);
+    expect(pay.indexOf('onPaymentInFlight?.(true)')).toBeLessThan(pay.indexOf('confirmPlatformPayPayment(clientSecret'));
+    const fin = pay.slice(pay.indexOf('} finally {') + '} finally {'.length);
+    expect(fin.slice(0, fin.indexOf('}'))).toContain('onPaymentInFlight?.(false)');
+    expect(CART).toContain('onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}');
+  });
+
+  it('shows the success sheet only while the Cart is on screen', () => {
+    expect(CART).toContain('if (navigation.isFocused()) setShowPaymentSuccessModal(true);');
+  });
+
+  // Found 2026-11-23: if the card was then refused, the decline only reached
+  // the hidden sheet. Nothing cancelled the checkout, and the database's
+  // double-booking guard counts the client's own hold, so trying again was
+  // refused with "That time is no longer available" until the hold ran out.
+  describe('when the payment then fails', () => {
+    const fn = pay.slice(pay.indexOf('const releaseIfSheetLeft'));
+    const helper = fn.slice(0, fn.indexOf('\n      };') + 9);
+    const away = CART.slice(CART.indexOf('onPaymentFailedAway={(checkoutBatchId, message) =>'));
+    const awayHandler = away.slice(0, away.indexOf('onPaymentPending={'));
+
+    it('knows it has been left by the sheet opening it belongs to, moved on in the same tick as the leave', () => {
+      expect(pay).toContain('const openId = getSheetOpenId?.();');
+      expect(helper).toContain('if (getSheetOpenId?.() === openId) return false;');
+      const blur = CART.slice(CART.indexOf("navigation.addListener('blur'"));
+      const blurBody = blur.slice(0, blur.indexOf('abandonOutstandingCheckout()'));
+      expect(blurBody).toContain('paymentSheetOpenIdRef.current += 1;');
+      expect(CART).toContain('paymentSheetOpenIdRef.current += 1;\n                        setShowPaymentModal(true);');
+    });
+
+    it('cancels the payment, and never touches a newer checkout the Cart may have', () => {
+      expect(helper).toContain('cancelPaymentIntent(checkoutBatchId, intentId)');
+      expect(helper).not.toContain('onClose()');
+      expect(awayHandler).toContain('if (serverCheckoutBatchIdRef.current === checkoutBatchId)');
+    });
+
+    it('says "still confirming" only when the server says the card was approved after all', () => {
+      const failed = helper.slice(helper.indexOf('catch'));
+      expect(failed).toContain('?.context?.status === 409');
+      expect(failed.indexOf('=== 409')).toBeLessThan(failed.indexOf("onPaymentPending?.('unknown')"));
+    });
+
+    it('runs before the card goes to Stripe, on a refused card, on a wallet that would not start, and on a thrown error', () => {
+      const early = pay.indexOf('if (await releaseIfSheetLeft(null)) return;');
+      expect(early).toBeGreaterThan(-1);
+      expect(early).toBeLessThan(pay.indexOf("if (method === 'paypal' && !paypalAvailable)"));
+      expect(early).toBeLessThan(pay.indexOf('onPaymentInFlight?.(true)'));
+      expect(pay).toContain('if (await releaseIfSheetLeft(confirmError.code');
+      expect(pay).toContain("if (await releaseIfSheetLeft('We couldn");
+      const caught = pay.slice(pay.indexOf('PAYMENT ERROR'));
+      expect(caught.indexOf("releaseIfSheetLeft(handedToStripe ? '' : null)")).toBeLessThan(caught.indexOf('onClose();'));
+    });
+
+    it('tells the client their payment did not go through', () => {
+      expect(helper).toContain('onPaymentFailedAway?.(checkoutBatchId, message)');
+      expect(awayHandler).toContain(`showAlert("Payment didn't go through"`);
+    });
+
+    it('does not start a new checkout while the last payment is still going through', () => {
+      const confirm = CART.slice(CART.indexOf("console.log('[CartScreen] Confirm & Pay pressed'"));
+      const guard = confirm.indexOf('if (paymentInFlightRef.current) {');
+      expect(guard).toBeGreaterThan(-1);
+      expect(guard).toBeLessThan(confirm.indexOf('setIsReservingSlots(true);'));
+    });
   });
 });

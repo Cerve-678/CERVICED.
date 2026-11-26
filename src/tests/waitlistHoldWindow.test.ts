@@ -1,9 +1,15 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { WAITLIST_HOLD_MINUTES, WAITLIST_HOLD_MS } from '../constants/waitlist';
+import { WAITLIST_HOLD_MINUTES } from '../constants/waitlist';
 
 const MIGRATION = readFileSync(
   join(__dirname, '..', '..', 'supabase/migrations/20260827120519_waitlist_hold_fifteen_minutes.sql'),
+  'utf8',
+);
+// The hold went from 15 to 10 minutes here; the cron and spans checks below
+// still read the migration that set them up.
+const LATEST_HOLD = readFileSync(
+  join(__dirname, '..', '..', 'supabase/migrations/20261118150000_waitlist_auto_and_close_together.sql'),
   'utf8',
 );
 
@@ -13,12 +19,8 @@ describe('waitlist hold window', () => {
   // with nothing but this test connecting them — which is exactly how the old
   // `3 * 60 * 60 * 1000` buried in JSX survived the change to 15 minutes.
   it('matches the interval the database stamps', () => {
-    const fn = MIGRATION.slice(MIGRATION.indexOf('FUNCTION public.waitlist_hold_duration'));
+    const fn = LATEST_HOLD.slice(LATEST_HOLD.indexOf('FUNCTION public.waitlist_hold_duration'));
     expect(fn).toContain(`INTERVAL '${WAITLIST_HOLD_MINUTES} minutes'`);
-  });
-
-  it('derives ms from minutes rather than carrying a second literal', () => {
-    expect(WAITLIST_HOLD_MS).toBe(WAITLIST_HOLD_MINUTES * 60 * 1000);
   });
 
   it('sweeps at least as often as the hold is long', () => {

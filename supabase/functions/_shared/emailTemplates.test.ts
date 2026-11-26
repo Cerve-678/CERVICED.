@@ -15,8 +15,10 @@
 // excludes supabase/functions for that reason, and jest picks the file up here
 // on its default testMatch regardless.
 import {
+  addressSharedEmail,
+  appointmentReminderEmail,
+  BOOKING_EMAIL_APP_BENEFITS,
   bookingConfirmationEmail,
-  claimVerificationEmail,
   clientHatAddedEmail,
   clientWelcomeEmail,
   feePaymentRequestEmail,
@@ -28,11 +30,19 @@ import {
   linkOnlyLiveEmail,
   linkOnlyWelcomeEmail,
   passwordChangedEmail,
+  requestNotAcceptedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
+  recoveryCodeEmail,
   refundRequestedProviderEmail,
+  payoutFailedSupportEmail,
+  bankDisputeSupportEmail,
+  moneySummaryEmail,
+  signupCodeEmail,
+  mapsUrl,
   supportRequestEmail,
 } from './emailTemplates.ts';
+import { emailedReminderTiming, londonToday, reminderIsDue } from './reminderEmailTiming.ts';
 
 /** No whitespace: firstNameOf() splits on it, so this survives whole. */
 const HOSTILE = `<script>alert(1)</script>&"'`;
@@ -51,7 +61,7 @@ const BOOKING = {
   depositAmount: 0,
   amountPaid: 74.99,
   paymentType: 'full',
-  paymentStatus: 'paid_in_full',
+  paymentStatus: 'fully_paid',
 };
 
 const every = () => [
@@ -60,7 +70,24 @@ const every = () => [
   ['clientHatAddedEmail', clientHatAddedEmail({ name: HOSTILE })],
   ['providerHatAddedEmail', providerHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
   ['passwordChangedEmail', passwordChangedEmail({ name: HOSTILE })],
-  ['claimVerificationEmail', claimVerificationEmail({ code: HOSTILE, businessName: HOSTILE })],
+  [
+    'addressSharedEmail',
+    addressSharedEmail({ providerName: HOSTILE, service: HOSTILE, date: HOSTILE, time: HOSTILE, address: HOSTILE, directions: HOSTILE }),
+  ],
+  [
+    'appointmentReminderEmail',
+    appointmentReminderEmail({
+      providerName: HOSTILE, service: HOSTILE, date: HOSTILE, time: HOSTILE, daysAhead: 1,
+      where: { kind: 'venue', address: HOSTILE }, dueAtAppointment: 10, instructions: HOSTILE,
+    }),
+  ],
+  [
+    'requestNotAcceptedEmail',
+    requestNotAcceptedEmail({
+      providerName: HOSTILE, service: HOSTILE, date: HOSTILE, time: HOSTILE,
+      money: { kind: 'released', amount: 45 },
+    }),
+  ],
   [
     'bookingConfirmationEmail',
     bookingConfirmationEmail({
@@ -102,6 +129,25 @@ const every = () => [
   [
     'linkOnlyGoLiveReminderEmail',
     linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
+  ],
+  [
+    'payoutFailedSupportEmail',
+    payoutFailedSupportEmail({
+      kind: 'transfer', provider: HOSTILE, amount: HOSTILE, booking: HOSTILE, why: HOSTILE, tries: HOSTILE, nextStep: HOSTILE,
+    }),
+  ],
+  [
+    'bankDisputeSupportEmail',
+    bankDisputeSupportEmail({ title: HOSTILE, amount: HOSTILE, reason: HOSTILE, bookings: [HOSTILE], nextStep: HOSTILE }),
+  ],
+  [
+    'moneySummaryEmail',
+    moneySummaryEmail({
+      failed: [{ title: HOSTILE, amount: HOSTILE }],
+      owed: [{ title: HOSTILE, amount: HOSTILE }],
+      refunds: [{ title: HOSTILE, amount: HOSTILE }],
+      unsentRefunds: [{ title: HOSTILE, amount: HOSTILE }],
+    }),
   ],
 ] as Array<[string, { subject: string; html: string }]>;
 
@@ -197,10 +243,20 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Cerviced platform fee');
     expect(html).toContain('£74.99');
     expect(html).toContain('Paid in full');
+    expect(html).toContain('Due at Appointment');
+    expect(html).toContain('£0.00');
+  });
+
+  it('tells a client who paid in full that they paid, using the status the database stores', () => {
+    const { html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'fully_paid' });
+    expect(html).toContain('Paid in full');
+    expect(html).toContain('>Paid<');
+    expect(html).toContain('£74.99');
+    expect(html).not.toContain('Awaiting payment');
     expect(html).not.toContain('Due to provider');
   });
 
-  it("shows a deposit as the provider's own figure, with the balance due", () => {
+  it('shows a deposit as what left the card and what remains', () => {
     const { html } = bookingConfirmationEmail({
       ...BOOKING,
       paymentType: 'deposit',
@@ -208,11 +264,35 @@ describe('booking confirmation money', () => {
       depositAmount: 20,
       amountPaid: 21.99,
     });
-    expect(html).toContain('Deposit paid to provider');
-    expect(html).toContain('£20.00');
-    expect(html).not.toContain('£21.99');
-    expect(html).toContain('Due to provider at appointment');
+    // £65 + £8 add-on + £1.99 fee = £74.99 total; £21.99 paid, £53.00 left.
+    expect(html).toContain('Deposit paid');
+    expect(html).toContain('>Paid (incl. fee)<');
+    expect(html).toContain('£21.99');
+    expect(html).toContain('Due at Appointment');
     expect(html).toContain('£53.00');
+    expect(html).not.toContain('Due to provider');
+  });
+
+  it('lists a paid deposit under the total, with the payment', () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      paymentType: 'deposit',
+      paymentStatus: 'deposit_paid',
+      depositAmount: 20,
+      amountPaid: 21.99,
+    });
+    const depositLine = html.search(/>Deposit paid<\/td>\s*<td[^>]*>£20\.00</);
+    expect(depositLine).toBeGreaterThan(-1);
+    expect(depositLine).toBeGreaterThan(html.indexOf('>Total<'));
+    expect(depositLine).toBeLessThan(html.indexOf('>Paid (incl. fee)<'));
+  });
+
+  it('leaves the deposit line out until the deposit is paid, and on a full payment', () => {
+    const unpaid = bookingConfirmationEmail({
+      ...BOOKING, paymentType: 'deposit', paymentStatus: 'pending', depositAmount: 20, amountPaid: 0,
+    }).html;
+    expect(unpaid).not.toMatch(/>Deposit paid<\/td>/);
+    expect(bookingConfirmationEmail(BOOKING).html).not.toMatch(/>Deposit paid<\/td>/);
   });
 
   it('never calls a hand-added unpaid booking paid in full', () => {
@@ -271,5 +351,234 @@ describe('fee payment request email', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain('href="https://invoice.stripe.com/i/acct_1/test_abc?s=ap&amp;x=1"');
     expect(html).toContain('Mon 26 Oct');
+  });
+});
+
+describe('refundRequestedProviderEmail', () => {
+  it('says the payout is on hold only when there is one', () => {
+    const base = { clientName: 'Amy', service: 'Lash lift', date: '18 Oct', time: '2:30pm', reason: 'The provider cancelled' };
+    expect(refundRequestedProviderEmail({ ...base, heldPence: 4500 }).html).toContain('Your £45.00 for this booking is on hold');
+    expect(refundRequestedProviderEmail(base).html).not.toContain('on hold');
+    expect(refundRequestedProviderEmail({ ...base, heldPence: 0 }).html).not.toContain('on hold');
+  });
+});
+
+// These two are rendered to static HTML that Supabase fills in itself. What must
+// survive is the literal placeholder: escaped or dropped, every user would get a
+// code email with no code in it.
+describe('Supabase Auth code emails', () => {
+  for (const [name, email] of [
+    ['signup', signupCodeEmail()],
+    ['recovery', recoveryCodeEmail()],
+  ] as const) {
+    it(`${name}: puts the code in the subject and the inbox preview`, () => {
+      expect(email.subject).toContain('{{ .Token }}');
+      expect(email.html).toMatch(/\{\{ \.Token \}\} is your CERVICED/);
+    });
+
+    it(`${name}: draws six boxes, and shows the code whole if it is not six digits`, () => {
+      for (let i = 0; i < 6; i++) {
+        expect(email.html).toContain(`{{ slice .Token ${i} ${i + 1} }}`);
+      }
+      // Slicing a shorter token fails the render, and Supabase then sends nothing.
+      const guard = email.html.indexOf('{{ if eq (len .Token) 6 }}');
+      const fallback = email.html.indexOf('{{ else }}');
+      expect(guard).toBeGreaterThan(-1);
+      expect(email.html.indexOf('{{ slice .Token 0 1 }}')).toBeGreaterThan(guard);
+      expect(email.html.indexOf('{{ slice .Token 5 6 }}')).toBeLessThan(fallback);
+      expect(email.html.indexOf('{{ .Token }}', fallback)).toBeGreaterThan(fallback);
+      expect(email.html.indexOf('{{ end }}')).toBeGreaterThan(fallback);
+    });
+
+    it(`${name}: names the address and has no script`, () => {
+      expect(email.html).toContain('{{ .Email }}');
+      expect(email.html).not.toMatch(/<script/i);
+    });
+  }
+
+  it('makes signup and reset different at a glance', () => {
+    const accentBox = 'bgcolor="#5C4033"';
+    expect(recoveryCodeEmail().html).toContain(accentBox);
+    expect(signupCodeEmail().html).not.toContain(accentBox);
+  });
+
+  it('does not tell someone they have an account when they may not', () => {
+    expect(signupCodeEmail().html).not.toContain('you have a CERVICED account');
+    expect(recoveryCodeEmail().html).not.toContain('you have a CERVICED account');
+  });
+});
+
+describe('a request’s email', () => {
+  const REQUEST = { ...BOOKING, isRequest: true, paymentStatus: 'authorised', clientEmail: 'sam@example.com' };
+
+  it('says the request was sent, not that the booking is confirmed', () => {
+    const { subject, html } = bookingConfirmationEmail(REQUEST);
+    expect(subject).toBe('Request sent — Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('Request sent');
+    expect(html).not.toContain('Booking confirmed');
+  });
+
+  it('says the money is held, not taken, and only charged if accepted', () => {
+    const { html } = bookingConfirmationEmail(REQUEST);
+    expect(html).toContain('Amara Lash Studio reviews every booking and will accept or decline it.');
+    expect(html).toContain('£74.99 is held on your card, not taken. You’re only charged if it’s accepted.');
+    expect(html).toContain('Held on your card');
+    expect(html).not.toContain('Paid in full');
+    expect(html).not.toContain('Awaiting payment');
+  });
+
+  it('holds only the deposit on a deposit request, with the rest due at the appointment', () => {
+    const { html } = bookingConfirmationEmail({ ...REQUEST, paymentType: 'deposit', depositAmount: 20, amountPaid: 21.99 });
+    expect(html).toContain('£21.99 is held on your card');
+    expect(html).toContain('Due at Appointment');
+    expect(html).toContain('£53.00');
+  });
+
+  it('mentions no hold on a free request', () => {
+    const { html } = bookingConfirmationEmail({ ...REQUEST, paymentStatus: 'pending', amountPaid: 0 });
+    expect(html).toContain('will accept or decline it.');
+    expect(html).not.toContain('is held on your card');
+  });
+
+  it('calls an out-of-hours request what it is', () => {
+    const { html } = bookingConfirmationEmail({ ...REQUEST, isOutOfHours: true });
+    expect(html).toContain('Amara Lash Studio will accept or decline your out-of-hours request.');
+    expect(html).not.toContain('reviews every booking');
+  });
+
+  it('calls an accepted request paid even while its hold is still being taken', () => {
+    const { subject, html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'authorised' });
+    expect(subject).toMatch(/^Booking confirmed/);
+    expect(html).toContain('Paid in full');
+    expect(html).not.toContain('Awaiting payment');
+    expect(html).not.toContain('is held on your card');
+  });
+});
+
+describe('the app box in a booking email', () => {
+  it('says how to manage the booking and lists the app’s benefits', () => {
+    const { html } = bookingConfirmationEmail({ ...BOOKING, clientEmail: 'sam@example.com' });
+    expect(html).toContain('Manage your booking');
+    expect(html).toContain('Sign in with sam@example.com to see this booking, reschedule or cancel it, and message Amara Lash Studio.');
+    expect(html).toContain('Enjoy the benefits of the CERVICED app');
+    for (const benefit of BOOKING_EMAIL_APP_BENEFITS) expect(html).toContain(benefit);
+  });
+
+  it('lists the same benefits as the website’s Booked screen', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readFileSync } = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { join } = require('path') as typeof import('path');
+    const screen = readFileSync(join(__dirname, '../../../src/web/WebPaymentStep.tsx'), 'utf8');
+    for (const benefit of BOOKING_EMAIL_APP_BENEFITS) expect(screen).toContain(`'${benefit}'`);
+  });
+});
+
+describe('a request that wasn’t accepted', () => {
+  const base = {
+    providerName: 'Amara Lash Studio', service: 'Classic lash full set',
+    date: 'Wednesday, 14 October 2026', time: '2:30pm',
+  };
+
+  it('says the provider declined it and the hold is released, nothing taken', () => {
+    const { subject, html } = requestNotAcceptedEmail({ ...base, money: { kind: 'released', amount: 68.65 } });
+    expect(subject).toBe('Request declined — Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('Amara Lash Studio couldn’t accept your request for Classic lash full set on Wednesday, 14 October 2026 at 2:30pm.');
+    expect(html).toContain('The £68.65 held on your card has been released. Nothing was taken.');
+    expect(html).toContain('find another time');
+  });
+
+  it('says an older, charged request is refunded, and says nothing about money on a free one', () => {
+    expect(requestNotAcceptedEmail({ ...base, money: { kind: 'refunded', amount: 45 } }).html)
+      .toContain('Your £45.00 is being refunded in full.');
+    const free = requestNotAcceptedEmail({ ...base, money: { kind: 'none', amount: 0 } }).html;
+    expect(free).not.toContain('held on your card');
+    expect(free).not.toContain('refunded');
+  });
+});
+
+describe('the address email', () => {
+  const base = {
+    providerName: 'Amara Lash Studio', service: 'Classic lash full set',
+    date: 'Wednesday, 14 October 2026', time: '2:30pm', address: '12 Rose Street, Leeds LS1 4AB',
+  };
+
+  it('says where to go, with directions and a Maps link', () => {
+    const { subject, html } = addressSharedEmail({ ...base, directions: 'Buzz flat 2' });
+    expect(subject).toBe('The address for your Classic lash full set with Amara Lash Studio');
+    expect(html).toContain('Amara Lash Studio has shared the address for your Classic lash full set on Wednesday, 14 October 2026 at 2:30pm.');
+    expect(html).toContain('12 Rose Street, Leeds LS1 4AB');
+    expect(html).toContain('Buzz flat 2');
+    expect(html).toContain(`href="${mapsUrl(base.address).replace(/&/g, '&amp;')}"`);
+    expect(html).toContain('reschedule or cancel it');
+  });
+
+  it('covers every service in a group booking', () => {
+    expect(addressSharedEmail({ ...base, groupCount: 3 }).html)
+      .toContain('the address for your 3 services, starting with Classic lash full set');
+  });
+});
+
+describe('the reminder email', () => {
+  const base = {
+    providerName: 'Amara Lash Studio', service: 'Classic lash full set',
+    date: 'Wednesday, 14 October 2026', time: '2:30pm', dueAtAppointment: 0,
+  };
+
+  it('says it’s tomorrow, where, and what’s due', () => {
+    const { subject, html } = appointmentReminderEmail({
+      ...base, daysAhead: 1, where: { kind: 'venue', address: '12 Rose Street' }, dueAtAppointment: 53,
+    });
+    expect(subject).toBe('Tomorrow: Classic lash full set with Amara Lash Studio at 2:30pm');
+    expect(html).toContain('Your appointment is tomorrow');
+    expect(html).toContain('12 Rose Street');
+    expect(html).toContain('Due at appointment');
+    expect(html).toContain('£53.00');
+    expect(html).toContain('Open in Maps');
+    expect(html).toContain('Please read Amara Lash Studio’s policies before your appointment.');
+  });
+
+  it('uses the provider’s own instructions, and says nothing is due once paid', () => {
+    const { html } = appointmentReminderEmail({
+      ...base, daysAhead: 2, where: { kind: 'not_yet' }, instructions: '  Come with clean lashes.\n No caffeine. ',
+    });
+    expect(html).toContain('Your appointment is in 2 days');
+    expect(html).toContain('Come with clean lashes. No caffeine.');
+    expect(html).toContain('Shared before your appointment');
+    expect(html).not.toContain('Due at appointment');
+    expect(html).not.toContain('Open in Maps');
+  });
+
+  it('says a mobile provider comes to the client', () => {
+    const { html } = appointmentReminderEmail({ ...base, daysAhead: 1, where: { kind: 'mobile', address: '1 High St' } });
+    expect(html).toContain('Amara Lash Studio comes to you at 1 High St');
+    expect(html).not.toContain('Open in Maps');
+  });
+});
+
+describe('which reminder is emailed', () => {
+  it('is the one nearest the appointment the provider sends', () => {
+    expect(emailedReminderTiming(undefined)).toBe('24h');
+    expect(emailedReminderTiming(['72h', '24h'])).toBe('24h');
+    expect(emailedReminderTiming(['48h', '72h'])).toBe('48h');
+    expect(emailedReminderTiming(['72h'])).toBe('72h');
+    expect(emailedReminderTiming([])).toBe('24h');
+    expect(emailedReminderTiming('24h')).toBe('24h');
+  });
+});
+
+describe('a reminder’s window', () => {
+  it('is only the days before the appointment the reminder is for', () => {
+    expect(reminderIsDue('2026-11-26', '2026-11-25', 1)).toBe(true);
+    expect(reminderIsDue('2026-11-27', '2026-11-25', 1)).toBe(false);
+    expect(reminderIsDue('2026-11-27', '2026-11-25', 2)).toBe(true);
+    expect(reminderIsDue('2026-11-25', '2026-11-25', 1)).toBe(false);
+    expect(reminderIsDue('2026-11-24', '2026-11-25', 3)).toBe(false);
+  });
+
+  it('counts the day in London, not UTC', () => {
+    // 23:30 UTC on 30 June is already 1 July in London (BST).
+    expect(londonToday(new Date('2026-06-30T23:30:00Z'))).toBe('2026-07-01');
+    expect(londonToday(new Date('2026-12-31T23:30:00Z'))).toBe('2026-12-31');
   });
 });
