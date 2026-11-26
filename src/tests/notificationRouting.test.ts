@@ -555,3 +555,45 @@ describe('notification type check — provider_no_show', () => {
     expect(check.slice(0, check.indexOf(']'))).toContain("'provider_no_show'");
   });
 });
+
+describe('notification routing — address not sent yet (Manual release)', () => {
+  const migration = () => read('supabase', 'migrations', '20261126100000_address_release_reminder.sql');
+
+  it('declares address_release_reminder everywhere a notification type has to exist', () => {
+    expect(migration()).toContain("ARRAY['address_release_reminder']");
+    expect(read('src', 'types', 'database.ts')).toContain('| "address_release_reminder"');
+    expect(notificationsScreen()).toContain("notification.type === 'address_release_reminder'");
+    expect(tapHandler()).toContain("'address_release_reminder'");
+    // Muted by the same switch as the provider's other appointment reminders.
+    expect(edgeFunction()).toContain("address_release_reminder: 'providerReminders'");
+  });
+
+  it('rebuilds the type check from live rather than from a copied list', () => {
+    expect(migration()).toContain('pg_get_constraintdef(oid)');
+    expect(migration()).toMatch(/< 50 THEN\s+RAISE EXCEPTION/);
+  });
+
+  it('reminds every provider on Manual whose address is still unsent, mobile included', () => {
+    const sql = migration();
+    expect(sql).toContain("p.address_release_policy = 'manual'");
+    expect(sql).not.toContain('business_type');
+    expect(sql).toContain('b.address_released_at IS NULL');
+    expect(sql).toContain("b.status = 'confirmed'");
+  });
+
+  it('reminds 3 days, 1 day and 4 hours before, once each, in UK time', () => {
+    const sql = migration();
+    expect(sql).toContain("interval '72 hours'");
+    expect(sql).toContain("interval '24 hours'");
+    expect(sql).toContain("interval '4 hours'");
+    expect(sql).toContain("AT TIME ZONE 'Europe/London'");
+    expect(sql).toContain("n.metadata->>'stage' = s.stage");
+    // A point that passed before the booking was confirmed is skipped, except the last.
+    expect(sql).toContain("s.stage = '4h' OR COALESCE(b.confirmed_at, b.created_at) <= t.starts_at - s.lead");
+  });
+
+  it('runs on a cron that nobody but the database can call', () => {
+    expect(migration()).toContain('REVOKE ALL ON FUNCTION public.process_address_release_reminders() FROM PUBLIC, anon, authenticated');
+    expect(migration()).toContain("cron.schedule('address-release-reminders'");
+  });
+});

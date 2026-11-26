@@ -75,6 +75,7 @@ const KIND_LABELS: Readonly<Record<string, string>> = {
   cancel_window_closing: 'Cancellation',
   cancellation_settled: 'Cancellation',
   booking_reminder: 'Reminder',
+  address_release_reminder: 'Reminder',
   daily_recap: 'Your schedule',
   no_show: 'No-show',
   provider_no_show: 'No-show',
