@@ -1,11 +1,12 @@
-// Why a provider's schedule is closed. The reason is optional, and a client only
+
+import { tr } from '../../i18n/translate';// Why a provider's schedule is closed. The reason is optional, and a client only
 // ever sees it if the provider chose to say (get_provider_closure_reason). These
 // values must match the CHECK on provider_schedule_closures.reason.
 export const CLOSURE_REASONS = [
-  { value: 'holiday', label: 'Holiday', clientLabel: 'On holiday' },
-  { value: 'time_off', label: 'Time off', clientLabel: 'Taking some time off' },
-  { value: 'training', label: 'Training', clientLabel: 'Away on training' },
-  { value: 'fully_booked', label: 'Fully booked', clientLabel: 'Fully booked' },
+  { value: 'holiday', get label() { return tr('discover.page.holiday'); }, get clientLabel() { return tr('discover.page.onHoliday'); } },
+  { value: 'time_off', get label() { return tr('discover.page.timeOff'); }, get clientLabel() { return tr('discover.page.takingSomeTimeOff'); } },
+  { value: 'training', get label() { return tr('discover.page.training'); }, get clientLabel() { return tr('discover.page.awayOnTraining'); } },
+  { value: 'fully_booked', get label() { return tr('discover.page.fullyBooked'); }, get clientLabel() { return tr('discover.page.fullyBooked'); } },
 ] as const;
 
 export type ClosureReason = (typeof CLOSURE_REASONS)[number]['value'];

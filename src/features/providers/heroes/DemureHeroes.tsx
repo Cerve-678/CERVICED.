@@ -30,6 +30,8 @@ import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes
 import { cardInk } from "./BoutiqueHero";
 import { BowGlyph, PearlRing, ribbonColours, stripeColours } from "./demureOrnaments";
 import { HeroPhoto } from "../HeroPhoto";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 /** How far Lounge's name line hangs below the panel's foot, as a share of its
  *  size. 0.55 at first, 0.42 (#578), 0.16 once the photo went (owner,
@@ -71,6 +73,8 @@ export function HushBoxes({
   paper: string;
   onOpen?: ((index: number) => void) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   if (uris.length === 0) return null;
   const edge = withAlpha(isDarkColor(paper) ? "#FFFFFF" : "#2A2826", 0.16);
   return (
@@ -85,7 +89,7 @@ export function HushBoxes({
             activeOpacity={0.9}
             onPress={() => onOpen(index)}
             accessibilityRole="imagebutton"
-            accessibilityLabel={`Photo ${index + 1} of ${Math.min(uris.length, 3)}. Tap to see it full size`}
+            accessibilityLabel={tr('discover.page.photoOfFull', { n: index + 1, total: Math.min(uris.length, 3) })}
           >
             {photo}
           </TouchableOpacity>
@@ -252,6 +256,8 @@ export function HushHero({
   /** The Business Name Font they picked, in place of the light italic. */
   nameStyle?: TextStyle | null;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const top = [kicker, location.toUpperCase()].filter(Boolean).join(" · ");
   return (
     <View style={[hush.frame, { borderColor: withAlpha(heroText, 0.32) }]}>
@@ -268,7 +274,7 @@ export function HushHero({
       {photoUris.length > 0 ? (
         <>
           <HushBoxes uris={photoUris} paper={paper} onOpen={onOpenPhoto} />
-          <Text style={[hush.caption, { color: heroSub }, shadow]}>a few of my favourites · tap to look closer</Text>
+          <Text style={[hush.caption, { color: heroSub }, shadow]}>{tr('discover.page.favourites')}</Text>
         </>
       ) : null}
     </View>

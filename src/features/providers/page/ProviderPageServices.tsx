@@ -22,6 +22,8 @@ import { placeInLineLabel } from "../../bookings/waitlist";
 import { capsuleServiceSurface, GlossShine } from "../ProfilePageStyle";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 type ServiceData = ProviderProfileService;
 
@@ -137,6 +139,8 @@ function ServiceDescription({
   /** Branding → Custom's text font; null keeps the app's. */
   fontStyle?: { fontFamily: string; fontWeight: "400" } | null;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [overflows, setOverflows] = useState(false);
   return (
     <View>
@@ -160,7 +164,7 @@ function ServiceDescription({
       {(overflows || expanded) && (
         <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
           <Text style={[styles.seeMoreText, { color: linkColor }]}>
-            {expanded ? "See less" : "See more"}
+            {expanded ? tr('discover.profile.seeLess') : tr('discover.profile.seeMore')}
           </Text>
         </TouchableOpacity>
       )}
@@ -268,6 +272,8 @@ export function ProviderPageServices({
   onOpenWaitlistPlace,
   onJoinWaitlist,
 }: ProviderPageServicesProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const {
     pageStyle,
     bodyFont,
@@ -426,7 +432,7 @@ export function ProviderPageServices({
         />
       ) : (
         <Text style={[styles.emptyServiceTypeText, { color: SV.sub }]}>
-          Services for {selectedServiceType} are coming soon.
+          {tr('discover.page.comingSoon', { type: selectedServiceType })}
         </Text>
       )}
 
@@ -453,7 +459,7 @@ export function ProviderPageServices({
           style={styles.selectModeLinkRow}
         >
           <Text style={[styles.selectModeLinkText, { color: adaptiveAccentColor }]}>
-            {selectMode ? "Cancel" : "Select"}
+            {selectMode ? tr('common.cancel') : tr('common.select')}
           </Text>
         </TouchableOpacity>
       )}
@@ -598,7 +604,7 @@ export function ProviderPageServices({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Available virtually
+                        {tr('discover.profile.availableVirtually')}
                       </Text>
                     )}
                   <ServiceDescription
@@ -722,7 +728,7 @@ export function ProviderPageServices({
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             >
                               <Text style={[styles.editAddOnsLink, { color: adaptiveAccentColor }]}>
-                                {pickedAddOns.length > 0 ? 'Edit' : 'Add extras'}
+                                {pickedAddOns.length > 0 ? tr('common.edit') : tr('discover.profile.addExtras')}
                               </Text>
                             </TouchableOpacity>
                           )}
@@ -786,7 +792,7 @@ export function ProviderPageServices({
                           minimumFontScale={0.8}
                         >
                           {!takingBookings
-                              ? "Not taking\nbookings"
+                              ? tr('discover.page.notTakingTwoLines')
                               : fullyBooked
                               ? "Fully Booked"
                               // Boutique says "Add to basket"; it still opens the booking sheet.
@@ -819,9 +825,9 @@ export function ProviderPageServices({
                           }}
                           activeOpacity={0.8}
                           accessibilityRole="button"
-                          accessibilityLabel="A slot is held for you. Open it to confirm and pay."
+                          accessibilityLabel={tr('discover.page.aSlotIsHeldForYou')}
                         >
-                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
+                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>{tr('discover.page.heldForYou')}</Text>
                           <Ionicons name="chevron-forward" size={11} color="#fff" />
                         </TouchableOpacity>
                       );
@@ -838,7 +844,7 @@ export function ProviderPageServices({
                           }}
                           activeOpacity={0.7}
                           accessibilityRole="button"
-                          accessibilityLabel={`${placeInLineLabel(wEntry.placeInLine)} for ${service.name}. Open your waitlist ticket.`}
+                          accessibilityLabel={tr('discover.page.waitlistTicketA11y', { place: placeInLineLabel(wEntry.placeInLine), service: service.name })}
                         >
                           <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
                             {placeInLineLabel(wEntry.placeInLine)}
@@ -869,7 +875,7 @@ export function ProviderPageServices({
                             { color: SV.sub },
                           ]}
                         >
-                          No openings next 2 wks
+                          {tr('discover.profile.noOpenings')}
                         </Text>
                       );
                     }
@@ -896,7 +902,7 @@ export function ProviderPageServices({
                           ]}
                           numberOfLines={1}
                         >
-                          Join waitlist
+                          {tr('discover.page.joinWaitlist')}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -916,7 +922,7 @@ export function ProviderPageServices({
             <Text
               style={[styles.showAllServicesText, { color: adaptiveAccentColor }]}
             >
-              {`Show all ${showAll.count} services`}
+              {tr('discover.page.showAllServices', { count: showAll.count })}
             </Text>
             <Ionicons name="chevron-forward" size={16} color={adaptiveAccentColor} />
           </TouchableOpacity>

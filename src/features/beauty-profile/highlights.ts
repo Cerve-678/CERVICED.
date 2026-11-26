@@ -20,6 +20,9 @@ export interface HighlightLabels {
   medicalNote: string;
   photosOn: string;
   photosOff: string;
+  /** Display label for a stored answer (options.ts `beautyOptionLabel`).
+   *  Omitted, answers show as stored. */
+  option?: (value: string) => string;
 }
 
 export interface CategoryHighlight {
@@ -35,6 +38,10 @@ const nonEmpty = (values: (string | string[] | null | undefined)[]): string[] =>
 
 /** Answers for a category in priority order: the first becomes the lead. */
 function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): string[] {
+  // Stored answers go through the display-label map; the already-translated
+  // words in `L` (scalp template, medical note, photos) do not.
+  const o = (v: string) => (v && L.option ? L.option(v) : v);
+  const os = (vs: string[]) => vs.map(o);
   switch (key) {
     case 'hair':        return nonEmpty([d.hairType, d.scalpCondition.map(c => L.scalp(c)), d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
     case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);

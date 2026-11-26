@@ -10,6 +10,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 import { HeroPhoto } from "../HeroPhoto";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 /** Capsule's two tones, both from the provider's own chosen colours: a soft
  *  tint of their accent (blended toward the page so it stays as light, or as
@@ -58,6 +60,8 @@ export function CapsuleHero({
   details: React.ReactNode;
   onOpenPhoto?: (() => void) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const tones = capsuleTones(accent, sheetColour, cardColour);
   const chips = kicker.split("·").map(part => part.trim().toLowerCase()).filter(Boolean);
   return (
@@ -68,7 +72,7 @@ export function CapsuleHero({
           disabled={!photo || !onOpenPhoto}
           onPress={onOpenPhoto}
           accessibilityRole={photo && onOpenPhoto ? "imagebutton" : undefined}
-          accessibilityLabel={photo ? `${name} featured work` : undefined}
+          accessibilityLabel={photo ? tr('discover.page.featuredWork', { name }) : undefined}
           activeOpacity={0.88}
         >
           {photo ? <HeroPhoto uri={photo} /> : <View style={styles.capsuleLogo}>{renderLogo(84)}</View>}

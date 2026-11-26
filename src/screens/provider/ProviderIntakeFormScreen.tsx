@@ -52,6 +52,7 @@ import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { useHowItWorks } from '../../components/HowItWorksSheet';
 import { logger } from '../../utils/logger';
+import { tr, trp, useTranslation } from '../../i18n';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
 
@@ -80,8 +81,8 @@ function buildPolicyTemplate(policyRows: PolicyDisplayRow[]): FormTemplate | nul
     id: 'policy-agreement',
     category: null,
     kind: 'policy',
-    label: 'Policy Agreement',
-    subtitle: 'Cancellation, deposit & no-show policy',
+    label: tr('providerBookings.forms.template.policy.label'),
+    subtitle: tr('providerBookings.forms.template.policy.subtitle'),
     keywords: [],
     questions: [
       {
@@ -125,10 +126,10 @@ const TERMS_TEMPLATE: FormTemplate = {
 
 // ── Question type config ─────────────────────────────────────────────────────
 const Q_TYPES: { type: IntakeFormQuestion['type']; label: string; icon: string }[] = [
-  { type: 'text',   label: 'Text',     icon: 'create-outline' },
-  { type: 'yesno',  label: 'Yes / No', icon: 'checkmark-circle-outline' },
-  { type: 'choice', label: 'Choice',   icon: 'list-outline' },
-  { type: 'policy', label: 'Policy',   icon: 'document-text-outline' },
+  { type: 'text',   get label() { return tr('providerBookings.forms.qType.text'); },     icon: 'create-outline' },
+  { type: 'yesno',  get label() { return tr('providerBookings.forms.qType.yesNo'); }, icon: 'checkmark-circle-outline' },
+  { type: 'choice', get label() { return tr('providerBookings.forms.qType.choice'); },   icon: 'list-outline' },
+  { type: 'policy', get label() { return tr('providerBookings.forms.qType.policy'); },   icon: 'document-text-outline' },
 ];
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -141,6 +142,8 @@ const DRAFT_FORM = '__draft__';
 type PickerTab = 'myForms' | 'templates';
 
 export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Opened two ways: from a booking (all params set — builder pre-fills the
   // service, sending goes straight to that client) or from Quick Access with
   // no params at all (pure library — sending opens a booking picker below).
@@ -436,7 +439,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return saved;
     } catch {
-      showToast('Could not save the form. Please try again.', 'error');
+      showToast(tr('providerBookings.forms.toast.saveFailed'), 'error');
       return null;
     } finally {
       busyRef.current = false;
@@ -461,7 +464,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       setPickableBookings(upcoming);
       setAlreadySentIds(already);
     } catch {
-      showToast('Could not load your bookings. Please try again.', 'error');
+      showToast(tr('providerBookings.forms.toast.loadBookingsFailed'), 'error');
       setPickingBookingFor(null);
     } finally {
       setLoadingBookings(false);
@@ -484,7 +487,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       if (hasBookingContext) navigation.goBack();
       else setMode('picker');
     } catch {
-      showToast('Could not send the form. Please try again.', 'error');
+      showToast(tr('providerBookings.forms.toast.sendFailed'), 'error');
     } finally {
       busyRef.current = false;
       setSaving(false);
@@ -495,7 +498,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   // be empty, so it's checked here too.
   const handleSendToClient = useCallback((form: Pick<LibraryForm, 'id' | 'questions'>) => {
     const problem = formProblem(form.questions);
-    if (problem) { showToast(`Edit this form first. ${problem}`, 'warning'); return; }
+    if (problem) { showToast(tr('providerBookings.forms.editFirst', { problem }), 'warning'); return; }
     if (bookingId && clientUserId) {
       void sendToBookings(form.id, [{ bookingId, clientUserId }]);
     } else {
@@ -543,7 +546,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       setLibraryForms(prev => prev.filter(f => f.id !== id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch {
-      showToast('Could not delete form.', 'error');
+      showToast(tr('providerBookings.forms.toast.deleteFailed'), 'error');
     }
   }, [showToast]);
 
@@ -575,7 +578,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: P.text }]}>
-              {mode === 'readonly' ? 'Form Responses'
+              {mode === 'readonly' ? tr('providerBookings.forms.title.responses')
                 : mode === 'builder' ? (editingId ? 'Edit Form' : 'Create Form')
                 : 'Forms'}
             </Text>
@@ -585,7 +588,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 hitSlop={10}
                 activeOpacity={0.7}
                 style={[styles.infoBtn, { backgroundColor: P.iconBg }]}
-                accessibilityLabel="How Forms work"
+                accessibilityLabel={tr('providerBookings.forms.howA11y')}
               >
                 <Ionicons name="information" size={13} color={P.text} />
               </TouchableOpacity>
@@ -634,8 +637,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 >
                   <Text style={[styles.tabLabel, { color: pickerTab === tab ? P.accent : P.sub }]}>
                     {tab === 'myForms'
-                      ? `My Forms${libraryForms.length > 0 ? ` (${libraryForms.length})` : ''}`
-                      : 'Templates'}
+                      ? `${tr('providerBookings.forms.myForms')}${libraryForms.length > 0 ? ` (${libraryForms.length})` : ''}`
+                      : tr('providerBookings.forms.tab.templates')}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -651,9 +654,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 libraryForms.length === 0 ? (
                   <View style={[styles.emptyState, { borderColor: P.border }]}>
                     <Ionicons name="document-text-outline" size={40} color={P.sub} style={{ marginBottom: 12 }} />
-                    <Text style={[styles.emptyTitle, { color: P.text }]}>No forms yet</Text>
+                    <Text style={[styles.emptyTitle, { color: P.text }]}>{tr('providerBookings.forms.empty.title')}</Text>
                     <Text style={[styles.emptySub, { color: P.sub }]}>
-                      Tap + to create a form and save it here.{'\n'}You can then send it to any client.
+                      {tr('providerBookings.forms.emptyLine1')}{'\n'}{tr('providerBookings.forms.emptyLine2')}
                     </Text>
                   </View>
                 ) : (
@@ -676,7 +679,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 <>
                   {autoTemplate && (
                     <>
-                      <Text style={[styles.sectionHeading, { color: P.sub }]}>SUGGESTED FOR THIS BOOKING</Text>
+                      <Text style={[styles.sectionHeading, { color: P.sub }]}>{tr('providerBookings.forms.section.suggested')}</Text>
                       <TouchableOpacity
                         style={[styles.formRow, styles.formRowAccent, { backgroundColor: P.card, borderColor: P.accent + '55' }]}
                         onPress={() => openBuilderFromTemplate(autoTemplate)}
@@ -686,7 +689,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                           <View style={styles.formRowTop}>
                             <Text style={[styles.formRowTitle, { color: P.text }]}>{autoTemplate.label}</Text>
                             <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}>
-                              <Text style={[styles.badgeText, { color: P.accent }]}>Best match</Text>
+                              <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.bestMatch')}</Text>
                             </View>
                           </View>
                           <Text style={[styles.formRowSub, { color: P.sub }]}>
@@ -696,13 +699,13 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                         <Ionicons name="chevron-forward" size={16} color={P.accent} />
                       </TouchableOpacity>
                       {relevantTemplates.filter(t => t.id !== autoTemplate.id).length > 0 && (
-                        <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>OTHER TEMPLATES FOR YOUR SERVICES</Text>
+                        <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{tr('providerBookings.forms.section.otherTemplates')}</Text>
                       )}
                     </>
                   )}
 
                   {!autoTemplate && (
-                    <Text style={[styles.sectionHeading, { color: P.sub }]}>TEMPLATES FOR YOUR SERVICES</Text>
+                    <Text style={[styles.sectionHeading, { color: P.sub }]}>{tr('providerBookings.forms.section.templates')}</Text>
                   )}
 
                   <View style={styles.templateGrid}>
@@ -732,7 +735,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       window, deposit, no-show); this is prose the provider
                       writes, and it's the one form clients can read from the
                       booking sheet before they book. */}
-                  <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>YOUR TERMS</Text>
+                  <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{tr('providerBookings.forms.section.terms')}</Text>
                   <View style={styles.templateGrid}>
                     <TouchableOpacity
                       style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
@@ -747,7 +750,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       <Text style={[styles.templateCardSub, { color: P.sub }]}>{TERMS_TEMPLATE.subtitle}</Text>
                       <View style={styles.templateCardFoot}>
                         <Text style={[styles.templateCardCount, { color: P.sub }]}>
-                          {libraryForms.some(f => f.isTerms) ? 'Written — tap to edit' : 'Not written yet'}
+                          {libraryForms.some(f => f.isTerms) ? tr('providerBookings.forms.terms.written') : tr('providerBookings.forms.terms.notWritten')}
                         </Text>
                         <Ionicons name="arrow-forward" size={13} color={P.sub} />
                       </View>
@@ -760,7 +763,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       built fresh from live booking_policies each time. */}
                   {policyTemplate && (
                     <>
-                      <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>YOUR POLICIES</Text>
+                      <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{tr('providerBookings.forms.section.policies')}</Text>
                       <View style={styles.templateGrid}>
                         <TouchableOpacity
                           style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
@@ -770,7 +773,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                           <Text style={[styles.templateCardLabel, { color: P.text }]}>{policyTemplate.label}</Text>
                           <Text style={[styles.templateCardSub, { color: P.sub }]}>{policyTemplate.subtitle}</Text>
                           <View style={styles.templateCardFoot}>
-                            <Text style={[styles.templateCardCount, { color: P.sub }]}>Pre-filled from your policy</Text>
+                            <Text style={[styles.templateCardCount, { color: P.sub }]}>{tr('providerBookings.forms.policy.prefilled')}</Text>
                             <Ionicons name="arrow-forward" size={13} color={P.sub} />
                           </View>
                         </TouchableOpacity>
@@ -794,12 +797,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             showsVerticalScrollIndicator={false}
           >
             {/* Title */}
-            <Text style={[styles.fieldLabel, { color: P.sub }]}>FORM TITLE</Text>
+            <Text style={[styles.fieldLabel, { color: P.sub }]}>{tr('providerBookings.forms.field.title')}</Text>
             <TextInput
               style={[styles.titleInput, { color: P.text, backgroundColor: P.card, borderColor: P.border }]}
               value={title}
               onChangeText={setTitle}
-              placeholder="Form title"
+              placeholder={tr('providerBookings.forms.field.titlePlaceholder')}
               placeholderTextColor={P.sub}
             />
 
@@ -810,7 +813,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     provider offers, which meant tapping every chip one at a
                     time. Doubles as Clear, so the same control undoes it. */}
                 <View style={styles.serviceLinkHeader}>
-                  <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 0 }]}>LINKS TO YOUR SERVICES</Text>
+                  <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 0 }]}>{tr('providerBookings.forms.field.links')}</Text>
                   <TouchableOpacity
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
@@ -820,12 +823,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     activeOpacity={0.6}
                   >
                     <Text style={[styles.serviceLinkAction, { color: P.accent }]}>
-                      {allServicesSelected ? 'CLEAR ALL' : 'SELECT ALL'}
+                      {allServicesSelected ? tr('providerBookings.forms.field.clearAll') : tr('providerBookings.forms.field.selectAll')}
                     </Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={[styles.fieldHint, { color: P.sub }]}>
-                  Select which services this form applies to. Toggle Auto-send to send it automatically when the service is booked.
+                  {tr('providerBookings.forms.field.linksHint')}
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceChipsScroll} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
                   {providerServiceNames.map((name) => {
@@ -849,8 +852,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 {selectedServices.length > 0 && (
                   <View style={[styles.autoSendRow, { borderColor: P.border }]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.autoSendLabel, { color: P.text }]}>Auto-send when service is booked</Text>
-                      <Text style={[styles.autoSendSub, { color: P.sub }]}>Client receives this form automatically on booking confirmation</Text>
+                      <Text style={[styles.autoSendLabel, { color: P.text }]}>{tr('providerBookings.forms.autoSend.label')}</Text>
+                      <Text style={[styles.autoSendSub, { color: P.sub }]}>{tr('providerBookings.forms.autoSend.sub')}</Text>
                     </View>
                     <Switch
                       value={autoSend}
@@ -883,12 +886,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
             {questions.length === 0 && (
               <View style={[styles.builderEmpty, { borderColor: P.border }]}>
-                <Text style={[styles.builderEmptyText, { color: P.sub }]}>No questions yet. Add one below.</Text>
+                <Text style={[styles.builderEmptyText, { color: P.sub }]}>{tr('providerBookings.forms.builder.empty')}</Text>
               </View>
             )}
 
             {/* Add question */}
-            <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>ADD QUESTION</Text>
+            <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>{tr('providerBookings.forms.builder.addQuestion')}</Text>
             <View style={styles.addRow}>
               {Q_TYPES.map(({ type, label, icon }) => (
                 <TouchableOpacity
@@ -908,7 +911,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               <>
                 <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>DEADLINE</Text>
                 <Text style={[styles.fieldHint, { color: P.sub }]}>
-                  When your client should fill this in by.
+                  {tr('providerBookings.forms.dueHint')}
                 </Text>
                 <View style={styles.deadlineRow}>
                   {DEADLINE_OPTIONS.map(o => {
@@ -934,8 +937,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             {/* Signature toggle */}
             <View style={[styles.autoSendRow, { borderColor: P.border, marginTop: 8 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.autoSendLabel, { color: P.text }]}>Require client signature / initials</Text>
-                <Text style={[styles.autoSendSub, { color: P.sub }]}>Client must sign off before submitting</Text>
+                <Text style={[styles.autoSendLabel, { color: P.text }]}>{tr('providerBookings.forms.signature.label')}</Text>
+                <Text style={[styles.autoSendSub, { color: P.sub }]}>{tr('providerBookings.forms.signature.sub')}</Text>
               </View>
               <Switch
                 value={requiresSignature}
@@ -959,7 +962,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             {existingForm?.requiresSignature && (
               <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44', alignSelf: 'flex-start', marginBottom: 16 }]}>
                 <Ionicons name="pencil-outline" size={11} color={P.accent} />
-                <Text style={[styles.badgeText, { color: P.accent }]}>Signature required</Text>
+                <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.signature.required')}</Text>
               </View>
             )}
             <View style={[styles.divider, { backgroundColor: P.border }]} />
@@ -977,7 +980,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             ))}
             {existingForm?.clientSignature && (
               <View style={[styles.signatureBox, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 6 }]}>CLIENT SIGNATURE</Text>
+                <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 6 }]}>{tr('providerBookings.forms.signature.client')}</Text>
                 <Text style={[styles.signatureText, { color: P.text }]}>{existingForm.clientSignature}</Text>
               </View>
             )}
@@ -985,7 +988,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               <View style={[styles.pendingBanner, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Ionicons name="time-outline" size={16} color={P.sub} />
                 <Text style={[styles.pendingText, { color: P.sub }]}>
-                  {existingForm.dueAt ? `Awaiting client response · due ${dueByLabel(existingForm.dueAt)}` : 'Awaiting client response'}
+                  {existingForm.dueAt ? tr('providerBookings.forms.awaitingDue', { due: dueByLabel(existingForm.dueAt) ?? '' }) : tr('providerBookings.forms.awaitingResponse')}
                 </Text>
               </View>
             )}
@@ -1007,7 +1010,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               >
                 {saving
                   ? <ActivityIndicator color={P.accent} size="small" />
-                  : <Text style={[styles.saveBtnText, { color: canSave ? P.accent : P.sub }]}>Save to My Forms</Text>
+                  : <Text style={[styles.saveBtnText, { color: canSave ? P.accent : P.sub }]}>{tr('providerBookings.forms.footer.save')}</Text>
                 }
               </TouchableOpacity>
               <TouchableOpacity
@@ -1018,7 +1021,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               >
                 {saving
                   ? <ActivityIndicator color={P.onAccent} size="small" />
-                  : <Text style={[styles.sendBtnText, { color: canSave ? P.onAccent : P.sub }]}>Save & Send</Text>
+                  : <Text style={[styles.sendBtnText, { color: canSave ? P.onAccent : P.sub }]}>{tr('providerBookings.forms.footer.saveSend')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -1035,8 +1038,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           <View style={[styles.previewHeader, { borderBottomColor: P.border }]}>
             <View style={{ width: 36 }} />
             <View style={{ alignItems: 'center' }}>
-              <Text style={[styles.previewTitle, { color: P.text }]}>Preview</Text>
-              <Text style={[styles.previewSub, { color: P.sub }]}>Client view</Text>
+              <Text style={[styles.previewTitle, { color: P.text }]}>{tr('providerBookings.forms.preview.title')}</Text>
+              <Text style={[styles.previewSub, { color: P.sub }]}>{tr('providerBookings.forms.preview.sub')}</Text>
             </View>
             <TouchableOpacity onPress={() => setShowPreview(false)} style={[styles.iconBtn, { backgroundColor: P.surface }]}>
               <Ionicons name="close" size={18} color={P.text} />
@@ -1044,27 +1047,27 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           </View>
           <ScrollView contentContainerStyle={styles.previewContent} showsVerticalScrollIndicator={false}>
             <Text style={[styles.previewFormTitle, { color: P.text }]}>{title || 'Consultation Form'}</Text>
-            <Text style={[styles.previewFormSub, { color: P.sub }]}>{questions.length} question{questions.length !== 1 ? 's' : ''}{requiresSignature ? '  ·  Signature required' : ''}</Text>
+            <Text style={[styles.previewFormSub, { color: P.sub }]}>{trp('providerBookings.forms.questions', questions.length)}{requiresSignature ? `  ·  ${tr('providerBookings.forms.signatureRequired')}` : ''}</Text>
             {!isTerms && deadlineHours != null && (
               <Text style={[styles.previewFormSub, { color: P.accent, marginTop: -4 }]}>
-                Fill in by {deadlineLabel(deadlineHours).toLowerCase()} your appointment
+                {tr('providerBookings.forms.fillInBy', { deadline: deadlineLabel(deadlineHours).toLowerCase() })}
               </Text>
             )}
             <View style={[styles.divider, { backgroundColor: P.border, marginBottom: 20 }]} />
             {questions.length === 0 ? (
               <View style={[styles.builderEmpty, { borderColor: P.border }]}>
-                <Text style={[styles.builderEmptyText, { color: P.sub }]}>No questions added yet</Text>
+                <Text style={[styles.builderEmptyText, { color: P.sub }]}>{tr('providerBookings.forms.preview.noQuestions')}</Text>
               </View>
             ) : questions.map((q, idx) => (
               <View key={q.id} style={[styles.previewQ, { backgroundColor: P.card, borderColor: P.border }]}>
                 <View style={styles.previewQTop}>
                   <Text style={[styles.previewQNum, { color: P.sub }]}>{idx + 1}</Text>
-                  {q.required && <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}><Text style={[styles.badgeText, { color: P.accent }]}>Required</Text></View>}
+                  {q.required && <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}><Text style={[styles.badgeText, { color: P.accent }]}>{tr('common.required')}</Text></View>}
                 </View>
                 <Text style={[styles.previewQLabel, { color: P.text }]}>{q.label || '(no question text)'}</Text>
                 {q.type === 'text' && (
                   <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg }]}>
-                    <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>Type your answer…</Text>
+                    <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>{tr('providerBookings.forms.preview.typeAnswer')}</Text>
                   </View>
                 )}
                 {q.type === 'yesno' && (
@@ -1105,12 +1108,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                   <Text style={[styles.previewQNum, { color: P.sub }]}>{questions.length + 1}</Text>
                   <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}>
                     <Ionicons name="pencil-outline" size={10} color={P.accent} />
-                    <Text style={[styles.badgeText, { color: P.accent }]}>Signature</Text>
+                    <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.signature.badge')}</Text>
                   </View>
                 </View>
-                <Text style={[styles.previewQLabel, { color: P.text }]}>Full name as signature</Text>
+                <Text style={[styles.previewQLabel, { color: P.text }]}>{tr('providerBookings.forms.preview.fullNameSignature')}</Text>
                 <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg }]}>
-                  <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>Type your full name…</Text>
+                  <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>{tr('providerBookings.forms.preview.typeFullName')}</Text>
                 </View>
               </View>
             )}
@@ -1134,17 +1137,17 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPickingBookingFor(null)} />
           <View style={{ maxHeight: '80%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 14, paddingBottom: insets.bottom + 16 }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, alignSelf: 'center', backgroundColor: P.border, marginBottom: 14 }} />
-            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>Who should get this form?</Text>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>{tr('providerBookings.forms.whoTitle')}</Text>
             <Text style={{ fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginBottom: 10, paddingHorizontal: 24 }}>
               {pickingBookingFor === DRAFT_FORM
-                ? "Tick the upcoming appointments to send it to. It's saved to My Forms and only goes to the clients you tick. Anyone who already has it won't get it again."
-                : "Tick the upcoming appointments to send it to. Only the clients you tick get it, and anyone who already has it won't get it again."}
+                ? tr('providerBookings.forms.whoDraft')
+                : tr('providerBookings.forms.who')}
             </Text>
             {loadingBookings ? (
               <ActivityIndicator color={P.accent} style={{ marginVertical: 30 }} />
             ) : pickableBookings.length === 0 ? (
               <Text style={{ fontSize: 13, color: P.sub, textAlign: 'center', paddingVertical: 30, paddingHorizontal: 24 }}>
-                No upcoming appointments to send this to yet.
+                {tr('providerBookings.forms.noUpcoming')}
               </Text>
             ) : (
               <>
@@ -1158,7 +1161,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                   activeOpacity={0.6}
                 >
                   <Text style={[styles.serviceLinkAction, { color: P.accent }]}>
-                    {pickedBookingIds.length > 0 && pickedBookingIds.length === pickableBookings.filter(b => !alreadySentIds.includes(b.id)).length ? 'CLEAR ALL' : 'SELECT ALL'}
+                    {pickedBookingIds.length > 0 && pickedBookingIds.length === pickableBookings.filter(b => !alreadySentIds.includes(b.id)).length ? tr('providerBookings.forms.field.clearAll') : tr('providerBookings.forms.field.selectAll')}
                   </Text>
                 </TouchableOpacity>
                 <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
@@ -1180,7 +1183,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                           <Text style={[styles.formRowSub, { color: P.sub }]}>
                             {b.service_name_snapshot} · {appointmentLabel(b)}
                           </Text>
-                          {has && <Text style={[styles.formRowSub, { color: P.sub }]}>Already has this form</Text>}
+                          {has && <Text style={[styles.formRowSub, { color: P.sub }]}>{tr('providerBookings.forms.alreadyHas')}</Text>}
                         </View>
                         <Ionicons name={has ? 'checkmark-done' : on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? P.accent : P.sub} />
                       </TouchableOpacity>
@@ -1198,8 +1201,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       ? <ActivityIndicator color={P.onAccent} size="small" />
                       : <Text style={[styles.sendBtnText, { color: pickedBookingIds.length > 0 ? P.onAccent : P.sub }]}>
                           {pickedBookingIds.length === 0
-                            ? 'Pick who to send it to'
-                            : `${pickingBookingFor === DRAFT_FORM ? 'Save & send' : 'Send'} to ${pickedBookingIds.length} ${pickedBookingIds.length === 1 ? 'client' : 'clients'}`}
+                            ? tr('providerBookings.forms.pickWho')
+                            : trp(pickingBookingFor === DRAFT_FORM ? 'providerBookings.forms.saveSendTo' : 'providerBookings.forms.sendTo', pickedBookingIds.length)}
                         </Text>
                     }
                   </TouchableOpacity>
@@ -1235,6 +1238,8 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
   onEdit:   () => void;
   onDelete: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Eases in on mount, a short stagger down the list — same motion as the
   // Info Packs cards.
   const fade = useRef(new Animated.Value(0)).current;
@@ -1258,7 +1263,7 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
           <Text style={[styles.libraryCardTitle, { color: P.text }]}>{form.title}</Text>
           <Text style={[styles.libraryCardMeta, { color: P.sub }]}>
             {form.questions.length} question{form.questions.length !== 1 ? 's' : ''}
-            {form.sentCount > 0 ? `  ·  Sent ${form.sentCount}×` : ''}
+            {form.sentCount > 0 ? `  ·  ${tr('providerBookings.forms.sentTimes', { count: form.sentCount })}` : ''}
           </Text>
         </View>
         <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 8 }}>
@@ -1274,19 +1279,19 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
         {form.requiresSignature && (
           <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
             <Ionicons name="pencil-outline" size={10} color={P.sub} />
-            <Text style={[styles.badgeText, { color: P.sub }]}>Signature</Text>
+            <Text style={[styles.badgeText, { color: P.sub }]}>{tr('providerBookings.forms.signature.badge')}</Text>
           </View>
         )}
         {form.autoSend && (
           <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}>
             <Ionicons name="flash-outline" size={10} color={P.accent} />
-            <Text style={[styles.badgeText, { color: P.accent }]}>Auto-send</Text>
+            <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.autoSend.badge')}</Text>
           </View>
         )}
         {form.deadlineHours != null && (
           <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
             <Ionicons name="time-outline" size={10} color={P.sub} />
-            <Text style={[styles.badgeText, { color: P.sub }]}>Due {deadlineLabel(form.deadlineHours).toLowerCase()}</Text>
+            <Text style={[styles.badgeText, { color: P.sub }]}>{tr('providerBookings.forms.due', { deadline: deadlineLabel(form.deadlineHours).toLowerCase() })}</Text>
           </View>
         )}
         {linkedServices.slice(0, 3).map(name => (
@@ -1304,7 +1309,7 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
       {/* Send button */}
       <TouchableOpacity style={[styles.librarySendBtn, { borderColor: P.accent + '55', backgroundColor: P.accent + '10' }]} onPress={onSend} activeOpacity={0.75}>
         <Ionicons name="send-outline" size={14} color={P.accent} />
-        <Text style={[styles.librarySendBtnText, { color: P.accent }]}>Send to clients</Text>
+        <Text style={[styles.librarySendBtnText, { color: P.accent }]}>{tr('providerBookings.forms.sendToClients')}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -1320,8 +1325,10 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
   onUpdateOption:   (qId: string, idx: number, value: string) => void;
   onRemoveOption:   (qId: string, idx: number) => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const TYPE_ICON: Record<string, string>  = { text: 'create-outline', yesno: 'checkmark-circle-outline', choice: 'list-outline', policy: 'document-text-outline' };
-  const TYPE_LABEL: Record<string, string> = { text: 'Text', yesno: 'Yes / No', choice: 'Choice', policy: 'Policy' };
+  const TYPE_LABEL: Record<string, string> = { text: tr('providerBookings.forms.qType.text'), yesno: 'Yes / No', choice: 'Choice', policy: 'Policy' };
 
   return (
     <View style={[styles.qCard, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -1344,14 +1351,14 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
             style={[styles.qLabelInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg }]}
             value={question.label}
             onChangeText={v => onUpdateQuestion(question.id, { label: v })}
-            placeholder="Question" placeholderTextColor={P.sub} multiline
+            placeholder={tr('providerBookings.forms.questionPlaceholder')} placeholderTextColor={P.sub} multiline
           />
       }
 
       {!isReadOnly && (
         <TouchableOpacity style={styles.requiredRow} onPress={() => onUpdateQuestion(question.id, { required: !question.required })} activeOpacity={0.7}>
           <View style={[styles.requiredDot, { backgroundColor: question.required ? P.accent : 'transparent', borderColor: question.required ? P.accent : P.sub }]} />
-          <Text style={[styles.requiredLabel, { color: question.required ? P.accent : P.sub }]}>Required</Text>
+          <Text style={[styles.requiredLabel, { color: question.required ? P.accent : P.sub }]}>{tr('common.required')}</Text>
         </TouchableOpacity>
       )}
 
@@ -1363,7 +1370,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
               <TextInput
                 style={[styles.optionInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg }]}
                 value={opt} onChangeText={v => onUpdateOption(question.id, oi, v)}
-                placeholder={`Option ${oi + 1}`} placeholderTextColor={P.sub}
+                placeholder={tr('providerBookings.forms.optionN', { n: oi + 1 })} placeholderTextColor={P.sub}
               />
               {(question.options ?? []).length > 2 && (
                 <TouchableOpacity onPress={() => onRemoveOption(question.id, oi)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1373,7 +1380,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
             </View>
           ))}
           <TouchableOpacity onPress={() => onAddOption(question.id)} style={styles.addOptionBtn}>
-            <Text style={[styles.addOptionText, { color: P.accent }]}>+ Add option</Text>
+            <Text style={[styles.addOptionText, { color: P.accent }]}>{tr('providerBookings.forms.addOption')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1383,7 +1390,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
           style={[styles.qLabelInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg, marginTop: 10, minHeight: 90 }]}
           value={question.body ?? ''}
           onChangeText={v => onUpdateQuestion(question.id, { body: v })}
-          placeholder="Policy text the client will read and acknowledge"
+          placeholder={tr('providerBookings.forms.policyPlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           textAlignVertical="top"
@@ -1395,12 +1402,12 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
 
       {isReadOnly && existingAnswer !== null && (
         <View style={[styles.answerBox, { backgroundColor: P.surface, borderColor: P.border }]}>
-          <Text style={[styles.answerLabel, { color: P.sub }]}>CLIENT ANSWER</Text>
+          <Text style={[styles.answerLabel, { color: P.sub }]}>{tr('providerBookings.forms.clientAnswer')}</Text>
           <Text style={[styles.answerText, { color: P.text }]}>{existingAnswer}</Text>
         </View>
       )}
       {isReadOnly && existingAnswer === null && (
-        <Text style={[styles.noAnswer, { color: P.sub }]}>No answer yet</Text>
+        <Text style={[styles.noAnswer, { color: P.sub }]}>{tr('providerBookings.forms.noAnswer')}</Text>
       )}
     </View>
   );

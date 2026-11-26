@@ -23,6 +23,8 @@ import {
 import { groupTipsByBooking } from '../features/payments/tipsByBooking';
 import { providerCancelGroupBooking, providerCancelOwnBooking } from '../services/databaseService';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 /** One-line summaries of the provider's own payment settings, shown as the
  *  "Your setup" tiles on Overview. PaymentsScreen owns those settings, so it
@@ -34,6 +36,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   setup?: PaymentSetupSummary | undefined;
   children?: React.ReactNode;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const C = useBusinessPalette();
   const { isDarkMode } = useTheme();
   const [section, setSection] = useState<'overview' | 'bookings' | 'payouts' | 'settings'>('overview');
@@ -69,19 +73,19 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         if (sequence !== loadSequence.current) return;
         setFinance(data); setFinanceError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setFinanceError('Balances and bank payouts could not load. Refresh to try again.');
+        if (sequence === loadSequence.current) setFinanceError(tr('providerBusiness.stripe.err.finance'));
       }),
       getConnectStatus().then(status => {
         if (sequence !== loadSequence.current) return;
         setAccount(status); setError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setError('We could not check your Stripe account. Refresh to try again.');
+        if (sequence === loadSequence.current) setError(tr('providerBusiness.stripe.err.account'));
       }),
       getProviderPayouts().then(rows => {
         if (sequence !== loadSequence.current) return;
         setPayouts(rows); setPayoutError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setPayoutError('Booking payments could not load. Refresh to try again.');
+        if (sequence === loadSequence.current) setPayoutError(tr('providerBusiness.stripe.err.payouts'));
       }),
       getPayoutSchedule().then(current => {
         if (sequence !== loadSequence.current) return;
@@ -116,7 +120,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         setFinance(current => current ? { ...next, payouts: [...current.payouts, ...next.payouts.filter(p => !current.payouts.some(existing => existing.id === p.id))] } : next);
         setFinanceError('');
       }
-    } catch { if (sequence === loadSequence.current) setFinanceError('Earlier payouts could not load. Please try again.'); }
+    } catch { if (sequence === loadSequence.current) setFinanceError(tr('providerBusiness.stripe.err.more')); }
     finally { setMoreLoading(false); }
   };
   const openStripe = useCallback(async (action: 'onboard' | 'dashboard') => {
@@ -139,7 +143,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         await Linking.openURL(url);
       }
     }
-    catch (error) { setError(error instanceof PaymentRequestError ? error.message : 'Stripe could not open. Please try again.'); }
+    catch (error) { setError(error instanceof PaymentRequestError ? error.message : tr('providerBusiness.stripe.err.open')); }
     finally { opening.current = false; setBusy(false); }
   }, [C.bg, C.accent, load]);
   useEffect(() => {
@@ -216,10 +220,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     return map;
   }, [feeEarnings]);
   const tabs = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'bookings', label: 'Bookings' },
-    { key: 'payouts', label: 'Payouts' },
-    { key: 'settings', label: 'Settings' },
+    { key: 'overview', label: tr('providerBusiness.stripe.tab.overview') },
+    { key: 'bookings', label: tr('providerBusiness.analytics.tile.bookings') },
+    { key: 'payouts', label: tr('providerBusiness.payoutCard.title') },
+    { key: 'settings', label: tr('common.settings') },
   ] as const;
   // Tapping a booking payment opens its timeline.
   const [timelineRow, setTimelineRow] = useState<ProviderPayout | null>(null);
@@ -248,10 +252,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   return <>
     <View style={styles.intro}>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.eyebrow, { color: C.accentText }]}>YOUR BUSINESS, IN BALANCE</Text>
-        <Text style={[styles.description, { color: C.text, marginTop: 4 }]}>A little clarity for every payment.</Text>
+        <Text style={[styles.eyebrow, { color: C.accentText }]}>{tr('providerBusiness.stripe.intro.eyebrow')}</Text>
+        <Text style={[styles.description, { color: C.text, marginTop: 4 }]}>{tr('providerBusiness.stripe.intro.body')}</Text>
       </View>
-      {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode · no real money moves</Text>}
+      {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>{tr('providerBusiness.payoutCard.testMode')}</Text>}
     </View>
 
     <View style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -266,8 +270,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         })}
       </View>
       {!needsConnect && <View style={styles.refreshRow}>
-        <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? 'Updating your payments…' : 'Your payment information'}</Text>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh all payment information" disabled={loading || busy}
+        <Text accessibilityLiveRegion="polite" style={[styles.caption, { color: C.sub }]}>{loading ? tr('providerBusiness.stripe.updating') : tr('providerBusiness.stripe.info')}</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('providerBusiness.stripe.refreshA11y')} disabled={loading || busy}
           onPress={() => { setLoading(true); void load(); }} style={styles.refresh}>
           {loading ? <ActivityIndicator size="small" color={C.accentText} /> : <Text style={[styles.link, { color: C.accentText }]}>Refresh</Text>}
         </TouchableOpacity>
@@ -281,7 +285,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         <Text style={[styles.description, { color: C.sub, textAlign: 'center' }]}>Connect your bank through Stripe. Your money, booking payments and paydays show up here once it's done.</Text>
         <View style={{ alignSelf: 'stretch' }}>
           {busy ? <ActivityIndicator color={C.accentText} style={{ marginTop: 16 }} />
-            : <PaymentAction disabled={busy} label={account.connected ? 'Continue with Stripe' : 'Connect with Stripe'} onPress={() => void openStripe('onboard')} />}
+            : <PaymentAction disabled={busy} label={account.connected ? tr('providerBusiness.stripe.continueStripe') : 'Connect with Stripe'} onPress={() => void openStripe('onboard')} />}
         </View>
       </View>}
 
@@ -307,15 +311,15 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
             <Text style={[styles.label, { color: C.text }]}>{feesToCharge.length === 1 ? '1 fee you can charge' : `${feesToCharge.length} fees you can charge`}</Text>
             <Text style={[styles.caption, { color: C.sub }]}>Open the booking payment to charge it, within 24 hours of the appointment.</Text>
           </View>
-          <Text style={[styles.link, { color: C.accentText }]}>Bookings</Text>
+          <Text style={[styles.link, { color: C.accentText }]}>{tr('providerBusiness.analytics.tile.bookings')}</Text>
         </TouchableOpacity>}
         <TouchableOpacity accessibilityRole="button" onPress={() => pick('payouts')} activeOpacity={0.75} style={styles.plainRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{nextPayout ? `Next payday · ${money(nextPayout.amount, nextPayout.currency)}` : 'Next payday'}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{nextPayout ? `Expected ${date(nextPayout.arrivalDate * 1000)}`
+            <Text style={[styles.caption, { color: C.sub }]}>{nextPayout ? tr('providerBusiness.stripe.next.expected', { date: date(nextPayout.arrivalDate * 1000) })
               : financeError ? 'Payout information is unavailable. Refresh to try again.' : loading ? 'Checking scheduled payouts…' : 'Nothing scheduled yet.'}</Text>
           </View>
-          <Text style={[styles.link, { color: C.accentText }]}>Payouts</Text>
+          <Text style={[styles.link, { color: C.accentText }]}>{tr('providerBusiness.payoutCard.title')}</Text>
         </TouchableOpacity>
 
 
@@ -323,20 +327,20 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <View style={[styles.headRow, styles.headRowSpaced]}>
             <Text style={[styles.sectionTitle, { color: C.text }]}>Recent booking payments</Text>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="See all booking payments" onPress={() => pick('bookings')} hitSlop={12}>
-              <Text style={[styles.link, { color: C.accentText }]}>See all</Text>
+              <Text style={[styles.link, { color: C.accentText }]}>{tr('common.seeAll')}</Text>
             </TouchableOpacity>
           </View>
           {!!payoutError && <Notice text={payoutError} />}
-          {!loading && !payoutError && payouts.length === 0 && <EmptyState title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
+          {!loading && !payoutError && payouts.length === 0 && <EmptyState title={tr('providerBusiness.stripe.recent.emptyTitle')} detail="When a client pays online, their booking payment will appear here." />}
           {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} toCharge={chargeableByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
 
       </>}
 
       {shownSection === 'bookings' && <>
-        <PaySection first title="Booking payments" sub="Your latest 50 online payments. Tap one to follow it from booking to bank.">
+        <PaySection first title={tr('providerBusiness.stripe.tab.bookings')} sub="Your latest 50 online payments. Tap one to follow it from booking to bank.">
           {!!payoutError && <Notice text={payoutError} />}
-          {!loading && !payoutError && payouts.length === 0 && <EmptyState title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
+          {!loading && !payoutError && payouts.length === 0 && <EmptyState title={tr('providerBusiness.stripe.bookings.emptyTitle')} detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
           {payouts.map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} toCharge={chargeableByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
         {/* Only tips whose booking payment isn't in the list above; the rest are on their booking. */}
@@ -356,7 +360,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
 
       {shownSection === 'payouts' && <>
-        <PaySection first title="From booking to bank">
+        <PaySection first title={tr('providerBusiness.stripe.journey.title')}>
           {([
             ['1', 'Appointment done', `Processing for ${PAYOUT_RELEASE_HOURS} hours after the appointment ends.`],
             ['2', 'Clearing', 'It clears into your balance, usually about 3 working days after the client paid.'],
@@ -366,26 +370,26 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
             <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{title}</Text><Text style={[styles.caption, { color: C.sub }]}>{detail}</Text></View>
           </View>)}
         </PaySection>
-        <PaySection title="Bank payouts" sub="What's been sent to your bank. Arrival dates are estimates.">
+        <PaySection title={tr('providerBusiness.stripe.bank.title')} sub="What's been sent to your bank. Arrival dates are estimates.">
           {!!financeError && <Notice text={financeError} />}
-          {!loading && !financeError && !finance?.payouts.length && <EmptyState title="No bank payouts yet" detail="Once Stripe schedules your first payout, you can follow its progress here." />}
+          {!loading && !financeError && !finance?.payouts.length && <EmptyState title={tr('providerBusiness.stripe.bank.emptyTitle')} detail="Once Stripe schedules your first payout, you can follow its progress here." />}
           {finance?.payouts.map((p, i) => <View key={p.id} style={[styles.listRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.amountSmall, { color: C.text }]}>{money(p.amount, p.currency)}</Text>
               <Text style={[styles.description, { color: C.text }]}>{p.status === 'paid' ? 'Arrived' : 'Expected'} {date(p.arrivalDate * 1000)}</Text>
-              <Text style={[styles.caption, { color: C.sub }]}>{p.automatic ? 'Scheduled payout' : 'Manual payout'} · Created {date(p.created * 1000)}</Text>
-              {p.status === 'failed' && <Text style={[styles.caption, { color: C.text }]}>Check your bank details in Manage payout account.</Text>}
+              <Text style={[styles.caption, { color: C.sub }]}>{p.automatic ? tr('providerBusiness.stripe.bank.scheduled') : tr('providerBusiness.stripe.bank.manual')} · Created {date(p.created * 1000)}</Text>
+              {p.status === 'failed' && <Text style={[styles.caption, { color: C.text }]}>{tr('providerBusiness.stripe.bank.failedHint')}</Text>}
             </View>
             <StatusChip label={bankLabels[p.status] ?? 'Status unavailable'} attention={p.status === 'failed'} />
           </View>)}
-          {finance?.hasMore && <PaymentAction secondary disabled={moreLoading || loading} label={moreLoading ? 'Loading…' : 'Load earlier payouts'} onPress={() => void loadMore()} />}
-          {account?.connected && <PaymentAction disabled={busy} label="Manage payout account" onPress={() => void openStripe('dashboard')} />}
+          {finance?.hasMore && <PaymentAction secondary disabled={moreLoading || loading} label={moreLoading ? tr('common.loading') : tr('providerBusiness.stripe.loadEarlier')} onPress={() => void loadMore()} />}
+          {account?.connected && <PaymentAction disabled={busy} label={tr('providerBusiness.stripe.manageAccount')} onPress={() => void openStripe('dashboard')} />}
         </PaySection>
       </>}
 
       {shownSection === 'settings' && <>
         {/* Each part of Settings is its own card; the rest come from PaymentsScreen. */}
-        <PayCard title="When you get paid" sub={`Each payment is processing for ${PAYOUT_RELEASE_HOURS} hours after its appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
+        <PayCard title={tr('providerBusiness.stripe.hold.title')} sub={`Each payment is processing for ${PAYOUT_RELEASE_HOURS} hours after its appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
           {!!scheduleError && <Notice text={scheduleError} />}
           {scheduleLoaded && !schedule
             ? <Notice text="Set up your Stripe account to choose when you get paid." />
@@ -423,7 +427,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
       <View style={styles.setupGrid}>
         {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
-          <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
+          <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={tr('providerBusiness.stripe.setup.a11y', { label: label, value: value })}
             onPress={() => pick('settings')} activeOpacity={0.75}
             style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
             <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
@@ -440,14 +444,14 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
             disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75} style={styles.plainRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
-              <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish with Stripe to receive online booking payments'
+              <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? tr('providerBusiness.stripe.account.finish')
                 : account.bankAccount ? `Paid to ${account.bankAccount.bankName ?? 'your bank'} ••${account.bankAccount.last4}. Tap Manage to change it.`
                 : 'Bank details managed securely by Stripe'}</Text>
             </View>
             {busy ? <ActivityIndicator size="small" color={C.accentText} />
-              : <Text style={[styles.link, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}
+              : <Text style={[styles.link, { color: C.accentText }]}>{manageAccount ? tr('providerBusiness.stripe.manage') : tr('common.continue')}</Text>}
           </TouchableOpacity>
-          {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
+          {!!account.requirementsDue && <PaymentAction disabled={busy} label={tr('providerBusiness.stripe.updateDetails')} onPress={() => void openStripe('onboard')} secondary />}
     </View>}
 
 

@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { FONT_COLLECTIONS, PROVIDER_FONTS } from '../constants/providerFonts';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 interface ProviderFontPickerProps {
   value: string;
@@ -33,6 +35,8 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
   unlockedFonts,
   onLockedPress,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const isUnlocked = (key: string) => !unlockedFonts || unlockedFonts.includes(key);
   // What they can pick comes first, both the rail and its place in the rail,
   // so it isn't behind every locked font.
@@ -76,7 +80,7 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
                     ]}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: isSelected }}
-                    accessibilityLabel={locked ? `${font.name}, locked` : font.name}
+                    accessibilityLabel={locked ? tr('providerProfile.ui.lockedA11y', { name: font.name }) : font.name}
                   >
                     {locked && <Ionicons name="lock-closed" size={11} color={subColor} style={styles.lockIcon} />}
                     <Text
@@ -86,7 +90,7 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
                       ]}
                       numberOfLines={1}
                     >
-                      Your Business
+                      {tr('providerProfile.fontPicker.preview')}
                     </Text>
                     <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
                       {font.name}

@@ -1,6 +1,7 @@
 import { normalizeExternalBookingUrl } from './externalBookingLink';
 import { filtersAllowLinkOnly, type LinkOnlyFilterInput } from './linkOnlySearch';
 import { ALL_SERVICE_TYPE_OPTS } from '../business-details/options';
+import { tr } from '../../i18n/translate';
 
 /**
  * Directory listings: businesses imported from public directories that
@@ -57,12 +58,12 @@ export function listingLink(raw: string | null | undefined): ListingLink | null 
   if (!url) return null;
   const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
   if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) {
-    return { label: 'Open their TikTok', url, opensInApp: false };
+    return { label: tr('discover.page.openTheirTiktok'), url, opensInApp: false };
   }
   if (host === 'wa.me' || host === 'whatsapp.com' || host.endsWith('.whatsapp.com')) {
-    return { label: 'Message on WhatsApp', url, opensInApp: false };
+    return { label: tr('discover.page.messageOnWhatsapp'), url, opensInApp: false };
   }
-  return { label: 'Book on their page', url, opensInApp: true };
+  return { label: tr('discover.page.bookOnTheirPage'), url, opensInApp: true };
 }
 
 /** A listing's Instagram profile URL, or null if the handle isn't one. */

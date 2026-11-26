@@ -83,6 +83,8 @@ import {
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
 import { readableAbsoluteSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -92,18 +94,18 @@ const CP = { card: '#252220', border: 'rgba(126,102,103,0.18)' }; // static Styl
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<string, { bg: string; dbg: string; color: string; label: string }> = {
-  confirmed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', label: 'Confirmed'   },
-  pending:     { bg: '#FBF1E0', dbg: '#3D2E10', color: '#B8730A', label: 'Pending'     },
-  completed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', label: 'Completed'   },
-  cancelled:   { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', label: 'Cancelled'   },
-  no_show:     { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', label: 'No Show'     },
-  in_progress: { bg: '#F3EAFF', dbg: '#2E1A40', color: '#7B2FBE', label: 'In Progress' },
-  upcoming:    { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', label: 'Confirmed'   },
+  confirmed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', get label() { return tr('providerBookings.status.confirmed'); }   },
+  pending:     { bg: '#FBF1E0', dbg: '#3D2E10', color: '#B8730A', get label() { return tr('providerBookings.status.pending'); }     },
+  completed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', get label() { return tr('providerBookings.status.completed'); }   },
+  cancelled:   { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', get label() { return tr('providerBookings.status.cancelled'); }   },
+  no_show:     { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', get label() { return tr('providerBookings.status.noShowTitle'); }     },
+  in_progress: { bg: '#F3EAFF', dbg: '#2E1A40', color: '#7B2FBE', get label() { return tr('providerBookings.status.inProgressTitle'); } },
+  upcoming:    { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', get label() { return tr('providerBookings.status.confirmed'); }   },
 };
 
 function statusCfg(s: string, declinedAt?: string | null) {
   // A request you (or the 24-hour expiry) turned down is stored as cancelled.
-  if (s === 'cancelled' && declinedAt) return { ...STATUS_CFG['cancelled']!, label: 'Declined' };
+  if (s === 'cancelled' && declinedAt) return { ...STATUS_CFG['cancelled']!, label: tr('providerBookings.status.declined') };
   return STATUS_CFG[s] ?? STATUS_CFG['completed']!;
 }
 
@@ -230,6 +232,8 @@ interface BookingCardProps {
 }
 
 function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const cfg   = statusCfg(booking.status, booking.declinedAt);
   const past  = isPastBooking(booking.bookingDate, booking.bookingTime);
   const eta   = countdownLabel(booking.bookingDate, booking.bookingTime);
@@ -323,19 +327,19 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
       {/* ── Booking Summary (state ≥ 1) ── */}
       {expansionState >= 1 && (
         <View style={[bc.expand, { borderTopColor: P.sep }]}>
-          <Text style={[bc.expandHdr, { color: P.sub }]}>BOOKING SUMMARY</Text>
-          <SummaryRow label="Service"  value={booking.serviceName} P={P} />
-          <SummaryRow label="Time"     value={booking.bookingTime} P={P} />
-          <SummaryRow label="Duration" value={booking.duration} P={P} />
-          <SummaryRow label="Price"    value={`£${booking.price}`} P={P} />
+          <Text style={[bc.expandHdr, { color: P.sub }]}>{tr('providerBookings.home.card.summaryHeader')}</Text>
+          <SummaryRow label={tr('providerBookings.home.card.service')}  value={booking.serviceName} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.time')}     value={booking.bookingTime} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.duration')} value={booking.duration} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.price')}    value={`£${booking.price}`} P={P} />
           {booking.addOns && booking.addOns.length > 0 && booking.addOns.map(a => (
-            <Text key={a.id} style={bc.addOn}>With Add-ons – {a.name} – £{a.price}</Text>
+            <Text key={a.id} style={bc.addOn}>{tr('providerBookings.home.withAddOn', { name: a.name, price: `£${a.price}` })}</Text>
           ))}
           {!!booking.notes && (
-            <SummaryRow label="Client Notes" value={`"${booking.notes}"`} italic P={P} />
+            <SummaryRow label={tr('providerBookings.home.card.clientNotes')} value={`"${booking.notes}"`} italic P={P} />
           )}
           <View style={[bc.payRow, { marginTop: 10 }]}>
-            <Text style={[bc.summaryLabel, { color: P.sub }]}>Service Total  </Text>
+            <Text style={[bc.summaryLabel, { color: P.sub }]}>{tr('providerBookings.home.card.serviceTotal')}  </Text>
             <Text style={[bc.summaryVal, { color: P.text }]}>£{total}</Text>
           </View>
           {booking.paymentType === 'deposit' ? (
@@ -349,15 +353,15 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
           ) : (
             <Text style={bc.deposit}>Paid in full – £{total}</Text>
           )}
-          <SummaryRow label="Payment Method" value={booking.paymentMethod || 'Card'} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.paymentMethod')} value={booking.paymentMethod || 'Card'} P={P} />
         </View>
       )}
 
       {/* ── Relevant Info (state ≥ 2) ── */}
       {expansionState >= 2 && (
         <View style={[bc.expand, { borderTopColor: P.sep }]}>
-          <Text style={[bc.expandHdr, { color: P.sub }]}>RELEVANT INFORMATION</Text>
-          <SummaryRow label="Booked Date" value={formatCreatedAt(booking.createdAt)} P={P} />
+          <Text style={[bc.expandHdr, { color: P.sub }]}>{tr('providerBookings.home.card.relevantHeader')}</Text>
+          <SummaryRow label={tr('providerBookings.home.card.bookedDate')} value={formatCreatedAt(booking.createdAt)} P={P} />
           {/* The client's note, not `bookingInstructions` — that field is this
               provider's OWN instructions copy (PoliciesScreen), so it read as
               the app quoting them back to themselves. Same swap as
@@ -365,9 +369,9 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
           {!!booking.notes && (
             <Text style={[bc.instructions, { color: P.sub }]}>“{booking.notes}”</Text>
           )}
-          <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.bookingRef')} value={ref} P={P} />
           <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={() => { tap(); onViewMessages(); }}>
-            <Text style={[bc.msgBtnTxt, { color: P.onAccent }]}>View Messages</Text>
+            <Text style={[bc.msgBtnTxt, { color: P.onAccent }]}>{tr('providerBookings.home.card.viewMessages')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -793,6 +797,8 @@ function WeekView({
   weekDates, bookingsByDate, scheduleIssues, availability, blockedDateStrings,
   selectedDate, onSelectDate, onPressBooking, P, refreshing, onRefresh,
 }: WeekViewProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -849,11 +855,11 @@ function WeekView({
           wrapping the ScrollView made its own vertical scroll feel broken
           even when gated to horizontal drags. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, marginHorizontal: 16, marginBottom: 8 }}>
-        <TouchableOpacity onPress={goPrevWeek} accessibilityLabel="Previous week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+        <TouchableOpacity onPress={goPrevWeek} accessibilityLabel={tr('providerBookings.home.previousWeek')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
           <Ionicons name="chevron-back" size={18} color={P.sub} />
         </TouchableOpacity>
         <Text style={{ fontSize: 15, fontWeight: '700', color: P.text, minWidth: 120, textAlign: 'center' }}>{weekRangeLabel}</Text>
-        <TouchableOpacity onPress={goNextWeek} accessibilityLabel="Next week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+        <TouchableOpacity onPress={goNextWeek} accessibilityLabel={tr('providerBookings.home.nextWeek')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
           <Ionicons name="chevron-forward" size={18} color={P.sub} />
         </TouchableOpacity>
       </View>
@@ -1067,6 +1073,8 @@ function SkeletonCard() {
 // ─── Section header ───────────────────────────────────────────────────────────
 
 function SectionBanner({ dateStr, P }: { dateStr: string; P: AppTheme }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode: dark } = useTheme();
   const banner = dark ? '#3A2E2F' : '#5C4033';
   const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
@@ -1075,7 +1083,7 @@ function SectionBanner({ dateStr, P }: { dateStr: string; P: AppTheme }) {
   if (kind === 'today') {
     return (
       <View style={sh.todayWrap}>
-        <Text style={[sh.todayText, { color: todayLabel }]}>Today</Text>
+        <Text style={[sh.todayText, { color: todayLabel }]}>{tr('common.date.today')}</Text>
       </View>
     );
   }
@@ -1108,6 +1116,8 @@ type ListRow =
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ProviderHomeScreen({ navigation, route }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode: dark, palette: P } = useTheme();
   // Measured per render, not captured at module load: the add-sheet's
   // offscreen resting position is a full screen height, and the month grid
@@ -1224,32 +1234,32 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     return [
       {
         key: 'tabs',
-        title: 'Your home base',
-        body: 'Swipe or tap to move between Home, My Services, Profile, and Becca — your AI assistant.',
+        title: tr('providerBookings.home.tour.tabsTitle'),
+        body: tr('providerBookings.home.tour.tabsBody'),
         target: { rect: tabRect },
         radius: Platform.OS === 'android' ? 0 : tabRect.height / 2,
         icon: 'apps',
       },
       {
         key: 'view-mode',
-        title: 'Three ways to see your bookings',
-        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance. It opens in the last one you picked, which you can also set in My Profile under Manage.',
+        title: tr('providerBookings.home.tour.viewModeTitle'),
+        body: tr('providerBookings.home.tour.viewModeBodyRemember'),
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
       },
       {
         key: 'fab',
-        title: 'Quick access',
-        body: 'Tap the + button anytime for your schedule, promotions, clientele, forms, and inbox.',
+        title: tr('providerBookings.home.tour.fabTitle'),
+        body: tr('providerBookings.home.tour.fabBody'),
         target: { ref: fabRef },
         radius: 26,
         icon: 'add-circle',
       },
       {
         key: 'bell',
-        title: "You'll be notified here",
-        body: 'New bookings, messages, and reminders show up in your notifications.',
+        title: tr('providerBookings.home.tour.bellTitle'),
+        body: tr('providerBookings.home.tour.bellBody'),
         target: { ref: bellRef },
         radius: 17,
         icon: 'notifications',
@@ -1816,7 +1826,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       const conversationId = await getOrCreateConversation(providerId, clientUserId);
       navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
     } catch {
-      Alert.alert('Error', 'Could not open chat. Try again.');
+      Alert.alert(tr('common.error'), tr('providerBookings.home.chatOpenFailed'));
     }
   }, [navigation]);
 
@@ -1856,7 +1866,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               onPress={() => handleDateTap(TODAY_STR)}
               style={[s.todayChip, { backgroundColor: P.accent }]}
             >
-              <Text style={[s.todayChipTxt, { color: P.onAccent }]}>Today</Text>
+              <Text style={[s.todayChipTxt, { color: P.onAccent }]}>{tr('common.date.today')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               ref={viewModeBtnRef}
@@ -1900,10 +1910,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             }}
           >
             <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
-              Set up your business to start getting booked
+              {tr('providerBookings.home.setup.title')}
             </Text>
             <Text style={{ fontSize: 12, color: P.sub, marginTop: 4 }}>
-              Add your services, schedule, and address so clients can find and book you.
+              {tr('providerBookings.home.setup.body')}
             </Text>
             <TouchableOpacity
               onPress={() => { tap(); navigation.navigate('EditProfile' as never); }}
@@ -1914,7 +1924,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 backgroundColor: P.accent,
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: P.onAccent }}>Get started</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: P.onAccent }}>{tr('providerBookings.home.setup.getStarted')}</Text>
               <Ionicons name="chevron-forward" size={14} color={P.onAccent} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </View>
@@ -2131,7 +2141,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: viewMode === 'week' ? 20 : 2, borderRadius: 12, backgroundColor: dark ? '#3D1B1B' : '#FDEAEA', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="ban-outline" size={16} color="#C73535" />
             <Text style={{ color: '#C73535', fontSize: 13, fontWeight: '600' }}>
-              {isSelectedDateBlocked ? 'This day is blocked' : 'Closed — not available'}
+              {isSelectedDateBlocked ? tr('providerBookings.home.dayBlocked') : tr('providerBookings.home.dayClosed')}
             </Text>
           </View>
         )}
@@ -2191,11 +2201,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                   return (
                     <View style={s.emptyDay}>
                       <Ionicons name="calendar-outline" size={36} color={P.sub} style={{ opacity: 0.45, marginBottom: 10 }} />
-                      <Text style={[s.emptyTitle, { color: P.text }]}>No appointments</Text>
+                      <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBookings.home.empty.title')}</Text>
                       <Text style={[s.emptySub, { color: P.sub }]}>
                         {/* YYYY-MM-DD strings compare correctly as text. A day that's
                             already gone reads in the past tense. */}
-                        {item.dateStr === todayStr ? "You're free today" : item.dateStr < todayStr ? 'This day was free' : 'This day is free'}
+                        {item.dateStr === todayStr ? tr('providerBookings.home.empty.freeToday') : item.dateStr < todayStr ? 'This day was free' : 'This day is free'}
                       </Text>
                     </View>
                   );
@@ -2256,17 +2266,17 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           >
             <Text style={{ fontSize: 44 }}>🎉</Text>
             <Text style={{ fontSize: 20, fontWeight: '800', color: P.text, marginTop: 12, textAlign: 'center' }}>
-              You're live!
+              {tr('providerBookings.home.live.title')}
             </Text>
             <Text style={{ fontSize: 14, color: P.sub, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
-              Clients can now find and book you. Nice work finishing your setup.
+              {tr('providerBookings.home.live.body')}
             </Text>
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); setShowGoLiveCelebration(false); }}
               style={{ marginTop: 20, backgroundColor: P.accent, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 }}
             >
-              <Text style={{ color: P.onAccent, fontWeight: '700', fontSize: 15 }}>Let's go</Text>
+              <Text style={{ color: P.onAccent, fontWeight: '700', fontSize: 15 }}>{tr('providerBookings.home.live.cta')}</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -2293,18 +2303,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             <View style={[s.sheetHandle, { backgroundColor: P.border }]} />
           </View>
 
-          <Text style={[s.sheetTitle, { color: P.sub }]}>Quick Access</Text>
+          <Text style={[s.sheetTitle, { color: P.sub }]}>{tr('providerBookings.home.sheet.title')}</Text>
 
           {/* These routes hide the bottom nav: add a new row's route to
               QUICK_ACCESS_ROUTES in navigation/tabBarVisibility.ts too. */}
           {([
-            { icon: 'add-circle-outline',      title: 'Add Booking', sub: 'Manually book a client in',        route: 'AddBooking'       },
-            { icon: 'calendar-outline',        title: 'Schedule',    sub: 'Set your hours & block dates',      route: 'ProviderSchedule' },
-            { icon: 'pricetag-outline',        title: 'Promotions',  sub: 'Create & manage offers',            route: 'Promotions'       },
-            { icon: 'people-outline',          title: 'Clientele',   sub: 'View & manage your client list',    route: 'Clientele'        },
-            { icon: 'document-text-outline',   title: 'Info Pack',   sub: 'Share service details with clients',route: 'InfoPacks'        },
-            { icon: 'clipboard-outline',       title: 'Forms',       sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Enquiries and client messages',        route: 'ProviderInbox'    },
+            { icon: 'add-circle-outline',      title: tr('providerBookings.home.sheet.addBooking'), sub: tr('providerBookings.home.sheet.addBookingSub'),        route: 'AddBooking'       },
+            { icon: 'calendar-outline',        title: tr('providerBookings.home.sheet.schedule'),    sub: tr('providerBookings.home.sheet.scheduleSub'),      route: 'ProviderSchedule' },
+            { icon: 'pricetag-outline',        title: tr('providerBookings.home.sheet.promotions'),  sub: tr('providerBookings.home.sheet.promotionsSub'),            route: 'Promotions'       },
+            { icon: 'people-outline',          title: tr('providerBookings.home.sheet.clientele'),   sub: tr('providerBookings.home.sheet.clienteleSub'),    route: 'Clientele'        },
+            { icon: 'document-text-outline',   title: tr('providerBookings.home.sheet.infoPack'),   sub: tr('providerBookings.home.sheet.infoPackSub'),route: 'InfoPacks'        },
+            { icon: 'clipboard-outline',       title: tr('providerBookings.home.sheet.forms'),       sub: tr('providerBookings.home.sheet.formsSub'),        route: 'ProviderIntakeForm' },
+            { icon: 'chatbubble-outline',      title: tr('providerBookings.home.sheet.inbox'),       sub: tr('providerBookings.home.sheet.inboxSub'),        route: 'ProviderInbox'    },
           ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
             <React.Fragment key={item.title}>
               <TouchableOpacity

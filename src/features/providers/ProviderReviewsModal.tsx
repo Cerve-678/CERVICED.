@@ -11,6 +11,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { ProviderReviewItem } from "./reviewPresentation";
 import { readableDialog } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface ProviderReviewsModalProps {
   isVisible: boolean;
@@ -36,6 +38,8 @@ export const ProviderReviewsModal: React.FC<ProviderReviewsModalProps> = React.m
     squareCards,
     onReportReview,
   }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
     const allReviews = reviews;
 
     const averageRating = useMemo(() => {
@@ -67,7 +71,7 @@ export const ProviderReviewsModal: React.FC<ProviderReviewsModalProps> = React.m
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderContent}>
                 <View>
-                  <Text style={styles.modalTitle}>All Reviews</Text>
+                  <Text style={styles.modalTitle}>{tr('discover.profile.allReviews')}</Text>
                   <Text style={styles.modalSubtitle}>
                     @{providerName} • {averageRating} ★ ({allReviews.length}{" "}
                     reviews)
@@ -142,9 +146,9 @@ export const ProviderReviewsModal: React.FC<ProviderReviewsModalProps> = React.m
                       activeOpacity={0.6}
                       style={styles.modalReportBtn}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel={`Report review by ${review.name || "a client"}`}
+                      accessibilityLabel={tr('discover.page.reportReviewA11y', { name: review.name || tr('discover.page.aClient') })}
                     >
-                      <Text style={styles.modalReportText}>Report</Text>
+                      <Text style={styles.modalReportText}>{tr('discover.page.report')}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </BlurView>

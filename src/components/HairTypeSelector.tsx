@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useTranslation, tr } from '../i18n';
 
 interface HairType {
   id: string;
@@ -10,16 +11,16 @@ interface HairType {
 }
 
 const hairTypes: HairType[] = [
-  { id: 'straight', name: 'Type 1', description: 'Straight', curlPattern: 'straight' },
-  { id: '2a', name: 'Type 2A', description: 'Wavy - Loose', curlPattern: '2a' },
-  { id: '2b', name: 'Type 2B', description: 'Wavy - Medium', curlPattern: '2b' },
-  { id: '2c', name: 'Type 2C', description: 'Wavy - Defined', curlPattern: '2c' },
-  { id: '3a', name: 'Type 3A', description: 'Curly - Loose', curlPattern: '3a' },
-  { id: '3b', name: 'Type 3B', description: 'Curly - Tight', curlPattern: '3b' },
-  { id: '3c', name: 'Type 3C', description: 'Curly - Corkscrew', curlPattern: '3c' },
-  { id: '4a', name: 'Type 4A', description: 'Coily - S Pattern', curlPattern: '4a' },
-  { id: '4b', name: 'Type 4B', description: 'Coily - Z Pattern', curlPattern: '4b' },
-  { id: '4c', name: 'Type 4C', description: 'Coily - Tight Zigzag', curlPattern: '4c' },
+  { id: 'straight', name: 'Type 1', get description() { return tr('clientAccount.hairType.straight'); }, curlPattern: 'straight' },
+  { id: '2a', name: 'Type 2A', get description() { return `${tr('clientAccount.hairType.wavy')} - ${tr('clientAccount.hairType.loose')}`; }, curlPattern: '2a' },
+  { id: '2b', name: 'Type 2B', get description() { return `${tr('clientAccount.hairType.wavy')} - ${tr('clientAccount.hairType.medium')}`; }, curlPattern: '2b' },
+  { id: '2c', name: 'Type 2C', get description() { return `${tr('clientAccount.hairType.wavy')} - ${tr('clientAccount.hairType.defined')}`; }, curlPattern: '2c' },
+  { id: '3a', name: 'Type 3A', get description() { return `${tr('clientAccount.hairType.curly')} - ${tr('clientAccount.hairType.loose')}`; }, curlPattern: '3a' },
+  { id: '3b', name: 'Type 3B', get description() { return `${tr('clientAccount.hairType.curly')} - ${tr('clientAccount.hairType.tight')}`; }, curlPattern: '3b' },
+  { id: '3c', name: 'Type 3C', get description() { return `${tr('clientAccount.hairType.curly')} - ${tr('clientAccount.hairType.corkscrew')}`; }, curlPattern: '3c' },
+  { id: '4a', name: 'Type 4A', get description() { return `${tr('clientAccount.hairType.coily')} - ${tr('clientAccount.hairType.sPattern')}`; }, curlPattern: '4a' },
+  { id: '4b', name: 'Type 4B', get description() { return `${tr('clientAccount.hairType.coily')} - ${tr('clientAccount.hairType.zPattern')}`; }, curlPattern: '4b' },
+  { id: '4c', name: 'Type 4C', get description() { return `${tr('clientAccount.hairType.coily')} - ${tr('clientAccount.hairType.tightZigzag')}`; }, curlPattern: '4c' },
 ];
 
 interface HairTypeSelectorProps {
@@ -29,6 +30,7 @@ interface HairTypeSelectorProps {
 
 export const HairTypeSelector: React.FC<HairTypeSelectorProps> = ({ onSelect, onBack }) => {
   const { theme, isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const [selectedType, setSelectedType] = React.useState<string | null>(null);
 
   return (
@@ -64,7 +66,8 @@ export const HairTypeSelector: React.FC<HairTypeSelectorProps> = ({ onSelect, on
                 }
               ]}
             >
-              {hairType.name}
+              {/* `name` is "Type 2A"; only the word "Type" is translated. */}
+              {t('clientAccount.hairTypeSelector.type', { code: hairType.name.replace(/^Type /, '') })}
             </Text>
           </TouchableOpacity>
         );

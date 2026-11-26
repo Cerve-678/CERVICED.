@@ -52,11 +52,11 @@ describe('client detail screen performance and safety contracts', () => {
     const list = read('screens', 'client', 'BookingsScreen.tsx');
 
     // Mobile comes first: there the client's own address is still theirs to see.
-    const mobileBranch = detail.indexOf("{isMobile ? 'Your Address' : 'Location'}");
+    const mobileBranch = detail.indexOf("{isMobile ? tr('clientBooking.detail.yourAddress') : tr('clientBooking.detail.location')}");
     const tba = detail.indexOf('>TBA</Text>');
     expect(mobileBranch).toBeGreaterThan(-1);
     expect(tba).toBeGreaterThan(mobileBranch);
-    expect(tba).toBeLessThan(detail.indexOf('{addrCountdown ? `Available in'));
+    expect(tba).toBeLessThan(detail.indexOf("{addrCountdown ? tr('clientBooking.detail.availableIn'"));
     expect(detail).toContain('!isMobile && !isPending && !!booking.howToGetThere');
     expect(list).toContain("if (b.status === BookingStatus.PENDING) return 'TBA';");
   });
@@ -91,7 +91,7 @@ describe('client detail screen performance and safety contracts', () => {
 
     expect(source).toContain('setLoadError(true)');
     expect(source).toContain('setRetryNonce(value => value + 1)');
-    expect(source).toContain("We couldn't load this form.");
+    expect(source).toContain("tr('clientBooking.intake.loadFailed')");
   });
 
   it('probes reschedule dates in bounded batches with an early exit', () => {
@@ -161,8 +161,8 @@ describe('client detail screen performance and safety contracts', () => {
 
     // The ⋯ menu opens the refund/complaint sheet, which files a support
     // ticket (fileBookingSupportRequest) and never moves money itself.
-    expect(source).toContain('accessibilityLabel="More options"');
-    expect(source).toContain('Request a refund');
+    expect(source).toContain("accessibilityLabel={tr('clientBooking.detail.moreOptionsA11y')}");
+    expect(source).toContain("tr('clientBooking.detail.requestRefund')");
     expect(source).toContain('fileBookingSupportRequest(');
     expect(source).not.toContain('refundProviderBooking(');
   });

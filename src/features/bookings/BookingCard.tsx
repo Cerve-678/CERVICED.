@@ -6,6 +6,7 @@ import { BookingStatus } from '../../contexts/BookingContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatBookingDate } from './presentation';
 import { isDeclinedRequest } from './statusPresentation';
+import { useTranslation } from '../../i18n';
 import type { BookingCardProps } from './presentationTypes';
 
 /**
@@ -15,6 +16,7 @@ import type { BookingCardProps } from './presentationTypes';
 export const BookingCard = React.memo<BookingCardProps>(
   ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, actionCount = 0, rowHasTag = false }) => {
     const { isDarkMode, palette: P } = useTheme();
+    const { t, tp } = useTranslation();
     const styles = useMemo(() => createStyles(isDarkMode, P), [isDarkMode, P]);
     const highlightAnim = useRef(new Animated.Value(isHighlighted ? 1 : 0)).current;
 
@@ -43,16 +45,17 @@ export const BookingCard = React.memo<BookingCardProps>(
       booking.status === BookingStatus.PENDING ||
       booking.isPendingReschedule;
 
+    const rescheduleAvailable = !!booking.isPendingReschedule && !!(booking as any).rescheduleRequest?.providerAvailableDates;
     const badgeText = useMemo(() => {
       if (booking.isPendingReschedule) {
-        return (booking as any).rescheduleRequest?.providerAvailableDates ? 'AVAILABLE' : 'PENDING';
+        return rescheduleAvailable ? t('clientBooking.card.badge.available').toUpperCase() : t('clientBooking.card.badge.pending').toUpperCase();
       }
       if (booking.status === BookingStatus.PENDING) return 'AWAITING CONFIRMATION';
       if (isDeclinedRequest(booking)) return 'DECLINED';
       if (booking.status === BookingStatus.CANCELLED) return 'CANCELLED';
       if (booking.status === BookingStatus.NO_SHOW) return 'NO SHOW';
       return '';
-    }, [booking]);
+    }, [booking, rescheduleAvailable, t]);
 
     const badgeColor = useMemo(() => {
       if (booking.isPendingReschedule) return P.accent;
@@ -89,7 +92,7 @@ export const BookingCard = React.memo<BookingCardProps>(
               <Text style={styles.serviceName} numberOfLines={1}>{booking.serviceName}</Text>
               {(booking.addOns?.length ?? 0) > 0 && (
                 <View style={styles.addOnPill}>
-                  <Text style={styles.addOnPillText}>+ {booking.addOns!.length} add-on{booking.addOns!.length === 1 ? '' : 's'}</Text>
+                  <Text style={styles.addOnPillText}>{tp('clientBooking.card.addOns', booking.addOns!.length)}</Text>
                 </View>
               )}
               <View style={styles.appointmentTime}>
@@ -99,7 +102,7 @@ export const BookingCard = React.memo<BookingCardProps>(
               {booking.isPendingReschedule ? (
                 <View style={[styles.rescheduleBadge, { backgroundColor: badgeColor }]}>
                   <Text style={styles.rescheduleBadgeText} numberOfLines={1}>
-                    {badgeText === 'AVAILABLE' ? 'Reschedule Available' : 'Reschedule Pending'}
+                    {rescheduleAvailable ? t('clientBooking.card.rescheduleAvailable') : t('clientBooking.card.reschedulePending')}
                   </Text>
                 </View>
               ) : rowHasTag ? <View style={styles.rescheduleBadgeSpacer} /> : null}

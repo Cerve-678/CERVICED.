@@ -15,6 +15,8 @@ import {
   type BookingHorizonSettings,
 } from '../../utils/bookingHorizon';
 import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
+import { tr } from '../../i18n/translate';
+import { getLanguage } from '../../i18n/languageStore';
 
 export interface ReleaseQuickView {
   title: string;
@@ -28,7 +30,7 @@ export function describeReleaseQuickView(settings: BookingHorizonSettings, now: 
   const openUntil = lastBookableDate(settings, now);
   const next = nextReleaseMoment(releaseDay, now, settings.schedule_release_time);
   return {
-    title: `Release day: the ${ordinalSuffix(releaseDay)} of every month at ${releaseTimeLabel(settings.schedule_release_time)}`,
+    title: tr('discover.page.releaseDayTitle', { day: (getLanguage() === 'en' ? ordinalSuffix(releaseDay) : String(releaseDay)), time: releaseTimeLabel(settings.schedule_release_time) }),
     lines: [
       ...(openUntil ? [`Clients can book up to ${formatShortDayDate(openUntil)}`] : []),
       `Next month opens ${formatShortDayDate(next)} at ${formatTime12(next)}`,

@@ -12,18 +12,21 @@ export type FontCollectionKey = 'editorial' | 'signature' | 'modern' | 'statemen
  *  (https://claude.ai/artifact/Fo89nJmKeBoM69qD2mVCL9); Classics holds the
  *  fonts that were here before them. */
 export const FONT_COLLECTIONS: { key: FontCollectionKey; name: string; description: string }[] = [
-  { key: 'editorial', name: 'Editorial', description: 'Magazine-cover serifs' },
-  { key: 'signature', name: 'Signature', description: 'Handwritten scripts' },
-  { key: 'modern',    name: 'Modern',    description: 'Clean sans-serifs with a twist' },
-  { key: 'statement', name: 'Statement', description: 'Art-deco and poster faces' },
-  { key: 'soft',      name: 'Soft',      description: 'Rounded and friendly' },
-  { key: 'classics',  name: 'Classics',  description: 'The original CERVICED fonts' },
+  { key: 'editorial', name: 'Editorial', get description() { return tr('providerProfile.ui.magazineCoverSerifs'); } },
+  { key: 'signature', name: 'Signature', get description() { return tr('providerProfile.ui.handwrittenScripts'); } },
+  { key: 'modern',    name: 'Modern',    get description() { return tr('providerProfile.ui.cleanSansSerifsWithATwist'); } },
+  { key: 'statement', name: 'Statement', get description() { return tr('providerProfile.ui.artDecoAndPosterFaces'); } },
+  { key: 'soft',      name: 'Soft',      get description() { return tr('providerProfile.ui.roundedAndFriendly'); } },
+  { key: 'classics',  name: 'Classics',  get description() { return tr('providerProfile.ui.theOriginalCervicedFonts'); } },
 ];
 
 /** The fonts a link-only provider can pick: Classic, Chunky & Rounded,
  *  Smooth & Rounded and Bakbak (owner's call, 2026-11-03). The rest show
  *  locked. See LINK_ONLY_THEMES in providerThemes.ts. */
 export const LINK_ONLY_FONTS: readonly string[] = ['default', 'baloo-2', 'varela-round', 'bakbak'];
+
+import type { TranslationKey } from '../i18n/types';
+import { tr } from '../i18n/translate';
 
 export interface ProviderFontOption {
   key: string;

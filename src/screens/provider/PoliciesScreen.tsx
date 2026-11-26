@@ -85,6 +85,8 @@ import {
   selectedBookingInstructions,
   toggleBookingInstruction,
 } from '../../features/business-details/bookingInstructions';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type CancelNotice     = '' | NoticeChoice;
 // 'custom' (a typed £ amount) was replaced by 'half' on 2026-11-13; saved
@@ -225,6 +227,8 @@ function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 export default function PoliciesScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
@@ -353,7 +357,7 @@ export default function PoliciesScreen({ navigation }: any) {
     if (!userId) return;
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      Alert.alert(tr('providerProfile.policies.permissionTitle'), tr('providerProfile.portfolio.permissionBody'));
       return;
     }
     // No allowsEditing: iOS's editor only crops to a square, which cuts the
@@ -394,7 +398,7 @@ export default function PoliciesScreen({ navigation }: any) {
         .then(edge => setImageEdges(prev => ({ ...prev, [publicUrl]: edge })))
         .catch(() => {});
     } catch (e: any) {
-      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
+      Alert.alert(tr('providerProfile.portfolio.uploadFailedTitle'), toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
     } finally {
       setPolicyImageUploads(n => n - 1);
     }
@@ -480,7 +484,7 @@ export default function PoliciesScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>{isLinkOnly ? 'Policies' : 'Policies & Info'}</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{isLinkOnly ? tr('providerProfile.dashboard.strength.policies.done') : tr('providerProfile.ui.policiesInfo')}</Text>
             <TouchableOpacity
               style={[s.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -499,20 +503,20 @@ export default function PoliciesScreen({ navigation }: any) {
             {toast && <Toast message={toast.message} type={toast.type} />}
 
             {isLinkOnly && (
-              <Card title="Your own policies" sub="These show on your profile so clients know them before they book. Clients book and pay on your own booking site, so CERVICED doesn't apply them or charge anything.">{null}</Card>
+              <Card title={tr('providerProfile.ui.ownPolicies')} sub="These show on your profile so clients know them before they book. Clients book and pay on your own booking site, so CERVICED doesn't apply them or charge anything.">{null}</Card>
             )}
 
             {/* Every card opens with one plain line saying what it sets up,
                 so a provider never has to guess from the pills alone. */}
-            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : "How much notice clients give, and what happens if it's late."}>
-              <SectionLabel text="Notice required" />
+            <Card title={tr('providerProfile.policies.cancel.title')} sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : "How much notice clients give, and what happens if it's late."}>
+              <SectionLabel text={tr('providerProfile.policies.noticeRequired')} />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '12h', l: '12h' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.cancelNotice}
                 onChange={v => setPolicy('cancelNotice', v)}
               />
               {!isLinkOnly && (<>
-                <SectionLabel text="If cancelled late" />
+                <SectionLabel text={tr('providerProfile.policies.cancel.ifLate')} />
                 <Pills
                   options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'half', l: 'Half the price' }]}
                   value={policies.cancelPenalty}
@@ -542,24 +546,24 @@ export default function PoliciesScreen({ navigation }: any) {
               </>)}
               {shows('cancelNote') && (
                 <View>
-                  <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
-                  <MinusButton label="Remove note" onPress={() => removeText('cancelNote')} style={MINUS_ON_FIELD} />
+                  <Field label={tr('providerProfile.policies.noteOptional')} value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder={tr('providerProfile.policies.cancel.notePlaceholder')} />
+                  <MinusButton label={tr('providerProfile.ui.removeNote')} onPress={() => removeText('cancelNote')} style={MINUS_ON_FIELD} />
                 </View>
               )}
               <View style={linkSt.row}>
-                {!isLinkOnly && <TextLink label={opened['cancelHow'] ? 'Hide' : 'How this works ›'} onPress={() => toggle('cancelHow')} />}
-                {!shows('cancelNote') && <TextLink label="+ Add a note" onPress={() => open('cancelNote')} />}
+                {!isLinkOnly && <TextLink label={opened['cancelHow'] ? tr('providerProfile.myProfile.row.hide') : 'How this works ›'} onPress={() => toggle('cancelHow')} />}
+                {!shows('cancelNote') && <TextLink label={tr('providerProfile.ui.addNote')} onPress={() => open('cancelNote')} />}
               </View>
             </Card>
 
-            <Card title="Rescheduling" sub="Notice, how many times, and to when.">
-              <SectionLabel text="Notice required" />
+            <Card title={tr('providerProfile.policies.reschedule.title')} sub="Notice, how many times, and to when.">
+              <SectionLabel text={tr('providerProfile.policies.noticeRequired')} />
               <Pills
                 options={[{ v: 'same_day', l: 'Same day' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.rescheduleNotice}
                 onChange={v => setPolicy('rescheduleNotice', v)}
               />
-              <SectionLabel text="Max reschedules per booking" />
+              <SectionLabel text={tr('providerProfile.policies.reschedule.max')} />
               <Pills
                 options={[{ v: '1', l: '1' }, { v: '2', l: '2' }, { v: 'unlimited', l: 'Unlimited' }]}
                 value={policies.maxReschedules}
@@ -577,11 +581,11 @@ export default function PoliciesScreen({ navigation }: any) {
               {shows('rescheduleNote')
                 ? (
                   <View>
-                    <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
-                    <MinusButton label="Remove note" onPress={() => removeText('rescheduleNote')} style={MINUS_ON_FIELD} />
+                    <Field label={tr('providerProfile.policies.noteOptional')} value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
+                    <MinusButton label={tr('providerProfile.ui.removeNote')} onPress={() => removeText('rescheduleNote')} style={MINUS_ON_FIELD} />
                   </View>
                 )
-                : <View style={linkSt.row}><TextLink label="+ Add a note" onPress={() => open('rescheduleNote')} /></View>}
+                : <View style={linkSt.row}><TextLink label={tr('providerProfile.ui.addNote')} onPress={() => open('rescheduleNote')} /></View>}
             </Card>
 
             {!isLinkOnly && (<>
@@ -589,20 +593,20 @@ export default function PoliciesScreen({ navigation }: any) {
               {/* One grace period, kept under noShowGraceMinutes: checkout quotes it
                   beside the late fee, and provider_update_booking_status() won't
                   accept a no-show until it has passed. */}
-              <Card title="Late" sub="How long a client can be late, and the fee after that. Leave the fee blank for no fee.">
+              <Card title={tr('providerProfile.ui.late')} sub="How long a client can be late, and the fee after that. Leave the fee blank for no fee.">
                 <Field
-                  label="Grace period (minutes)"
+                  label={tr('providerProfile.policies.noShow.grace')}
                   value={policies.noShowGraceMinutes}
                   onChange={v => setPolicy('noShowGraceMinutes', v.replace(/[^0-9]/g, ''))}
-                  placeholder="e.g. 15"
+                  placeholder={tr('providerProfile.policies.noShow.gracePlaceholder')}
                   keyboardType="phone-pad"
                   note="How long after the booked start time before a client counts as late. You can't mark a No Show until this has passed. 0 = no grace period."
                 />
                 <Field
-                  label="Late arrival fee (£)"
+                  label={tr('providerProfile.policies.fees.late')}
                   value={policies.lateFee}
                   onChange={v => setPolicy('lateFee', v.replace(/[^0-9.]/g, ''))}
-                  placeholder="e.g. 10"
+                  placeholder={tr('providerProfile.policies.fees.latePlaceholder')}
                   keyboardType="decimal-pad"
                   note="For arriving after your grace period above."
                 />
@@ -611,12 +615,12 @@ export default function PoliciesScreen({ navigation }: any) {
                   <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>{FEE_CHARGE_NOTE}</Text>
                 )}
                 <View style={linkSt.row}>
-                  <TextLink label={opened['lateHow'] ? 'Hide' : 'How fees are charged ›'} onPress={() => toggle('lateHow')} />
+                  <TextLink label={opened['lateHow'] ? tr('providerProfile.myProfile.row.hide') : 'How fees are charged ›'} onPress={() => toggle('lateHow')} />
                 </View>
               </Card>
 
-              <Card title="No-show" sub="What happens when a client doesn't turn up.">
-                <SectionLabel text="Action" />
+              <Card title={tr('providerProfile.policies.noShow.title')} sub="What happens when a client doesn't turn up.">
+                <SectionLabel text={tr('providerProfile.policies.noShow.action')} />
                 <Pills
                   options={[
                     { v: 'none', l: 'No action' },
@@ -641,13 +645,13 @@ export default function PoliciesScreen({ navigation }: any) {
                 )}
                 {shows('noShowNote') && (
                   <View>
-                    <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
-                    <MinusButton label="Remove note" onPress={() => removeText('noShowNote')} style={MINUS_ON_FIELD} />
+                    <Field label={tr('providerProfile.policies.noteOptional')} value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+                    <MinusButton label={tr('providerProfile.ui.removeNote')} onPress={() => removeText('noShowNote')} style={MINUS_ON_FIELD} />
                   </View>
                 )}
                 <View style={linkSt.row}>
-                  {policies.noShowAction === 'half' && <TextLink label={opened['noShowHow'] ? 'Hide' : 'How this works ›'} onPress={() => toggle('noShowHow')} />}
-                  {!shows('noShowNote') && <TextLink label="+ Add a note" onPress={() => open('noShowNote')} />}
+                  {policies.noShowAction === 'half' && <TextLink label={opened['noShowHow'] ? tr('providerProfile.myProfile.row.hide') : 'How this works ›'} onPress={() => toggle('noShowHow')} />}
+                  {!shows('noShowNote') && <TextLink label={tr('providerProfile.ui.addNote')} onPress={() => open('noShowNote')} />}
                 </View>
               </Card>
             </>)}
@@ -672,12 +676,12 @@ export default function PoliciesScreen({ navigation }: any) {
                 refund-processing infra, so there is deliberately no
                 percentage/amount field here that would imply the app
                 calculates or enforces a refund automatically. */}
-            <Card title="Refund Policy" sub={isLinkOnly ? 'When you give refunds, in your own words, so clients know before they book. Shown on your profile (optional).' : 'When you give refunds, in your own words, so clients know before they book. Shown on their booking (optional).'}>
+            <Card title={tr('providerProfile.policies.refund.title')} sub={isLinkOnly ? 'When you give refunds, in your own words, so clients know before they book. Shown on your profile (optional).' : 'When you give refunds, in your own words, so clients know before they book. Shown on their booking (optional).'}>
               <Field
-                label="Your refund policy"
+                label={tr('providerProfile.policies.refund.label')}
                 value={policies.refundPolicyNote}
                 onChange={v => setPolicy('refundPolicyNote', v)}
-                placeholder='e.g. "Refunds considered case-by-case, contact me directly"'
+                placeholder={tr('providerProfile.policies.refund.placeholder')}
                 multiline
               />
             </Card>
@@ -688,7 +692,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 pushes on top, so nothing typed here is lost. */}
             {!isLinkOnly && packTip.mode === 'card' && (
               <PackFormTipCard
-                title="Want clients to actually read it?"
+                title={tr('providerProfile.ui.wantRead')}
                 body="An Info Pack lands on their phone with their booking. A Form gets their answers, and a signature if you want one, before they come."
                 palette={C}
                 onOpen={kind => { packTip.dismiss(); openPackOrForm(kind); }}
@@ -696,12 +700,12 @@ export default function PoliciesScreen({ navigation }: any) {
               />
             )}
             {!isLinkOnly && (
-              <Card title="Your Instructions" sub="Shown in their booking details and in the reminder the day before, like arriving early or what to bring (optional). Directions and door codes go beside your address. Changes apply to new bookings.">
+              <Card title={tr('providerProfile.ui.yourInstructions')} sub="Shown in their booking details and in the reminder the day before, like arriving early or what to bring (optional). Directions and door codes go beside your address. Changes apply to new bookings.">
                 <Field
-                  label="Instructions"
+                  label={tr('providerProfile.policies.instructions.label')}
                   value={policies.bookingInstructions}
                   onChange={v => setPolicy('bookingInstructions', v)}
-                  placeholder="Write your own or tap a suggestion below"
+                  placeholder={tr('providerProfile.ui.instructionsPlaceholder')}
                   multiline
                 />
                 <ChipGroup
@@ -724,12 +728,12 @@ export default function PoliciesScreen({ navigation }: any) {
                 the distance is stated once). */}
             {shows('travelPolicy') && (
               <Card
-                title="Travel"
+                title={tr('providerProfile.ui.travel')}
                 sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional)."
-                action={<MinusButton label="Remove travel" onPress={() => removeText('travelPolicy')} />}
+                action={<MinusButton label={tr('providerProfile.ui.removeTravel')} onPress={() => removeText('travelPolicy')} />}
               >
                 <Field
-                  label="Your travel policy"
+                  label={tr('providerProfile.ui.travelPolicy')}
                   value={policies.travelPolicy}
                   onChange={v => setPolicy('travelPolicy', v)}
                   placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
@@ -739,12 +743,12 @@ export default function PoliciesScreen({ navigation }: any) {
             )}
             {shows('emergencyBookingPolicy') && (
               <Card
-                title="Emergency Appointments"
+                title={tr('providerProfile.ui.emergency')}
                 sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly."
-                action={<MinusButton label="Remove emergency appointments" onPress={() => removeText('emergencyBookingPolicy')} />}
+                action={<MinusButton label={tr('providerProfile.ui.removeEmergency')} onPress={() => removeText('emergencyBookingPolicy')} />}
               >
                 <Field
-                  label="Your emergency appointment policy"
+                  label={tr('providerProfile.ui.emergencyPolicy')}
                   value={policies.emergencyBookingPolicy}
                   onChange={v => setPolicy('emergencyBookingPolicy', v)}
                   placeholder="e.g. I only take emergencies from existing clients, message me and I'll let you know if I can fit you in"
@@ -754,28 +758,28 @@ export default function PoliciesScreen({ navigation }: any) {
             )}
             {(!shows('travelPolicy') || !shows('emergencyBookingPolicy')) && (
               <View style={addSt.wrap}>
-                <SectionLabel text="Add if you need them" />
+                <SectionLabel text={tr('providerProfile.ui.addIfNeeded')} />
                 <View style={addSt.row}>
                   {!shows('travelPolicy') && (
                     <TouchableOpacity style={[addSt.chip, { borderColor: C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); open('travelPolicy'); }} activeOpacity={0.7} accessibilityRole="button">
-                      <Text style={[addSt.chipText, { color: C.accentText }]}>+ Travel</Text>
+                      <Text style={[addSt.chipText, { color: C.accentText }]}>{tr('providerProfile.ui.plusTravel')}</Text>
                     </TouchableOpacity>
                   )}
                   {!shows('emergencyBookingPolicy') && (
                     <TouchableOpacity style={[addSt.chip, { borderColor: C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); open('emergencyBookingPolicy'); }} activeOpacity={0.7} accessibilityRole="button">
-                      <Text style={[addSt.chipText, { color: C.accentText }]}>+ Emergency appointments</Text>
+                      <Text style={[addSt.chipText, { color: C.accentText }]}>{tr('providerProfile.ui.plusEmergency')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
             )}
 
-            <Card title="Detailed Policy Images" sub={`Pages of your full policy, like a house-rules sheet or consent form. Up to ${MAX_POLICY_IMAGES}, in reading order. Clients can zoom in (optional).`}>
+            <Card title={tr('providerProfile.ui.policyImages')} sub={`Pages of your full policy, like a house-rules sheet or consent form. Up to ${MAX_POLICY_IMAGES}, in reading order. Clients can zoom in (optional).`}>
               <View style={imgSt.grid}>
                 {policies.policyImageUrls.map((url, index) => (
                   <View key={url} style={imgSt.thumbWrap}>
                     <Image source={{ uri: url }} style={[imgSt.thumb, { backgroundColor: C.border }]} resizeMode="contain" fadeDuration={0} />
-                    <Text style={[imgSt.pageNo, { color: C.sub }]}>Page {index + 1}</Text>
+                    <Text style={[imgSt.pageNo, { color: C.sub }]}>{tr('providerProfile.ui.page')} {index + 1}</Text>
                     <TouchableOpacity
                       style={imgSt.removeBtn}
                       onPress={() => handleRemovePolicyImage(url)}
@@ -794,14 +798,14 @@ export default function PoliciesScreen({ navigation }: any) {
                     disabled={policyImageUploading || policyImageToCrop !== null}
                     activeOpacity={0.7}
                     accessibilityRole="button"
-                    accessibilityLabel="Add policy images"
+                    accessibilityLabel={tr('providerProfile.ui.addPolicyImagesA11y')}
                   >
                     {policyImageUploading ? (
                       <ActivityIndicator size="small" color={C.accent} />
                     ) : (
                       <>
                         <Text style={[imgSt.addPlus, { color: C.sub }]}>+</Text>
-                        <Text style={[imgSt.addText, { color: C.sub }]}>{policies.policyImageUrls.length > 0 ? 'Add more' : 'Add Images'}</Text>
+                        <Text style={[imgSt.addText, { color: C.sub }]}>{policies.policyImageUrls.length > 0 ? tr('providerProfile.ui.addMore') : tr('providerProfile.ui.addImages')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -809,7 +813,7 @@ export default function PoliciesScreen({ navigation }: any) {
               </View>
               {policies.policyImageUrls.length > 0 && (
                 <Text style={[imgSt.count, { color: C.sub }]}>
-                  {policyImageUploading ? 'UPLOADING…' : `${policies.policyImageUrls.length} OF ${MAX_POLICY_IMAGES}`}
+                  {policyImageUploading ? tr('providerProfile.policies.image.uploading') : `${policies.policyImageUrls.length} OF ${MAX_POLICY_IMAGES}`}
                 </Text>
               )}
             </Card>

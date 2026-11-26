@@ -96,14 +96,14 @@ describe('one editor per answer', () => {
     expect(servicesPricing).not.toContain('hair_types_catered:');
     expect(servicesPricing).not.toContain('skin_tones_catered');
     expect(servicesPricing).not.toContain('setClientele');
-    expect(aboutYou).toContain('<Card title="I Work With"');
+    expect(aboutYou).toContain("<Card title={t('providerProfile.ui.iWorkWith')}");
     expect(aboutYou).toMatch(/^\s+clientele,$/m);
     expect(aboutYou).toContain('skin_tones_catered: skinTones.length ? skinTones : null');
   });
 
   it('keeps products in a card of their own, apart from style', () => {
-    expect(servicesPricing).toContain('<Card title="Your Style">');
-    expect(servicesPricing).toContain('<Card title="Products I Work With"');
+    expect(servicesPricing).toContain("<Card title={t('providerProfile.ui.yourStyle')}>");
+    expect(servicesPricing).toContain("<Card title={t('providerProfile.ui.productsIWorkWith')}");
     expect(servicesPricing).toContain('products_used: joinProductsUsed(');
   });
 });

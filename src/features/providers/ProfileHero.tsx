@@ -30,6 +30,8 @@ import { CapsuleHero } from "./heroes/CapsuleHero";
 import { MoodboardHero } from "./heroes/MoodboardHero";
 import { LatteHero } from "./heroes/LatteHero";
 import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -282,12 +284,14 @@ function ProfileHeroLayoutBody({
   onOpenHeroPhoto,
   pickedNameFont = null,
 }: ProfileHeroLayoutProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Quiet, Signature, Hush, Pinboard, Neon and Moodboard draw the name themselves: in the picked font,
   // when there is one, at the size that top draws it.
   const pickedName = (size: number): TextStyle | null => (pickedNameFont ? pickedNameFontStyle(pickedNameFont, size) : null);
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
-    <Ionicons name="checkmark-circle" size={18} color={heroIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+    <Ionicons name="checkmark-circle" size={18} color={heroIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} />
   ) : null;
   // The accent stays the accent on a pale hero; over a dark photo it is lifted
   // so it still reads.
@@ -455,7 +459,7 @@ function ProfileHeroLayoutBody({
               disabled={!photo || !onOpenHeroPhoto}
               onPress={() => onOpenHeroPhoto?.(0)}
               accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
-              accessibilityLabel={photo ? `${name} featured work` : undefined}
+              accessibilityLabel={photo ? tr('discover.page.featuredWork', { name }) : undefined}
               activeOpacity={0.88}
             >{photo ? <HeroPhoto uri={photo} /> : null}</TouchableOpacity>
           </View>
@@ -494,7 +498,7 @@ function ProfileHeroLayoutBody({
                 <Path d="M8 34 L10 29 L12 34 L17 36 L12 38 L10 43 L8 38 L3 36 Z" fill={heroText} />
                 <Path d="M156 50 L157.6 46 L159.2 50 L163 51.6 L159.2 53.2 L157.6 57 L156 53.2 L152 51.6 Z" fill={heroText} />
               </Svg>
-              <Text style={[layout.posterScript, { color: heroText }]} numberOfLines={2}>book in{"\n"}with me</Text>
+              <Text style={[layout.posterScript, { color: heroText }]} numberOfLines={2}>{tr('discover.page.bookInWithMe')}</Text>
             </View>
             {photo ? (
               <TouchableOpacity
@@ -502,7 +506,7 @@ function ProfileHeroLayoutBody({
                 disabled={!onOpenHeroPhoto}
                 onPress={() => onOpenHeroPhoto?.(0)}
                 accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
-                accessibilityLabel={`${name} work photo`}
+                accessibilityLabel={tr('discover.page.workPhoto', { name })}
                 activeOpacity={0.88}
               >
                 <View style={layout.posterPrintPhoto}><HeroPhoto uri={photo} /></View>
@@ -528,7 +532,7 @@ function ProfileHeroLayoutBody({
           <Text style={[layout.echoLead, { color: "#FFF4F6" }]}>WELCOME TO</Text>
           <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
             <Text style={[layout.echoName, pickedName(32), { color: panelPop }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
-            {isVerified ? <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" accessibilityLabel="Verified" /> : null}
+            {isVerified ? <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" accessibilityLabel={tr('discover.page.verified')} /> : null}
           </View>
           {phrase ? (
             <View style={[layout.echoTag, { backgroundColor: withAlpha(panelPop, 0.22) }]}>
@@ -552,7 +556,7 @@ function ProfileHeroLayoutBody({
                 disabled={!onOpenHeroPhoto}
                 onPress={() => onOpenHeroPhoto?.(0)}
                 accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
-                accessibilityLabel={`${name} featured work`}
+                accessibilityLabel={tr('discover.page.featuredWork', { name })}
                 activeOpacity={0.88}
               ><HeroPhoto uri={photo} /></TouchableOpacity>
               {panelBody}
@@ -578,7 +582,7 @@ function ProfileHeroLayoutBody({
             disabled={!photo || !onOpenHeroPhoto}
             onPress={() => onOpenHeroPhoto?.(0)}
             accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
-            accessibilityLabel={photo ? `${name} featured work` : undefined}
+            accessibilityLabel={photo ? tr('discover.page.featuredWork', { name }) : undefined}
             activeOpacity={0.9}
           >
             {photo ? <HeroPhoto uri={photo} /> : null}
@@ -589,7 +593,7 @@ function ProfileHeroLayoutBody({
             {phrase ? <Text style={[layout.storeOver, { color: withAlpha(bandInk, 0.6) }]} numberOfLines={1}>{phrase.toUpperCase()}</Text> : null}
             <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
               <Text style={[layout.storeName, pickedName(30), { color: bandInk }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
-              {isVerified ? <Ionicons name="checkmark-circle" size={17} color={bandDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+              {isVerified ? <Ionicons name="checkmark-circle" size={17} color={bandDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} /> : null}
             </View>
           </View>
           <View style={layout.storeFoot}>{meta}{details}</View>
@@ -612,7 +616,7 @@ function ProfileHeroLayoutBody({
           onPress={() => onOpenHeroPhoto?.(index)}
           style={[layout.pinboardPin, { backgroundColor: pinFill }, size]}
           accessibilityRole={onOpenHeroPhoto ? "imagebutton" : undefined}
-          accessibilityLabel={`Photo ${index + 1} of ${pins.length}`}
+          accessibilityLabel={tr('discover.page.photoOf', { n: index + 1, total: pins.length })}
         >
           {pins[index] ? <HeroPhoto uri={pins[index]} /> : null}
         </TouchableOpacity>
@@ -676,7 +680,7 @@ function ProfileHeroLayoutBody({
             disabled={!cover || !onOpenHeroPhoto}
             onPress={() => onOpenHeroPhoto?.(0)}
             accessibilityRole={cover && onOpenHeroPhoto ? "imagebutton" : undefined}
-            accessibilityLabel={cover ? `${name} cover photo` : undefined}
+            accessibilityLabel={cover ? tr('discover.page.coverPhoto', { name }) : undefined}
             style={[layout.portfolioCover, { backgroundColor: blend(heroColour, "#282322", 0.45) }]}
           >
             {cover ? <HeroPhoto uri={cover} /> : null}
@@ -717,7 +721,7 @@ function ProfileHeroLayoutBody({
             <Text style={[layout.kicker, { color: heroSub }, shadow]}>WELCOME TO MY BOOKING PAGE</Text>
             {renderName({ scale: 1.45 })}
             {location ? (
-              <Text style={[layout.located, { color: heroSub }, shadow]}>Located in {location}</Text>
+              <Text style={[layout.located, { color: heroSub }, shadow]}>{tr('discover.page.locatedIn')} {location}</Text>
             ) : null}
           </View>
           <View style={layout.mastRow}>
@@ -726,7 +730,7 @@ function ProfileHeroLayoutBody({
               {renderLogo(124)}
             </View>
             <View style={layout.mastAbout}>
-              <Text style={[layout.meet, { color: heroText }, shadow]}>Meet</Text>
+              <Text style={[layout.meet, { color: heroText }, shadow]}>{tr('discover.page.meet')}</Text>
               <Text style={[layout.meetName, { color: heroText }, shadow]} numberOfLines={2}>{firstName}</Text>
               {about}
             </View>
@@ -749,7 +753,7 @@ function ProfileHeroLayoutBody({
               {location ? (
                 <View style={layout.locatedRow}>
                   <Ionicons name="location-outline" size={13} color={heroSub} />
-                  <Text style={[layout.locatedScript, { color: heroSub }, shadow]}>located in</Text>
+                  <Text style={[layout.locatedScript, { color: heroSub }, shadow]}>{tr('discover.page.locatedInLower')}</Text>
                   <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={2}>{location}</Text>
                 </View>
               ) : null}
@@ -895,7 +899,7 @@ function ProfileHeroLayoutBody({
                   <Text style={[layout.duetLocated, { color: duetInk.sub }]} numberOfLines={2}>{location.toUpperCase()}</Text>
                 ) : null}
                 {isVerified ? (
-                  <Ionicons name="checkmark-circle" size={18} color={cardIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                  <Ionicons name="checkmark-circle" size={18} color={cardIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} />
                 ) : null}
               </View>
               </View>
@@ -1003,7 +1007,7 @@ function ProfileHeroLayoutBody({
                   {name}
                 </Text>
                 {isVerified ? (
-                  <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                  <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} />
                 ) : null}
               </View>
             </View>
@@ -1197,7 +1201,7 @@ function ProfileHeroLayoutBody({
               rating={rating}
               cardColour={cardColour}
               logo={<View style={layout.logoNoGap}>{renderLogo(64)}</View>}
-              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} /> : null}
             />
           </View>
           <View style={layout.infoCenter}>{details}</View>
@@ -1216,7 +1220,7 @@ function ProfileHeroLayoutBody({
           renderLogo={renderLogo}
           details={details}
           // The tick sits beside the name on the accent panel.
-          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(accent) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(accent) ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} /> : null}
           onBookNow={onBookNow}
         />
       );
@@ -1244,7 +1248,7 @@ function ProfileHeroLayoutBody({
           renderLogo={renderLogo}
           details={details}
           // The tick sits on the pale tinted card.
-          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color="#007AFF" accessibilityLabel="Verified" /> : null}
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color="#007AFF" accessibilityLabel={tr('discover.page.verified')} /> : null}
         />
       );
 
@@ -1379,7 +1383,7 @@ function ProfileHeroLayoutBody({
           renderLogo={renderLogo}
           details={details}
           // The tick sits on the strip, usually a pale shade of the accent.
-          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(stripesHeroColour(accent)) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(stripesHeroColour(accent)) ? "#FFFFFF" : "#007AFF"} accessibilityLabel={tr('discover.page.verified')} /> : null}
         />
       );
 
@@ -1561,8 +1565,10 @@ function CurvedCaption({ text, color, width }: { text: string; color: string; wi
 
 /** Groovy's starburst sticker with their rating. */
 function Starburst({ rating, fill, ink }: { rating: string; fill: string; ink: string }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
-    <View style={layout.starburst} pointerEvents="none" accessible accessibilityLabel={`Rated ${rating}`}>
+    <View style={layout.starburst} pointerEvents="none" accessible accessibilityLabel={tr('discover.page.ratedA11y', { rating })}>
       <Svg width={100} height={100} viewBox="0 0 100 100" style={StyleSheet.absoluteFill}>
         <Polygon
           fill={fill}

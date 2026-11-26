@@ -5,6 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { getMyRequestCardHolds, requestCardHoldStep, type RequestCardHold } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
 import { holdCheckPrompt, holdNeedsCheck, holdResultLine } from './requestHolds';
+import { tr } from '../../i18n';
 
 // Loaded lazily, as in CartScreen: the native module is missing in Expo Go.
 const StripeRN: typeof import('@stripe/stripe-react-native') = require('@stripe/stripe-react-native');
@@ -81,7 +82,7 @@ export function RequestHoldChecks({ checkoutBatchId }: Props) {
       if (mounted.current) updateHold(hold.holdId, checked.state);
     } catch (err) {
       logger.error('[checkout] could not confirm a request hold', err);
-      if (mounted.current) setError(err instanceof Error ? err.message : 'Please try again.');
+      if (mounted.current) setError(err instanceof Error ? err.message : tr('common.pleaseTryAgain'));
     } finally {
       if (mounted.current) setBusyId(null);
     }
@@ -103,7 +104,7 @@ export function RequestHoldChecks({ checkoutBatchId }: Props) {
             <Text style={[styles.detail, { color: P.sub }]}>{prompt.detail}</Text>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={`Confirm the hold for the ${hold.serviceName} request with your bank`}
+              accessibilityLabel={tr('cart.hold.confirmA11y', { service: hold.serviceName })}
               disabled={!!busyId}
               activeOpacity={0.85}
               onPress={() => { confirm(hold); }}
@@ -111,7 +112,7 @@ export function RequestHoldChecks({ checkoutBatchId }: Props) {
             >
               {busy
                 ? <ActivityIndicator color={P.onAccent} size="small" />
-                : <Text style={[styles.buttonText, { color: P.onAccent }]}>Confirm with your bank</Text>}
+                : <Text style={[styles.buttonText, { color: P.onAccent }]}>{tr('cart.hold.confirm')}</Text>}
             </TouchableOpacity>
           </View>
         );

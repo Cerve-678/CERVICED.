@@ -49,6 +49,9 @@ import { ClientBeautyProfileDetails } from '../../features/beauty-profile/Client
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { interestedRecipientIds } from '../../features/providers/announcementAudience';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -101,11 +104,13 @@ type Tab = 'all' | 'repeat' | 'new' | 'lapsed';
 function TabBar({ active, onChange, counts, P }: {
   active: Tab; onChange: (t: Tab) => void; counts: Record<Tab, number>; P: typeof LIGHT;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const tabs = [
-    { key: 'all' as Tab, label: 'All', count: counts.all },
-    { key: 'repeat' as Tab, label: 'Repeat', count: counts.repeat },
-    { key: 'new' as Tab, label: 'New', count: counts.new },
-    { key: 'lapsed' as Tab, label: 'Lapsed', count: counts.lapsed },
+    { key: 'all' as Tab, label: tr('common.all'), count: counts.all },
+    { key: 'repeat' as Tab, label: tr('providerBusiness.clientele.tab.repeat'), count: counts.repeat },
+    { key: 'new' as Tab, label: tr('common.new'), count: counts.new },
+    { key: 'lapsed' as Tab, label: tr('providerBusiness.clientele.tab.lapsed'), count: counts.lapsed },
   ];
   return (
     <View style={[tbSt.wrap, { backgroundColor: P.surface }]}>
@@ -142,6 +147,8 @@ function ClientSheet({ member, onClose, P, isDark }: {
   P: typeof LIGHT;
   isDark: boolean;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Inside a <Modal>, so the live inset, not SafeAreaView (inert here).
   const bottomInset = useSystemBottomInset();
   const clientId = member?.user_id ?? null;
@@ -218,7 +225,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
       setSavedAt(at);
       return true;
     } catch (e) {
-      setSaveError(`${toUserMessageAllowingDbGuard(e, 'Could not save your note.', 'ProviderClienteleScreen.saveNote')} Tap Save to try again, or close to discard.`);
+      setSaveError(`${toUserMessageAllowingDbGuard(e, tr('providerBusiness.ui.noteSaveFailed'), 'ProviderClienteleScreen.saveNote')} ${tr('providerBusiness.ui.tapSaveAgain')}`);
       return false;
     } finally {
       setSaving(false);
@@ -239,7 +246,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
   );
   const retry = (label: string, onPress: () => void) => (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={csSt.center}>
-      <Text style={[csSt.emptySub, { color: P.sub }]}>Couldn't load {label}. Tap to try again.</Text>
+      <Text style={[csSt.emptySub, { color: P.sub }]}>{tr('providerBusiness.ui.couldntLoad', { what: label })}</Text>
     </TouchableOpacity>
   );
 
@@ -249,7 +256,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
       {/* The dim fills the whole window BEHIND the sheet, so the sheet's
           rounded top corners show the dim, not the screen, through them. */}
       <View style={csSt.overlay}>
-      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} accessibilityRole="button" accessibilityLabel="Close" />
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} accessibilityRole="button" accessibilityLabel={tr('common.close')} />
       <View style={[csSt.sheet, { backgroundColor: P.surface, paddingBottom: bottomInset }]}>
         <View style={[csSt.handle, { backgroundColor: P.border }]} />
         <View style={csSt.header}>
@@ -261,10 +268,10 @@ function ClientSheet({ member, onClose, P, isDark }: {
           <View style={{ flex: 1 }}>
             <Text style={[csSt.title, { color: P.text }]}>{member?.customer_name ?? ''}</Text>
             <Text style={[csSt.sub, { color: P.sub }]}>
-              {member ? `${member.booking_count} booking${member.booking_count !== 1 ? 's' : ''} with you` : ''}
+              {member ? trp('providerBusiness.ui.bookingsWithYou', member.booking_count) : ''}
             </Text>
           </View>
-          <TouchableOpacity onPress={close} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Close">
+          <TouchableOpacity onPress={close} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={tr('common.close')}>
             <Ionicons name="close" size={22} color={P.sub} />
           </TouchableOpacity>
         </View>
@@ -281,7 +288,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
               // Null is "not shared yet", never "nothing on file" — saying
               // nothing here would read as "no allergies".
               <Text style={[csSt.emptySub, csSt.blockText, { color: P.sub }]}>
-                Shared with you once you've accepted a booking from them.
+                {tr('providerBusiness.ui2.sharedWithYouOnceYouVe')}
               </Text>
             ) : (
               <ClientBeautyProfileDetails
@@ -307,12 +314,12 @@ function ClientSheet({ member, onClose, P, isDark }: {
                 <TextInput
                   value={note}
                   onChangeText={t => { setNote(t); if (saveError) setSaveError(''); }}
-                  placeholder="Anything to remember about them: preferences, formulas, what they liked last time…"
+                  placeholder={tr('providerBusiness.ui2.anythingToRememberAboutThemPreferences')}
                   placeholderTextColor={P.sub}
                   multiline
                   maxLength={2000}
                   style={[csSt.noteInput, { color: P.text }]}
-                  accessibilityLabel="Your notes on this client"
+                  accessibilityLabel={tr('providerBusiness.ui2.yourNotesOnThisClient')}
                 />
                 <View style={csSt.noteFooter}>
                   <Text style={[csSt.noteHint, { color: saveError ? DANGER : P.sub }]}>
@@ -327,7 +334,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
                     >
                       {saving
                         ? <ActivityIndicator size="small" color={P.onAccent} />
-                        : <Text style={[csSt.saveText, { color: P.onAccent }]}>Save</Text>}
+                        : <Text style={[csSt.saveText, { color: P.onAccent }]}>{tr('common.save')}</Text>}
                     </TouchableOpacity>
                   )}
                 </View>
@@ -342,7 +349,7 @@ function ClientSheet({ member, onClose, P, isDark }: {
           ) : history.state === 'failed' ? (
             retry('their history', () => clientId && loadHistory(clientId))
           ) : bookings.length === 0 ? (
-            <View style={csSt.center}><Text style={[csSt.emptySub, { color: P.sub }]}>No booking history</Text></View>
+            <View style={csSt.center}><Text style={[csSt.emptySub, { color: P.sub }]}>{tr('providerBusiness.clientele.history.empty')}</Text></View>
           ) : (
             bookings.map(b => {
               const statusColor = b.status === 'completed' ? GREEN
@@ -437,6 +444,8 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
   onError: (msg: string) => void;
   P: typeof LIGHT;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [audience, setAudience] = useState<AudienceKey>(clients.length > 0 ? 'all' : 'followers');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -450,12 +459,12 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
   const bottomSafeGap = useSystemBottomInset() + 16;
 
   const audienceOptions: { key: AudienceKey; label: string; icon: string }[] = [
-    { key: 'all',    label: 'All clients',    icon: 'people-outline' },
-    { key: 'interested', label: 'Interested', icon: 'heart-outline' },
-    { key: 'repeat', label: 'Repeat clients', icon: 'repeat-outline' },
-    { key: 'new',    label: 'New clients',    icon: 'sparkles-outline' },
-    { key: 'lapsed', label: 'Lapsed (60d+)',  icon: 'time-outline' },
-    { key: 'followers', label: 'Saved you or bell on', icon: 'notifications-outline' },
+    { key: 'all',    label: tr('providerBusiness.clientele.audience.all'),    icon: 'people-outline' },
+    { key: 'interested', label: tr('providerBusiness.promotions.notify.interested'), icon: 'heart-outline' },
+    { key: 'repeat', label: tr('providerBusiness.clientele.audience.repeat'), icon: 'repeat-outline' },
+    { key: 'new',    label: tr('providerBusiness.clientele.audience.new'),    icon: 'sparkles-outline' },
+    { key: 'lapsed', label: tr('providerBusiness.clientele.audience.lapsed'),  icon: 'time-outline' },
+    { key: 'followers', label: tr('providerBusiness.ui2.savedYouOrBellOn'), icon: 'notifications-outline' },
   ];
 
   const recipientIds = (): string[] => {
@@ -572,9 +581,9 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
     >
       <View style={anSt.header}>
         <View>
-          <Text style={[anSt.title, { color: P.text }]}>New Announcement</Text>
+          <Text style={[anSt.title, { color: P.text }]}>{tr('providerBusiness.clientele.announce.title')}</Text>
           <Text style={[anSt.sub, { color: P.sub }]}>
-            {recipients} will receive this
+            {tr('providerBusiness.ui.willReceive', { recipients })}
           </Text>
         </View>
         <TouchableOpacity onPress={() => sheetRef.current?.close()} activeOpacity={0.7}>
@@ -588,7 +597,7 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[anSt.scroll, { paddingBottom: bottomSafeGap }]}
       >
-        <Text style={[anSt.label, { color: P.sub }]}>AUDIENCE</Text>
+        <Text style={[anSt.label, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.audience')}</Text>
         <View style={anSt.audienceRow}>
           {audienceOptions.map(opt => {
             const active = audience === opt.key;
@@ -608,22 +617,22 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
           })}
         </View>
 
-        <Text style={[anSt.label, { color: P.sub }]}>TITLE</Text>
+        <Text style={[anSt.label, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.titleLabel')}</Text>
         <BottomSheetTextInput
           style={[anSt.input, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g. New availability this weekend"
+          placeholder={tr('providerBusiness.clientele.announce.titlePlaceholder')}
           placeholderTextColor={P.sub}
           maxLength={80}
         />
 
-        <Text style={[anSt.label, { color: P.sub }]}>MESSAGE</Text>
+        <Text style={[anSt.label, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.message')}</Text>
         <BottomSheetTextInput
           style={[anSt.input, anSt.textArea, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
           value={body}
           onChangeText={setBody}
-          placeholder="Write your message to clients..."
+          placeholder={tr('providerBusiness.clientele.announce.messagePlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           maxLength={300}
@@ -634,8 +643,8 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
         <View style={[anSt.scheduleRow, { backgroundColor: P.card, borderColor: P.border }]}>
           <Ionicons name="alarm-outline" size={16} color={scheduleMode ? P.accent : P.sub} style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={[anSt.scheduleLabel, { color: P.text }]}>Schedule Send</Text>
-            <Text style={[anSt.scheduleSub, { color: P.sub }]}>Send at a specific date & time</Text>
+            <Text style={[anSt.scheduleLabel, { color: P.text }]}>{tr('providerBusiness.clientele.announce.schedule')}</Text>
+            <Text style={[anSt.scheduleSub, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.scheduleSub')}</Text>
           </View>
           <Switch value={scheduleMode} onValueChange={setScheduleMode}
             trackColor={{ false: P.border, true: P.accent }} thumbColor="#fff" />
@@ -709,10 +718,10 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
               <View style={[anSt.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, bottomSafeGap) }]}>
                 <View style={[anSt.pickerHeader, { borderBottomColor: P.border }]}>
                   <Text style={[anSt.pickerHeaderLabel, { color: P.text }]}>
-                    {showDatePicker ? 'Select Date' : 'Select Time'}
+                    {showDatePicker ? tr('providerBusiness.clientele.announce.selectDate') : tr('providerBusiness.clientele.announce.selectTime')}
                   </Text>
                   <TouchableOpacity onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
-                    <Text style={[anSt.pickerDoneLabel, { color: P.accent }]}>Done</Text>
+                    <Text style={[anSt.pickerDoneLabel, { color: P.accent }]}>{tr('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
                 {showDatePicker ? (
@@ -767,8 +776,8 @@ function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSen
               <Ionicons name={scheduleMode ? 'alarm-outline' : 'megaphone-outline'} size={16} color={canSend ? P.onAccent : P.text} />
               <Text style={[anSt.sendBtnText, { color: canSend ? P.onAccent : P.text }]}>
                 {scheduleMode
-                  ? `Schedule for ${recipients}`
-                  : `Send to ${recipients}`}
+                  ? tr('providerBusiness.ui.scheduleFor', { recipients })
+                  : tr('providerBusiness.ui.sendTo', { recipients })}
               </Text>
             </>
           )}
@@ -830,6 +839,8 @@ function ClientCard({ member, onMessage, onRebook, onOpen, lapsed, reliability, 
   reliability?: ClientReliabilityStats | undefined;
   P: typeof LIGHT;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const color = avatarColor(member.customer_name);
   const days = daysSince(member.last_booking_date);
   const hasReliabilityFlag = !!reliability && (reliability.noShowCount > 0 || reliability.lateCancelCount > 0);
@@ -840,7 +851,7 @@ function ClientCard({ member, onMessage, onRebook, onOpen, lapsed, reliability, 
       onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(member); }}
       activeOpacity={0.8}
       accessibilityRole="button"
-      accessibilityHint="Opens their Beauty Profile, your notes and their booking history"
+      accessibilityHint={tr('providerBusiness.ui2.opensTheirBeautyProfileYourNotes')}
     >
       <View style={[ccSt.avatar, { backgroundColor: color + '22', borderColor: color + '44' }]}>
         <Text style={[ccSt.avatarText, { color }]}>{initials(member.customer_name)}</Text>
@@ -850,12 +861,12 @@ function ClientCard({ member, onMessage, onRebook, onOpen, lapsed, reliability, 
           <Text style={[ccSt.name, { color: P.text }]} numberOfLines={1}>{member.customer_name}</Text>
           {lapsed && (
             <View style={ccSt.lapsedBadge}>
-              <Text style={[ccSt.lapsedText, { color: DANGER }]}>{days}d ago</Text>
+              <Text style={[ccSt.lapsedText, { color: DANGER }]}>{tr('providerBusiness.ui.daysAgo', { days })}</Text>
             </View>
           )}
         </View>
         <Text style={[ccSt.meta, { color: P.sub }]}>
-          {member.booking_count} {member.booking_count === 1 ? 'booking' : 'bookings'} · Last {formatShort(member.last_booking_date)}
+          {trp('providerBusiness.ui.bookings', member.booking_count)} · {tr('providerBusiness.ui.lastOn', { date: formatShort(member.last_booking_date) })}
         </Text>
         {hasReliabilityFlag && (
           <View style={ccSt.reliabilityRow}>
@@ -885,7 +896,7 @@ function ClientCard({ member, onMessage, onRebook, onOpen, lapsed, reliability, 
             onPress={e => { e.stopPropagation(); Haptics.selectionAsync().catch(() => {}); onMessage(member); }}
             activeOpacity={0.7}>
             <Ionicons name="chatbubble-ellipses-outline" size={11} color={P.accent} />
-            <Text style={[ccSt.btnText, { color: P.accent }]}>Message</Text>
+            <Text style={[ccSt.btnText, { color: P.accent }]}>{tr('providerBusiness.clientele.card.message')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -914,6 +925,8 @@ const ccSt = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function ProviderClienteleScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const [clients, setClients] = useState<ClienteleMember[]>([]);
@@ -978,12 +991,12 @@ export default function ProviderClienteleScreen({ navigation }: any) {
 
   const handleAnnouncementSent = (who: string) => {
     setAnnouncementOpen(false);
-    showToast(`Announcement sent to ${who}`);
+    showToast(tr('providerBusiness.ui.announcementSent', { who }));
   };
 
   const handleAnnouncementScheduled = (when: Date) => {
     setAnnouncementOpen(false);
-    showToast(`Scheduled for ${when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} at ${formatTime12(when)}`);
+    showToast(tr('providerBusiness.clientele.toast.scheduled', { date: when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), time: formatTime12(when) }));
   };
 
   // Opens the real in-app conversation with this client rather than a
@@ -1006,7 +1019,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const handleRebook = async (member: ClienteleMember) => {
     try {
       await sendRebookPrompt(member.user_id, providerName);
-      showToast(`Rebook nudge sent to ${member.customer_name}`);
+      showToast(tr('providerBusiness.clientele.toast.rebook', { name: member.customer_name }));
     } catch (e: any) {
       showToast(toUserMessage(e, 'Could not send that rebook prompt.', 'ProviderClienteleScreen.rebook'), 'error');
     }
@@ -1030,8 +1043,8 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={s.header}>
           <View>
-            <Text style={[s.headerTitle, { color: P.text }]}>My Clientele</Text>
-            <Text style={[s.headerSub, { color: P.sub }]}>{clients.length} client{clients.length !== 1 ? 's' : ''} · {repeatClients.length} repeat</Text>
+            <Text style={[s.headerTitle, { color: P.text }]}>{tr('providerBusiness.clientele.title')}</Text>
+            <Text style={[s.headerSub, { color: P.sub }]}>{clients.length} {tr('providerBusiness.inbox.clientLower')}{clients.length !== 1 ? 's' : ''} · {repeatClients.length} repeat</Text>
           </View>
           <View style={s.headerActions}>
             {(clients.length > 0 || followers.length > 0) && (
@@ -1040,7 +1053,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setAnnouncementOpen(true); }}
                 activeOpacity={0.7}>
                 <Ionicons name="megaphone-outline" size={15} color={P.accent} />
-                <Text style={[s.announceBtnText, { color: P.accent }]}>Announce</Text>
+                <Text style={[s.announceBtnText, { color: P.accent }]}>{tr('providerBusiness.clientele.announceBtn')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()}>
@@ -1056,7 +1069,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
             <View style={s.lapsedBanner}>
               <Ionicons name="time-outline" size={13} color={DANGER} />
               <Text style={[s.lapsedBannerText, { color: DANGER }]}>
-                {lapsedClients.length} client{lapsedClients.length > 1 ? 's' : ''} haven't booked in 60+ days
+                {trp('providerBusiness.ui.lapsed', lapsedClients.length)}
               </Text>
             </View>
           )}
@@ -1066,11 +1079,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                 <Ionicons name="people-outline" size={36} color={P.sub} />
               </View>
               <Text style={[s.emptyTitle, { color: P.text }]}>
-                {tab === 'repeat' ? 'No repeat clients yet' : tab === 'new' ? 'No new clients'
+                {tab === 'repeat' ? tr('providerBusiness.clientele.empty.repeat') : tab === 'new' ? 'No new clients'
                   : tab === 'lapsed' ? 'No lapsed clients' : 'No clients yet'}
               </Text>
               <Text style={[s.emptySub, { color: P.sub }]}>
-                {tab === 'repeat' ? 'Clients who book twice or more will appear here'
+                {tab === 'repeat' ? tr('providerBusiness.clientele.empty.repeatSub')
                   : tab === 'new' ? 'First-time bookers will appear here'
                   : tab === 'lapsed' ? 'Clients inactive for 60+ days appear here'
                   : 'Clients who complete a booking will appear here'}

@@ -48,6 +48,7 @@ import type { EmergencyReason, RequestCandidate } from '../services/Availability
 import { parseTimeToMinutes, snapToRequestable } from '../services/AvailabilityService';
 import { formatLongDateNoYear } from '../utils/dateUtils';
 import { withAlpha } from '../constants/providerThemes';
+import { useTranslation } from '../i18n';
 
 /** Same fixed warning red as the rest of the by-request UI — see
  *  ModernBeautyCalendar's EMERGENCY_OUTLINE for why it isn't the accent. */
@@ -106,6 +107,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
   textColor,
   subColor,
 }) => {
+  const { t } = useTranslation();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [wheelValue, setWheelValue] = useState<Date>(new Date());
@@ -135,12 +137,12 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
   const commitPickedMinutes = (picked: number) => {
     const result = snapToRequestable(picked, candidates);
     if (result.kind === 'none') {
-      setWheelError(`${providerLabel} isn't taking requests on this date.`);
+      setWheelError(t('clientBooking.requestTime.notTakingRequests', { provider: providerLabel }));
       return;
     }
     if (result.kind === 'out-of-range') {
       setWheelError(
-        `${providerLabel} will only consider ${result.earliest.time} to ${result.latest.time} on this date.`,
+        t('clientBooking.requestTime.onlyConsiders', { provider: providerLabel, earliest: result.earliest.time, latest: result.latest.time }),
       );
       return;
     }
@@ -178,15 +180,14 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
         }}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel="Back to available times"
+        accessibilityLabel={t('clientBooking.requestTime.backA11y')}
       >
         <Text style={[styles.backChevron, { color: subColor }]}>‹</Text>
-        <Text style={[styles.backText, { color: subColor }]}>Available times</Text>
+        <Text style={[styles.backText, { color: subColor }]}>{t('clientBooking.requestTime.availableTimes')}</Text>
       </TouchableOpacity>
 
       <Text style={[styles.lead, { color: subColor }]}>
-        These fall outside {providerLabel}'s usual availability. They have to accept
-        the request before it's booked — it won't be confirmed automatically.
+        {t('clientBooking.requestTime.lead', { provider: providerLabel })}
       </Text>
 
       <TouchableOpacity
@@ -197,9 +198,9 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
         }}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel={`Change date, currently ${formatLongDateNoYear(date)}`}
+        accessibilityLabel={t('clientBooking.requestTime.changeDateA11y', { date: formatLongDateNoYear(date) })}
       >
-        <Text style={[styles.rowLabel, { color: subColor }]}>Date</Text>
+        <Text style={[styles.rowLabel, { color: subColor }]}>{t('clientBooking.requestTime.date')}</Text>
         <Text style={[styles.rowValue, { color: textColor }]}>{formatLongDateNoYear(date)}</Text>
         <Text style={[styles.chevron, { color: subColor }]}>{showDatePicker ? '⌃' : '⌄'}</Text>
       </TouchableOpacity>
@@ -224,7 +225,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
             activeOpacity={0.85}
             accessibilityRole="button"
           >
-            <Text style={styles.doneText}>Done</Text>
+            <Text style={styles.doneText}>{t('common.done')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -244,12 +245,12 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
         </View>
       ) : candidates.length === 0 ? (
         <Text style={[styles.empty, { color: subColor }]}>
-          {providerLabel} isn't taking requests on this date. Try another one.
+          {t('clientBooking.requestTime.emptyTryAnother', { provider: providerLabel })}
         </Text>
       ) : (
         <>
           <Text style={[styles.groupLabel, { color: subColor }]}>
-            Times {providerLabel} may accept
+            {t('clientBooking.requestTime.timesMayAccept', { provider: providerLabel })}
           </Text>
           <View style={styles.chipWrap}>
             {candidates.map(slot => (
@@ -259,7 +260,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
                 onPress={() => handlePick(slot.time, slot.reasons)}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`${slot.time}, by request only`}
+                accessibilityLabel={t('clientBooking.requestTime.slotA11y', { time: slot.time })}
               >
                 <Text style={[styles.chipText, { color: EMERGENCY_OUTLINE }]}>{slot.time}</Text>
               </TouchableOpacity>
@@ -268,7 +269,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
 
           <View style={styles.orRow}>
             <View style={[styles.rule, { backgroundColor: hairline }]} />
-            <Text style={[styles.orText, { color: subColor }]}>or</Text>
+            <Text style={[styles.orText, { color: subColor }]}>{t('clientBooking.requestTime.or')}</Text>
             <View style={[styles.rule, { backgroundColor: hairline }]} />
           </View>
 
@@ -278,7 +279,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
             activeOpacity={0.75}
             accessibilityRole="button"
           >
-            <Text style={[styles.rowValue, { color: accentColor }]}>Pick an exact time</Text>
+            <Text style={[styles.rowValue, { color: accentColor }]}>{t('clientBooking.requestTime.pickExact')}</Text>
             <Text style={[styles.chevron, { color: accentColor }]}>{showTimePicker ? '⌃' : '⌄'}</Text>
           </TouchableOpacity>
 
@@ -301,7 +302,7 @@ export const RequestTimePanel: React.FC<RequestTimePanelProps> = ({
                 activeOpacity={0.85}
                 accessibilityRole="button"
               >
-                <Text style={styles.doneText}>Use this time</Text>
+                <Text style={styles.doneText}>{t('clientBooking.requestTime.useThisTime')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
