@@ -1,4 +1,5 @@
-/**
+
+import { tr } from '../../i18n';/**
  * Filters for the provider Inbox list: read state, how recent the last
  * message is, and a name search. Pure, so the screen and its tests share one
  * definition of what each chip means.
@@ -21,7 +22,7 @@ export const INBOX_READ_CHIPS: { key: InboxReadFilter; label: string }[] = [
 ];
 
 export const INBOX_DATE_CHIPS: { key: InboxDateFilter; label: string }[] = [
-  { key: 'today', label: 'Today' },
+  { key: 'today', get label() { return tr('common.date.today'); } },
   { key: 'last7', label: 'Last 7 days' },
   { key: 'older', label: 'Older' },
 ];

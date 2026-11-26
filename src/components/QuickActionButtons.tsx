@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Animated } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { logger } from '../utils/logger';
+import { useTranslation } from '../i18n';
 
 interface Service {
   id: string | number;
@@ -33,6 +34,7 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
   onAddOns,
   style
 }) => {
+  const { t } = useTranslation();
   const [bookPressed, setBookPressed] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(1));
 
@@ -88,11 +90,11 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
           onPress={handleQuickBook}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={`Quick book ${service.name}`}
+          accessibilityLabel={t('discover.quickActions.quickBookA11y', { service: service.name })}
         >
           <BlurView intensity={40} tint="dark" style={styles.quickBookBlur}>
             <Text style={[styles.quickBookText, bookPressed && styles.quickBookTextPressed]}>
-              {bookPressed ? 'ADDED!' : 'Quick Book'}
+              {bookPressed ? t('discover.quickActions.added').toUpperCase() : t('discover.quickActions.quickBook')}
             </Text>
           </BlurView>
         </TouchableOpacity>
@@ -103,10 +105,10 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
         onPress={handleAddOns}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`View add-ons for ${service.name}`}
+        accessibilityLabel={t('discover.quickActions.addOnsA11y', { service: service.name })}
       >
         <BlurView intensity={30} tint="light" style={styles.addOnsBlur}>
-          <Text style={styles.addOnsText}>Add-ons</Text>
+          <Text style={styles.addOnsText}>{t('discover.quickActions.addOns')}</Text>
         </BlurView>
       </TouchableOpacity>
     </View>

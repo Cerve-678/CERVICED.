@@ -31,6 +31,8 @@ import {
 } from '../../constants/customPageStyle';
 import { PROVIDER_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { CARD_SHAPES, isDarkColor, type CardShape } from '../../constants/providerThemes';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface CustomPageMakerPalette {
   surface: string;
@@ -83,6 +85,8 @@ export function CustomPageMaker({
   accent,
   P,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const current = matchingFontSet(brandFont, choices.heading, choices.text);
   // Opens on Mix when their fonts aren't one of the sets, so what they picked is what they see.
   const [mode, setMode] = React.useState<FontMode>(current || !active ? 'sets' : 'mix');
@@ -221,7 +225,7 @@ export function CustomPageMaker({
                       >
                         {fontSet.name}
                       </Text>
-                      <Text style={[styles.setHeading, { color: P.text, fontFamily: heading.fontFamily, fontSize: Math.round(14 * (heading.sizeScale ?? 1)) }]} numberOfLines={1}>Services</Text>
+                      <Text style={[styles.setHeading, { color: P.text, fontFamily: heading.fontFamily, fontSize: Math.round(14 * (heading.sizeScale ?? 1)) }]} numberOfLines={1}>{tr('discover.profile.services')}</Text>
                       <Text style={[styles.setText, { color: P.sub, fontFamily: text.fontFamily }]} numberOfLines={1}>Your text</Text>
                     </TouchableOpacity>
                   );

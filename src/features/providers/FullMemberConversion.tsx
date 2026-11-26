@@ -38,6 +38,8 @@ import {
   countLeftToGoLive,
   FULL_MEMBER_NOW_YOU_CAN,
 } from './conversionSteps';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export type ConversionPhase = 'working' | 'done' | 'failed';
 
@@ -70,6 +72,8 @@ interface ServerResult {
 }
 
 export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: FullMemberConversionProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const { becomeFullMember } = useAuth();
   const insets = useSafeAreaInsets();
@@ -298,7 +302,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
               activeOpacity={0.75}
               accessibilityRole="button"
             >
-              <Text style={styles.ctaText}>Try again</Text>
+              <Text style={styles.ctaText}>{tr('common.tryAgain')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.ghost}
@@ -306,7 +310,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
               activeOpacity={0.55}
               accessibilityRole="button"
             >
-              <Text style={styles.ghostText}>Not now</Text>
+              <Text style={styles.ghostText}>{tr('common.notNow')}</Text>
             </TouchableOpacity>
           </>
         )}

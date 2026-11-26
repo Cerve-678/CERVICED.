@@ -16,6 +16,8 @@ import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../../constants/providerThemes';
 import type { DbPortfolioItem } from '../../types/database';
 import { heroPhotos, toggleHeroPhotoPick } from './heroPhotos';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export function HeroPhotoPicker({
   items,
@@ -35,6 +37,8 @@ export function HeroPhotoPicker({
   accent: string;
   subColor: string;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // The slot each picked photo fills: the hero shows the picks in portfolio
   // order (heroPhotos), not the order they were tapped.
   const slotOf = useMemo(() => {
@@ -103,7 +107,7 @@ export function HeroPhotoPicker({
             accessibilityRole="button"
             accessibilityLabel="Clear your picked photos"
           >
-            <Text style={[styles.clearText, { color: accent }]}>Clear</Text>
+            <Text style={[styles.clearText, { color: accent }]}>{tr('common.clear')}</Text>
           </TouchableOpacity>
         ) : null}
       </View>

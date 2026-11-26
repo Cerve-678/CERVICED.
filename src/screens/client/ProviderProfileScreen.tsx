@@ -144,6 +144,7 @@ import { useWaitlistHoldActions } from "../../features/bookings/useWaitlistHoldA
 import { durationToMinutes } from "../../features/cart/presentation";
 import { ProviderProfileQrSheet } from "../../components/ProviderProfileQrSheet";
 import { readableDialog, readableSheet } from '../../constants/readableWidth';
+import { tr, useTranslation } from '../../i18n';
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -204,6 +205,8 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
     animation,
     adaptiveAccentColor,
   }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
     // The card was hardcoded light (light blur tint, white gradient, black
     // text), so in dark mode it appeared as a white slab. Follow the app
     // theme like every other surface instead.
@@ -271,7 +274,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
 
                 {details.when && (
                   <View style={[styles.successRow, { borderTopColor: P.border }]}>
-                    <Text style={[styles.successRowLabel, { color: P.sub }]}>When</Text>
+                    <Text style={[styles.successRowLabel, { color: P.sub }]}>{tr('maintenance.add.when')}</Text>
                     <Text style={[styles.successRowValue, { color: P.text }]} numberOfLines={2}>
                       {details.when}
                     </Text>
@@ -279,7 +282,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                 )}
 
                 <View style={[styles.successRow, { borderTopColor: P.border }]}>
-                  <Text style={[styles.successRowLabel, { color: P.sub }]}>Total</Text>
+                  <Text style={[styles.successRowLabel, { color: P.sub }]}>{tr('discover.profile.success.total')}</Text>
                   <Text style={[styles.successRowValue, { color: adaptiveAccentColor }]}>
                     {details.total}
                   </Text>
@@ -289,7 +292,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                     reason: this one isn't confirmed by being paid for. */}
                 {details.isRequest && (
                   <Text style={styles.successRequestNote}>
-                    Outside their usual hours — they have to accept it before it's booked.
+                    {tr('discover.profile.success.requestNote')}
                   </Text>
                 )}
               </View>
@@ -314,7 +317,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                   style={[styles.successCloseText, { color: P.text }]}
                   numberOfLines={1}
                 >
-                  Keep browsing
+                  {tr('discover.profile.success.keepBrowsing')}
                 </Text>
               </TouchableOpacity>
 
@@ -328,7 +331,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                   activeOpacity={0.8}
                 >
                   <Text style={styles.successViewCartText} numberOfLines={1}>
-                    View cart
+                    {tr('discover.profile.success.viewCart')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -442,6 +445,8 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
     canBookProvider,
     onBookOffer,
   }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
     const { width: screenWidth } = useWindowDimensions();
     const OP = themeTokens;
 
@@ -491,7 +496,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
             >
               <View>
                 <Text style={[offersStyles.headerTitle, { color: OP.text }]}>
-                  OFFERS
+                  {tr('discover.offers.title')}
                 </Text>
                 <Text style={[offersStyles.headerSub, { color: OP.sub }]}>
                   {providerName} — {promotions.length} active{" "}
@@ -533,7 +538,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                   ]}
                 >
                   <Text style={[offersStyles.emptyText, { color: OP.sub }]}>
-                    No active offers right now
+                    {tr('discover.profile.offers.none')}
                   </Text>
                 </View>
               ) : (
@@ -602,8 +607,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                     ) : null}
 
                     <Text style={[offersStyles.validity, { color: OP.sub }]}>
-                      Valid {formatDate(promo.valid_from)} –{" "}
-                      {formatDate(promo.valid_until)}
+                      {tr('discover.profile.offerValid', { from: formatDate(promo.valid_from), until: formatDate(promo.valid_until) })}
                     </Text>
 
                     {promo.promo_code ? (
@@ -622,7 +626,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                         <Text
                           style={[offersStyles.promoLabel, { color: OP.sub }]}
                         >
-                          CODE
+                          {tr('discover.profile.offers.code')}
                         </Text>
                         <Text
                           style={[offersStyles.promoCode, { color: OP.text }]}
@@ -659,7 +663,7 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                         }}
                         activeOpacity={0.85}
                       >
-                        <Text style={offersStyles.bookBtnText}>Book Now</Text>
+                        <Text style={offersStyles.bookBtnText}>{tr('discover.image.bookNow')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -856,6 +860,8 @@ function UnclaimedProviderView({
   currentUserId: string | null | undefined;
   onClaim: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const { palette: P, isDarkMode } = useTheme();
   const link = listingLink(provider.website);
@@ -873,7 +879,7 @@ function UnclaimedProviderView({
     const opening = link.opensInApp ? openExternalBookingPage(link.url) : Linking.openURL(link.url);
     opening.catch((error: unknown) => {
       logger.error("[ProviderProfile] listing link failed to open", error);
-      Alert.alert("Couldn't open their page", "Please try again in a moment.");
+      Alert.alert(tr('discover.profile.pageOpenFailed'), tr('discover.profile.tryAgainMoment'));
     });
   };
 
@@ -882,7 +888,7 @@ function UnclaimedProviderView({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     Linking.openURL(instagramUrl).catch((error: unknown) => {
       logger.error("[ProviderProfile] listing Instagram failed to open", error);
-      Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+      Alert.alert(tr('discover.profile.instagramFailed'), tr('discover.profile.tryAgainMoment'));
     });
   };
 
@@ -892,7 +898,7 @@ function UnclaimedProviderView({
   const nudge = async () => {
     if (nudgePending || nudgeSent) return;
     if (!currentUserId) {
-      Alert.alert("Sign in to nudge them", "Sign in to your CERVICED account, then tap Nudge.");
+      Alert.alert(tr('discover.profile.nudgeSignInTitle'), tr('discover.profile.nudgeSignIn'));
       return;
     }
     setNudgePending(true);
@@ -902,7 +908,7 @@ function UnclaimedProviderView({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error) {
       logger.warn("[ProviderProfile] could not record listing nudge", error);
-      Alert.alert("Couldn't send your nudge", "Please try again in a moment.");
+      Alert.alert(tr('discover.profile.nudgeFailed'), tr('discover.profile.tryAgainMoment'));
     } finally {
       setNudgePending(false);
     }
@@ -930,7 +936,7 @@ function UnclaimedProviderView({
         {/* Below the header row so the back arrow never covers it. */}
         <View style={unclaimedStyles.pillRow}>
           <View style={unclaimedStyles.pill}>
-            <Text style={unclaimedStyles.pillText}>Not on CERVICED yet</Text>
+            <Text style={unclaimedStyles.pillText}>{tr('discover.notOnCerviced')}</Text>
           </View>
         </View>
         <View
@@ -1000,10 +1006,10 @@ function UnclaimedProviderView({
                   onPress={openInstagram}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                  accessibilityLabel={tr('discover.profile.openInstagramA11y', { handle: provider.instagram ?? '' })}
                 >
                   <Ionicons name="logo-instagram" size={16} color={P.onAccent} />
-                  <Text style={[unclaimedStyles.primaryButtonText, { color: P.onAccent }]}>Open their Instagram</Text>
+                  <Text style={[unclaimedStyles.primaryButtonText, { color: P.onAccent }]}>{tr('discover.profile.openTheirInstagram')}</Text>
                 </TouchableOpacity>
               )}
               {link && instagramUrl && (
@@ -1012,7 +1018,7 @@ function UnclaimedProviderView({
                   onPress={openInstagram}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                  accessibilityLabel={tr('discover.profile.openInstagramA11y', { handle: provider.instagram ?? '' })}
                 >
                   <Ionicons name="logo-instagram" size={20} color={P.text} />
                 </TouchableOpacity>
@@ -1042,7 +1048,7 @@ function UnclaimedProviderView({
           activeOpacity={0.85}
         >
           <Text style={[unclaimedStyles.claimButtonText, { color: P.text }]}>
-            Is this your business? Claim it
+            {tr('discover.profile.claimIt')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1053,7 +1059,7 @@ function UnclaimedProviderView({
           businessName={provider.displayName}
           sent={nudgeSent}
           pending={nudgePending}
-          sentLabel="Nudged! We'll let them know"
+          sentLabel={tr('discover.profile.nudged')}
           onNudge={() => { void nudge(); }}
         />
       )}
@@ -1168,6 +1174,8 @@ const unclaimedStyles = StyleSheet.create({
 // even in dark mode: the page never follows the viewer's dark mode, and the
 // back button's tint already assumes this background.
 function ProviderProfileSkeleton() {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { height: screenHeight } = useWindowDimensions();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1206,7 +1214,7 @@ function ProviderProfileSkeleton() {
         style={styles.skeletonShell}
         accessible
         accessibilityRole="progressbar"
-        accessibilityLabel="Loading profile"
+        accessibilityLabel={tr('discover.profile.loadingA11y')}
       >
         <Animated.View style={[styles.heroInfoWrap, { opacity }]}>
           <View style={styles.logoContainer}>
@@ -1307,6 +1315,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   navigation,
   route,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { theme } = useTheme();
   // Measured per render, not captured at module load: the offers panel rests
   // one panel-width offscreen and the full-screen image modal pages by width.
@@ -1998,8 +2008,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       () => {},
     );
     showAlert(
-      "Book from a client profile",
-      "You're signed in with a provider account, so you can look around but not book. You can add a client profile from your Profile tab.",
+      tr('discover.profile.providerAccountTitle'),
+      tr('discover.profile.providerAccount'),
       "center",
     );
     return true;
@@ -2016,7 +2026,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error) {
       logger.warn('[ProviderProfile] could not record join nudge', error);
-      showAlert("Couldn't send your nudge", 'Please try again in a moment.');
+      showAlert(tr('discover.profile.nudgeFailed'), tr('discover.profile.tryAgainMoment'));
     } finally {
       setJoinNudgePending(false);
     }
@@ -2025,12 +2035,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
     showConfirm(
-      "Are you sure you want to discard?",
+      tr('discover.profile.discardTitle'),
       undefined,
       [
-        { text: "Continue", style: "cancel" },
+        { text: tr('common.continue'), style: "cancel" },
         {
-          text: "Discard",
+          text: tr('discover.profile.discard'),
           style: "destructive",
           onPress: () => {
             setSelectedServiceIds(new Set());
@@ -2130,8 +2140,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         () => {},
       );
       showAlert(
-        "That's your profile",
-        "You can't add your own profile to Your Providers.",
+        tr('discover.profile.ownTitle'),
+        tr('discover.profile.ownCantSave'),
         "center",
       );
       return;
@@ -2194,7 +2204,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
     } catch (error) {
       logger.error("Bookmark toggle failed:", error);
-      Alert.alert("Error", "Failed to update bookmark");
+      Alert.alert(tr('common.error'), tr('discover.profile.bookmarkFailed'));
     } finally {
       setIsBookmarkLoading(false);
     }
@@ -2275,7 +2285,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       return;
     // "Date range" with no dates used to join for any date without saying so.
     if (waitlistDateMode === "range" && !waitlistDateFrom) {
-      setWaitlistError("Pick the first day you can do, or choose Anytime.");
+      setWaitlistError(tr('discover.profile.pickFirstDay'));
       return;
     }
     Keyboard.dismiss();
@@ -2303,7 +2313,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       closeWaitlistModal();
       await loadWaitlistMap();
     } catch {
-      setWaitlistError("Couldn't save — check your connection and try again.");
+      setWaitlistError(tr('discover.profile.waitlistSaveFailed'));
     }
     setWaitlistJoining(false);
   }, [
@@ -2329,7 +2339,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         return next;
       });
     } catch {
-      Alert.alert("Error", "Could not leave waitlist.");
+      Alert.alert(tr('common.error'), tr('discover.profile.waitlistLeaveFailed'));
     }
   }, []);
 
@@ -2379,7 +2389,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (held) {
       openWaitlistTicket(held);
     } else {
-      showAlert("This slot has gone", `Its ${WAITLIST_HOLD_MINUTES} minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from here.`);
+      showAlert(tr('discover.profile.slotGoneTitle'), tr('discover.profile.slotGone', { minutes: WAITLIST_HOLD_MINUTES }));
     }
     navigation.setParams({ openWaitlistHoldId: undefined } as never);
   }, [openWaitlistHoldId, waitlistLoaded, userWaitlistMap, openWaitlistTicket, showAlert, navigation]);
@@ -2432,27 +2442,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           Haptics.NotificationFeedbackType.Warning,
         ).catch(() => {});
         showAlert(
-          "That's your profile",
-          "These are your own contact details — this is what a client taps to reach you.",
+          tr('discover.profile.ownTitle'),
+          tr('discover.profile.ownContact'),
           "center",
         );
         return;
       }
       Linking.openURL(url).catch(() => {
-        Alert.alert("Couldn't open", "Please try again in a moment.");
+        Alert.alert(tr('discover.profile.openFailed'), tr('discover.profile.tryAgainMoment'));
       });
     },
     [isOwnProvider, showAlert],
   );
   const handlePublicContactLink = useCallback((url: string) => {
     Linking.openURL(url).catch(() => {
-      Alert.alert("Couldn't open", "Please try again in a moment.");
+      Alert.alert(tr('discover.profile.openFailed'), tr('discover.profile.tryAgainMoment'));
     });
   }, []);
 
   const handleGetInTouch = useCallback(() => {
     if (!provider || !providerDbId) {
-      Alert.alert("Not available", "Provider details are still loading.");
+      Alert.alert(tr('discover.profile.notAvailable'), tr('discover.profile.stillLoading'));
       return;
     }
     // get_or_create_provider_conversation raises self_conversation_not_allowed
@@ -2535,7 +2545,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             activeOpacity={0.7}
             disabled={isBookmarkLoading || !canSaveProvider}
             accessibilityLabel={
-              providerIsBookmarked ? "Remove bookmark" : "Bookmark provider"
+              providerIsBookmarked ? tr('discover.profile.removeBookmarkA11y') : tr('discover.profile.bookmarkA11y')
             }
             accessibilityRole="button"
           >
@@ -2548,7 +2558,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             style={styles.headerActionButton}
             onPress={handleShare}
             activeOpacity={0.7}
-            accessibilityLabel="Share"
+            accessibilityLabel={tr('common.share')}
             accessibilityRole="button"
           >
             <ShareIcon size={18} color="#000" />
@@ -2684,7 +2694,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       })
       .catch((error: unknown) => {
         logger.error('[ProviderProfile] external booking link failed to open', error);
-        Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
+        Alert.alert(tr('discover.profile.bookingLinkFailed'), tr('discover.profile.tryAgainMoment'));
       });
   }, [recordStat, canSaveProvider]);
 
@@ -2705,7 +2715,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         await addMyExternalBooking({ providerId: providerDbId, ...result });
       } catch (error) {
         showAlert(
-          "Couldn't add it",
+          tr('discover.profile.addExternalFailed'),
           toUserMessage(error, "Please try again in a moment.", "ProviderProfile.addExternalBooking"),
         );
         throw error;
@@ -2716,14 +2726,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // The sheet is a native modal; wait for it to close before the dialog.
       setTimeout(() => {
         showConfirm(
-          "Added to your bookings",
-          "You'll find it in your Upcoming bookings. Anything about it — changing or cancelling — goes through them.",
+          tr('discover.profile.externalAddedTitle'),
+          tr('discover.profile.externalAdded'),
           canOpenBookings
             ? [
-                { text: "Done", style: "cancel" },
-                { text: "View bookings", onPress: () => navigation.navigate("Bookings" as never) },
+                { text: tr('common.done'), style: "cancel" },
+                { text: tr('discover.profile.viewBookings'), onPress: () => navigation.navigate("Bookings" as never) },
               ]
-            : [{ text: "Done", style: "cancel" }],
+            : [{ text: tr('common.done'), style: "cancel" }],
         );
       }, 400);
     },
@@ -2739,7 +2749,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr('discover.profile.ownTitle'), tr('discover.profile.ownCantBook'), "center");
       return;
     }
     if (refuseBookingAsProvider()) return;
@@ -2841,8 +2851,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       } catch (error) {
         logger.error("Error in Quick Book:", error);
         Alert.alert(
-          "Error",
-          "Failed to process quick booking. Please try again.",
+          tr('common.error'),
+          tr('discover.profile.quickBookFailed'),
         );
       }
     },
@@ -2950,12 +2960,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr('discover.profile.ownTitle'), tr('discover.profile.ownCantBook'), "center");
       return;
     }
     if (refuseBookingAsProvider()) return;
     if (!takingBookings) {
-      showAlert("Not taking bookings", closureReason ? `This provider isn't taking bookings right now: ${closureReason.toLowerCase()}.` : "This provider isn't taking bookings right now.", "center");
+      showAlert(tr('discover.profile.notTakingTitle'), closureReason ? tr('discover.profile.notTakingReason', { reason: closureReason.toLowerCase() }) : tr('discover.profile.notTaking'), "center");
       return;
     }
     if (tryOpenExternalBooking()) return;
@@ -2966,7 +2976,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         setShowBookingSheet(true);
       } catch (error) {
         logger.error("Error opening booking sheet:", error);
-        Alert.alert("Error", "Failed to open booking options. Please try again.");
+        Alert.alert(tr('common.error'), tr('discover.profile.bookingOptionsFailed'));
       }
     };
     if (holdForDetails(openBookingSheet)) return;
@@ -3111,7 +3121,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr('discover.profile.ownTitle'), tr('discover.profile.ownCantBook'), "center");
       return;
     }
     if (refuseBookingAsProvider()) return;
@@ -3158,7 +3168,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       ]}
     >
       <Text style={[styles.selectionBarText, { color: OP.text }]}>
-        {selectedServicesFlat.length} selected • £{selectedTotal.toFixed(2)}
+        {tr('discover.profile.selectedBar', { count: selectedServicesFlat.length, total: `£${selectedTotal.toFixed(2)}` })}
       </Text>
       <TouchableOpacity
         disabled={isOwnProvider}
@@ -3180,7 +3190,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             isOwnProvider && { color: OP.sub },
           ]}
         >
-          {isOwnProvider ? "Your profile" : "Book"}
+          {isOwnProvider ? tr('discover.profile.yourProfile') : tr('beautyProfile.hello.book')}
         </Text>
       </TouchableOpacity>
     </BlurView>
@@ -3206,7 +3216,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      showAlert("That's your profile", "You can't book yourself.", "center");
+      showAlert(tr('discover.profile.ownTitle'), tr('discover.profile.ownCantBook'), "center");
     }, 500);
     return () => clearTimeout(timer);
   }, [route.params?.bookIntent, viewerChecked, isOwnProvider, showAlert]);
@@ -3332,8 +3342,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       } catch (error) {
         logger.error("Error adding service to cart:", error);
         Alert.alert(
-          "Error",
-          "Failed to add service to cart. Please try again.",
+          tr('common.error'),
+          tr('discover.profile.addServiceFailed'),
         );
       }
     },
@@ -3413,7 +3423,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         );
       } catch (error) {
         logger.error("Error adding multi-booking to cart:", error);
-        Alert.alert("Error", "Failed to add services to cart. Please try again.");
+        Alert.alert(tr('common.error'), tr('discover.profile.addServicesFailed'));
       }
     },
     [provider, providerDbId, addToCart, showSuccessMessageWithAnimation],
@@ -3430,7 +3440,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
     } catch (error) {
       logger.error("Cart navigation error:", error);
-      Alert.alert("Navigation Error", "Unable to navigate to cart");
+      Alert.alert(tr('common.somethingWentWrong'), tr('discover.profile.cartNavFailed'));
     }
   }, [hideSuccessMessage, navigation]);
 
@@ -3500,8 +3510,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <View style={[styles.loading, { backgroundColor: OP.bg }]}>
           <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
             {loadFailed
-              ? "Could not load provider. Please try again."
-              : "Provider not found"}
+              ? tr('discover.profile.loadFailed')
+              : tr('discover.profile.notFound')}
           </Text>
         </View>
       );
@@ -3824,9 +3834,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         <ProviderContactSheet
           visible={contactSheetVisible}
           onClose={() => setContactSheetVisible(false)}
-          title="Your contact options"
-          subtitle="What anyone browsing your profile sees for general enquiries, from the contact details you set in Business Profile → Contact. In-app messaging isn't available on your own profile."
-          emptyText="You haven't published any contact details yet. Add them in Business Profile → Contact so people browsing can get in touch."
+          title={tr('discover.profile.contactSheet.title')}
+          subtitle={tr('discover.profile.contactSheet.sub')}
+          emptyText={tr('discover.profile.contactSheet.empty')}
           options={contactOptions}
           // Read-only, like the Contact card rows behind it — this sheet only
           // ever renders on your own profile, so every option here would be a
@@ -3872,13 +3882,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           uris={policyPages}
           visible={showPolicyImage}
           onClose={() => setShowPolicyImage(false)}
-          label="Policy document"
+          label={tr('discover.profile.policyDocument')}
         />
         <PolicyStoryViewer
           urls={policyPages}
           edges={policyEdges}
           startIndex={policyStoryIndex}
-          title={provider ? `${provider.displayName} · Policy` : "Policy"}
+          title={provider ? tr('discover.profile.policyTitle', { name: provider.displayName }) : tr('discover.profile.tab.policy')}
           onClose={() => setPolicyStoryIndex(null)}
           onZoom={() => {
             // One modal closes before the next opens: two at once can leave
@@ -3930,7 +3940,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <View style={[styles.modalHeader, { borderBottomColor: OP.border }]}>
                   <View style={styles.modalHeaderContent}>
                     <View>
-                      <Text style={[styles.modalTitle, { color: OP.text }]}>All Services</Text>
+                      <Text style={[styles.modalTitle, { color: OP.text }]}>{tr('discover.profile.allServices')}</Text>
                       <Text style={[styles.modalSubtitle, { color: OP.sub }]}>
                         {selectedCategory} • {selectedCategoryServices.length}{" "}
                         service
@@ -4017,7 +4027,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.waitlistPopupTitle, { color: OP.text }]}>
-                    Join Waitlist
+                    {tr('discover.profile.joinWaitlist')}
                   </Text>
                   {waitlistModal.service && (
                     <Text
@@ -4046,7 +4056,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
               {/* Availability toggle */}
               <Text style={[styles.waitlistPopupLabel, { color: OP.sub }]}>
-                AVAILABILITY
+                {tr('discover.home.availability')}
               </Text>
               <View
                 style={[
@@ -4072,7 +4082,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       },
                     ]}
                   >
-                    Anytime
+                    {tr('discover.profile.anytime')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4091,7 +4101,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       { color: waitlistDateMode === "range" ? "#fff" : OP.sub },
                     ]}
                   >
-                    Date Range
+                    {tr('discover.profile.dateRange')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -4115,7 +4125,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       color={OP.sub}
                     />
                     <Text style={[styles.waitlistDateLabel, { color: OP.sub }]}>
-                      From
+                      {tr('discover.profile.from')}
                     </Text>
                     <Text
                       style={[
@@ -4132,7 +4142,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             month: "short",
                             year: "numeric",
                           })
-                        : "Select date"}
+                        : tr('discover.profile.selectDate')}
                     </Text>
                     <Ionicons
                       name="chevron-forward"
@@ -4152,7 +4162,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       color={OP.sub}
                     />
                     <Text style={[styles.waitlistDateLabel, { color: OP.sub }]}>
-                      To
+                      {tr('discover.profile.to')}
                     </Text>
                     <Text
                       style={[
@@ -4169,7 +4179,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             month: "short",
                             year: "numeric",
                           })
-                        : "Select date"}
+                        : tr('discover.profile.selectDate')}
                     </Text>
                     <Ionicons
                       name="chevron-forward"
@@ -4200,7 +4210,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Done
+                        {tr('common.done')}
                       </Text>
                     </TouchableOpacity>
                     <DateTimePicker
@@ -4233,7 +4243,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Done
+                        {tr('common.done')}
                       </Text>
                     </TouchableOpacity>
                     <DateTimePicker
@@ -4274,7 +4284,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 ]}
                 value={waitlistNotes}
                 onChangeText={setWaitlistNotes}
-                placeholder="Any preferences for the provider..."
+                placeholder={tr('discover.profile.waitlistNotesPlaceholder')}
                 placeholderTextColor={OP.sub}
                 multiline
                 maxLength={280}
@@ -4289,7 +4299,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               ) : waitlistDateMode === "range" && !waitlistDateFrom ? (
                 // Join stays off until there's a first day to wait for.
                 <Text style={[styles.waitlistErrorText, { color: OP.sub }]}>
-                  Pick the first day you can do, or choose Anytime.
+                  {tr('discover.profile.pickFirstDay')}
                 </Text>
               ) : null}
 
@@ -4306,7 +4316,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[styles.waitlistPopupCancelText, { color: OP.sub }]}
                   >
-                    Cancel
+                    {tr('common.cancel')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4322,7 +4332,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   activeOpacity={0.8}
                 >
                   <Text style={styles.waitlistJoinConfirmText}>
-                    {waitlistJoining ? "Joining..." : "Join Waitlist"}
+                    {waitlistJoining ? tr('discover.profile.joining') : tr('discover.profile.joinWaitlist')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -4385,7 +4395,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <Ionicons name="exit-outline" size={22} color="#FF9500" />
               </View>
               <Text style={[styles.leavePopupTitle, { color: OP.text }]}>
-                Leave Waitlist?
+                {tr('discover.profile.leaveTitle')}
               </Text>
               {leaveConfirmEntry && (
                 <Text
@@ -4399,8 +4409,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </Text>
               )}
               <Text style={[styles.leavePopupBody, { color: OP.sub }]}>
-                You'll lose your place in the queue and won't be notified when a
-                slot opens up.
+                {tr('discover.profile.leaveBody')}
               </Text>
               <View style={styles.waitlistPopupActions}>
                 <TouchableOpacity
@@ -4414,7 +4423,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[styles.waitlistPopupCancelText, { color: OP.sub }]}
                   >
-                    Keep my spot
+                    {tr('discover.profile.keepSpot')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4422,7 +4431,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   onPress={handleConfirmLeave}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.leavePopupLeaveText}>Leave</Text>
+                  <Text style={styles.leavePopupLeaveText}>{tr('discover.profile.leave')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -4458,7 +4467,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 style={styles.offersFloatTabGradient}
               >
                 <Text style={styles.offersFloatCount}>{promotions.length}</Text>
-                <Text style={styles.offersFloatLabel}>OFFERS</Text>
+                <Text style={styles.offersFloatLabel}>{tr('discover.offers.title')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -4492,9 +4501,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               disabled={asOwnPreview}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
+              accessibilityLabel={tr('discover.profile.bookWithA11y', { name: provider.displayName })}
             >
-              <Text style={[styles.pinnedBookButtonText, squareButtons && styles.squareButtonText]}>Book</Text>
+              <Text style={[styles.pinnedBookButtonText, squareButtons && styles.squareButtonText]}>{tr('beautyProfile.hello.book')}</Text>
             </TouchableOpacity>
             {/* Close it without going to Services (user, 2026-11-22). */}
             <TouchableOpacity
@@ -4507,7 +4516,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               activeOpacity={0.6}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel={tr('common.close')}
             >
               <Ionicons name="close" size={18} color={OP.sub} />
             </TouchableOpacity>

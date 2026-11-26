@@ -5,7 +5,7 @@
 
 #generated
 
-**4455 functions** across **716 files**.
+**4457 functions** across **717 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -206,6 +206,9 @@
 
 ### `src/features/explore/` (1)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
+
+### `src/features/help/` (1)
+- `helpTopics.ts` — **helpAudienceFor** · **helpSectionsFor**
 
 ### `src/features/home/` (2)
 - `SkeletonSection.tsx` — **SkeletonSection**
