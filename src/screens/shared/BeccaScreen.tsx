@@ -56,7 +56,9 @@ import {
   type AnswerReveal,
 } from "../../components/ChatComponents";
 import { Provider } from "../../services/ProviderDataService";
-import { formatTime12, DAY_NAMES_FULL, ordinalSuffix, relativeDayLabel, formatSectionTitle } from "../../utils/dateUtils";
+import { formatTime12, dayName, ordinalDay, relativeDayLabel, formatSectionTitle } from "../../utils/dateUtils";
+import { useTranslation, localeForLanguage } from "../../i18n";
+import type { TranslationKey } from "../../i18n";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useBooking } from "../../contexts/BookingContext";
 import { useCart } from "../../contexts/CartContext";
@@ -75,7 +77,7 @@ import { openAboutPage } from '../../utils/aboutPage';
 // primitives dateUtils.ts already exports rather than duplicating a new
 // full formatter for one call site.
 function formatHeroDate(date: Date): string {
-  return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())}`;
+  return `${dayName(date.getDay(), 'full')} ${ordinalDay(date.getDate())}`;
 }
 
 /** Shown until the engine has understood the message and says what it's doing. */
@@ -92,6 +94,7 @@ export default function BeccaScreen({
   // literals — ThemeContext already returns the client (plum) palette when
   // activeMode is 'client' and the provider (brown/rose) palette otherwise.
   const { isDarkMode, palette: P } = useTheme();
+  const { t, tp } = useTranslation();
   const { bookings } = useBooking();
   const { addToCart } = useCart();
   const { user, hatState, myBookingMode } = useAuth();
@@ -109,7 +112,7 @@ export default function BeccaScreen({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [thinkingLabel, setThinkingLabel] = useState("Thinking it through…");
+  const [thinkingLabel, setThinkingLabel] = useState(() => t('shared.becca.thinking.default'));
   // The completed answer is kept separate until its visible type-in has
   // finished, so action chips never belong to the previous answer mid-stream.
   const [streamingResponse, setStreamingResponse] = useState<ChatMessage | null>(null);
@@ -298,10 +301,10 @@ export default function BeccaScreen({
           "- **Your profile** — opening hours and reach\n\n" +
           "What would you like to check?",
         suggestions: [
-          { id: "messages", text: "Messages", action: "message", data: { message: "Any unread messages?" } },
-          { id: "updates", text: "Anything I've missed?", action: "message", data: { message: "Any updates?" } },
-          { id: "hours", text: "My Hours", action: "message", data: { message: "What are my working hours?" } },
-          { id: "reach", text: "My Reach", action: "message", data: { message: "How many followers have I got?" } },
+          { id: "messages", text: t('shared.nav.messages'), action: "message", data: { message: "Any unread messages?" } },
+          { id: "updates", text: t('shared.becca.chip.missed'), action: "message", data: { message: "Any updates?" } },
+          { id: "hours", text: t('shared.becca.chip.hours'), action: "message", data: { message: "What are my working hours?" } },
+          { id: "reach", text: t('shared.becca.chip.reach'), action: "message", data: { message: "How many followers have I got?" } },
         ],
       };
     }
@@ -318,25 +321,25 @@ export default function BeccaScreen({
         suggestions: [
           {
             id: "today",
-            text: "Today's Bookings",
+            text: t('shared.becca.chip.todaysBookings'),
             action: "message",
             data: { message: "What's on today?" },
           },
           {
             id: "clients",
-            text: "My Clients",
+            text: t('shared.becca.chip.myClients'),
             action: "message",
             data: { message: "How many clients do I have?" },
           },
           {
             id: "messages",
-            text: "Messages",
+            text: t('shared.becca.chip.messages'),
             action: "message",
             data: { message: "Any unread messages?" },
           },
           {
             id: "analytics",
-            text: "Analytics",
+            text: t('shared.becca.chip.analytics'),
             action: "message",
             data: { message: "How am I doing?" },
           },
@@ -347,9 +350,9 @@ export default function BeccaScreen({
     const upcomingCount = bookings.filter(
       (b) => b.status === "upcoming",
     ).length;
-    let welcomeText = "## Your beauty assistant\n";
+    let welcomeText = t('shared.becca.welcome.client.heading');
     if (upcomingCount > 0) {
-      welcomeText += `**${upcomingCount} upcoming appointment${upcomingCount > 1 ? "s" : ""}.**\n`;
+      welcomeText += tp('shared.becca.welcome.client.upcoming', upcomingCount);
     }
     const hasPastBooking = bookings.some((b) => b.status === "completed");
     welcomeText +=
@@ -366,27 +369,27 @@ export default function BeccaScreen({
       suggestions: [
         {
           id: "my-bookings",
-          text: "My Bookings",
+          text: t('shared.becca.chip.myBookings'),
           action: "navigate",
           data: { screen: "Bookings" },
         },
         {
           id: "next-booking",
-          text: "My Next Appointment",
+          text: t('shared.becca.chip.nextAppointment'),
           action: "message",
           data: { message: "When's my next appointment?" },
         },
         ...(hasPastBooking
           ? [{
             id: "book-again",
-            text: "Book My Last Appointment Again",
+            text: t('shared.becca.chip.bookAgain'),
             action: "message" as const,
             data: { message: "Rebook my last appointment" },
           }]
           : []),
         {
           id: "browse",
-          text: "Browse All Services",
+          text: t('shared.becca.chip.browseServices'),
           action: "message",
           data: { message: "Show me all services" },
         },
@@ -472,8 +475,8 @@ export default function BeccaScreen({
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         showAlert(
-          "Permission Required",
-          "Please allow access to your photo library in Settings.",
+          t('shared.becca.photoPermission.title'),
+          t('shared.becca.photoPermission.body'),
         );
         return;
       }
@@ -489,7 +492,7 @@ export default function BeccaScreen({
         setSelectedImage(result.assets[0].uri);
       }
     } catch {
-      showAlert("Error", "Couldn't open photo library. Please try again.");
+      showAlert(t('common.error'), t('shared.becca.photoOpenFailed'));
     }
   };
 
@@ -773,10 +776,10 @@ export default function BeccaScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     // In-app themed dialog, not the OS Alert — a system popup breaks the
     // screen's visual language and can't be styled to match Becca.
-    showConfirm("New Chat", "Start a new conversation?", [
-      { text: "Cancel", style: "cancel" },
+    showConfirm(t('shared.becca.newChat.title'), t('shared.becca.newChat.body'), [
+      { text: t('common.cancel'), style: "cancel" },
       {
-        text: "New Chat",
+        text: t('shared.becca.newChat.title'),
         onPress: () => {
           // Invalidate any in-flight handleLoadChat so it can't resolve
           // after this and overwrite the fresh chat with old messages.
@@ -814,7 +817,7 @@ export default function BeccaScreen({
       // (a past write failure) must read as empty, not as a fresh chat
       // that looks like it happened just now.
       if (msgs.length === 0) {
-        showAlert("Chat unavailable", "This conversation has no saved messages.");
+        showAlert(t('shared.becca.chatUnavailable.title'), t('shared.becca.chatUnavailable.body'));
         return;
       }
       setMessages(msgs);
@@ -827,7 +830,7 @@ export default function BeccaScreen({
       conversationRef.current = undefined;
     } catch {
       if (loadChatRequestRef.current !== requestId) return;
-      showAlert("Error", "Could not load chat.");
+      showAlert(t('common.error'), t('shared.becca.loadChatFailed'));
     }
   };
 
@@ -851,7 +854,7 @@ export default function BeccaScreen({
     } catch {
       // Say so rather than leaving the row on screen with no explanation —
       // a silent failure here reads as an unresponsive button.
-      showAlert("Couldn't delete", "That chat couldn't be deleted. Please try again.");
+      showAlert(t('shared.becca.deleteFailed.title'), t('shared.becca.deleteFailed.body'));
     }
   };
 
@@ -861,15 +864,15 @@ export default function BeccaScreen({
   const handleClearHistory = () => {
     if (!user?.id || sessions.length === 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    const scope = isProviderMode ? "business" : "beauty";
     showConfirm(
-      "Clear chat history?",
-      `This permanently deletes all ${sessions.length} of your ${scope} chats with Becca. ` +
-        `Your ${isProviderMode ? "beauty" : "business"} chats aren't affected. This can't be undone.`,
+      t('shared.becca.clearHistory.title'),
+      isProviderMode
+        ? tp('shared.becca.clearHistory.bodyBusiness', sessions.length)
+        : tp('shared.becca.clearHistory.bodyBeauty', sessions.length),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t('common.cancel'), style: "cancel" },
         {
-          text: "Clear All",
+          text: t('shared.becca.clearHistory.confirm'),
           style: "destructive",
           onPress: async () => {
             try {
@@ -893,8 +896,8 @@ export default function BeccaScreen({
             } catch (err) {
               logger.error('[Becca] clear history failed:', err);
               showAlert(
-                "Couldn't clear history",
-                "Your chats couldn't be deleted. Please try again.",
+                t('shared.becca.clearFailed.title'),
+                t('shared.becca.clearFailed.body'),
               );
             }
           },
@@ -1169,21 +1172,21 @@ export default function BeccaScreen({
                     color={P.accentText}
                   />
                   <Text style={[styles.hatBadgeText, { color: P.accentText }]}>
-                    {isProviderMode ? "BUSINESS ASSISTANT" : "BEAUTY ASSISTANT"}
+                    {isProviderMode ? t('shared.becca.badge.business') : t('shared.becca.badge.beauty')}
                   </Text>
                 </View>
                 <Text style={[styles.heroGreeting, { color: P.text }]}>
-                  Hi, I'm{"\n"}
-                  <Text style={{ color: P.accentText }}>Becca</Text>.
+                  {t('shared.becca.hero.greetingBefore')}{"\n"}
+                  <Text style={{ color: P.accentText }}>Becca</Text>{t('shared.becca.hero.greetingAfter')}
                 </Text>
                 <Text style={[styles.heroQuestion, { color: P.sub }]}>
-                  How can I help?
+                  {t('shared.becca.hero.question')}
                 </Text>
                 {!isProviderMode && upcomingCount > 0 && (
                   <View style={styles.heroStatusLine}>
                     <View style={styles.liveDot} />
                     <Text style={[styles.heroStatusText, { color: P.sub }]}>
-                      {upcomingCount} upcoming appointment{upcomingCount > 1 ? "s" : ""}
+                      {tp('shared.becca.hero.upcoming', upcomingCount)}
                     </Text>
                   </View>
                 )}
@@ -1215,7 +1218,7 @@ export default function BeccaScreen({
                         color={P.accentText}
                       />
                       <Text style={[styles.headerStatus, { color: P.sub }]}>
-                        {isProviderMode ? "Business Assistant" : "Beauty Assistant"}
+                        {isProviderMode ? t('shared.becca.header.business') : t('shared.becca.header.beauty')}
                       </Text>
                     </View>
                   </View>
@@ -1358,7 +1361,7 @@ export default function BeccaScreen({
             onImagePick={handleImagePick}
             onStopTyping={handleStopTyping}
             isReplyTyping={!!streamingResponse}
-            placeholder="Ask me anything..."
+            placeholder={t('shared.becca.inputPlaceholder')}
             hasImage={!!selectedImage}
           />
 
@@ -1401,7 +1404,7 @@ export default function BeccaScreen({
               without this a provider can't tell why their client-side chats
               aren't here. */}
           <View>
-            <Text style={[styles.historyTitle, { color: P.text }]}>Chat History</Text>
+            <Text style={[styles.historyTitle, { color: P.text }]}>{t('shared.becca.history.title')}</Text>
             <View style={styles.headerStatusRow}>
               <Ionicons
                 name={isProviderMode ? "briefcase" : "sparkles"}
@@ -1409,7 +1412,7 @@ export default function BeccaScreen({
                 color={P.accentText}
               />
               <Text style={[styles.historySubtitle, { color: P.sub }]}>
-                {isProviderMode ? "Business chats" : "Beauty chats"}
+                {isProviderMode ? t('shared.becca.history.business') : t('shared.becca.history.beauty')}
               </Text>
             </View>
           </View>
@@ -1430,21 +1433,21 @@ export default function BeccaScreen({
               }}
               activeOpacity={0.5}
             >
-              <Text style={[styles.historyClose, { color: P.accentText }]}>Done</Text>
+              <Text style={[styles.historyClose, { color: P.accentText }]}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {historyLoading ? (
           <View style={styles.historyEmpty}>
-            <Text style={[styles.historyEmptyText, { color: P.sub }]}>Loading...</Text>
+            <Text style={[styles.historyEmptyText, { color: P.sub }]}>{t('shared.becca.history.loading')}</Text>
           </View>
         ) : sessions.length === 0 ? (
           <View style={styles.historyEmpty}>
             <Text style={[styles.historyEmptyText, { color: P.sub }]}>
               {isProviderMode
-                ? "No business chats yet. Your client-side Becca keeps its own separate history."
-                : "No beauty chats yet. Start a conversation and it will appear here."}
+                ? t('shared.becca.history.emptyBusiness')
+                : t('shared.becca.history.emptyBeauty')}
             </Text>
           </View>
         ) : (
@@ -1488,7 +1491,7 @@ export default function BeccaScreen({
                     </Text>
                     <Text style={[styles.historyItemDate, { color: P.sub }]}>
                       {new Date(item.updated_at).toLocaleDateString(
-                        "en-GB",
+                        localeForLanguage(),
                         {
                           month: "short",
                           day: "numeric",

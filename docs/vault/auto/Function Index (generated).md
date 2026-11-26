@@ -5,9 +5,9 @@
 
 #generated
 
-**4457 functions** across **717 files**.
+**4459 functions** across **717 files**.
 
-### `src/components/` (69)
+### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -28,6 +28,7 @@
 - `ColourWheelPicker.tsx` — ColourWheelPicker · commit · onBar · onHexText · onSquare
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
+- `ErrorBoundary.tsx` — component · DefaultFallback
 - `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar** · reassert
 - `FramedLogo.tsx` — **FramedLogo** · **LogoCircle**
 - `FullImageViewer.tsx` — clampX · clampY · close · **FullImageViewer** · onZoomChange · report · settle · ZoomablePage

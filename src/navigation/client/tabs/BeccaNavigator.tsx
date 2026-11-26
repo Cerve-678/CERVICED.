@@ -13,12 +13,14 @@ import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import { BeccaStackParamList } from '../../types';
+import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const BeccaStack = createNativeStackNavigator<BeccaStackParamList>();
 
 export default function BeccaNavigator() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <BeccaStack.Navigator>
@@ -31,16 +33,16 @@ export default function BeccaNavigator() {
       <BeccaStack.Screen
         name="ProviderChat"
         component={ProviderChatScreen}
-        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: t('common.back') }}
       />
 
       <BeccaStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
         options={{
-          title: 'Provider Profile',
+          title: t('shared.nav.providerProfile'),
           presentation: 'card',
-          headerBackTitle: 'Chat',
+          headerBackTitle: t('shared.nav.chat'),
           headerStyle: {
             backgroundColor: theme.background,
           },
@@ -66,10 +68,10 @@ export default function BeccaNavigator() {
         name="Notifications"
         component={NotificationsScreen}
         options={{
-          title: 'Notifications',
+          title: t('shared.nav.notifications'),
           presentation: 'formSheet',
           headerShown: false,
-          headerBackTitle: 'Close',
+          headerBackTitle: t('common.close'),
           headerStyle: {
             backgroundColor: theme.background,
           },
@@ -80,9 +82,9 @@ export default function BeccaNavigator() {
         name="Bookings"
         component={BookingsScreen}
         options={{
-          title: 'Track Appointment',
+          title: t('shared.nav.trackAppointment'),
           presentation: 'card',
-          headerBackTitle: 'Chat',
+          headerBackTitle: t('shared.nav.chat'),
           headerTransparent: false,
           headerShadowVisible: false,
           headerStyle: {
@@ -101,7 +103,7 @@ export default function BeccaNavigator() {
         name="ActivityCentre"
         component={ActivityCentreScreen}
         options={{
-          title: 'Activity Centre',
+          title: t('profile.forYou.activity.title'),
           presentation: 'card',
           headerTransparent: false,
           headerShadowVisible: false,

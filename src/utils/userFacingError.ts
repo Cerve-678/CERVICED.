@@ -12,6 +12,7 @@
  * `logger`/`reportError` at the throw site and by `toUserMessage` itself.
  */
 import { reportError } from './logger';
+import { tr } from '../i18n/translate';
 
 /**
  * Supabase Auth's own guard against "changing" a password to its current
@@ -33,28 +34,28 @@ export const BLOCKED_LANGUAGE_MESSAGE =
 const FRIENDLY_PATTERNS: { test: RegExp; message: string }[] = [
   { test: /language that isn.t allowed on CERVICED/i, message: BLOCKED_LANGUAGE_MESSAGE },
   { test: /network|fetch failed|timeout|offline|connect/i,
-    message: 'No internet connection. Please check your network and try again.' },
+    get message() { return tr('shared.error.offline'); } },
   { test: /rate limit|too many/i,
-    message: 'Too many attempts. Please wait a moment and try again.' },
+    get message() { return tr('shared.error.rateLimited'); } },
   // Only Supabase auth says "already registered", so this stays safe to make
   // email-specific; the generic clause below still covers duplicate-key writes.
   { test: /already registered|already been registered/i,
-    message: 'An account with this email already exists. Try logging in instead.' },
+    get message() { return tr('shared.error.emailTaken'); } },
   { test: /already exists|duplicate key/i,
-    message: 'That already exists. Please check your details and try again.' },
+    get message() { return tr('shared.error.duplicate'); } },
   { test: /invalid email|unable to validate email/i,
-    message: "That email address doesn't look right. Please check it and try again." },
+    get message() { return tr('shared.error.invalidEmail'); } },
   { test: /password.*weak|weak.*password/i,
-    message: "Your password isn't strong enough. Try mixing letters, numbers, and symbols." },
+    get message() { return tr('shared.error.weakPassword'); } },
   { test: /password.*(short|characters)/i,
-    message: 'Your password needs to be at least 8 characters long.' },
+    get message() { return tr('shared.error.shortPassword'); } },
   { test: /new password should be different/i, message: SAME_PASSWORD_MESSAGE },
   { test: /invalid login|invalid credentials|email not confirmed/i,
-    message: "That email or password doesn't match an account." },
+    get message() { return tr('shared.error.invalidLogin'); } },
   { test: /permission|row-level security|not authorized|unauthorized|jwt/i,
-    message: "You don't have permission to do that. Try signing out and back in." },
+    get message() { return tr('shared.error.permission'); } },
   { test: /payment|card|declined/i,
-    message: 'That payment could not be completed. Please check your details or try another card.' },
+    get message() { return tr('shared.error.payment'); } },
 ];
 
 const GENERIC = 'Something went wrong. Please try again.';
@@ -116,13 +117,13 @@ const GUARD_TRANSLATIONS: { test: RegExp; message: string }[] = [
   // real cause is almost always a screen acting on a status that has since
   // moved on somewhere else.
   { test: /invalid status transition/i,
-    message: 'This booking has already been updated somewhere else. Check its current status and try again.' },
+    get message() { return tr('shared.error.guard.statusMoved'); } },
   // The group RPCs name the offending booking by UUID, which is meaningless
   // to a provider and needlessly exposes an internal id.
   { test: /not owned by caller|no provider profile for caller|is not part of group/i,
-    message: "You don't have permission to change this booking. Try signing out and back in." },
+    get message() { return tr('shared.error.guard.notOwner'); } },
   { test: /^no (proposals|selections) supplied/i,
-    message: 'Add at least one date and time first.' },
+    get message() { return tr('shared.error.guard.noProposals'); } },
 ];
 
 export function toUserMessageAllowingDbGuard(
