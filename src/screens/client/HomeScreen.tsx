@@ -49,6 +49,7 @@ import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
 import { shuffle, shuffleWithDifferentFirst } from '../../utils/shuffle';
+import { useReshuffleWhenHidden } from '../../features/home/useReshuffleWhenHidden';
 import { keepShownOrder } from '../../utils/keepShownOrder';
 import { withTimeout } from '../../utils/withTimeout';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
@@ -174,10 +175,6 @@ const ProviderRail = React.memo(function ProviderRail({
 });
 
 const DEFAULT_NEARBY_RADIUS_MILES = 10;
-
-// Long enough for a pushed screen's slide-in to cover Home before Trending
-// gets its new order.
-const TRENDING_RESHUFFLE_AFTER_LEAVE_MS = 600;
 
 // Longest Recommended waits for its personalised order before showing the
 // plain one. Ranking is a local read, normally done well inside this.
@@ -454,28 +451,15 @@ export default function HomeScreen() {
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
-  // Refresh the order of these three browse rails after leaving Home. Doing
-  // it after the next screen slides over Home avoids cards jumping on return.
-  const trendingReshuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useFocusEffect(
-    useCallback(() => {
-      if (trendingReshuffleTimer.current) {
-        clearTimeout(trendingReshuffleTimer.current);
-        trendingReshuffleTimer.current = null;
-      }
-      return () => {
-        trendingReshuffleTimer.current = setTimeout(() => {
-          trendingReshuffleTimer.current = null;
-          setTrending(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
-          setNewProviders(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
-          setTopRated(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
-        }, TRENDING_RESHUFFLE_AFTER_LEAVE_MS);
-      };
-    }, []),
-  );
-  useEffect(() => () => {
-    if (trendingReshuffleTimer.current) clearTimeout(trendingReshuffleTimer.current);
+  // A new order for these three browse rails each time the client comes
+  // back, applied only once Home is fully hidden so a card never jumps in
+  // view. See useReshuffleWhenHidden.
+  const reshuffleBrowseRails = useCallback(() => {
+    setTrending(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+    setNewProviders(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+    setTopRated(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
   }, []);
+  useReshuffleWhenHidden(navigation, reshuffleBrowseRails);
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityInfo>>(new Map());
 
   // Per-service audience refinement (services.audience) for the Male/Kids

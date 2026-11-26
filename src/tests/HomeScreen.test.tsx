@@ -5,7 +5,13 @@ import HomeScreen from '../screens/client/HomeScreen';
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useFocusEffect: jest.fn(),
-  useNavigation: () => ({ navigate: jest.fn() }),
+  // addListener/getParent: Home listens for the stack's transitionEnd to
+  // reshuffle its browse rails only once it's hidden (useReshuffleWhenHidden).
+  useNavigation: () => ({
+    navigate: jest.fn(),
+    addListener: jest.fn(() => () => {}),
+    getParent: () => ({ isFocused: () => true }),
+  }),
   useIsFocused: () => true,
 }));
 
