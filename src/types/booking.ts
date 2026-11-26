@@ -65,9 +65,8 @@ export function isAddressPending(address: string | null | undefined): boolean {
  * `providerBusinessType` is the real answer, carried through the
  * client_bookings view. The clientAddress fallback only covers a booking read
  * before that column existed; never branch on clientAddress presence directly
- * — a non-mobile booking could carry one (see the checkout fix in
- * BookingContext.createBookingsFromCart), and a mobile booking legitimately
- * has none until the client sends it.
+ * — a non-mobile booking could carry one from an older checkout, and a
+ * mobile booking legitimately has none until the client sends it.
  *
  * The 'mobile' comparison itself lives in `appointmentVenue`
  * (features/business-details/options.ts) with the rest of what defines a
@@ -381,6 +380,9 @@ export interface ConfirmedBooking {
   noShowDisputeReason?: string | undefined;
   /** £ refunded so far (Stripe path), across every refund on this booking. */
   refundedAmount?: number | undefined;
+  /** £ the provider's promo code took off the service. `price` is already
+   *  the discounted price; this is shown as its own receipt line. */
+  promoDiscount?: number | undefined;
   /** £ the provider kept under their cancellation policy, set by the server
    *  when a client's late cancellation was settled. */
   policyRetainedAmount?: number | undefined;

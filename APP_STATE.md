@@ -144,7 +144,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Latest start per service | ✅ (2026-11-10, needs migration `20261110140000`) | `services.latest_start_time`, set in Edit Service (`ServiceEditorSheet`, "Latest start", Any time or 9am–8pm). NULL = any time in working hours. Server gate: `enforce_booking_bookability` (hard stop, no emergency opt-in; provider squeeze-in bypasses); `get_services_open_within` + `get_providers_availability` count only starts at or before it. App mirror: `utils/latestStart.ts` used by `AvailabilityService` (single slots, back-to-back chains, next free day, checkout re-check) and both reschedule pickers. |
 | Checkout availability re-check | ✅ | `AvailabilityService.isSlotAvailable()` queries Supabase at checkout |
 | Checkout slot hold | ✅ | 5-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
-| Booking created in Supabase | ✅ | `BookingContext.createBookingsFromCart()` → `databaseService.createBooking()` |
+| Booking created in Supabase | ✅ | `prepare_checkout` holds the times; `finalize-payment-intent` (or the Stripe webhook) books them once the payment goes through |
 | Booking confirmation notification + email | ✅ | DB-trigger-owned notification + `sendEmail()` fire-and-forget |
 
 ### Payments — corrected, this is the most stale part of the old docs
@@ -156,13 +156,12 @@ mid-migration**:
 
 | Component | Status | Where |
 |---|---|---|
-| Mock `PaymentModal` (raw card fields, fake instant success, no real charge) | 🚧 still present | `CartScreen.tsx` — collects card data itself, not PCI-compliant. CLAUDE.md flags this must not be extended as if production-ready. |
-| Real Stripe PaymentIntent flow (`StripePaymentModal`, native Payment Sheet: card/Apple Pay/Google Pay) | ✅ built, test-mode | `stripeService.ts`, edge functions `create-payment-intent` / `finalize-payment-intent`, `@stripe/stripe-react-native` |
-| Which one runs | Toggled by a `USE_STRIPE_PAYMENTS` flag in `CartScreen.tsx` (`ActivePaymentModal = USE_STRIPE_PAYMENTS ? StripePaymentModal : PaymentModal`) — Expo Go can't run the real Stripe module (no native module), so the mock stays wired for that environment | `CartScreen.tsx` |
+| Practice card form (raw card fields, no real charge) | ❌ removed 2026-11-26, with the `hold_cart_booking_slots` / `claim_cart_booking_slots` / `release_cart_booking_slots` RPCs behind it (migration `20261126120000`) | — |
+| Stripe checkout (`StripePaymentSheet`: card, Apple Pay, Google Pay, PayPal) | ✅ the only checkout, every build, test mode until launch | `src/features/cart/StripePaymentSheet.tsx`, `prepare_checkout`, edge functions `create-payment-intent` / `finalize-payment-intent` |
 | `payments` / `earnings` tables | Per `stripe-payment-intent-integration` memory, this landed on main 2026-08-02 and per CLAUDE.md still needs `cerviced-security-review` + `cerviced-legal-flagger` before treating it as launch-ready | — |
 
-**Do not describe payment as either "fully mock" or "fully real Stripe" —
-both code paths exist simultaneously on purpose.**
+**Since 2026-11-26 there is one checkout: real Stripe, in test mode until
+the keys switch to live.**
 
 ### Post-booking
 

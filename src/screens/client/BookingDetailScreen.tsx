@@ -1211,7 +1211,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       with Paid. */}
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600', flexShrink: 1, marginRight: 12 }} numberOfLines={2}>{booking.serviceName || 'Service'}</Text>
-                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>£{payment.servicePrice.toFixed(2)}</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>£{payment.listPrice.toFixed(2)}</Text>
                   </View>
                   {(booking.addOns ?? []).map((a, i) => (
                     <View key={`ao-${i}`} style={[st.rcptRow, st.rcptAddOnRow]}>
@@ -1219,6 +1219,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       <Text style={{ color: C.sub, fontSize: 13 }}>£{a.price.toFixed(2)}</Text>
                     </View>
                   ))}
+                  {payment.promoDiscount > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>{tr('cart.promoDiscount')}</Text>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>−£{payment.promoDiscount.toFixed(2)}</Text>
+                    </View>
+                  )}
                   {payment.addOnsTotal > 0 && (
                     <View style={st.rcptRow}>
                       <Text style={{ color: C.text, fontSize: 13 }}>{tr('clientBooking.detail.receipt.subtotal')}</Text>

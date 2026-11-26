@@ -76,6 +76,11 @@ export interface StripePaymentSheetProps {
   onClose: () => void;
   lines: PaymentSheetLine[];
   totalAmount: number;
+  /** The total the client was shown before the server priced the checkout,
+   *  when that differs from totalAmount (a price changed after the service
+   *  went in the cart). The lines then carry the old prices, so they're
+   *  listed without them and the sheet says the price changed. */
+  previousTotal?: number | null;
   /** The server-prepared checkout. Its amount and held bookings already
    *  exist before the sheet opens. */
   checkoutBatchId?: string | null;
@@ -111,6 +116,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
     onClose,
     lines,
     totalAmount,
+    previousTotal,
     checkoutBatchId,
     onPaymentSuccess,
     onPaymentComplete,
@@ -506,7 +512,7 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
               style={[styles.paymentModalContent, { paddingBottom: bottomInset }]}
             >
               <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
-                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.mockPay.title')}</Text>
+                <Text style={[styles.paymentTitle, { color: theme.text }]}>{t('cart.payment.title')}</Text>
                 <TouchableOpacity
                   style={styles.paymentCloseButton}
                   disabled={isProcessing}
@@ -522,14 +528,21 @@ export const StripePaymentSheet: React.FC<StripePaymentSheetProps> = memo(
 
               <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.mockPay.orderSummary')}</Text>
+                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>{t('cart.payment.orderSummary')}</Text>
+                  {previousTotal != null && (
+                    <Text style={[styles.priceChangedText, { color: P.text }]}>
+                      {t('cart.payment.priceChanged', { now: `£${totalAmount.toFixed(2)}`, was: `£${previousTotal.toFixed(2)}` })}
+                    </Text>
+                  )}
                   {lines.map(line => (
                     <View key={line.id} style={styles.orderItem}>
                       <Text style={[styles.orderItemName, { color: theme.text }]}>
                         {line.label}
                         {line.isDeposit && ' (Deposit)'}
                       </Text>
-                      <Text style={[styles.orderItemPrice, { color: theme.text }]}>£{line.price.toFixed(2)}</Text>
+                      {previousTotal == null && (
+                        <Text style={[styles.orderItemPrice, { color: theme.text }]}>£{line.price.toFixed(2)}</Text>
+                      )}
                     </View>
                   ))}
                   <View style={styles.orderTotal}>
@@ -833,6 +846,13 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: spacing.md,
   },
+  priceChangedText: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
   orderItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -981,4 +1001,3 @@ const styles = StyleSheet.create({
 });
 
 /** The sheet's order summary and header styles, shared with the Cart's older card-entry modal. */
-export { styles as paymentSheetStyles };

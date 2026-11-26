@@ -79,16 +79,6 @@ describe('CartScreen hands the slots back on every exit it can see', () => {
   it('releases when the screen unmounts', () => {
     expect(CART).toContain('useEffect(() => () => abandonRef.current(), [])');
   });
-
-  it('refuses to release while the hold is being claimed', () => {
-    // Releasing mid-claim DELETEs the rows claim_cart_booking_slots is
-    // converting, and its fallback insert has been RLS-blocked since
-    // 20260810180302 — the booking would not be re-created, just lost.
-    const fn = CART.slice(CART.indexOf('const abandonOutstandingCheckout'));
-    expect(fn.slice(0, 400)).toContain('if (isClaimingRef.current) return;');
-    expect(CART).toContain('isClaimingRef.current = true;');
-    expect(CART).toContain('isClaimingRef.current = false;');
-  });
 });
 
 describe('leaving the Cart while a payment is going through', () => {
@@ -97,7 +87,7 @@ describe('leaving the Cart while a payment is going through', () => {
   // the server released the card they had just approved and dropped the booking.
   const abandon = CART.slice(
     CART.indexOf('const abandonOutstandingCheckout = useCallback'),
-    CART.indexOf('}, [releaseCartCheckoutSlots]);'),
+    CART.indexOf('// An RN Modal renders in a native overlay above whatever screen is'),
   );
   const pay = PAY_SHEET.slice(PAY_SHEET.indexOf('export const StripePaymentSheet'));
 
