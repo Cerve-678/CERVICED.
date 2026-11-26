@@ -20,6 +20,8 @@ import {
   SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY, hairTreatmentHistory,
 } from './options';
 import { tailoredOptions, type TailoredQuestion } from './tailoredOptions';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   category: CategoryKey;
@@ -30,6 +32,8 @@ interface Props {
 }
 
 export function CategoryEditor({ category, draft, editing, setDraft, P }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Which tailored questions have "More options" open.
   const [showAll, setShowAll] = useState<Partial<Record<TailoredQuestion, boolean>>>({});
   const setSingle = (field: keyof BeautyData, value: string) => {
@@ -129,10 +133,10 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
             activeOpacity={0.6}
             accessibilityRole="button"
             accessibilityState={{ expanded: open }}
-            accessibilityLabel={open ? 'Fewer options' : `More options, ${folded.length}`}
+            accessibilityLabel={open ? tr('clientAccount.editor.fewerOptions') : tr('clientAccount.editor.moreOptionsA11y', { count: folded.length })}
           >
             <Text style={[styles.suitedLabel, styles.moreText, { color: P.sub }]}>
-              {open ? 'FEWER OPTIONS ▴' : `MORE OPTIONS (${folded.length}) ▾`}
+              {open ? `${tr('clientAccount.editor.fewerOptions').toUpperCase()} ▴` : `${tr('clientAccount.editor.moreOptions', { count: folded.length }).toUpperCase()} ▾`}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -186,7 +190,7 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     <View style={styles.sectionTitleRow}>
       <Text style={[styles.sectionLabel, { color: P.text }]}>{label}</Text>
       {opts?.warning && <Text style={styles.warnIcon}>⚠</Text>}
-      {opts?.optional && <Text style={[styles.optionalBadge, { color: P.sub }]}>optional</Text>}
+      {opts?.optional && <Text style={[styles.optionalBadge, { color: P.sub }]}>{tr('clientAccount.editor.optional')}</Text>}
       {count && (
         <Text style={[styles.sectionCount, { color: P.sub }]}>
           {count.selected}/{count.total}
@@ -393,8 +397,8 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
 
           <View style={[styles.consentRow, { backgroundColor: P.surface, borderColor: P.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.consentLabel, { color: P.text }]}>Kids beauty services</Text>
-              <Text style={[styles.consentSub, { color: P.sub }]}>Show me kids' beauty services in the home feed</Text>
+              <Text style={[styles.consentLabel, { color: P.text }]}>{tr('clientAccount.editor.kids')}</Text>
+              <Text style={[styles.consentSub, { color: P.sub }]}>{tr('clientAccount.editor.kidsSub')}</Text>
             </View>
             <Switch
               value={draft.has_kids}
@@ -411,7 +415,7 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
       return (
         <View style={[styles.consentRow, { backgroundColor: P.surface, borderColor: P.border }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.consentLabel, { color: P.text }]}>Photography consent</Text>
+            <Text style={[styles.consentLabel, { color: P.text }]}>{tr('clientAccount.editor.photoConsent')}</Text>
             <Text style={[styles.consentSub, { color: P.sub }]}>
               Allow your provider to share before/after photos on their social media
             </Text>
