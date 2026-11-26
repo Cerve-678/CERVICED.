@@ -92,6 +92,6 @@ describe('the Cart', () => {
     expect(release).toBeLessThan(prepare);
     const between = CART.slice(release, prepare);
     expect(between).toContain("if (earlier === 'still_paying')");
-    expect(between).toContain('Your last payment is still going through');
+    expect(between).toContain("tr('cart.pay.stillGoingTitle')");
   });
 });
