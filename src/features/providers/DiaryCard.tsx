@@ -25,7 +25,6 @@ import {
   type DiaryEvent,
 } from '../../services/deviceCalendarService';
 import { dayName, monthName, formatDurationMinutes } from '../../utils/dateUtils';
-import { useTranslation } from '../../i18n';
 import type { UseTranslation } from '../../i18n/useTranslation';
 import type { DbProviderAvailability } from '../../types/database';
 import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type DashboardWeekDay } from './diaryDays';
