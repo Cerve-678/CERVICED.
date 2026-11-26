@@ -38,7 +38,8 @@ import {
   tileWidth,
   type IoniconName,
 } from '../../components/analytics/AnalyticsKit';
-import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
+import { dateToYMD, formatShortDate, monthName } from '../../utils/dateUtils';
+import { useTranslation, tr, type TranslationKey } from '../../i18n';
 import {
   chartBuckets,
   currentWindow,
@@ -47,7 +48,7 @@ import {
   previousWindow,
   type AnalyticsRange,
 } from '../../utils/analyticsPeriod';
-
+import { trp } from '../../i18n';
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
 
@@ -90,13 +91,24 @@ function revenueOf(b: BookingWithAddOns): number {
 
 // What one chart bar represents, so the heading names the unit rather than
 // leaving the reader to guess ("Revenue by month" vs "…by day"/"…by quarter").
-function bucketNoun(range: Range): string {
+type Bucket = 'day' | 'month' | 'quarter';
+function bucketOf(range: Range): Bucket {
   switch (range) {
     case '7d': return 'day';
     case '90d': return 'quarter';
     default: return 'month'; // 6mo and All are both monthly buckets
   }
 }
+const REVENUE_BY_KEYS: Record<Bucket, TranslationKey> = {
+  day: 'providerBusiness.analytics.revenueBy.day',
+  month: 'providerBusiness.analytics.revenueBy.month',
+  quarter: 'providerBusiness.analytics.revenueBy.quarter',
+};
+const STRONGEST_KEYS: Record<Bucket, TranslationKey> = {
+  day: 'providerBusiness.analytics.insight.strongestDay',
+  month: 'providerBusiness.analytics.insight.strongestMonth',
+  quarter: 'providerBusiness.analytics.insight.strongestQuarter',
+};
 
 /** One plain-English sentence about the selected period, built from the real
  *  bookings so it can never assert something that didn't happen. Returns null
@@ -118,25 +130,25 @@ function buildInsight(
     byService.set(b.service_name_snapshot, (byService.get(b.service_name_snapshot) ?? 0) + revenueOf(b));
   }
   const topSvc = Array.from(byService.entries()).sort((a, b) => b[1] - a[1])[0];
-  if (topSvc && byService.size > 1) clauses.push(`${topSvc[0]} is your top earner`);
+  if (topSvc && byService.size > 1) clauses.push(tr('providerBusiness.analytics.insight.topEarner', { service: topSvc[0] }));
 
   // Best bucket in the chart (only meaningful with more than one populated bar).
   const withRev = chartData.filter(d => d.revenue > 0);
   if (withRev.length > 1) {
     const best = withRev.reduce((m, d) => (d.revenue > m.revenue ? d : m), withRev[0]!);
-    clauses.push(`${best.label} was your strongest ${bucketNoun(range)}`);
+    clauses.push(tr(STRONGEST_KEYS[bucketOf(range)], { label: best.label }));
   }
 
   // No-shows, only if there are none (a small win worth naming) — a non-zero
   // count is already visible in the tiles, so don't repeat bad news here.
-  if (noShow === 0 && completed.length >= 3) clauses.push('no no-shows');
+  if (noShow === 0 && completed.length >= 3) clauses.push(tr('providerBusiness.analytics.insight.noNoShows'));
 
   if (clauses.length === 0) return null;
-  // Join naturally: "a", "a, and b", "a, b, and c".
+  // Join naturally: "a", "a, and b", "a, b, and c" (the last joiner is per language).
   const joined =
     clauses.length === 1
       ? clauses[0]!
-      : clauses.slice(0, -1).join(', ') + ', and ' + clauses[clauses.length - 1];
+      : clauses.slice(0, -1).join(', ') + tr('providerBusiness.analytics.insight.and') + clauses[clauses.length - 1];
   return joined.charAt(0).toUpperCase() + joined.slice(1) + '.';
 }
 
@@ -166,6 +178,7 @@ function TopServices({
       .slice(0, 5);
   }, [bookings]);
 
+  const { t, tp } = useTranslation();
   const maxRev = Math.max(...ranked.map(r => r.revenue), 1);
 
   if (ranked.length === 0) return null;
@@ -173,7 +186,7 @@ function TopServices({
   return (
     <DeckCard dark={dark} style={{ marginBottom: 16 }}>
       <View style={svc.inner}>
-        <Text style={[svc.heading, { color: theme.text }]}>Top Services</Text>
+        <Text style={[svc.heading, { color: theme.text }]}>{t('providerBusiness.analytics.topServices')}</Text>
         {ranked.map((item, i) => {
           const fill = item.revenue / maxRev;
           const COLORS = [accentColor(dark), CHART.blue, CHART.teal, CHART.green, CHART.amber];
@@ -255,6 +268,7 @@ function RecentStream({
         .slice(0, 6),
     [bookings]
   );
+  const { t, tp } = useTranslation();
 
   if (recent.length === 0) return null;
 
@@ -266,7 +280,7 @@ function RecentStream({
   return (
     <DeckCard dark={dark} style={{ marginBottom: 16 }}>
       <View style={stream.inner}>
-        <Text style={[stream.heading, { color: theme.text }]}>Recent Activity</Text>
+        <Text style={[stream.heading, { color: theme.text }]}>{t('providerBusiness.analytics.recentActivityTitle')}</Text>
         {recent.map((b, i) => {
           const color = STATUS_COL[b.status] ?? '#8E8E93';
           const addOns = b.add_ons?.reduce((s, a) => s + (a.price_snapshot ?? 0), 0) ?? 0;
@@ -289,7 +303,7 @@ function RecentStream({
                   <Text style={[stream.price, { color: theme.text }]}>£{total.toFixed(2)}</Text>
                 </View>
                 <Text style={[stream.client, { color: theme.secondaryText }]} numberOfLines={1}>
-                  {b.customer_name?.trim() || 'Client'} · {formatShortDate(b.booking_date)}
+                  {b.customer_name?.trim() || t('providerBusiness.analytics.client')} · {formatShortDate(b.booking_date)}
                 </Text>
               </View>
             </PressScale>
@@ -325,6 +339,7 @@ function CompletionRing({
   dark: boolean;
   theme: any;
 }) {
+  const { t, tp } = useTranslation();
   const accent = accentColor(dark);
   const anim = useRef(new Animated.Value(0)).current;
   const [displayPct, setDisplayPct] = useState(0);
@@ -350,7 +365,7 @@ function CompletionRing({
   return (
     <DeckCard dark={dark} style={{ marginBottom: 16 }}>
       <View style={ring.inner}>
-        <Text style={[ring.heading, { color: theme.text }]}>Completion Rate</Text>
+        <Text style={[ring.heading, { color: theme.text }]}>{t('providerBusiness.analytics.completionRate')}</Text>
         <View style={ring.row}>
           <View style={[ring.container, { width: SIZE, height: SIZE }]}>
             <Svg width={SIZE} height={SIZE}>
@@ -379,21 +394,21 @@ function CompletionRing({
             </Svg>
             <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
               <Text style={[ring.pct, { color: accent }]}>{displayPct}%</Text>
-              <Text style={[ring.sub, { color: theme.secondaryText }]}>completed</Text>
+              <Text style={[ring.sub, { color: theme.secondaryText }]}>{t('providerBusiness.analytics.completedLower')}</Text>
             </View>
           </View>
           <View style={ring.stats}>
             <View style={ring.statRow}>
               <View style={[ring.dot, { backgroundColor: CHART.green }]} />
-              <Text style={[ring.statLabel, { color: theme.secondaryText }]}>Completed</Text>
+              <Text style={[ring.statLabel, { color: theme.secondaryText }]}>{t('providerBusiness.analytics.completed')}</Text>
             </View>
             <View style={ring.statRow}>
               <View style={[ring.dot, { backgroundColor: CHART.amber }]} />
-              <Text style={[ring.statLabel, { color: theme.secondaryText }]}>Pending</Text>
+              <Text style={[ring.statLabel, { color: theme.secondaryText }]}>{t('providerBusiness.analytics.pending')}</Text>
             </View>
             <View style={ring.statRow}>
               <View style={[ring.dot, { backgroundColor: CHART.pink }]} />
-              <Text style={[ring.statLabel, { color: theme.secondaryText }]}>Cancelled</Text>
+              <Text style={[ring.statLabel, { color: theme.secondaryText }]}>{t('providerBusiness.analytics.cancelled')}</Text>
             </View>
           </View>
         </View>
@@ -466,6 +481,7 @@ function RatingAnalytics({
   dark: boolean;
   theme: any;
 }) {
+  const { t, tp } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const ratingChartW = ratingChartWidth(screenWidth);
   const bookingServiceMap = useMemo(() => {
@@ -489,7 +505,7 @@ function RatingAnalytics({
     Array.from({ length: RATING_MONTHS }, (_, i) => {
       const d = monthsAgo(RATING_MONTHS - 1 - i);
       const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('en-GB', { month: 'short' });
+      const label = monthName(d.getMonth(), 'short');
       const bucket = reviews.filter(r => r.created_at.startsWith(key));
       const avg    = bucket.length > 0 ? bucket.reduce((s, r) => s + r.rating, 0) / bucket.length : null;
       return { label, avg, count: bucket.length };
@@ -553,7 +569,7 @@ function RatingAnalytics({
         {/* Title */}
         <View style={rta.titleRow}>
           <Ionicons name="star" size={14} color={CHART.amber} />
-          <Text style={[rta.heading, { color: theme.text }]}>Rating Analytics</Text>
+          <Text style={[rta.heading, { color: theme.text }]}>{t('providerBusiness.analytics.ratingAnalytics')}</Text>
         </View>
 
         {/* Hero average */}
@@ -574,7 +590,7 @@ function RatingAnalytics({
             })}
           </View>
           <Text style={[rta.reviewCount, { color: theme.secondaryText }]}>
-            {reviews.length} review{reviews.length !== 1 ? 's' : ''}
+            {tp('providerBusiness.analytics.reviews', reviews.length)}
           </Text>
         </View>
 
@@ -595,7 +611,7 @@ function RatingAnalytics({
         {/* Monthly trend line */}
         {validPts >= 2 && (
           <View style={rta.trendBlock}>
-            <Text style={[rta.subheading, { color: theme.text }]}>Rating Trend</Text>
+            <Text style={[rta.subheading, { color: theme.text }]}>{t('providerBusiness.analytics.ratingTrend')}</Text>
             <Svg width={ratingChartW} height={RATING_CHART_H + 4} style={{ marginTop: 10 }}>
               {/* dashed reference lines at 3★ and 4★ */}
               {[3, 4].map(v => {
@@ -643,7 +659,7 @@ function RatingAnalytics({
         {/* Per-service ratings */}
         {serviceRatings.length > 0 && (
           <View style={rta.svcBlock}>
-            <Text style={[rta.subheading, { color: theme.text }]}>By Service</Text>
+            <Text style={[rta.subheading, { color: theme.text }]}>{t('providerBusiness.analytics.byService')}</Text>
             {serviceRatings.map((s, i) => {
               const SVC_COLORS = [accentColor(dark), CHART.blue, CHART.teal, CHART.green];
               const c = SVC_COLORS[i % SVC_COLORS.length]!;
@@ -743,6 +759,7 @@ function ServiceQuadrantCharts({
   dark: boolean;
   theme: any;
 }) {
+  const { t } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const quadW = quadWidth(screenWidth);
   const quadChartW = quadChartWidth(screenWidth);
@@ -752,7 +769,7 @@ function ServiceQuadrantCharts({
         const d = monthsAgo(5 - i);
         return {
           key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-          label: d.toLocaleDateString('en-GB', { month: 'short' }),
+          label: monthName(d.getMonth(), 'short'),
         };
       }),
     []
@@ -790,7 +807,7 @@ function ServiceQuadrantCharts({
       <View style={quad.inner}>
         <View style={quad.titleRow}>
           <Ionicons name="trending-up" size={14} color={accentColor(dark)} />
-          <Text style={[quad.heading, { color: theme.text }]}>Service Trends</Text>
+          <Text style={[quad.heading, { color: theme.text }]}>{t('providerBusiness.analytics.serviceTrends')}</Text>
           <View style={{ marginLeft: 'auto' }}>
             <LivePulse color={CHART.green} />
           </View>
@@ -823,7 +840,7 @@ function ServiceQuadrantCharts({
                   </Text>
                   <Text style={[quad.totalCount, { color: color }]}>
                     {total}
-                    <Text style={[quad.totalSuffix, { color: theme.secondaryText }]}> bkgs</Text>
+                    <Text style={[quad.totalSuffix, { color: theme.secondaryText }]}> {t('providerBusiness.analytics.bookingsShort')}</Text>
                   </Text>
                   <Svg width={quadChartW} height={QUAD_CHART_H + 2} style={quad.chart}>
                     <SvgLine
@@ -884,15 +901,20 @@ const RANGES: { key: Range; label: string }[] = [
   { key: '7d',  label: '7d'  },
   { key: '30d', label: '30d' },
   { key: '90d', label: '90d' },
-  { key: 'all', label: 'All' },
+  { key: 'all', get label() { return tr('common.all'); } },
 ];
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function ProviderAnalyticsScreen({ navigation }: any) {
   const { theme, isDarkMode: dark } = useTheme();
+  const { t, tp } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const accent = accentColor(dark);
+  const rangeOptions = useMemo(
+    () => RANGES.map(r => (r.key === 'all' ? { ...r, label: t('providerBusiness.analytics.rangeAll') } : r)),
+    [t],
+  );
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
   // Paid tips (pounds) by booking id; added into revenue on top of the price.
   const [tips, setTips]                 = useState<ReadonlyMap<string, number>>(new Map());
@@ -1045,11 +1067,11 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
           }
         >
 
-          <AnalyticsHeader title="Provider Analytics" onBack={() => navigation.goBack()} dark={dark} theme={theme} />
+          <AnalyticsHeader title={t('providerBusiness.analytics.title')} onBack={() => navigation.goBack()} dark={dark} theme={theme} />
 
           {/* ── Range selector + payouts shortcut ── */}
           <View style={main.rangeArea}>
-            <RangeSelector options={RANGES} range={range} onChange={setRange} dark={dark} theme={theme} />
+            <RangeSelector options={rangeOptions} range={range} onChange={setRange} dark={dark} theme={theme} />
             <PressScale
               onPress={() => navigation.navigate('Payments')}
               haptic="light"
@@ -1069,7 +1091,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                   <View style={main.heroTop}>
                     <View>
                       <Text style={[heroText.label, { color: theme.secondaryText }]}>
-                        Total Revenue
+                        {t('providerBusiness.analytics.totalRevenue')}
                       </Text>
                       <AnimatedNumber
                         value={kpi.revenue}
@@ -1092,12 +1114,12 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                   </View>
                   {compareLabel && (
                     <Text style={[heroText.sub, { color: theme.secondaryText }]}>
-                      vs £{kpi.prevRevenue.toFixed(0)} {compareLabel}
+                      {t('providerBusiness.analytics.versus', { amount: `£${kpi.prevRevenue.toFixed(0)}`, period: compareLabel })}
                     </Text>
                   )}
                   {kpi.tipTotal > 0 && (
                     <Text style={[heroText.sub, { color: theme.secondaryText }]}>
-                      Includes {fmtGBP(kpi.tipTotal)} in tips
+                      {tr('providerBusiness.ui.includesTips', { amount: fmtGBP(kpi.tipTotal) })}
                     </Text>
                   )}
 
@@ -1105,14 +1127,14 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                   <View style={{ marginTop: 20 }}>
                     <View style={heroText.chartHead}>
                       <Text style={[heroText.chartHeadK, { color: theme.secondaryText }]}>
-                        Revenue by {bucketNoun(range)}
+                        {t(REVENUE_BY_KEYS[bucketOf(range)])}
                       </Text>
                       {selectedBucket && (
                         <View style={{ alignItems: 'flex-end' }}>
                           <Text style={[heroText.roLabel, { color: theme.secondaryText }]}>{selectedBucket.label}</Text>
                           <Text style={[heroText.roVal, { color: accent }]}>{fmtGBP(selectedBucket.revenue)}</Text>
                           <Text style={[heroText.roSub, { color: theme.secondaryText }]}>
-                            {selectedBucket.bookings} booking{selectedBucket.bookings !== 1 ? 's' : ''}
+                            {tp('providerBusiness.analytics.bookingCount', selectedBucket.bookings)}
                           </Text>
                         </View>
                       )}
@@ -1127,7 +1149,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                       onSelect={setSelectedBar}
                     />
                     <Text style={[heroText.chartHint, { color: theme.secondaryText }]}>
-                      Tap a bar to see what it earned
+                      {t('providerBusiness.analytics.tapBar')}
                     </Text>
                   </View>
                 </View>
@@ -1142,28 +1164,29 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             )}
 
             {/* ── At a glance ── */}
-            <SectionLabel theme={theme}>At a glance</SectionLabel>
+            <SectionLabel theme={theme}>{t('providerBusiness.analytics.atAGlance')}</SectionLabel>
             <View style={main.tileGrid}>
               {([
-                { label: 'Bookings',   value: kpi.total,                                                                                              icon: 'calendar',       color: CHART.blue },
-                { label: 'Completed',  value: inRange.filter(b => b.status === 'completed').length,                                                   icon: 'checkmark-done', color: CHART.green },
-                { label: 'Saved',      value: followerCount,                                                                                           icon: 'bookmark',       color: accent },
-                { label: 'Pending',    value: kpi.pending,                                                                                             icon: 'time',           color: CHART.amber },
-                { label: 'No Shows',   value: kpi.noShow,                                                                                              icon: 'alert-circle',   color: CHART.pink },
+                { id: 'bookings', label: t('providerBusiness.analytics.tile.bookings'), value: kpi.total,                                                                                              icon: 'calendar',       color: CHART.blue },
+                { id: 'completed', label: t('providerBusiness.analytics.completed'), value: inRange.filter(b => b.status === 'completed').length,                                                   icon: 'checkmark-done', color: CHART.green },
+                { id: 'saved', label: t('providerBusiness.analytics.tile.saved'), value: followerCount,                                                                                           icon: 'bookmark',       color: accent },
+                { id: 'pending', label: t('providerBusiness.analytics.pending'), value: kpi.pending,                                                                                             icon: 'time',           color: CHART.amber },
+                { id: 'noShows', label: t('providerBusiness.analytics.tile.noShows'), value: kpi.noShow,                                                                                              icon: 'alert-circle',   color: CHART.pink },
                 {
-                  label: reviewsInRange.length > 0 ? `${reviewsInRange.length} review${reviewsInRange.length !== 1 ? 's' : ''}` : 'No reviews yet',
+                  id: 'reviews',
+                  label: reviewsInRange.length > 0 ? tp('providerBusiness.analytics.reviews', reviewsInRange.length) : t('providerBusiness.analytics.tile.noReviews'),
                   value: reviewsInRange.length > 0 ? parseFloat((reviewsInRange.reduce((s, r) => s + r.rating, 0) / reviewsInRange.length).toFixed(1)) : 0,
                   icon: 'star', color: CHART.amber,
                 },
-                { label: 'Cancelled',  value: kpi.cancelled,                                                                                           icon: 'close-circle',   color: CHART.plum },
-              ] as { label: string; value: number; sub?: string; icon: IoniconName; color: string }[]).map((t, i) => (
-                <Reveal key={t.label} index={i + 1} style={{ width: tileWidth(screenWidth) }}>
+                { id: 'cancelled', label: t('providerBusiness.analytics.cancelled'), value: kpi.cancelled,                                                                                           icon: 'close-circle',   color: CHART.plum },
+              ] as { id: string; label: string; value: number; sub?: string; icon: IoniconName; color: string }[]).map((tile, i) => (
+                <Reveal key={tile.id} index={i + 1} style={{ width: tileWidth(screenWidth) }}>
                   <StatTile
-                    label={t.label}
-                    value={t.value}
-                    sub={t.sub}
-                    icon={t.icon}
-                    color={t.color}
+                    label={tile.label}
+                    value={tile.value}
+                    sub={tile.sub}
+                    icon={tile.icon}
+                    color={tile.color}
                     dark={dark}
                     theme={theme}
                   />
@@ -1174,7 +1197,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             {/* ── Where your money comes from ── */}
             {hasCompletedInRange && (
               <>
-                <SectionLabel theme={theme}>Where your money comes from</SectionLabel>
+                <SectionLabel theme={theme}>{t('providerBusiness.analytics.moneyFrom')}</SectionLabel>
                 <Reveal index={9}>
                   <TopServices bookings={inRange} dark={dark} theme={theme} />
                 </Reveal>
@@ -1182,7 +1205,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             )}
 
             {/* ── Performance ── */}
-            <SectionLabel theme={theme}>Performance</SectionLabel>
+            <SectionLabel theme={theme}>{t('providerBusiness.analytics.performance')}</SectionLabel>
             <Reveal index={8}>
               <CompletionRing rate={kpi.cRate} dark={dark} theme={theme} />
             </Reveal>
@@ -1195,7 +1218,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             {/* ── Reputation ── */}
             {reviews.length > 0 && (
               <>
-                <SectionLabel theme={theme}>Reputation</SectionLabel>
+                <SectionLabel theme={theme}>{t('providerBusiness.analytics.reputation')}</SectionLabel>
                 <Reveal index={11}>
                   <RatingAnalytics reviews={reviews} bookings={bookings} dark={dark} theme={theme} />
                 </Reveal>
@@ -1205,7 +1228,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
             {/* ── Recent activity ── */}
             {inRange.length > 0 && (
               <>
-                <SectionLabel theme={theme}>Recent activity</SectionLabel>
+                <SectionLabel theme={theme}>{t('providerBusiness.analytics.recentActivity')}</SectionLabel>
                 <Reveal index={12}>
                   <RecentStream
                     bookings={inRange}

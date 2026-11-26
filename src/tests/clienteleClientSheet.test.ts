@@ -47,7 +47,7 @@ describe('Clientele client sheet: Beauty Profile', () => {
 
   it('reads "no row" as not shared, never as an empty profile', () => {
     expect(service).toContain('export async function getClientBeautyProfileForProvider(');
-    expect(screen).toContain("Shared with you once you've accepted a booking from them.");
+    expect(screen).toContain("tr('providerBusiness.ui2.sharedWithYouOnceYouVe')");
   });
 
   it('shows the profile the same way as the booking page', () => {

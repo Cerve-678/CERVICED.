@@ -23,6 +23,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { toUserMessage } from '../../utils/userFacingError';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CP_DARK = {
@@ -59,10 +62,10 @@ const CP = CP_DARK; // static fallback for StyleSheet.create
 type ContactMethod = 'in_app' | 'email' | 'whatsapp' | 'phone';
 
 const METHOD_META: Record<ContactMethod, { icon: string; label: string; description: string }> = {
-  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Booked clients chat with you inside Cerviced. Anyone browsing your profile can also start a general enquiry via Get In Touch' },
-  email:    { icon: 'mail-outline',                label: 'Email',              description: 'Booked clients can email you' },
-  whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Booked clients open a WhatsApp chat with you' },
-  phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Booked clients can call you' },
+  in_app:   { icon: 'chatbubble-ellipses-outline', get label() { return tr('providerBusiness.comms.method.inApp'); },  get description() { return tr('providerBusiness.comms.method.inAppSub'); } },
+  email:    { icon: 'mail-outline',                get label() { return tr('providerBusiness.comms.method.email'); },              get description() { return tr('providerBusiness.ui2.bookedClientsCanEmailYou'); } },
+  whatsapp: { icon: 'logo-whatsapp',               get label() { return tr('providerBusiness.comms.method.whatsapp'); },           get description() { return tr('providerBusiness.ui2.bookedClientsOpenAWhatsappChat'); } },
+  phone:    { icon: 'call-outline',                get label() { return tr('providerBusiness.comms.method.phone'); },         get description() { return tr('providerBusiness.ui2.bookedClientsCanCallYou'); } },
 };
 
 const ALL_METHODS: ContactMethod[] = ['in_app', 'email', 'whatsapp', 'phone'];
@@ -72,9 +75,9 @@ type ContactValues = Record<ValueMethod, string>;
 const EMPTY_VALUES: ContactValues = { email: '', phone: '', whatsapp: '' };
 
 const INPUT_META: Record<ValueMethod, { placeholder: string; keyboardType: 'email-address' | 'phone-pad' }> = {
-  email:    { placeholder: 'Email for booked clients', keyboardType: 'email-address' },
-  phone:    { placeholder: 'Number for booked clients', keyboardType: 'phone-pad' },
-  whatsapp: { placeholder: 'WhatsApp number for booked clients', keyboardType: 'phone-pad' },
+  email:    { get placeholder() { return tr('providerBusiness.ui2.emailForBookedClients'); }, keyboardType: 'email-address' },
+  phone:    { get placeholder() { return tr('providerBusiness.ui2.numberForBookedClients'); }, keyboardType: 'phone-pad' },
+  whatsapp: { get placeholder() { return tr('providerBusiness.ui2.whatsappNumberForBookedClients'); }, keyboardType: 'phone-pad' },
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,6 +109,8 @@ const tSt = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderCommunicationsScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const [loading, setLoading] = useState(true);
@@ -226,7 +231,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         <KeyboardDismissView>
           {/* Header */}
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>Contact Preferences</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{tr('providerBusiness.comms.title')}</Text>
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: C.surface }]} onPress={() => navigation.goBack()}>
               <Ionicons name="close" size={22} color={C.sub} />
             </TouchableOpacity>
@@ -243,7 +248,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
 
             {/* Contact method toggles */}
             <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Text style={[s.cardTitle, { color: C.text }]}>Booked-Client Contact Channels</Text>
+              <Text style={[s.cardTitle, { color: C.text }]}>{tr('providerBusiness.comms.channels')}</Text>
               {ALL_METHODS.map((method, idx) => {
                 const meta = METHOD_META[method];
                 const isOn = enabled.has(method);
@@ -264,7 +269,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           <Text style={[s.rowLabel, { color: C.text }]}>{meta.label}</Text>
                           {isLocked && (
                             <View style={[s.alwaysOnBadge, { backgroundColor: C.accent }]}>
-                              <Text style={[s.alwaysOnText, { color: C.onAccent }]}>Always on</Text>
+                              <Text style={[s.alwaysOnText, { color: C.onAccent }]}>{tr('providerBusiness.comms.alwaysOn')}</Text>
                             </View>
                           )}
                         </View>
@@ -297,8 +302,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           />
                           {!booked[method].trim() && (
                             publicValue
-                              ? <Text style={[s.inputHint, { color: C.sub }]}>Using your public {method === 'email' ? 'email' : 'number'}. Type here to give booked clients a different one.</Text>
-                              : isOn && <Text style={s.rowWarn}>Not added yet</Text>
+                              ? <Text style={[s.inputHint, { color: C.sub }]}>{tr(method === 'email' ? 'providerBusiness.ui.usingPublicEmail' : 'providerBusiness.ui.usingPublicNumber')}</Text>
+                              : isOn && <Text style={s.rowWarn}>{tr('providerBusiness.comms.notAdded')}</Text>
                           )}
                         </View>
                       );
@@ -316,7 +321,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             >
               {saving
                 ? <ActivityIndicator color={C.onAccent} size="small" />
-                : <Text style={[s.saveTxt, { color: C.onAccent }]}>Save Preferences</Text>
+                : <Text style={[s.saveTxt, { color: C.onAccent }]}>{tr('providerBusiness.comms.save')}</Text>
               }
             </TouchableOpacity>
           </ScrollView>
