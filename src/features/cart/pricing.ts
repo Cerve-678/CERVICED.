@@ -43,3 +43,10 @@ export function resolveDepositPolicyArg(
 ): DepositPolicy | number {
   return toDepositPolicy(providerDepositPolicies[providerKey]) ?? DEPOSIT_PERCENTAGE;
 }
+
+/** The total the client was shown, when the server priced the checkout
+ *  differently (the provider changed a price after it went in the cart), so
+ *  the payment sheet can say so. null when they agree to the penny. */
+export function priceChangedFrom(shownTotal: number, serverTotal: number): number | null {
+  return Math.round(shownTotal * 100) === Math.round(serverTotal * 100) ? null : shownTotal;
+}

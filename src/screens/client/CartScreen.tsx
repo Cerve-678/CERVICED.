@@ -66,7 +66,7 @@ import { formatDurationMinutes, formatLongDateNoYear, formatShortDayDate, format
 import { newestAddedItem } from '../../utils/newestAddedItem';
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { CART_ISSUE, describeReserveFailure, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
-import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
+import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg, priceChangedFrom } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { useTranslation, tr, localeForLanguage } from '../../i18n';
@@ -296,6 +296,8 @@ interface PaymentModalProps {
   onClose: () => void;
   effectiveCartItems: EffectiveCartItem[];
   totalAmount: number;
+  /** What the summary showed, when the server's total differs from it. */
+  previousTotal?: number | null;
   /** The server-prepared checkout. Its amount and held bookings are already
    * created before the payment sheet opens. */
   checkoutBatchId?: string | null;
@@ -1197,6 +1199,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
+  // What the summary showed, when the server priced the checkout differently
+  // (a price changed after the service went in the cart). The payment sheet
+  // then says so; null when they agree.
+  const [priceChangedTotal, setPriceChangedTotal] = useState<number | null>(null);
   // The checkout that just went through, for the success screen: how much
   // was only held for requests, and any hold the client's bank wants checked.
   const [paidCheckout, setPaidCheckout] = useState<{ checkoutBatchId: string; plan: CheckoutHoldPlan | null } | null>(null);
@@ -2716,6 +2722,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // frozenCheckoutTotals.total computes next render, rather than two
     // independent formulas that could drift apart under a future edit.
     setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
+    setPriceChangedTotal(null);
     setPaidCheckout(null);
 
     // Show review modal pre-filled with user data
@@ -3418,6 +3425,7 @@ const handlePaymentSuccess = useCallback(async () => {
                         const prepared = await prepareCheckout(intent);
                         setServerCheckoutBatchId(prepared.checkoutBatchId);
                         setPaymentTotal(prepared.amountDue);
+                        setPriceChangedTotal(priceChangedFrom(frozenCheckoutTotals.total, prepared.amountDue));
                         setShowBookingSummaryModal(false);
                         paymentSheetOpenIdRef.current += 1;
                         setShowPaymentModal(true);
@@ -3640,6 +3648,7 @@ const handlePaymentSuccess = useCallback(async () => {
                 }}
                 effectiveCartItems={paymentSheetCartItems}
                 totalAmount={paymentTotal}
+                previousTotal={priceChangedTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={handlePaymentSuccess}
                 onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}

@@ -29,6 +29,7 @@ export const cart = {
   "cart.payment.title": "Complete Payment",
   "cart.payment.orderSummary": "Order Summary",
   "cart.payment.depositSuffix": " (Deposit)",
+  "cart.payment.priceChanged": "The price has changed since you added this to your cart. You'll pay {now}, not {was}.",
   "cart.pay.amount": "Pay {amount}",
   "cart.pay.expired": "Checkout has expired. Please review your booking and try again.",
   "cart.pay.paypalUnavailable": "PayPal isn't available for this booking. Please pay by card.",
@@ -242,6 +243,7 @@ export const cart = {
 /** Keys in this area HELD IN ENGLISH in every language (legal, refund,
  *  cancellation, payment, age and health-safety copy). See ../../translate.ts. */
 export const cartHeld: readonly (keyof typeof cart)[] = [
+  'cart.payment.priceChanged',
   'cart.methods.stripeNote',
   'cart.methods.paypalSub',
 ];
