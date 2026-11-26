@@ -38,7 +38,7 @@ describe("provider booking surfaces show the client's side, not their own copy",
   });
 
   it("gives both provider surfaces the client's note instead", () => {
-    expect(detail).toContain("Client note");
+    expect(detail).toContain("tr('providerBookings.detail.clientNote')");
     expect(detail).toContain("{booking.notes}");
     expect(home).toContain("booking.notes");
   });
@@ -50,7 +50,7 @@ describe("provider booking surfaces show the client's side, not their own copy",
     // The release states below it are for a provider whose OWN address is the
     // venue — never reachable on a mobile booking.
     const mobileBranch = detail.indexOf(") : isMobileProvider ? (");
-    const releaseBranch = detail.indexOf("Send address to client");
+    const releaseBranch = detail.indexOf("tr('providerBookings.detail.address.sendToClient')");
     expect(mobileBranch).toBeGreaterThan(-1);
     expect(releaseBranch).toBeGreaterThan(mobileBranch);
   });

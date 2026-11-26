@@ -6,9 +6,9 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **155 files**
+Curated: [[Address Release]] · **160 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(126)_
 - `src/services/database/addressRelease.ts` _(94)_
 - `src/screens/provider/InfoRegScreen.tsx` _(93)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
@@ -37,23 +37,23 @@ Curated: [[Address Release]] · **155 files**
 - `src/screens/client/ProfileInfoScreen.tsx` _(22)_
 - `src/i18n/catalogs/en/clientAccount.ts` _(21)_
 - `src/features/providers/goLiveStatus.ts` _(20)_
-- … +125 more
+- … +130 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **281 files**
+Curated: [[Availability & Slots]] · **286 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(189)_
 - `src/services/database/availability.ts` _(182)_
-- `src/screens/provider/AddBookingScreen.tsx` _(161)_
+- `src/screens/provider/AddBookingScreen.tsx` _(156)_
 - `src/screens/client/SearchScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(97)_
 - `src/services/becca/capabilities/client.ts` _(92)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(83)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/contexts/BookingContext.tsx` _(76)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(68)_
 - `src/services/database/providers.ts` _(67)_
 - `src/i18n/catalogs/en/clientBooking.ts` _(64)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(62)_
 - `src/features/providers/TodayScheduleCards.tsx` _(58)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(55)_
 - `src/i18n/catalogs/en/discover.ts` _(54)_
@@ -65,16 +65,16 @@ Curated: [[Availability & Slots]] · **281 files**
 - `supabase/waitlist_holds.sql` _(43)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/components/AvailabilityCard.tsx` _(31)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(31)_
 - `supabase/add_providers_availability_rpc.sql` _(31)_
 - `src/components/BookingSheet.tsx` _(30)_
 - `src/i18n/catalogs/en/cart.ts` _(30)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(30)_
 - `src/types/database.ts` _(28)_
 - `src/i18n/catalogs/de/discover.ts` _(27)_
-- … +251 more
+- … +256 more
 
 ## Payments
-Curated: [[Payments]] · **244 files**
+Curated: [[Payments]] · **248 files**
 - `src/screens/client/CartScreen.tsx` _(465)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/features/cart/StripePaymentSheet.tsx` _(175)_
@@ -89,7 +89,7 @@ Curated: [[Payments]] · **244 files**
 - `src/web/WebPaymentStep.tsx` _(97)_
 - `src/services/database/checkout.ts` _(95)_
 - `src/features/bookings/paymentPresentation.ts` _(85)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(73)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(74)_
 - `src/services/database/edgeFunctions.ts` _(61)_
 - `src/types/database.ts` _(59)_
 - `src/features/providers/goLiveStatus.ts` _(54)_
@@ -105,20 +105,20 @@ Curated: [[Payments]] · **244 files**
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/screens/client/PaymentMethodsScreen.tsx` _(37)_
 - `supabase/provider_reminder_jobs.sql` _(34)_
-- … +214 more
+- … +218 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **476 files**
+Curated: [[Booking Flow]] · **480 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(710)_
 - `src/screens/client/CartScreen.tsx` _(659)_
 - `src/services/becca/capabilities/client.ts` _(618)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(607)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(585)_
 - `src/screens/client/BookingDetailScreen.tsx` _(510)_
 - `src/screens/client/BookingsScreen.tsx` _(429)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(255)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(202)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(251)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(196)_
 - `src/services/database/bookings.ts` _(193)_
 - `src/screens/client/RescheduleScreen.tsx` _(192)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
@@ -139,10 +139,10 @@ Curated: [[Booking Flow]] · **476 files**
 - `src/services/database/infoPacks.ts` _(110)_
 - `src/services/database/reschedule.ts` _(109)_
 - `src/types/booking.ts` _(109)_
-- … +446 more
+- … +450 more
 
 ## Notifications
-Curated: [[Notifications]] · **247 files**
+Curated: [[Notifications]] · **251 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(415)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **247 files**
 - `supabase/phase1_schema.sql` _(29)_
 - `src/navigation/RootNavigation.tsx` _(28)_
 - `supabase/consolidate_address_release_notification.sql` _(28)_
-- … +217 more
+- … +221 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **114 files**
@@ -210,17 +210,22 @@ Curated: [[Provider Onboarding & Go-Live]] · **114 files**
 - … +84 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **113 files**
+Curated: [[Booking Flow]] · **118 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(274)_
 - `src/screens/client/BookingsScreen.tsx` _(189)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(93)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(129)_
 - `supabase/waitlist_holds.sql` _(75)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_
 - `src/services/database/waitlist.ts` _(56)_
 - `src/services/becca/capabilities/client.ts` _(52)_
 - `src/i18n/catalogs/en/clientBooking.ts` _(40)_
+- `src/i18n/catalogs/en/providerBookings.ts` _(40)_
 - `src/features/providers/page/ProviderPageServices.tsx` _(39)_
 - `src/screens/provider/ProviderAutomationsScreen.tsx` _(37)_
+- `src/i18n/catalogs/de/providerBookings.ts` _(36)_
+- `src/i18n/catalogs/es/providerBookings.ts` _(36)_
+- `src/i18n/catalogs/fr/providerBookings.ts` _(36)_
+- `src/i18n/catalogs/pl/providerBookings.ts` _(36)_
 - `src/features/bookings/WaitlistTicket.tsx` _(35)_
 - `src/services/becca/capabilities/provider.ts` _(35)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(35)_
@@ -236,17 +241,12 @@ Curated: [[Booking Flow]] · **113 files**
 - `src/features/bookings/useWaitlistHoldActions.ts` _(19)_
 - `supabase/booking_flow_fixes.sql` _(19)_
 - `src/services/databaseService.ts` _(18)_
-- `src/contexts/CartContext.tsx` _(17)_
-- `src/features/bookings/WaitlistDatesSheet.tsx` _(16)_
-- `src/types/database.ts` _(15)_
-- `src/i18n/catalogs/en/settings.ts` _(13)_
-- `src/screens/shared/NotificationsScreen.tsx` _(13)_
-- … +83 more
+- … +88 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **293 files**
+Curated: [[Booking Flow]] · **297 files**
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(368)_
 - `src/contexts/BookingContext.tsx` _(351)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(251)_
 - `src/screens/client/RescheduleScreen.tsx` _(213)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
@@ -271,11 +271,11 @@ Curated: [[Booking Flow]] · **293 files**
 - `src/features/cart/StripePaymentSheet.tsx` _(61)_
 - `src/services/bookingService.ts` _(60)_
 - `src/screens/client/BookingsScreen.tsx` _(59)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(58)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(59)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/components/IssueRefundSheet.tsx` _(54)_
-- … +263 more
+- … +267 more
 
 ## Auth
 Curated: [[Contexts]] · **280 files**
@@ -312,7 +312,7 @@ Curated: [[Contexts]] · **280 files**
 - … +250 more
 
 ## Becca / AI
-Curated: [[Services]] · **87 files**
+Curated: [[Services]] · **90 files**
 - `src/screens/shared/BeccaScreen.tsx` _(149)_
 - `src/services/becca/engine.ts` _(66)_
 - `src/i18n/catalogs/en/shared.ts` _(60)_
@@ -343,7 +343,7 @@ Curated: [[Services]] · **87 files**
 - `src/i18n/catalogs/en/settings.ts` _(11)_
 - `src/i18n/catalogs/fr/settings.ts` _(11)_
 - `src/i18n/catalogs/pl/clientAccount.ts` _(11)_
-- … +57 more
+- … +60 more
 
 ## Cart & checkout
 Curated: [[Payments]] · **142 files**

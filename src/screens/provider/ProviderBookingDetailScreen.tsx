@@ -99,6 +99,8 @@ import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
 import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 import { readableDialog, readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -144,6 +146,8 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
 
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { user, hatState } = useAuth();
   const activeMode = hatState.active;
   const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule, fromRescheduleRequest } = route.params;
@@ -532,7 +536,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e) {
       // Let the DB's own guard through ("This booking was cancelled...").
-      Alert.alert('Info pack not sent', toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
+      Alert.alert(tr('providerBookings.detail.pack.notSentTitle'), toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
     } finally {
       setSendingItemId(null);
     }
@@ -547,7 +551,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e) {
       logger.error('[ProviderBookingDetail] send form failed:', e);
-      Alert.alert('Form not sent', 'Could not send that form. Please try again.');
+      Alert.alert(tr('providerBookings.detail.formNotSentTitle'), tr('providerBookings.detail.formNotSent'));
     } finally {
       setSendingItemId(null);
     }
@@ -674,8 +678,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, []);
 
   const handleAddInitSlot = useCallback(() => {
-    if (!initSlotDate) { setInitInputError('Pick a date first.'); return; }
-    if (initSelectedTimes.length === 0) { setInitInputError('Select or add at least one time.'); return; }
+    if (!initSlotDate) { setInitInputError(tr('providerBookings.detail.reschedule.pickDateFirst')); return; }
+    if (initSelectedTimes.length === 0) { setInitInputError(tr('providerBookings.detail.reschedule.pickTime')); return; }
     setInitInputError('');
     setInitRescheduleSlots(prev => {
       const existing = prev.find(s => s.date === initSlotDate);
@@ -698,7 +702,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // Both are trigger-notified server-side (handle_reschedule_request_change()
   // in supabase/fix_reschedule_flow_completion.sql) — no app-side insert here.
   const handleInitRescheduleSubmit = useCallback(async () => {
-    if (initRescheduleSlots.length === 0) { setInitInputError('Add at least one date and time slot.'); return; }
+    if (initRescheduleSlots.length === 0) { setInitInputError(tr('providerBookings.detail.reschedule.addSlot')); return; }
     if (!booking) return;
     setInitLoading(true);
     setInitInputError('');
@@ -769,7 +773,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       setDbReschedule(prev => prev ? { ...prev, status: 'rejected' } : prev);
       closeInitRescheduleModal();
     } catch (err) {
-      Alert.alert('Could not decline', toUserMessage(err, 'That reschedule request is still open. Please try again.', 'ProviderBookingDetail.declineReschedule'));
+      Alert.alert(tr('providerBookings.detail.reschedule.declineFailedTitle'), toUserMessage(err, 'That reschedule request is still open. Please try again.', 'ProviderBookingDetail.declineReschedule'));
     } finally {
       setRespondLoading(false);
     }
@@ -777,9 +781,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const confirmDeclineRequest = useCallback(() => {
     setPendingConfirm({
-      title: 'Decline Reschedule Request',
-      message: 'Are you sure you want to decline this reschedule? The client will be notified and their original appointment time stands.',
-      confirmLabel: 'Decline',
+      title: tr('providerBookings.detail.reschedule.declineTitle'),
+      message: tr('providerBookings.detail.reschedule.declineBody'),
+      confirmLabel: tr('providerBookings.detail.decline'),
       destructive: true,
       onConfirm: handleDeclineRequest,
     });
@@ -829,7 +833,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // options" pattern as the single-booking initiate flow above).
   const handleAddGroupDateOption = useCallback(() => {
     if (!groupRescheduleDate || !groupRescheduleChain) {
-      setGroupRescheduleError('Pick a date and time first.');
+      setGroupRescheduleError(tr('providerBookings.detail.reschedule.pickDateTimeFirst'));
       return;
     }
     setGroupRescheduleError('');
@@ -843,7 +847,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const handleSendGroupReschedule = useCallback(async () => {
     if (groupDateOptions.length === 0) {
-      setGroupRescheduleError('Add at least one date option.');
+      setGroupRescheduleError(tr('providerBookings.detail.reschedule.addDateOption'));
       return;
     }
     if (!booking?.groupBookingId) return;
@@ -898,7 +902,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       const now = new Date().toISOString();
       setAddressReleasedAt(now);
     } catch (err) {
-      Alert.alert('Address not sent', toUserMessage(err, 'Could not send your address. Please try again.', 'ProviderBookingDetail.releaseAddress'));
+      Alert.alert(tr('providerBookings.detail.address.notSentTitle'), toUserMessage(err, 'Could not send your address. Please try again.', 'ProviderBookingDetail.releaseAddress'));
     } finally {
       setReleasingAddress(false);
     }
@@ -915,12 +919,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     // drops the preview line — it must not block the send.
     const address = await getMyProviderFullAddress().catch((err) => { logger.error('[ProviderBookingDetail] address preview load failed:', err); return null; });
     Alert.alert(
-      'Send your address?',
+      tr('providerBookings.detail.address.confirmTitle'),
       'Check it\u2019s correct before sending \u2014 this can\u2019t be undone.'
         + (address ? `\n\n${address}` : ''),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Send address', onPress: () => { void releaseAddressNow(); } },
+        { text: tr('common.cancel'), style: 'cancel' },
+        { text: tr('providerBookings.detail.address.send'), onPress: () => { void releaseAddressNow(); } },
       ],
     );
   }, [booking, releasingAddress, releaseAddressNow]);
@@ -990,7 +994,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         message: isNoShow
           ? `${clientName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone.${groupSuffix} Are you sure?`
           : `The booking status will be updated to ${label}.${groupSuffix}`,
-        confirmLabel: `Mark ${label}`,
+        confirmLabel: tr('providerBookings.detail.markAsButton', { status: label }),
         destructive: newStatus === BookingStatus.NO_SHOW,
         onConfirm: async () => {
           // The on_booking_status_changed DB trigger notifies the client
@@ -1024,7 +1028,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       // didn't file — don't quote a reference that doesn't exist, and don't
       // call it a failure either (see fileNoShowDispute).
       Alert.alert(
-        'Dispute Sent',
+        tr('providerBookings.detail.dispute.sentTitle'),
         ticketNumber
           ? `Your client has been told you dispute this, and support has a copy. Your reference is #${ticketNumber}.`
           : `Your client has been told you dispute this. We couldn't reach support just now — email ${SUPPORT_EMAIL} if you don't hear back.`,
@@ -1032,7 +1036,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       refreshBookingStatus();
     } catch (err) {
       Alert.alert(
-        "Couldn't Send Your Dispute",
+        tr('providerBookings.detail.dispute.failedTitle'),
         toUserMessageAllowingDbGuard(
           err,
           'Please try again in a moment.',
@@ -1047,9 +1051,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const handleConfirm = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
-      title: 'Confirm Booking',
-      message: `The client will be notified that their booking is confirmed.${groupSuffix}`,
-      confirmLabel: 'Confirm Booking',
+      title: tr('providerBookings.history.confirmAlert.title'),
+      message: `${tr('providerBookings.confirm.notified')}${groupSuffix}`,
+      confirmLabel: tr('providerBookings.history.confirmAlert.title'),
       onConfirm: async () => {
         // pending → confirmed fires the DB trigger, which notifies the client
         await updateBookingStatus(booking.id, BookingStatus.UPCOMING);
@@ -1061,9 +1065,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const handleDecline = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
-      title: 'Decline Booking',
-      message: `The client will be notified. This cannot be undone.${groupSuffix}`,
-      confirmLabel: 'Decline',
+      title: tr('providerBookings.detail.declineBooking'),
+      message: `${tr('providerBookings.detail.notifiedCannotUndo')}${groupSuffix}`,
+      confirmLabel: tr('providerBookings.detail.decline'),
       destructive: true,
       onConfirm: async () => {
         // pending → cancelled by the provider: the DB trigger sends the
@@ -1078,9 +1082,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const handleCancel = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
-      title: 'Cancel Booking',
-      message: `This cannot be undone. The client will be notified.${groupSuffix}`,
-      confirmLabel: 'Cancel Booking',
+      title: tr('providerBookings.detail.cancelBooking'),
+      message: `${tr('providerBookings.detail.cannotUndoNotified')}${groupSuffix}`,
+      confirmLabel: tr('providerBookings.detail.cancelBooking'),
       destructive: true,
       onConfirm: async () => {
         // The DB trigger notifies the client and invites the next waitlist
@@ -1120,7 +1124,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       setPassOnReason(null);
       setClientRefundNonce(n => n + 1);
       showAlert(
-        'Passed to Cerviced',
+        tr('providerBookings.detail.passOn.sentTitle'),
         ticketNumber
           ? `Cerviced will review it against your policy and let you both know. Your reference is #${ticketNumber}.`
           : `Cerviced will review it against your policy. We couldn't reach support just now, so email ${SUPPORT_EMAIL} if you don't hear back.`,
@@ -1128,7 +1132,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     } catch (err) {
       logger.error('[ProviderBookingDetail] pass refund request on failed:', err);
       showAlert(
-        "Couldn't Pass It On",
+        tr('providerBookings.detail.passOn.failedTitle'),
         // pass_refund_request_to_cerviced()'s guards are written for people.
         toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', 'ProviderBookingDetail.passRefundRequestOn'),
       );
@@ -1167,7 +1171,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       const conversationId = await getOrCreateConversation(booking.providerId, clientUserId);
       navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
     } catch (err) {
-      Alert.alert('Chat unavailable', toUserMessage(err, 'Could not open this chat. Please try again.', 'ProviderBookingDetail.openChat'));
+      Alert.alert(tr('providerBookings.detail.chat.unavailableTitle'), toUserMessage(err, 'Could not open this chat. Please try again.', 'ProviderBookingDetail.openChat'));
     }
   }, [booking, clientUserId, navigation]);
 
@@ -1176,9 +1180,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     try {
       const html = buildProviderInvoiceHTML(booking);
       const { uri } = await Print.printToFileAsync({ html, ...A4_PRINT_SIZE });
-      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Invoice', UTI: 'com.adobe.pdf' });
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: tr('providerBookings.detail.invoice.share'), UTI: 'com.adobe.pdf' });
     } catch (err) {
-      Alert.alert('Invoice not created', toUserMessage(err, 'Could not generate the invoice. Please try again.', 'ProviderBookingDetail.shareInvoice'));
+      Alert.alert(tr('providerBookings.detail.invoice.failedTitle'), toUserMessage(err, 'Could not generate the invoice. Please try again.', 'ProviderBookingDetail.shareInvoice'));
     }
   }, [booking]);
 
@@ -1245,7 +1249,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       <View style={[styles.root, { backgroundColor: P.bg }]}>
         <SafeAreaView style={styles.container}>
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: P.text }]}>Booking not found</Text>
+            <Text style={[styles.emptyText, { color: P.text }]}>{tr('providerBookings.detail.notFound')}</Text>
           </View>
         </SafeAreaView>
       </View>
@@ -1312,7 +1316,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
             <Text style={[styles.headerTitle, { color: P.text }]} numberOfLines={1}>
-              Your Client's Booking
+              {tr('providerBookings.detail.title')}
             </Text>
           </View>
           <View style={styles.headerRight}>
@@ -1369,13 +1373,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Receipt Header ── */}
               <View style={styles.receiptHeader}>
                 <Text style={[styles.receiptBrand, { color: P.text }]}>CERVICED</Text>
-                <Text style={[styles.receiptSubBrand, { color: P.sub }]}>Booking Receipt</Text>
+                <Text style={[styles.receiptSubBrand, { color: P.sub }]}>{tr('providerBookings.detail.receipt')}</Text>
                 <Text style={[styles.receiptTime, { color: P.sub }]}>{receiptWhen}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                    {isDeclinedRequest(booking) ? 'Declined' : BOOKING_STATUS_LABELS[booking.status]}{dbReschedule?.status === 'provider_responded'
-                      ? '  ·  Reschedule Offer Pending'
+                    {isDeclinedRequest(booking) ? tr('providerBookings.status.declined') : BOOKING_STATUS_LABELS[booking.status]}{dbReschedule?.status === 'provider_responded'
+                      ? `  ·  ${tr('providerBookings.detail.offerPending')}`
                       : isPending ? '  ·  Reschedule Requested' : ''}
                   </Text>
                 </View>
@@ -1402,8 +1406,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <View style={[styles.completionBanner, { backgroundColor: '#34C75912', borderColor: '#34C75940' }]}>
                   <Text style={styles.completionIcon}>✓</Text>
                   <View>
-                    <Text style={[styles.completionTitle, { color: '#34C759' }]}>Appointment Complete</Text>
-                    <Text style={[styles.completionSub, { color: '#34C75999' }]}>This appointment has been completed</Text>
+                    <Text style={[styles.completionTitle, { color: '#34C759' }]}>{tr('providerBookings.detail.complete.title')}</Text>
+                    <Text style={[styles.completionSub, { color: '#34C75999' }]}>{tr('providerBookings.detail.complete.sub')}</Text>
                   </View>
                 </View>
               )}
@@ -1421,7 +1425,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Ionicons name={withCerviced ? 'shield-checkmark-outline' : 'arrow-undo-outline'} size={16} color={P.accent} />
                       <Text style={{ color: P.text, fontWeight: '700', fontSize: 14, flex: 1 }}>
-                        {withCerviced ? 'Refund request with Cerviced' : 'Refund requested'}
+                        {withCerviced ? tr('providerBookings.detail.refundAsk.withCerviced') : tr('providerBookings.detail.refundAsk.requested')}
                       </Text>
                       <Text style={{ color: P.sub, fontSize: 12 }}>{asked}</Text>
                     </View>
@@ -1446,7 +1450,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             onPress={handleRefund}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.refundAskBtnText, { color: P.onAccent }]}>Issue a refund</Text>
+                            <Text style={[styles.refundAskBtnText, { color: P.onAccent }]}>{tr('providerBookings.detail.issueRefund')}</Text>
                           </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -1454,7 +1458,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           onPress={() => { setPassOnNote(''); setPassOnReason(null); setShowPassOnModal(true); }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.refundAskBtnText, { color: P.text }]}>Pass to Cerviced</Text>
+                          <Text style={[styles.refundAskBtnText, { color: P.text }]}>{tr('providerBookings.detail.passToCerviced')}</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -1467,14 +1471,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── SERVICE section ── */}
               <View style={styles.section}>
-                {!showHelpDropdown && <Text style={[styles.sectionLabel, { color: P.sub }]}>SERVICE</Text>}
+                {!showHelpDropdown && <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.service')}</Text>}
                 <Row label={booking.serviceName} value={`£${(booking.price ?? 0).toFixed(2)}`} textColor={P.text} divColor={rowDiv} bold />
                 {(booking.addOns ?? []).map((a: { name: string; price: number }, i: number) => (
                   <Row key={i} label={a.name} value={`£${(a.price ?? 0).toFixed(2)}`} textColor={P.text} divColor={rowDiv} indent />
                 ))}
                 {(booking.addOns ?? []).length > 0 && (
                   <View style={[styles.subtotalRow, { borderTopColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.10)' }]}>
-                    <Text style={[styles.subtotalLabel, { color: P.text + '77' }]}>Subtotal</Text>
+                    <Text style={[styles.subtotalLabel, { color: P.text + '77' }]}>{tr('providerBookings.detail.subtotal')}</Text>
                     <Text style={[styles.subtotalValue, { color: P.text }]}>£{totalPrice.toFixed(2)}</Text>
                   </View>
                 )}
@@ -1537,11 +1541,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── APPOINTMENT section ── */}
               <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: P.sub }]}>APPOINTMENT</Text>
-                <Row label="Date" value={formatBookingDisplayDate(booking.bookingDate) || '—'} textColor={P.text} divColor={rowDiv} />
-                <Row label="Time" value={timeRange} textColor={P.text} divColor={rowDiv} />
+                <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.appointment')}</Text>
+                <Row label={tr('maintenance.menu.date')} value={formatBookingDisplayDate(booking.bookingDate) || '—'} textColor={P.text} divColor={rowDiv} />
+                <Row label={tr('providerBookings.home.card.time')} value={timeRange} textColor={P.text} divColor={rowDiv} />
                 {displayDuration ? (
-                  <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
+                  <Row label={tr('providerBookings.home.card.duration')} value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
                 {/* A MOBILE provider travels to the client, so the venue is the
                     client's address and the only thing this row can honestly
@@ -1554,12 +1558,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     the ADDRESS section further down; this is the status line
                     for it. */}
                 {booking.status === BookingStatus.CANCELLED ? (
-                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                  <Row label={tr('providerBookings.detail.row.location')} value="—" textColor={P.sub} divColor={rowDiv} last />
                 ) : !addressKnown ? (
-                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                  <Row label={tr('providerBookings.detail.row.location')} value="—" textColor={P.sub} divColor={rowDiv} last />
                 ) : isMobileProvider ? (
                   <Row
-                    label="Location"
+                    label={tr('providerBookings.detail.row.location')}
                     value={hasClientAddress ? 'Client address received' : 'Waiting for client’s address'}
                     textColor={P.text}
                     {...(hasClientAddress ? { valueColor: '#34C759' } : {})}
@@ -1582,7 +1586,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {addressPolicy && addressPolicy !== 'always' ? (
                   isAddressReleased ? (
                     <Row
-                      label="Location"
+                      label={tr('providerBookings.detail.row.location')}
                       value="Address sent to client"
                       textColor={P.text}
                       valueColor="#34C759"
@@ -1596,16 +1600,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       activeOpacity={0.7}
                       disabled={releasingAddress}
                     >
-                      <Text style={[styles.rowLabel, { color: P.text }]} numberOfLines={1}>Location</Text>
+                      <Text style={[styles.rowLabel, { color: P.text }]} numberOfLines={1}>{tr('providerBookings.detail.row.location')}</Text>
                       {releasingAddress ? (
                         <ActivityIndicator size="small" color={P.accent} />
                       ) : (
-                        <Text style={[styles.rowValue, { color: P.accent }]}>Send address to client</Text>
+                        <Text style={[styles.rowValue, { color: P.accent }]}>{tr('providerBookings.detail.address.sendToClient')}</Text>
                       )}
                     </TouchableOpacity>
                   ) : (
                     <Row
-                      label="Location"
+                      label={tr('providerBookings.detail.row.location')}
                       value={PENDING_RELEASE_COPY[addressPolicy] ?? 'Address not sent yet'}
                       textColor={P.text}
                       divColor={rowDiv}
@@ -1614,7 +1618,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   )
                 ) : addressPolicy === 'always' ? (
                   <Row
-                    label="Location"
+                    label={tr('providerBookings.detail.row.location')}
                     value="Shared with client automatically"
                     textColor={P.text}
                     valueColor="#34C759"
@@ -1627,7 +1631,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   // already know, and on a mobile booking it is not where the
                   // appointment happens at all (user, 2026-11-08). The row
                   // only reports what happened to it.
-                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                  <Row label={tr('providerBookings.detail.row.location')} value="—" textColor={P.sub} divColor={rowDiv} last />
                 )}
                 </>
                 )}
@@ -1644,23 +1648,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {isMobileProvider && (
                 <>
                   <View style={styles.section}>
-                    <Text style={[styles.sectionLabel, { color: P.sub }]}>ADDRESS</Text>
+                    <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.address')}</Text>
 
                     {hasClientAddress ? (
                       <>
                         <View style={[addrStyles.addressBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: rowDiv }]}>
-                          <Text style={[addrStyles.addressLabel, { color: P.sub }]}>CLIENT ADDRESS</Text>
+                          <Text style={[addrStyles.addressLabel, { color: P.sub }]}>{tr('providerBookings.detail.address.clientAddress')}</Text>
                           <Text style={[addrStyles.addressText, { color: P.text }]}>{booking.clientAddress}</Text>
                         </View>
                         <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv, marginTop: 8 }]}>
                           <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
-                          <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — you travel to the client</Text>
+                          <Text style={[addrStyles.statusText, { color: P.sub }]}>{tr('providerBookings.detail.address.mobile')}</Text>
                         </View>
                       </>
                     ) : (
                       <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv }]}>
                         <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
-                        <Text style={[addrStyles.statusText, { color: P.sub }]}>The client sends this in Messages — it appears here as soon as they do</Text>
+                        <Text style={[addrStyles.statusText, { color: P.sub }]}>{tr('providerBookings.detail.address.clientSendsInMessages')}</Text>
                       </View>
                     )}
                   </View>
@@ -1681,9 +1685,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {booking.notes ? (
                 <>
                   <View style={styles.section}>
-                    <Text style={[styles.sectionLabel, { color: P.sub }]}>NOTES</Text>
+                    <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.notes')}</Text>
                     <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
-                      <Text style={[styles.notesLabel, { color: P.sub }]}>Client note</Text>
+                      <Text style={[styles.notesLabel, { color: P.sub }]}>{tr('providerBookings.detail.clientNote')}</Text>
                       <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
                     </View>
                   </View>
@@ -1693,7 +1697,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── CLIENT section ── */}
               <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: P.sub }]}>CLIENT</Text>
+                <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.client')}</Text>
                 <View style={styles.clientHeader}>
                   <View style={[styles.avatar, { backgroundColor: P.iconBg, borderColor: P.border }]}>
                     <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
@@ -1716,7 +1720,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.historyBtnText, { color: P.accent }]}>History</Text>
+                      <Text style={[styles.historyBtnText, { color: P.accent }]}>{tr('providerBookings.history.tab.history')}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -1748,16 +1752,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       ].filter(Boolean).join('  ·  ')}
                     </Text>
                     <Text style={{ fontSize: 11, color: '#FF3B30', opacity: 0.7 }}>
-                      {profileExpanded ? 'Hide' : 'View'}
+                      {profileExpanded ? tr('providerBookings.detail.hide') : tr('providerBookings.detail.view')}
                     </Text>
                   </TouchableOpacity>
                 )}
 
                 {booking.customerPhone ? (
-                  <Row label="Phone" value={booking.customerPhone} textColor={P.text} divColor={rowDiv} />
+                  <Row label={tr('providerBookings.detail.row.phone')} value={booking.customerPhone} textColor={P.text} divColor={rowDiv} />
                 ) : null}
                 {booking.customerEmail ? (
-                  <Row label="Email" value={booking.customerEmail} textColor={P.text} divColor={rowDiv} last />
+                  <Row label={tr('providerBookings.detail.row.email')} value={booking.customerEmail} textColor={P.text} divColor={rowDiv} last />
                 ) : null}
                 {(booking.customerPhone || booking.customerEmail) && (
                   <View style={styles.contactRow}>
@@ -1766,7 +1770,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       onPress={handleOpenChat}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.contactBtnText, { color: P.onAccent }]}>Message</Text>
+                      <Text style={[styles.contactBtnText, { color: P.onAccent }]}>{tr('providerBookings.detail.message')}</Text>
                     </TouchableOpacity>
                     {booking.customerPhone ? (
                       <TouchableOpacity
@@ -1774,7 +1778,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         onPress={handleCallClient}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.contactBtnText, { color: P.text }]}>Call</Text>
+                        <Text style={[styles.contactBtnText, { color: P.text }]}>{tr('providerBookings.detail.call')}</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -1791,7 +1795,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {!clientProfile && isPendingConfirmation && (
                 <>
                   <View style={styles.section}>
-                    <Text style={[styles.sectionLabel, { color: P.sub }]}>CLIENT PROFILE</Text>
+                    <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.clientProfile')}</Text>
                     <Text style={[styles.tipNote, { color: P.sub, marginTop: 0 }]}>
                       Shared with you once you accept this booking, including any allergies or medical notes.
                     </Text>
@@ -1813,7 +1817,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: profileExpanded ? 10 : 0 }}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={[styles.sectionLabel, { color: P.sub, marginBottom: 0 }]}>CLIENT PROFILE</Text>
+                          <Text style={[styles.sectionLabel, { color: P.sub, marginBottom: 0 }]}>{tr('providerBookings.detail.section.clientProfile')}</Text>
                           {hasCritical && (
                             <View style={{ backgroundColor: '#FF3B3018', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
                               <Text style={{ fontSize: 10, fontWeight: '700', color: '#FF3B30' }}>
@@ -1888,7 +1892,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 return (
                   <View style={styles.section}>
                     <View style={styles.intakeFormHeader}>
-                      <Text style={[styles.sectionLabel, { color: P.sub }]}>FORMS & PACKS</Text>
+                      <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.forms')}</Text>
                     </View>
 
                     {/* Forms sent, with whether the client has answered */}
@@ -1912,12 +1916,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                               <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{form.title}</Text>
                             </View>
                             <View style={[styles.intakeFormStatus, { backgroundColor: (done ? green : amber) + '22' }]}>
-                              <Text style={[styles.intakeFormStatusText, { color: done ? green : amber }]}>{done ? 'Answered' : 'Waiting'}</Text>
+                              <Text style={[styles.intakeFormStatusText, { color: done ? green : amber }]}>{done ? tr('providerBookings.detail.answered') : tr('providerBookings.detail.waiting')}</Text>
                             </View>
                           </View>
                           <Text style={[styles.intakeFormSub, { color: P.sub }]}>
                             {done
-                              ? `Answered${form.completedAt ? ` ${formatShortDayDate(new Date(form.completedAt))}` : ''} · tap to see the answers`
+                              ? (form.completedAt ? tr('providerBookings.detail.answeredOn', { date: formatShortDayDate(new Date(form.completedAt)) }) : tr('providerBookings.detail.answeredTap'))
                               : isOverdue(form.dueAt, form.status, Date.now())
                                 ? `Sent ${formatShortDayDate(new Date(form.sentAt))} · was due ${dueByLabel(form.dueAt)}`
                                 : `Sent ${formatShortDayDate(new Date(form.sentAt))} · ${form.dueAt ? `due ${dueByLabel(form.dueAt)}` : 'not answered yet'}`}
@@ -1935,13 +1939,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
                           </View>
                           <View style={[styles.intakeFormStatus, { backgroundColor: pack.viewedAt ? green + '22' : P.sub + '22' }]}>
-                            <Text style={[styles.intakeFormStatusText, { color: pack.viewedAt ? green : P.sub }]}>{pack.viewedAt ? 'Read' : 'Not read'}</Text>
+                            <Text style={[styles.intakeFormStatusText, { color: pack.viewedAt ? green : P.sub }]}>{pack.viewedAt ? tr('providerBookings.detail.pack.read') : tr('providerBookings.detail.pack.notRead')}</Text>
                           </View>
                         </View>
                         <Text style={[styles.intakeFormSub, { color: P.sub }]}>
                           {pack.viewedAt
-                            ? `Read ${formatShortDayDate(new Date(pack.viewedAt))}`
-                            : `Sent ${formatShortDayDate(new Date(pack.createdAt))} · not opened yet`}
+                            ? tr('providerBookings.detail.packRead', { date: formatShortDayDate(new Date(pack.viewedAt)) })
+                            : tr('providerBookings.detail.packSent', { date: formatShortDayDate(new Date(pack.createdAt)) })}
                         </Text>
                       </View>
                     ))}
@@ -1953,7 +1957,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {(formsState === 'error' || packsState === 'error') && (
                       <TouchableOpacity onPress={loadSentItems} activeOpacity={0.7} style={{ marginBottom: 8 }}>
                         <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
-                          Couldn't check what's been sent. <Text style={{ color: P.accent, fontWeight: '700' }}>Try again</Text>
+                          {tr('providerBookings.detail.sentCheckFailed')} <Text style={{ color: P.accent, fontWeight: '700' }}>{tr('common.tryAgain')}</Text>
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1973,18 +1977,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {formsState === 'ready' && libraryState === 'ready' && canSendPacks && intakeForms.length === 0 && !hasFormForService && (
                       <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
                         <Ionicons name="clipboard-outline" size={15} color={P.sub} />
-                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No form covers {service} yet.</Text>
+                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>{tr('providerBookings.detail.noForm', { service })}</Text>
                         <TouchableOpacity onPress={() => navigation.navigate('ProviderIntakeForm')} activeOpacity={0.7} hitSlop={8}>
-                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>Create one</Text>
+                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>{tr('providerBookings.detail.createOne')}</Text>
                         </TouchableOpacity>
                       </View>
                     )}
                     {packsState === 'ready' && providerPacksState === 'ready' && canSendPacks && bookingInfoPacks.length === 0 && !hasPackForService && (
                       <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
                         <Ionicons name="document-text-outline" size={15} color={P.sub} />
-                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No info pack covers {service} yet.</Text>
+                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>{tr('providerBookings.detail.noPack', { service })}</Text>
                         <TouchableOpacity onPress={() => navigation.navigate('InfoPacks')} activeOpacity={0.7} hitSlop={8}>
-                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>Create one</Text>
+                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>{tr('providerBookings.detail.createOne')}</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -2007,7 +2011,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── PAYMENT section ── */}
               <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: P.sub }]}>PAYMENT</Text>
+                <Text style={[styles.sectionLabel, { color: P.sub }]}>{tr('providerBookings.detail.section.payment')}</Text>
                 {/* Only show a "paid" row when something was actually paid
                     through the app — a manual booking (provider_create_
                     manual_booking) always inserts amount_paid=0, so showing
@@ -2041,7 +2045,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     real deposit" so the two don't read the same. */}
                 {(booking.remainingBalance ?? 0) > 0 && (
                   <Row
-                    label={(booking.amountPaid ?? 0) > 0 ? 'Balance due at appointment' : 'To collect in person'}
+                    label={(booking.amountPaid ?? 0) > 0 ? tr('providerBookings.detail.payment.balanceDue') : tr('providerBookings.detail.payment.collectInPerson')}
                     value={`£${(booking.remainingBalance ?? 0).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
@@ -2052,7 +2056,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
                 {/* Grand total block */}
                 <View style={[styles.totalBlock, { borderTopColor: P.text }]}>
-                  <Text style={[styles.totalLabel, { color: P.text }]}>TOTAL</Text>
+                  <Text style={[styles.totalLabel, { color: P.text }]}>{tr('providerBookings.detail.payment.total')}</Text>
                   <Text style={[styles.totalValue, { color: P.text }]}>£{totalPrice.toFixed(2)}</Text>
                 </View>
 
@@ -2080,10 +2084,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: '#FF9500' }]}>
-                      {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : dbReschedule.requested_by === 'provider' ? 'RESCHEDULE OFFER PENDING' : 'RESCHEDULE · RESPONDED'}
+                      {dbReschedule.status === 'pending' ? tr('providerBookings.detail.section.rescheduleRequest') : dbReschedule.requested_by === 'provider' ? 'RESCHEDULE OFFER PENDING' : 'RESCHEDULE · RESPONDED'}
                     </Text>
                     <Text style={[styles.rescheduleNote, { color: P.sub }]}>
-                      Requested {formatBookingDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
+                      {tr('providerBookings.detail.requestedOn', { date: formatBookingDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at) })}
                     </Text>
                     {/* Whose turn it is and until when. updated_at moves when
                         the provider offers times, which is when the client's
@@ -2094,8 +2098,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       return (
                         <Text style={[styles.rescheduleNote, { color: '#FF9500', fontWeight: '600' }]}>
                           {dbReschedule.status === 'pending'
-                            ? `Reply by ${by}, or the booking stays as it is.`
-                            : `${booking?.customerName ?? 'The client'} has until ${by} to choose, or the booking stays as it is.`}
+                            ? tr('providerBookings.detail.replyBy', { time: by })
+                            : tr('providerBookings.detail.clientHasUntil', { name: booking?.customerName ?? tr('providerBookings.detail.theClient'), time: by })}
                         </Text>
                       );
                     })()}
@@ -2112,14 +2116,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     })}
                     {dbReschedule.status === 'provider_responded' && (dbReschedule.provider_available_slots ?? []).length > 0 && (
                       <View style={{ marginTop: 8 }}>
-                        <Text style={[styles.rescheduleNote, { color: P.text + '77', marginBottom: 6 }]}>Your offered slots:</Text>
+                        <Text style={[styles.rescheduleNote, { color: P.text + '77', marginBottom: 6 }]}>{tr('providerBookings.detail.reschedule.yourSlots')}</Text>
                         <Text style={[styles.rescheduleNote, { color: P.sub, marginBottom: 6 }]}>
                           {dbReschedule.cancel_if_declined
                             ? 'If the client declines, this booking will be cancelled and any payment refunded in full.'
                             : 'If the client declines, their original booking time stays in place.'}
                         </Text>
                         {!!dbReschedule.response_note && (
-                          <Text style={[styles.rescheduleNote, { color: P.text, marginBottom: 8 }]}>Your note: {dbReschedule.response_note}</Text>
+                          <Text style={[styles.rescheduleNote, { color: P.text, marginBottom: 8 }]}>{tr('providerBookings.detail.yourNote', { note: dbReschedule.response_note ?? '' })}</Text>
                         )}
                         {(dbReschedule.provider_available_slots ?? []).map((slot, i) => (
                           <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
@@ -2137,7 +2141,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         onPress={() => setShowInitRescheduleModal(true)}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.respondBtnText}>Respond to Reschedule</Text>
+                        <Text style={styles.respondBtnText}>{tr('providerBookings.detail.reschedule.respond')}</Text>
                       </TouchableOpacity>
                     )}
                     {/* After the start the server refuses new times (see
@@ -2147,7 +2151,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         <Text style={[styles.rescheduleNote, { color: P.sub }]}>{PROVIDER_STARTED_BLOCK.message}</Text>
                         {!!clientUserId && (
                           <TouchableOpacity onPress={handleOpenChat} activeOpacity={0.7} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-                            <Text style={[styles.rescheduleNote, { color: P.accent, fontWeight: '600' }]}>Message the client</Text>
+                            <Text style={[styles.rescheduleNote, { color: P.accent, fontWeight: '600' }]}>{tr('providerBookings.detail.messageClient')}</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -2158,7 +2162,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── Receipt Footer ── */}
               <View style={[styles.receiptFooter, { borderTopColor: perf }]}>
-                <Text style={[styles.footerLabel, { color: P.sub }]}>REFERENCE</Text>
+                <Text style={[styles.footerLabel, { color: P.sub }]}>{tr('providerBookings.detail.reference')}</Text>
                 <Text style={[styles.footerText, { color: P.text }]}>
                   {formatBookingRef(booking)}
                 </Text>
@@ -2178,15 +2182,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         {isPendingConfirmation && booking.isEmergencyRequest && (
           <View style={[styles.emergencyBanner, { borderColor: '#C2811A' }]}>
             <Text style={[styles.emergencyBannerTitle, { color: '#C2811A' }]}>
-              Outside your availability
+              {tr('providerBookings.detail.emergency.title')}
             </Text>
             <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
-              {booking.customerName || 'This client'} requested a time outside your working
-              hours. Confirming books them in as normal.
+              {tr('providerBookings.detail.outsideHours', { name: booking.customerName || tr('providerBookings.detail.thisClient') })}
               {/* The opt-in this points at is hidden while EMERGENCY_BOOKINGS_ENABLED
                   is off (SchedulingScreen), so don't send the provider to a screen
                   where the setting no longer appears. */}
-              {EMERGENCY_BOOKINGS_ENABLED ? ' To change this setting, go to Scheduling & Availability.' : ''}
+              {EMERGENCY_BOOKINGS_ENABLED ? ` ${tr('providerBookings.detail.changeSetting')}` : ''}
             </Text>
           </View>
         )}
@@ -2194,7 +2197,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           <View style={styles.actions}>
             {pendingExpired ? (
               <Text style={{ textAlign: 'center', fontSize: 13, color: '#FF9500', marginBottom: 10 }}>
-                This request's appointment time has passed — it can no longer be confirmed.
+                {tr('providerBookings.detail.pendingExpired')}
               </Text>
             ) : (
               <>
@@ -2212,27 +2215,27 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {providerRequestNote(requestDeadline, undefined, booking.paymentStatus === PaymentStatus.AUTHORISED)}
                   </Text>
                 )}
-                <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+                <ActionButton color="#34C759" label={tr('providerBookings.history.confirmAlert.title')} onPress={handleConfirm} />
               </>
             )}
-            <ActionButton color="#FF3B30" label="Decline Booking" onPress={handleDecline} ghost />
+            <ActionButton color="#FF3B30" label={tr('providerBookings.detail.declineBooking')} onPress={handleDecline} ghost />
           </View>
         )}
         {isActive && (
           <View style={styles.actions}>
             {booking.status === BookingStatus.UPCOMING && (
               isApptToday ? (
-                <ActionButton color={P.accent} label="Start Appointment" textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
+                <ActionButton color={P.accent} label={tr('providerBookings.detail.action.start')} textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
               ) : (
                 <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, marginBottom: 10 }}>
                   {apptStartPassed
-                    ? 'The appointment day has passed — mark it No Show or Cancel.'
-                    : `You can start this appointment on ${formatBookingDisplayDate(booking.bookingDate)}.`}
+                    ? tr('providerBookings.detail.action.dayPassed')
+                    : tr('providerBookings.detail.action.startOn', { date: formatBookingDisplayDate(booking.bookingDate) })}
                 </Text>
               )
             )}
             {booking.status === BookingStatus.IN_PROGRESS && (
-              <ActionButton color={P.accent} label="Mark Complete" textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
+              <ActionButton color={P.accent} label={tr('providerBookings.detail.action.complete')} textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
             )}
             <View style={styles.secondaryActions}>
               {/* Mirrors provider_update_booking_status()'s server-side no_show
@@ -2242,17 +2245,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   offer the client could still act on is outstanding — resolve
                   that first rather than short-circuiting it with a no_show. */}
               {isApptToday && apptStartPassed && !hasRescheduleRequest && booking.status !== BookingStatus.IN_PROGRESS && (
-                <ActionButton color="#FF9500" label="No Show" onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
+                <ActionButton color="#FF9500" label={tr('providerBookings.status.noShowTitle')} onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
               )}
               {booking.status === BookingStatus.UPCOMING && !isApptToday && !apptStartPassed && !hasRescheduleRequest && (
                 <ActionButton
                   color="#FF9500"
-                  label="Reschedule"
+                  label={tr('providerBookings.detail.action.reschedule')}
                   onPress={() => (groupSiblings.length > 1 ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true))}
                   ghost
                 />
               )}
-              <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
+              <ActionButton color="#FF3B30" label={tr('common.cancel')} onPress={handleCancel} ghost />
             </View>
           </View>
         )}
@@ -2280,7 +2283,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           <View style={styles.actions}>
             <ActionButton
               color="#FF9500"
-              label="This wasn't right — dispute it"
+              label={tr('providerBookings.detail.dispute.cta')}
               onPress={() => setShowDisputeModal(true)}
               ghost
             />
@@ -2306,7 +2309,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '80%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <Text style={[styles.respondModalTitle, { color: P.text }]}>
-                {booking?.customerName ? `${booking.customerName}'s History` : 'Client History'}
+                {booking?.customerName ? tr('providerBookings.detail.historyOf', { name: booking.customerName }) : tr('providerBookings.detail.clientHistory')}
               </Text>
               <TouchableOpacity onPress={() => setClientHistoryVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={P.text} />
@@ -2316,7 +2319,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <ActivityIndicator color={P.accent} style={{ marginVertical: 32 }} />
             ) : clientHistoryBookings.length === 0 ? (
               <Text style={[styles.respondModalSub, { color: P.sub, textAlign: 'center', marginVertical: 24 }]}>
-                No previous bookings found.
+                {tr('providerBookings.detail.noHistory')}
               </Text>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 504 }}>
@@ -2395,31 +2398,31 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.sentState}>
                 <Text style={styles.sentIcon}>{dbReschedule?.status === 'rejected' ? '✕' : '✓'}</Text>
                 <Text style={[styles.sentTitle, { color: P.text }]}>
-                  {dbReschedule?.status === 'rejected' ? 'Request Declined' : 'Request Sent'}
+                  {dbReschedule?.status === 'rejected' ? tr('providerBookings.detail.reschedule.declinedTitle') : tr('providerBookings.detail.reschedule.sentTitle')}
                 </Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
                   {dbReschedule?.status === 'rejected'
-                    ? 'The client has been notified. Their original appointment time stands.'
-                    : `${booking?.customerName ?? 'The client'} has been notified and has ${RESCHEDULE_REPLY_MINUTES} minutes to choose one of your times. If they don't, the booking stays as it is.`}
+                    ? tr('providerBookings.detail.reschedule.declinedBody')
+                    : tr('providerBookings.detail.offerSent', { name: booking?.customerName ?? tr('providerBookings.detail.theClient'), minutes: RESCHEDULE_REPLY_MINUTES })}
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
                     style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
                     onPress={closeInitRescheduleModal}
                   >
-                    <Text style={styles.respondModalBtnText}>Done</Text>
+                    <Text style={styles.respondModalBtnText}>{tr('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={[styles.respondModalTitle, { color: P.text }]}>
-                  {canRespondToReschedule ? 'Respond to Reschedule' : 'Propose New Times'}
+                  {canRespondToReschedule ? tr('providerBookings.detail.reschedule.respond') : tr('providerBookings.detail.reschedule.propose')}
                 </Text>
                 <Text style={[styles.respondModalSub, { color: P.text + '77', marginBottom: 14 }]}>
                   {canRespondToReschedule
-                    ? "Offer dates and times you're available. The client will pick one to confirm."
-                    : "Add the dates and times you're available. The client will pick one to confirm."}
+                    ? tr('providerBookings.detail.reschedule.respondSub')
+                    : tr('providerBookings.detail.reschedule.proposeSub')}
                 </Text>
 
                 {/* Client's requested dates — only present when responding to
@@ -2429,7 +2432,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     languages (one styled, one plain text). */}
                 {canRespondToReschedule && (dbReschedule?.requested_dates ?? []).length > 0 && (
                   <View style={{ marginBottom: 14 }}>
-                    <Text style={[styles.inputLabel, { color: '#FF9500' }]}>CLIENT REQUESTED</Text>
+                    <Text style={[styles.inputLabel, { color: '#FF9500' }]}>{tr('providerBookings.detail.reschedule.clientRequested')}</Text>
                     {(dbReschedule?.requested_dates ?? []).map((d, i) => {
                       const requestedTime = dbReschedule?.requested_times?.[i];
                       return (
@@ -2466,7 +2469,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         {sendApology && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>x</Text>}
                       </View>
                       <Text style={[styles.apologyToggleText, { color: sendApology ? '#FF3B30' : P.text + 'AA' }]}>
-                        Apologise — none of the requested dates work
+                        {tr('providerBookings.detail.reschedule.apologise')}
                       </Text>
                     </TouchableOpacity>
 
@@ -2506,15 +2509,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   style={[styles.respondInput, { color: P.text, borderColor: P.border, backgroundColor: P.card, marginBottom: 14 }]}
                   value={offerNote}
                   onChangeText={setOfferNote}
-                  placeholder="Add context for the new time"
+                  placeholder={tr('providerBookings.detail.notePlaceholder')}
                   placeholderTextColor={P.sub}
                   multiline
                   maxLength={500}
-                  accessibilityLabel="Note to client about reschedule offer"
+                  accessibilityLabel={tr('providerBookings.detail.noteA11y')}
                 />
 
                 {/* Date picker */}
-                <Text style={[styles.inputLabel, { color: P.text + '77' }]}>DATE</Text>
+                <Text style={[styles.inputLabel, { color: P.text + '77' }]}>{tr('providerBookings.history.invite.dateHeader')}</Text>
                 <TouchableOpacity
                   style={[styles.datePickBtn, { borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
                   onPress={() => setInitSlotDatePickerVisible(true)}
@@ -2522,7 +2525,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 >
                   <Ionicons name="calendar-outline" size={16} color="#FF9500" />
                   <Text style={[styles.datePickBtnText, { color: initSlotDate ? P.text : P.text + '66' }]}>
-                    {initSlotDate ? formatBookingDisplayDate(initSlotDate) : 'Choose a date'}
+                    {initSlotDate ? formatBookingDisplayDate(initSlotDate) : tr('providerBookings.detail.reschedule.chooseDate')}
                   </Text>
                 </TouchableOpacity>
                 {initSlotDatePickerVisible && (
@@ -2532,9 +2535,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitSlotDatePickerVisible(false)} />
                         <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                           <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
-                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Date</Text>
+                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>{tr('providerBookings.schedule.picker.selectDate')}</Text>
                             <TouchableOpacity onPress={() => setInitSlotDatePickerVisible(false)}>
-                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>Done</Text>
+                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>{tr('common.done')}</Text>
                             </TouchableOpacity>
                           </View>
                           <DateTimePicker
@@ -2562,7 +2565,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 )}
 
                 {/* Time chips: from the provider's real availability, plus any custom time picked below */}
-                <Text style={[styles.inputLabel, { color: P.text + '77', marginTop: 8 }]}>TIMES</Text>
+                <Text style={[styles.inputLabel, { color: P.text + '77', marginTop: 8 }]}>{tr('providerBookings.detail.reschedule.timesLabel')}</Text>
                 {initLoadingTimes && <ActivityIndicator size="small" color={P.accent} style={{ marginBottom: 8 }} />}
                 {(initSuggestedTimes.length > 0 || initSelectedTimes.length > 0) && (
                   <View style={styles.chipsRow}>
@@ -2587,18 +2590,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <View style={styles.addSlotRow}>
                   <TouchableOpacity
                     style={[styles.addSlotBtn, { borderColor: P.accent + '66' }]}
-                    onPress={() => { if (!initSlotDate) { setInitInputError('Pick a date first.'); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
+                    onPress={() => { if (!initSlotDate) { setInitInputError(tr('providerBookings.detail.reschedule.pickDateFirst')); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
                   >
-                    <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add custom time</Text>
+                    <Text style={[styles.addSlotBtnText, { color: P.accent }]}>{tr('providerBookings.detail.reschedule.addCustomTime')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.addSlotBtnPrimary, { backgroundColor: '#FF9500' }]}
                     onPress={handleAddInitSlot}
                     activeOpacity={0.85}
                     accessibilityRole="button"
-                    accessibilityLabel="Add this date and time to your proposed times"
+                    accessibilityLabel={tr('providerBookings.detail.reschedule.addSlotA11y')}
                   >
-                    <Text style={styles.addSlotBtnPrimaryText}>+ Add</Text>
+                    <Text style={styles.addSlotBtnPrimaryText}>{tr('providerBookings.detail.reschedule.add')}</Text>
                   </TouchableOpacity>
                 </View>
                 {initCustomTimePickerVisible && (
@@ -2608,9 +2611,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitCustomTimePickerVisible(false)} />
                         <View style={[styles.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                           <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
-                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Time</Text>
+                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>{tr('providerBookings.add.selectTime')}</Text>
                             <TouchableOpacity onPress={() => setInitCustomTimePickerVisible(false)}>
-                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>Done</Text>
+                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>{tr('common.done')}</Text>
                             </TouchableOpacity>
                           </View>
                           <DateTimePicker
@@ -2645,7 +2648,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {initRescheduleSlots.length > 0 && (
                   <View style={styles.slotsList}>
                     <Text style={[styles.inputLabel, { color: '#FF9500' }]}>
-                      {canRespondToReschedule ? (sendApology ? 'ALTERNATIVE DATES' : 'YOUR PROPOSED TIMES') : 'DATES BEING SENT'}
+                      {canRespondToReschedule ? (sendApology ? 'ALTERNATIVE DATES' : 'YOUR PROPOSED TIMES') : tr('providerBookings.detail.reschedule.datesSending')}
                     </Text>
                     {initRescheduleSlots.map((slot, i) => (
                       <View key={i} style={[styles.slotChip, styles.slotChipRow, { justifyContent: 'space-between', backgroundColor: isDarkMode ? 'rgba(255,149,0,0.12)' : 'rgba(255,149,0,0.08)', borderColor: '#FF9500' + '44' }]}>
@@ -2691,14 +2694,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     style={{ alignSelf: 'center', marginTop: 14, opacity: respondLoading ? 0.5 : 1 }}
                   >
                     <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '600' }}>
-                      Decline Request (no alternative times)
+                      {tr('providerBookings.detail.reschedule.declineNoAlt')}
                     </Text>
                   </TouchableOpacity>
                 )}
 
                 <View style={[styles.respondModalActions, { marginTop: 16 }]}>
                   <TouchableOpacity style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} onPress={closeInitRescheduleModal}>
-                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>Cancel</Text>
+                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>{tr('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.respondModalBtn, { backgroundColor: initRescheduleSlots.length > 0 ? '#FF9500' : '#FF950055', opacity: initLoading ? 0.6 : 1 }]}
@@ -2707,7 +2710,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   >
                     {initLoading
                       ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={styles.respondModalBtnText}>{canRespondToReschedule ? 'Send Response' : 'Send Request'}</Text>
+                      : <Text style={styles.respondModalBtnText}>{canRespondToReschedule ? tr('providerBookings.detail.reschedule.sendResponse') : tr('providerBookings.detail.reschedule.sendRequest')}</Text>
                     }
                   </TouchableOpacity>
                 </View>
@@ -2732,26 +2735,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             {initSent ? (
               <View style={styles.sentState}>
                 <Text style={styles.sentIcon}>✓</Text>
-                <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
+                <Text style={[styles.sentTitle, { color: P.text }]}>{tr('providerBookings.detail.reschedule.sentTitle')}</Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  {booking?.customerName ?? 'The client'} has been notified and has {RESCHEDULE_REPLY_MINUTES} minutes to choose from your proposed dates for all {groupSiblings.length} services. If they don't, the bookings stay as they are.
+                  {tr('providerBookings.detail.groupOfferSent', { name: booking?.customerName ?? tr('providerBookings.detail.theClient'), minutes: RESCHEDULE_REPLY_MINUTES, count: groupSiblings.length })}
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
                     style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
                     onPress={closeGroupRescheduleModal}
                   >
-                    <Text style={styles.respondModalBtnText}>Done</Text>
+                    <Text style={styles.respondModalBtnText}>{tr('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={[styles.respondModalTitle, { color: P.text }]}>
-                  Propose New Day — {groupSiblings.length} Services
+                  {tr('providerBookings.detail.proposeDay', { count: groupSiblings.length })}
                 </Text>
                 <Text style={[styles.respondModalSub, { color: P.text + '77', marginBottom: 14 }]}>
-                  Times shown fit all {groupSiblings.length} services back-to-back. Add one or more days — the client will pick one to confirm the whole group.
+                  {tr('providerBookings.detail.groupTimesFit', { count: groupSiblings.length })}
                 </Text>
 
                 <ModernBeautyCalendar
@@ -2787,12 +2790,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   onPress={handleAddGroupDateOption}
                   disabled={!groupRescheduleChain}
                 >
-                  <Text style={styles.respondModalBtnText}>Add This Day</Text>
+                  <Text style={styles.respondModalBtnText}>{tr('providerBookings.detail.groupReschedule.addDay')}</Text>
                 </TouchableOpacity>
 
                 {groupDateOptions.length > 0 && (
                   <View style={{ marginTop: 14, gap: 6 }}>
-                    <Text style={[styles.inputLabel, { color: P.text + '77' }]}>PROPOSED DAYS</Text>
+                    <Text style={[styles.inputLabel, { color: P.text + '77' }]}>{tr('providerBookings.detail.groupReschedule.proposedDays')}</Text>
                     {groupDateOptions.map(opt => (
                       <View key={opt.date} style={[styles.row, { borderBottomColor: 'transparent' }]}>
                         <Text style={[styles.rowLabel, { color: P.text }]}>{formatBookingDisplayDate(opt.date)}</Text>
@@ -2813,14 +2816,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: P.text + '22' }]}
                     onPress={closeGroupRescheduleModal}
                   >
-                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>Cancel</Text>
+                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>{tr('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.respondModalBtn, { backgroundColor: groupDateOptions.length > 0 ? '#FF9500' : '#FF950055', opacity: groupRescheduleSending ? 0.6 : 1 }]}
                     onPress={handleSendGroupReschedule}
                     disabled={groupRescheduleSending || groupDateOptions.length === 0}
                   >
-                    {groupRescheduleSending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.respondModalBtnText}>Send Request</Text>}
+                    {groupRescheduleSending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.respondModalBtnText}>{tr('providerBookings.detail.reschedule.sendRequest')}</Text>}
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -2851,18 +2854,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           }]}>
             <View style={styles.helpDropdownContent}>
               <View style={styles.helpDropdownRow}>
-                <Text style={[styles.helpDropdownLabel, { color: P.accent }]}>SERVICE</Text>
-                <Text style={[styles.helpDropdownBody, { color: P.text }]}>Base price plus any add-ons selected at booking.</Text>
+                <Text style={[styles.helpDropdownLabel, { color: P.accent }]}>{tr('providerBookings.detail.section.service')}</Text>
+                <Text style={[styles.helpDropdownBody, { color: P.text }]}>{tr('providerBookings.detail.help.service')}</Text>
               </View>
               <View style={[styles.helpDropdownDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
               <View style={styles.helpDropdownRow}>
-                <Text style={[styles.helpDropdownLabel, { color: P.accent }]}>PAYMENT</Text>
-                <Text style={[styles.helpDropdownBody, { color: P.text }]}>Any deposit paid, balance remaining, and the full total.</Text>
+                <Text style={[styles.helpDropdownLabel, { color: P.accent }]}>{tr('providerBookings.detail.section.payment')}</Text>
+                <Text style={[styles.helpDropdownBody, { color: P.text }]}>{tr('providerBookings.detail.help.payment')}</Text>
               </View>
               <View style={[styles.helpDropdownDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
               <View style={styles.helpDropdownRow}>
-                <Text style={[styles.helpDropdownLabel, { color: P.accent }]}>REF</Text>
-                <Text style={[styles.helpDropdownBody, { color: P.text }]}>Unique booking ID — quote this when contacting support.</Text>
+                <Text style={[styles.helpDropdownLabel, { color: P.accent }]}>{tr('providerBookings.detail.help.refLabel')}</Text>
+                <Text style={[styles.helpDropdownBody, { color: P.text }]}>{tr('providerBookings.detail.help.ref')}</Text>
               </View>
             </View>
           </View>
@@ -2899,8 +2902,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
                 </View>
                 <View style={styles.moreSheetTextBlock}>
-                  <Text style={[styles.moreSheetTitle, { color: P.text }]}>Issue a refund</Text>
-                  <Text style={[styles.moreSheetSub, { color: P.sub }]}>Return some or all of this payment</Text>
+                  <Text style={[styles.moreSheetTitle, { color: P.text }]}>{tr('providerBookings.detail.issueRefund')}</Text>
+                  <Text style={[styles.moreSheetSub, { color: P.sub }]}>{tr('providerBookings.detail.more.refundSub')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={P.sub} />
               </TouchableOpacity>
@@ -2914,8 +2917,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Ionicons name="headset-outline" size={20} color={P.accent} />
               </View>
               <View style={styles.moreSheetTextBlock}>
-                <Text style={[styles.moreSheetTitle, { color: P.text }]}>Get support</Text>
-                <Text style={[styles.moreSheetSub, { color: P.sub }]}>Contact the Cerviced team</Text>
+                <Text style={[styles.moreSheetTitle, { color: P.text }]}>{tr('providerBookings.detail.more.support')}</Text>
+                <Text style={[styles.moreSheetSub, { color: P.sub }]}>{tr('providerBookings.detail.more.supportSub')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={P.sub} />
             </TouchableOpacity>
@@ -2940,7 +2943,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         />
         <View style={styles.dialogPositioner} pointerEvents="box-none">
           <View style={[styles.dialog, { backgroundColor: P.card }]}>
-            <Text style={[styles.dialogTitle, { color: P.text }]}>Dispute this no-show</Text>
+            <Text style={[styles.dialogTitle, { color: P.text }]}>{tr('providerBookings.detail.dispute.title')}</Text>
             <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
               {booking.customerName || 'Your client'} reported that you didn't show up. Tell us what actually happened — they'll see it, and so will Cerviced support.
             </Text>
@@ -2952,7 +2955,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   minHeight: 92,
                   textAlignVertical: 'top',
                 }]}
-                placeholder="What happened?"
+                placeholder={tr('providerBookings.detail.dispute.placeholder')}
                 placeholderTextColor={P.text + '44'}
                 value={disputeReason}
                 onChangeText={setDisputeReason}
@@ -2972,7 +2975,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <ActivityIndicator size="small" color="#007AFF" />
               ) : (
                 <Text style={[styles.dialogBtnText, { color: '#007AFF', fontWeight: '600', opacity: disputeReason.trim() ? 1 : 0.4 }]}>
-                  Send Dispute
+                  {tr('providerBookings.detail.dispute.send')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -2983,7 +2986,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               disabled={disputeBusy}
               onPress={() => { setShowDisputeModal(false); setDisputeReason(''); }}
             >
-              <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Cancel</Text>
+              <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>{tr('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3014,7 +3017,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Ionicons name="shield-checkmark-outline" size={20} color={P.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.refundTitle, { color: P.text }]}>Pass to Cerviced</Text>
+                  <Text style={[styles.refundTitle, { color: P.text }]}>{tr('providerBookings.detail.passToCerviced')}</Text>
                   <Text style={{ color: P.sub, fontSize: 13 }} numberOfLines={1}>
                     {booking?.customerName || 'Client'} · {clientRefundRequest?.reason ?? 'Refund request'}
                   </Text>
@@ -3069,7 +3072,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               >
                 {passOnBusy
                   ? <ActivityIndicator size="small" color={P.onAccent} />
-                  : <Text style={[styles.refundCtaText, { color: P.onAccent }]}>Pass to Cerviced</Text>}
+                  : <Text style={[styles.refundCtaText, { color: P.onAccent }]}>{tr('providerBookings.detail.passToCerviced')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -3133,7 +3136,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       'Could not complete this action. Check your connection and try again.',
                       'ProviderBookingDetail.confirmAction',
                     );
-                    Alert.alert('Action failed', message);
+                    Alert.alert(tr('providerBookings.detail.actionFailedTitle'), message);
                     // The most common cause of a rejected transition is this
                     // screen acting on a status that has since moved on, so
                     // re-read the row rather than leaving the provider looking
@@ -3152,7 +3155,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 activeOpacity={0.65}
                 onPress={() => setPendingConfirm(null)}
               >
-                <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Keep</Text>
+                <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>{tr('maintenance.menu.keep')}</Text>
               </TouchableOpacity>
             </View>
           </View>

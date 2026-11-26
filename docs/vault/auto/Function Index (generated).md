@@ -5,7 +5,7 @@
 
 #generated
 
-**4468 functions** across **717 files**.
+**4472 functions** across **717 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -226,7 +226,7 @@
 ### `src/features/intake-forms/` (4)
 - `formDeadline.ts` — **deadlineLabel** · **dueByLabel** · **isOverdue**
 - `FormsWelcome.tsx` — answers · **FormsWelcome** · renderStage · writeIn
-- `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst
+- `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst · **templateLabel** · **templateSubtitle**
 - `sendForms.ts` — **appointmentLabel** · **bookingsHoldingForm** · **formProblem** · **sentFormsMessage** · startMs · **upcomingForForms**
 
 ### `src/features/maintenance/` (12)
@@ -504,7 +504,7 @@
 - `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeCertificate · closeEditor · DashCard · DashEmpty · FindabilityCard · findabilityGaps · finishTour · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenBooking · handleOpenClientView · handleOpenPayments · handleOpenRecentActivity · handleOpenRelease · handleOpenTodayDay · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hidden · live · load · needing · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ProviderProfileLoadingShell · releaseQuickView · renderRow · row · ServiceCategoryCard · ServiceRow · serviceType · setup · startLowerSections · visibleTourSteps
 - `ProviderNotificationSettingsScreen.tsx` — ProviderNotificationSettingsScreen
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
-- `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
+- `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · scheduleTabs · timeToDate · toggleDay · toTime
 - `SchedulingScreen.tsx` — chooseHorizonMode · flash · handleSave · releaseStatus · saveReleaseChanges · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
@@ -666,7 +666,7 @@
 - `rescheduleWindow.ts` — **isSameMonth** · **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · **sameMonthLastDay** · to24HourTimeOrRaw · tomorrowMidnight
 - `roundRobinMix.ts` — alternateCategories · arrange · freshFirst · **roundRobinMix**
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
-- `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
+- `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · issue · **primaryIssue** · resolveSpan · toMinutes
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice
 - `serviceFilterMatch.ts` — **candidateServices** · **hasServiceCriteria** · **priceRangeAcrossServices** · **serviceMatchesCriteria** · **serviceRange**
 - `serviceImageDraft.ts` — **normalizeServiceImages**
