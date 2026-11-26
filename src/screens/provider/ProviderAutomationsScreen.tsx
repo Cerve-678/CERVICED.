@@ -54,7 +54,6 @@ const C_LIGHT = {
 // ─── Data shape ───────────────────────────────────────────────────────────────
 interface ProviderAutomations {
   // What CERVICED sends on your behalf — you choose when/if
-  clientReminderTiming:   string[];   // ['24h', '48h', '72h'] — push to clients
   rebookingNudgeWeeks:    string;     // 'never' | '2' | '4' | '6' | '8' | '12'
   autoReviewRequest:      boolean;    // 2hrs after completion
   postApptCheckIn:        boolean;    // check-in message day after
@@ -74,7 +73,6 @@ interface ProviderAutomations {
 }
 
 const DEFAULTS: ProviderAutomations = {
-  clientReminderTiming:    ['24h'],
   rebookingNudgeWeeks:     'never',
   autoReviewRequest:       true,
   postApptCheckIn:         false,
@@ -188,7 +186,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         const profile = context?.profile ?? null;
         if (profile) setProviderId(profile.id);
         const m = (context?.userMetadata ?? {}) as {
-          pa_client_reminder_timing?: string[];
           pa_rebooking_nudge_weeks?: string;
           pa_auto_review_request?: boolean;
           pa_post_appt_check_in?: boolean;
@@ -203,7 +200,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
         setD({
-          clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
           autoReviewRequest:       a.autoReviewRequest    ?? m['pa_auto_review_request']    ?? DEFAULTS.autoReviewRequest,
           postApptCheckIn:         a.postApptCheckIn      ?? m['pa_post_appt_check_in']     ?? DEFAULTS.postApptCheckIn,
@@ -229,7 +225,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     try {
       const saves: Promise<unknown>[] = [
         updateCurrentUserMetadata({
-            pa_client_reminder_timing:    d.clientReminderTiming,
             pa_rebooking_nudge_weeks:     d.rebookingNudgeWeeks,
             pa_auto_review_request:       d.autoReviewRequest,
             pa_post_appt_check_in:        d.postApptCheckIn,
@@ -256,7 +251,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         // so anything that must act on these settings reads them from here.
         // Merged, so only this screen's keys change — see the note on the type.
         saves.push(mergeProviderAutomationSettings(providerId, {
-          clientReminderTiming: d.clientReminderTiming,
           rebookingNudgeWeeks:  d.rebookingNudgeWeeks,
           autoReviewRequest:    d.autoReviewRequest,
           postApptCheckIn:      d.postApptCheckIn,
@@ -284,15 +278,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
     setD(prev => ({ ...prev, [key]: val }));
-  }, []);
-
-  const toggleReminder = useCallback((v: string) => {
-    setD(prev => ({
-      ...prev,
-      clientReminderTiming: prev.clientReminderTiming.includes(v)
-        ? prev.clientReminderTiming.filter(x => x !== v)
-        : [...prev.clientReminderTiming, v],
-    }));
   }, []);
 
   if (loading) {
@@ -399,37 +384,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           C={C}
         />
 
-        {/* Client appointment reminders */}
-        <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, marginBottom: 8 }]}>
-          <Text style={[st.cardTitle, { color: C.text, marginBottom: 4 }]}>{t('providerBusiness.automations.reminders')}</Text>
-          <Text style={[st.cardDesc, { color: C.sub, marginBottom: 12 }]}>
-            {t('providerBusiness.automations.remindersSub')}
-          </Text>
-          <View style={st.chipRow}>
-            {([
-              { v: '1h',  l: tp('providerBusiness.automations.hoursShort', 1) },
-              { v: '3h',  l: tp('providerBusiness.automations.hoursShort', 3) },
-              { v: '24h', l: tp('providerBusiness.automations.hoursShort', 24) },
-              { v: '48h', l: tp('providerBusiness.automations.hoursShort', 48) },
-              { v: '72h', l: tp('providerBusiness.automations.hoursShort', 72) },
-              { v: '1w',  l: t('providerBusiness.automations.oneWeek') },
-            ] as const).map(({ v, l }) => {
-              const on = d.clientReminderTiming.includes(v);
-              return (
-                <TouchableOpacity
-                  key={v}
-                  style={[st.chip, { borderColor: C.border, backgroundColor: C.surface }, on && { backgroundColor: C.accent, borderColor: C.accent }]}
-                  onPress={() => toggleReminder(v)}
-                >
-                  <Text style={[st.chipText, { color: C.sub }, on && { color: C.onAccent }]}>{l}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {d.clientReminderTiming.length === 0 && (
-            <Text style={[st.hint, { color: C.sub }]}>{t('providerBusiness.automations.noReminders')}</Text>
-          )}
-        </View>
+        {/* No appointment reminder setting here on purpose: CERVICED sends
+            every client the same two (2 days before and the day before),
+            whoever they booked with. */}
 
         {/* Rebooking nudges */}
         <ChipSelect
@@ -537,7 +494,6 @@ const st = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600' },
 
   chipHint: { fontSize: 12, lineHeight: 17, marginTop: -2, marginBottom: 16, paddingHorizontal: 2, fontStyle: 'italic' },
-  hint:     { fontSize: 12, lineHeight: 17, marginTop: 8, fontStyle: 'italic' },
 
   infoBox: {
     flexDirection: 'row',
