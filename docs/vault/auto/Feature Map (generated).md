@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **299 files**
 - … +269 more
 
 ## Payments
-Curated: [[Payments]] · **256 files**
+Curated: [[Payments]] · **257 files**
 - `src/screens/client/CartScreen.tsx` _(465)_
 - `src/screens/provider/PaymentsScreen.tsx` _(229)_
 - `src/features/cart/StripePaymentSheet.tsx` _(175)_
@@ -97,15 +97,15 @@ Curated: [[Payments]] · **256 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(74)_
 - `src/services/database/edgeFunctions.ts` _(61)_
 - `src/types/database.ts` _(59)_
+- `src/services/becca/capabilities/client.ts` _(55)_
 - `src/i18n/catalogs/en/cart.ts` _(54)_
 - `src/features/providers/goLiveStatus.ts` _(53)_
 - `src/utils/depositPolicy.ts` _(51)_
-- `src/services/becca/capabilities/client.ts` _(48)_
 - `src/i18n/catalogs/en/clientBooking.ts` _(47)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/features/bookings/bookingSupportRequest.ts` _(42)_
 - `src/screens/provider/PoliciesScreen.tsx` _(42)_
-- … +226 more
+- … +227 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **492 files**
@@ -123,12 +123,12 @@ Curated: [[Booking Flow]] · **492 files**
 - `src/screens/client/RescheduleScreen.tsx` _(192)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
+- `src/services/becca/engine.ts` _(148)_
 - `src/screens/shared/NotificationsScreen.tsx` _(143)_
 - `src/services/database/edgeFunctions.ts` _(143)_
 - `src/services/AvailabilityService.ts` _(141)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(139)_
 - `supabase/waitlist_holds.sql` _(134)_
-- `src/services/becca/engine.ts` _(132)_
 - `src/i18n/catalogs/en/clientBooking.ts` _(125)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **260 files**
 - … +230 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **127 files**
+Curated: [[Provider Onboarding & Go-Live]] · **128 files**
 - `src/features/providers/goLiveStatus.ts` _(89)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(72)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **127 files**
 - `src/services/database/bookings.ts` _(6)_
 - `src/services/database/notifications.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
-- … +97 more
+- … +98 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **129 files**
@@ -314,13 +314,13 @@ Curated: [[Contexts]] · **281 files**
 ## Becca / AI
 Curated: [[Services]] · **96 files**
 - `src/screens/shared/BeccaScreen.tsx` _(149)_
-- `src/services/becca/engine.ts` _(66)_
+- `src/services/becca/engine.ts` _(67)_
 - `src/i18n/catalogs/en/shared.ts` _(60)_
 - `src/i18n/catalogs/fr/shared.ts` _(59)_
 - `src/i18n/catalogs/pl/shared.ts` _(58)_
 - `src/i18n/catalogs/de/shared.ts` _(54)_
 - `src/i18n/catalogs/es/shared.ts` _(54)_
-- `src/services/becca/capabilities/client.ts` _(53)_
+- `src/services/becca/capabilities/client.ts` _(54)_
 - `src/components/ChatComponents.tsx` _(46)_
 - `src/services/becca/types.ts` _(43)_
 - `src/services/database/becca.ts` _(39)_

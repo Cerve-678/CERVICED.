@@ -618,6 +618,9 @@ const bookingPrep: Capability = {
   hat: "client",
   describe: "Do I need to do anything before my appointment",
   thinking: ["Finding that appointment…", "Checking forms and prep notes…"],
+  // "do i need to pay a deposit" matched "do i need to"; a deposit is
+  // provider.deposit's, and prep is forms, patch tests and what to bring.
+  excludeWhen: /\bdeposits?\b/i,
   phrases: [
     "do i need to", "anything to fill", "forms", "intake form", "patch test",
     "before my appointment", "anything i need", "prepare", "aftercare",
@@ -1156,6 +1159,9 @@ const findProviders: Capability = {
       String.raw`\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b`,
       // "how often do i get my nails done" asks about their own routine.
       String.raw`\bhow often\b`,
+      // "is there a deposit" — its "is there a" tied provider.deposit, and the
+      // toss-up became a "did you mean" menu instead of "which provider?".
+      String.raw`\bdeposits?\b`,
       RATING_ASK_RE.source,
       NEW_ASK_RE.source,
     ].join("|"),
@@ -1932,6 +1938,45 @@ const providerServices: Capability = {
  *     opinion, which engine.ts's MEDICAL_OR_DERMATOLOGY_RE guard exists to
  *     prevent her doing anywhere else.
  */
+/**
+ * "is gel good for weak nails", "will acrylics damage my nails".
+ *
+ * Whether a treatment suits someone depends on what the provider can see in
+ * person, so Becca doesn't judge it — she says whose call it is and offers to
+ * find them. Not health advice: anything medical (eczema, allergy, infection…)
+ * is caught by the engine's MEDICAL_OR_DERMATOLOGY_RE before routing.
+ */
+const treatmentSuitability: Capability = {
+  id: "discover.suitability",
+  hat: "client",
+  describe: "Is a treatment right for me",
+  thinking: ["Reading your question…"],
+  phrases: [
+    "good for my", "good for weak", "good for thin", "good for short", "good for fine",
+    "ok for", "okay for", "suitable for", "is it suitable", "right for me", "right for my",
+    "damage my", "will it damage", "ruin my", "bad for my", "too harsh",
+  ],
+  // Asking for a PERSON who's good at something is a search or a ranking.
+  excludeWhen: /\b(?:who|who's|whos|anyone|anybody|someone|somebody)\b/i,
+  needs: [{ kind: "service", required: false }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const service = entities.service?.value;
+    const thing = service ? service.specific ?? categoryWords(service.category) : "a treatment";
+    const people = service ? categoryWords(service.category) : undefined;
+    return {
+      text:
+        `Whether ${thing} is right for you is one for the provider doing it. ` +
+        "They can see what you're working with and tell you honestly. Many offer a consultation first.",
+      suggestions: people
+        ? [
+          askChip("find", `Find ${people}`, `Find ${people}`),
+          askChip("top", "Who's top rated?", `Who are the best rated ${people} providers?`),
+        ]
+        : [askChip("browse", "Show me all services", "Show me all services")],
+    };
+  },
+};
+
 const treatmentSafety: Capability = {
   id: "provider.safety",
   hat: "client",
@@ -4259,6 +4304,7 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   // Before `providerServices`: "is the peel safe in pregnancy" is a safety
   // question, not a request for their price list, and both need a provider.
   treatmentSafety,
+  treatmentSuitability,
   providerServices,
   providerLocation,
   providerDeposit,

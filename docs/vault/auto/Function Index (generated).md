@@ -5,7 +5,7 @@
 
 #generated
 
-**4474 functions** across **717 files**.
+**4476 functions** across **717 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -550,7 +550,7 @@
 ### `src/services/becca/` (12)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
-- `engine.ts` — answeredUnderstanding · answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · holdQuestion · interpretWithTimeout · isAskableKind · **isConfirmToken** · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · settled · suggestionFitsLinkOnly · understandWithFallback · verifyComposition · withoutAwaiting
+- `engine.ts` — answeredUnderstanding · answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · holdQuestion · interpretWithTimeout · isAskableKind · **isConfirmToken** · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · settled · soleUpcomingProvider · suggestionFitsLinkOnly · understandWithFallback · upcomingProviderNames · verifyComposition · withoutAwaiting
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — containsGappedPhrase · containsPhraseWithTypos · escape · isKnownWord · phraseWords · plainAsk · scoreEntities · scorePhrases · **understand** · wordsOf
 - `missLog.ts` — **abandonMiss** · offeredOptions · **trackTurn**
