@@ -1,4 +1,4 @@
--- 20261126130000_client_reminders_fixed_timing.sql
+-- 20261126140000_client_reminders_fixed_timing.sql
 --
 -- Every client now gets the same two appointment reminders, whoever they
 -- booked with: 2 days before ("Upcoming Appointment … in 2 days") and the day
@@ -22,7 +22,8 @@
 -- function, swaps three exact literals and re-creates it. The md5 guard is
 -- the live definition read on 2026-11-26; if it has changed, or any literal
 -- isn't there exactly once, the migration stops rather than guess.
--- Numbered above the live frontier (20261126120000).
+-- Numbered above the live frontier (20261126120000) and above #819's
+-- unapplied 20261126130000_client_bookings_promo_discount (no overlap).
 
 BEGIN;
 
@@ -58,7 +59,7 @@ END
 $mig$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261126130000', 'client_reminders_fixed_timing')
+VALUES ('20261126140000', 'client_reminders_fixed_timing')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

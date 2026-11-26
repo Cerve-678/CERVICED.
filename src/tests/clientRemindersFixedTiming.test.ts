@@ -8,7 +8,7 @@ import { join } from 'path';
 const root = join(__dirname, '../..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
 
-const migration = read('supabase/migrations/20261126130000_client_reminders_fixed_timing.sql');
+const migration = read('supabase/migrations/20261126140000_client_reminders_fixed_timing.sql');
 const screen = read('src/screens/provider/ProviderAutomationsScreen.tsx');
 const emailFn = read('supabase/functions/send-booking-update-email/index.ts');
 
