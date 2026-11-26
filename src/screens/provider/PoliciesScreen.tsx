@@ -838,7 +838,7 @@ export default function PoliciesScreen({ navigation }: any) {
               <Text style={[termsSt.text, { color: C.text }]}>
                 I agree to the{' '}
                 <Text style={[termsSt.link, { color: C.accent }]} onPress={() => openLegalPage('provider-terms')}>
-                  Terms &amp; Conditions
+                  Terms & Conditions
                 </Text>
                 {ownChanged ? '. Your Sections are in my own words, shown publicly on my profile, and I\'m responsible for what they say.' : ''}
               </Text>
