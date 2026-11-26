@@ -12,7 +12,7 @@ export const providerBookings = {
 
   // ── Schedule problems on a booking (src/utils/scheduleIssues.ts) ────────
   'providerBookings.scheduleIssue.overlap': 'Overlaps another booking',
-  'providerBookings.scheduleIssue.timeUnavailable': 'This time is no longer available in your schedule',
+  'providerBookings.scheduleIssue.timeUnavailable': 'Outside your hours',
   'providerBookings.scheduleIssue.notWorking': "On a day you're not working",
   'providerBookings.scheduleIssue.blockedDate': "On a date you've blocked off",
   'providerBookings.scheduleIssue.unconfirmedPastStart': 'Still unconfirmed and its start time has passed',

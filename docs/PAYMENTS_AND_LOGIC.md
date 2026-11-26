@@ -231,6 +231,12 @@ that, putting it right means taking money back from Jo (section 2.8).
 1. **Reserve and price.** The server checks the basket, holds each slot for
    5 minutes and records the checkout. The server never trusts a price sent
    by the app: every amount is recalculated from the database.
+   **A price changed since the service went in the cart is charged at the
+   new price, and the client is told first.** When the server's total
+   differs from what the summary showed, the payment sheet says "The price
+   has changed since you added this to your cart. You'll pay £new, not
+   £old." It lists the services without their old prices. The Pay button
+   always shows the server's amount. (App part from 26 November, next build.)
    Add-ons are priced from `service_add_ons`, the per-service copies of the
    provider's own add-on list (`provider_add_ons`, since 5 November; one
    price per add-on, the same on every service). An add-on's extra time
@@ -1513,6 +1519,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 13 Nov | A provider's written cancellation notice always says the window actually applied; the database rewrites the text from the window, never the reverse. Daminkfinesse (24h → 48h), Nails Studio (48h → 24h) and CuratedByCilva (12h → 24h) were corrected; no window applied changed. Live since 13 November (migration `20261113180000`) | Clients saw one notice on the profile and another on their booking page |
 | 13 Nov | Refund requests close at the end of the fifth UK day after the appointment day, for bookings made from then on, for every reason; complaints stay open | Gives clients time to notice a problem while letting a booking's money settle; older bookings keep the terms they were booked under; the owner's rule |
 | 26 Nov | A client booking can only be made by paying for it. The practice card form is gone from the app, and the old `hold_cart_booking_slots` / `claim_cart_booking_slots` / `release_cart_booking_slots` functions are dropped. Not live until migration `20261126120000_checkout_only_through_payment` is applied | The claim function wrote whatever the caller sent as the payment, and any signed-in user could call it, so a booking could be made and shown as paid with no money taken |
+| 26 Nov | A price the provider changed after the service went in the cart is charged at the new price, and the payment sheet says so before the client pays ("You'll pay £new, not £old") | The user's call ("update the price and carry on"); the client was charged the new price before, with no word that it had changed |
 | 15 Nov | A bank dispute takes money back only from the provider(s) whose booking it's about, matched by amount; when the amount fits no booking, or more than one way, an admin picks and nothing is taken back until then. A won dispute pays the provider back automatically | One payment can pay several providers, and taking from all of them punished providers the client had no complaint about. An admin picking was chosen over splitting the cost across everyone on the payment, which would still charge providers the client had no complaint about |
 | 16 Nov | Bank disputes live. CERVICED stays in the middle because it charges the card (one payment per basket); paying each provider directly was considered and not chosen. An unclear dispute stays an admin pick, not an automatic split by share. Providers see "Paid back · dispute won" and the other dispute lines. Provider Terms §9 explains it all; no 15-day notice while the provider base is being built | Keeps the one-checkout basket; the bank decides and the provider whose booking it was carries the cost |
 

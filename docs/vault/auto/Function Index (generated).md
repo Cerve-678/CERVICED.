@@ -5,7 +5,7 @@
 
 #generated
 
-**4454 functions** across **717 files**.
+**4455 functions** across **717 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -200,7 +200,7 @@
 - `checkoutOutcome.ts` — **settledFromBatch** · **settledFromCaptureStatus** · **waitForCheckoutOutcome**
 - `platformFee.ts` — **calculatePlatformFee** · **calculatePlatformFeePence** · **toPence**
 - `presentation.ts` — **describeReserveFailure** · **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · slotStartMs · **to24hMinutes** · toLabel
-- `pricing.ts` — **getCartAddOnsSummary** · **getCartItemFullPrice** · **resolveDepositPolicyArg** · **toDepositPolicy**
+- `pricing.ts` — **getCartAddOnsSummary** · **getCartItemFullPrice** · **priceChangedFrom** · **resolveDepositPolicyArg** · **toDepositPolicy**
 - `releaseEarlierPayments.ts` — isApprovedRefusal · **releaseEarlierPayments**
 - `RequestHoldChecks.tsx` — confirm · **RequestHoldChecks** · updateHold
 - `requestHolds.ts` — **checkoutSuccessMessage** · count · **holdCheckPrompt** · **holdNeedsCheck** · **holdPlanNote** · **holdResultLine** · money · **payButtonLabel**
