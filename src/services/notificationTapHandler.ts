@@ -249,7 +249,9 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   }
 
   // ── Message types ────────────────────────────────────────────────────────────
-  if (type === 'provider_message' || type === 'new_message') {
+  // address_not_sent asks the client to message their provider for the
+  // address, so it opens the same chat.
+  if (type === 'provider_message' || type === 'new_message' || type === 'address_not_sent') {
     if (isProvider) {
       navigateNested('ProviderHome', 'ProviderInbox', { initialFilter: 'unread' });
       return;

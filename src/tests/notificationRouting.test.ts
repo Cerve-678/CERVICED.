@@ -597,3 +597,38 @@ describe('notification routing — address not sent yet (Manual release)', () =>
     expect(migration()).toContain("cron.schedule('address-release-reminders'");
   });
 });
+
+describe('notification routing — address still not sent: home-based only, and the client is told', () => {
+  const migration = () => read('supabase', 'migrations', '20261126110000_address_reminder_home_based_and_client_notice.sql');
+
+  it('reminds home-based providers only again', () => {
+    // User 2026-11-26: a mobile provider's address never shows on the client's booking screen.
+    expect(migration()).toContain("AND p.business_type = 'home_based'");
+  });
+
+  it('rebuilds the reminder function from live, guarded', () => {
+    expect(migration()).toMatch(/md5\(pg_get_functiondef\('public\.process_address_release_reminders\(\)'::regprocedure\)\)\)\s+<> '[0-9a-f]{32}'/);
+  });
+
+  it('declares address_not_sent everywhere a notification type has to exist', () => {
+    expect(migration()).toContain("ARRAY['address_not_sent']");
+    expect(read('src', 'types', 'database.ts')).toContain('| "address_not_sent"');
+    expect(notificationsScreen()).toContain("notification.type === 'address_not_sent'");
+    expect(tapHandler()).toContain("type === 'address_not_sent'");
+    expect(edgeFunction()).toContain("address_not_sent: 'bookingReminder'");
+  });
+
+  it('tells the client an hour after the provider’s last reminder, once, and asks them to message', () => {
+    const sql = migration();
+    expect(sql).toContain("r.metadata->>'stage' = '4h'");
+    expect(sql).toContain("r.created_at <= now() - interval '1 hour'");
+    expect(sql).toContain("n.type = 'address_not_sent'");
+    expect(sql).toContain("'. Message them to ask for it.'");
+    expect(sql).toContain("'client'");
+  });
+
+  it('opens the client’s chat with that provider', () => {
+    expect(tapHandler()).toMatch(/type === 'address_not_sent'\) \{[\s\S]{0,900}'ProviderChat'/);
+    expect(notificationsScreen()).toMatch(/notification\.type === 'address_not_sent'\) \{[\s\S]{0,1400}'ProviderChat'/);
+  });
+});

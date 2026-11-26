@@ -139,7 +139,10 @@ export type NotificationType =
   | "waitlist_joined"
   /** Provider: on Manual release and hasn't sent their address
    *  for a booking yet. metadata.stage is '3d', '1d' or '4h' before it. */
-  | "address_release_reminder";
+  | "address_release_reminder"
+  /** Client: the home-based provider still hasn't sent their address an hour
+   *  after their last reminder. Opens the chat with that provider. */
+  | "address_not_sent";
 
 export type NotificationPriority = "high" | "medium" | "low";
 

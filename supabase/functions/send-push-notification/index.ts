@@ -145,6 +145,7 @@ const CLIENT_PREF_KEY_BY_TYPE: Record<string, string> = {
   booking_reminder: 'bookingReminder',
   pending_booking_reminder: 'bookingReminder',
   rebooking_nudge: 'bookingReminder',
+  address_not_sent: 'bookingReminder',
   // "Booking Updates — Changes, cancellations"
   booking_declined: 'bookingUpdates',
   booking_cancelled: 'bookingUpdates',

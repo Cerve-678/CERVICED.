@@ -18,8 +18,8 @@ Curated: [[Address Release]] · **172 files**
 - `src/contexts/BookingContext.tsx` _(50)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
+- `src/types/database.ts` _(39)_
 - `src/screens/client/BookingsScreen.tsx` _(38)_
-- `src/types/database.ts` _(37)_
 - `src/types/booking.ts` _(35)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `src/i18n/catalogs/en/discover.ts` _(33)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **492 files**
 ## Notifications
 Curated: [[Notifications]] · **261 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(421)_
+- `src/screens/shared/NotificationsScreen.tsx` _(423)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/database/notifications.ts` _(118)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_

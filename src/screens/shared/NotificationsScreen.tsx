@@ -90,7 +90,7 @@ interface Notification {
       | 'schedule_fully_booked' | 'points_earned'
       | 'maintenance_due'    | 'aftercare_available'
       | 'provider_saved'     | 'follow_request'     | 'waitlist_joined'
-      | 'address_release_reminder';
+      | 'address_release_reminder' | 'address_not_sent';
   title: string;
   message: string;
   timestamp: string;
@@ -863,7 +863,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderInbox', { initialFilter: 'unread' });
       }, 300);
-    } else if (notification.type === 'new_message') {
+    } else if (notification.type === 'new_message' || notification.type === 'address_not_sent') {
+      // address_not_sent asks the client to message their provider, so it
+      // opens the same chat.
       // Chat message — providers open the inbox section with unread messages; clients open
       // the chat with that provider (slug + name looked up from provider_id)
       if (isProviderRef.current) {
@@ -1023,7 +1025,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
-    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available', 'waitlist_joined', 'address_release_reminder'].includes(type)) return '#FF9500';
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available', 'waitlist_joined', 'address_release_reminder', 'address_not_sent'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
     if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved', 'follow_request'].includes(type)) return P.accentText;
     return '#FF9800';
@@ -1114,6 +1116,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // The booking is where "Send address to client" is.
       case 'address_release_reminder':
         return t('shared.notifications.action.viewBooking');
+      // Asks the client to message their provider for the address.
+      case 'address_not_sent':
+        return t('shared.notifications.action.openChat');
       case 'schedule_fully_booked':
         return 'View Certificate';
       case 'payout_failed':
