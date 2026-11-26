@@ -560,7 +560,7 @@ payout before sending it:
 | Check | If it fails |
 |---|---|
 | Is a refund request open on this booking? | Wait, and try again on the next run |
-| Is the booking still confirmed or completed? | Cancel the payout. Nothing is sent |
+| Is the booking still confirmed or completed? | Cancel the payout. Nothing is sent. One exception: a booking the client reported as a provider no-show is paid once Cerviced has declined that "The provider didn't turn up" refund request (the provider did turn up). The booking keeps its no-show status, so the client gets no review prompt, points or reminders |
 | Was the payment fully refunded? | Skip it |
 | Is the payment disputed at the bank? | Only this booking's part matters (section 2.7): not part of the dispute, pay it; part of an open dispute, or waiting for an admin to pick, wait; CERVICED won, pay it; CERVICED lost, cancel the payout |
 | Does every refund on the charge match CERVICED's refund ledger? | Skip it (an unexplained refund needs a person) |
@@ -757,6 +757,14 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
   own message, which stays in the app.
 - Requests are only for bookings paid through the app, with one open request
   per booking.
+- **Reporting that the provider didn't turn up opens one.** On the day,
+  after the start time, the client's booking screen has "Provider didn't turn
+  up?" in place of Cancel. Reporting it marks the booking `provider_no_show`
+  (so the provider isn't paid) and, for a booking paid in the app, opens a
+  request with that reason in the same call, unless one is already open. It
+  then follows the usual 3 days. *Live since 26 November (migration
+  `20261126170000_provider_no_show_opens_refund_request`); the button
+  change ships with the next app build.*
 - **A client can ask until the end of the fifth UK day after the day of the
   appointment** (appointment on the 10th, last day the 15th). After that
   `request_booking_refund()` refuses, and the app's ⋯ sheet says when it
@@ -827,6 +835,21 @@ payment):
    again automatically about **1, 3 and 6 days** in.
 3. After 7 days unpaid, the request lapses and the provider is told. The
    provider can also cancel a request early.
+
+**If charging stops part-way** (the function times out or crashes after the
+fee row is made), the row is left at "processing". That would block every
+other fee on the visit and, if Stripe had already taken the money, leave it
+unrecorded (the webhook only accepts a payment already bound to the row).
+`release-payouts` checks any such row 15 minutes on, and Stripe decides:
+- **Taken:** it's recorded and paid out as normal, and the client gets the
+  "fee charged" notice they missed.
+- **Still going through:** it waits for the next run.
+- **Not taken:** any payment still open is cancelled, the row is marked
+  failed, and the provider is told nothing was taken and they can charge it
+  again.
+
+Live since 26 November (migration
+`20261126160000_release_payouts_settles_stuck_fees`, `release-payouts` v26).
 
 **If the client disagrees with a fee:** they dispute it **with the
 provider**, who refunds it or keeps it. CERVICED doesn't judge fee disputes.
@@ -1309,7 +1332,7 @@ Keep the list short and review it monthly.
 | `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes (matched to bookings by `_shared/bankDispute.ts` / `disputePlan.ts`), bank payout failures |
 | `assign-bank-dispute` | App (admins only) | An admin's pick of which booking(s) a dispute is about: takes back from those providers, then records it (`assign_bank_dispute`) |
 | `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over (and tells the client if the bank had declined one) |
-| `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; support alerts |
+| `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; fee charges stuck at "processing"; support alerts |
 | `refund-payment` | Provider, admin, or the server (`refund_booking_async`) | Full and partial refunds; reconciles the payout |
 | `apply-cancellation-refund` | App, after a client cancels | Applies the frozen cancellation policy and settles the provider directly |
 | `booking-fee` | Provider app | Charges, refunds and cancels late/no-show fees; records a client paying a fee request |
@@ -1520,6 +1543,9 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 13 Nov | Refund requests close at the end of the fifth UK day after the appointment day, for bookings made from then on, for every reason; complaints stay open | Gives clients time to notice a problem while letting a booking's money settle; older bookings keep the terms they were booked under; the owner's rule |
 | 26 Nov | A client booking can only be made by paying for it. The practice card form is gone from the app, and the old `hold_cart_booking_slots` / `claim_cart_booking_slots` / `release_cart_booking_slots` functions are dropped. Not live until migration `20261126120000_checkout_only_through_payment` is applied | The claim function wrote whatever the caller sent as the payment, and any signed-in user could call it, so a booking could be made and shown as paid with no money taken |
 | 26 Nov | A price the provider changed after the service went in the cart is charged at the new price, and the payment sheet says so before the client pays ("You'll pay £new, not £old") | The user's call ("update the price and carry on"); the client was charged the new price before, with no word that it had changed |
+| 26 Nov | When Cerviced declines a "The provider didn't turn up" refund request, the provider is paid their held payout. The booking stays a provider no-show rather than becoming Completed. Live since 26 November (`release-payouts` v27) | Cerviced has decided the provider turned up, so the money is theirs; it used to stay with Cerviced. Marking it Completed would have sent the client a review prompt, points and reminders right after their claim was turned down (the owner's call) |
+| 26 Nov | A fee charge left at "processing" when charging stopped part-way is settled by `release-payouts` after 15 minutes, as Stripe says: recorded and the client told if taken, cancelled and the provider told if not | A stuck row blocked every other fee on the visit, and a charge Stripe had taken could never be recorded, paid out or refunded in the app |
+| 26 Nov | After the start time a client can't cancel in the app; on the day they can report that the provider didn't turn up instead, and for a booking paid in the app that opens a refund request ("The provider didn't turn up") for the provider to answer like any other | The owner's call. A client whose provider never came used to cancel and pay the late-cancel charge, and the report itself stopped the payout but refunded nobody until they found the separate refund request |
 | 15 Nov | A bank dispute takes money back only from the provider(s) whose booking it's about, matched by amount; when the amount fits no booking, or more than one way, an admin picks and nothing is taken back until then. A won dispute pays the provider back automatically | One payment can pay several providers, and taking from all of them punished providers the client had no complaint about. An admin picking was chosen over splitting the cost across everyone on the payment, which would still charge providers the client had no complaint about |
 | 16 Nov | Bank disputes live. CERVICED stays in the middle because it charges the card (one payment per basket); paying each provider directly was considered and not chosen. An unclear dispute stays an admin pick, not an automatic split by share. Providers see "Paid back · dispute won" and the other dispute lines. Provider Terms §9 explains it all; no 15-day notice while the provider base is being built | Keeps the one-checkout basket; the bank decides and the provider whose booking it was carries the cost |
 
