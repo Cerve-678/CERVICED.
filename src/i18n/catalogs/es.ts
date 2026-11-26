@@ -30,18 +30,17 @@ export const es: Catalog = {
 
   'helpCentre.title': 'Centro de ayuda',
   'helpCentre.subtitle': 'Respuestas a preguntas frecuentes',
-  'helpCentre.section.faqs': 'PREGUNTAS FRECUENTES',
 
   'helpCentre.faq.book.q': '¿Cómo reservo una cita?',
   'helpCentre.faq.book.a':
-    'Explora los profesionales en la pestaña Explorar, toca un profesional y luego selecciona un servicio y un horario disponible. Recibirás una notificación de confirmación.',
+    'Abre la página de un profesional desde Inicio, Buscar o Explorar, elige un servicio y una hora, y añádelo a tu carrito. Pagas al finalizar la compra, y puedes reservar con más de un profesional a la vez.',
   'helpCentre.faq.cancel.q': '¿Puedo reprogramar o cancelar?',
   'helpCentre.faq.becca.q': '¿Cómo funciona Becca?',
   'helpCentre.faq.becca.a':
     'Becca es tu asistente de belleza con IA. Pregúntale lo que quieras: puede recomendar profesionales, explicar servicios y ayudarte a encontrar el look ideal.',
   'helpCentre.faq.points.q': '¿Cómo gano puntos?',
   'helpCentre.faq.points.a':
-    'Ganas puntos al completar reservas, dejar reseñas, recomendar a amigos y con tu primera reserva. Los puntos se pueden canjear por descuentos.',
+    'Completa una reserva o deja una reseña, además de bonos por tu primera reserva, tu primera reseña y tu cumpleaños. Tu saldo está en Puntos, en tu Perfil.',
   'helpCentre.faq.payment.q': '¿Mi información de pago es segura?',
 
   'helpCentre.action.contact': 'Contactar con soporte',

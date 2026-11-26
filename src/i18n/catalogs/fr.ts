@@ -30,18 +30,17 @@ export const fr: Catalog = {
 
   'helpCentre.title': "Centre d'aide",
   'helpCentre.subtitle': 'Réponses aux questions fréquentes',
-  'helpCentre.section.faqs': 'QUESTIONS FRÉQUENTES',
 
   'helpCentre.faq.book.q': 'Comment réserver un rendez-vous ?',
   'helpCentre.faq.book.a':
-    "Parcourez les professionnels dans l'onglet Explorer, appuyez sur un professionnel, puis sélectionnez un service et un créneau disponible. Vous recevrez une notification de confirmation.",
+    "Ouvrez la page d'un professionnel depuis Accueil, Recherche ou Explorer, choisissez un service et un créneau, puis ajoutez-le à votre panier. Vous payez au moment de la commande, et vous pouvez réserver avec plusieurs professionnels à la fois.",
   'helpCentre.faq.cancel.q': 'Puis-je reporter ou annuler ?',
   'helpCentre.faq.becca.q': 'Comment fonctionne Becca ?',
   'helpCentre.faq.becca.a':
     "Becca est votre assistante beauté dotée d'une IA. Posez-lui n'importe quelle question : elle peut recommander des professionnels, expliquer des services et vous aider à trouver le bon look.",
   'helpCentre.faq.points.q': 'Comment gagner des points ?',
   'helpCentre.faq.points.a':
-    'Vous gagnez des points en effectuant des réservations, en laissant des avis, en parrainant des amis et lors de votre première réservation. Les points peuvent être échangés contre des réductions.',
+    'Effectuez une réservation ou laissez un avis, avec en plus des bonus pour votre première réservation, votre premier avis et votre anniversaire. Votre solde se trouve dans Points, sur votre Profil.',
   'helpCentre.faq.payment.q': 'Mes informations de paiement sont-elles sécurisées ?',
 
   'helpCentre.action.contact': 'Contacter le support',
