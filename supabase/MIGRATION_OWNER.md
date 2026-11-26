@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-ac (fix/settle-stuck-fee-charges) — 20261126160000_release_payouts_settles_stuck_fees, written + dry-run, NOT applied (waiting for the user's OK). 20261126150000 (#819) also mine, also not applied: apply 150000 first.
 ```
 
 ### Applied 2026-11-26 (home-based only, and the client is told to message the provider)

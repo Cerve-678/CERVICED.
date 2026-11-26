@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
-import { lapseFeePayRequests, retryDueFees } from '../_shared/feePayRequest.ts';
+import { lapseFeePayRequests, retryDueFees, settleStuckFees } from '../_shared/feePayRequest.ts';
 import {
   classifyTransferFailure, describeTransferFailure, nextPayoutRetryAt, PAYOUT_MAX_ATTEMPTS,
 } from '../_shared/payoutRetry.ts';
@@ -310,10 +310,13 @@ Deno.serve(async (req: Request) => {
     // Requests to pay a fee the saved card couldn't, past their 7 days.
     const lapsedFeeRequests = await lapseFeePayRequests(admin, stripe, BATCH_LIMIT)
       .catch((err) => { console.error(`[release-payouts] fee request lapse failed: ${String(err)}`); return -1; });
+    // Fee charges left at 'processing' when booking-fee stopped part-way.
+    const stuckFees = await settleStuckFees(admin, stripe, BATCH_LIMIT)
+      .catch((err) => { console.error(`[release-payouts] stuck fee settle failed: ${String(err)}`); return null; });
 
-    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} tips=${JSON.stringify(tips)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)}`);
+    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} tips=${JSON.stringify(tips)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)} stuckFees=${JSON.stringify(stuckFees)}`);
     return new Response(
-      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, tips, lapsedFeeRequests, feeRetries }),
+      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, tips, lapsedFeeRequests, feeRetries, stuckFees }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (err) {
