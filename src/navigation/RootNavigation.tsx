@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { CommonActions, NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import * as Notifications from 'expo-notifications';
 import ClientTabNavigation from './client/ClientTabNavigator';
@@ -8,12 +8,14 @@ import ProviderTabNavigation from './provider/ProviderTabNavigator';
 import { RootStackParamList } from './types';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useTranslation } from '../i18n';
 import { navigationRef } from './navigationRef';
 import { requestMode, resolveModeChange } from './modeController';
+import { openProviderProfileLink, type ProviderProfileLinkOutcome } from './openProviderProfileLink';
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
+import { parseProviderProfileDeepLink } from '../utils/providerProfileLink';
+import { useAppDialog } from '../components/AppDialog';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
 
@@ -31,14 +33,26 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
 import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
 import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
+import { useCircleEnabledSync } from '../stores/useCircleStore';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>, [string, string]> = {
+  not_found: ['Profile not found', "This code doesn't match a profile on CERVICED any more."],
+  failed: ["Couldn't open that profile", 'Check your connection and scan the code again.'],
+};
+
 export default function RootNavigation() {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
+  // Faces of people you follow on provider cards: client hat, signed in only.
+  useCircleEnabledSync(isLoggedIn && activeMode === 'client' && hatState.owned.client);
   const { isDarkMode } = useTheme();
-  const { t } = useTranslation();
+  const { showAlert, DialogHost } = useAppDialog();
 
   // The switch overlay always uses the DESTINATION hat's real accent (not a
   // hardcoded placeholder color) — same "you're switching identity" signal
@@ -96,10 +110,17 @@ export default function RootNavigation() {
   // Track whether NavigationContainer has finished mounting
   const [isNavReady, setIsNavReady] = useState(false);
   const [connectReturn, setConnectReturn] = useState<StripeConnectReturn | null>(null);
+  const [providerProfileLink, setProviderProfileLink] = useState<{ providerKey: string; receivedAt: number } | null>(null);
   const handledConnectReturn = useRef<StripeConnectReturn | null>(null);
+  const handledProviderProfileLink = useRef<{ providerKey: string; receivedAt: number } | null>(null);
   useEffect(() => {
     let live = true;
     const receive = (url: string) => {
+      const providerKey = parseProviderProfileDeepLink(url);
+      if (live && providerKey) {
+        setProviderProfileLink({ providerKey, receivedAt: Date.now() });
+        return;
+      }
       const result = parseStripeConnectReturn(url);
       if (live && result) setConnectReturn({ result, receivedAt: Date.now() });
     };
@@ -108,13 +129,32 @@ export default function RootNavigation() {
     return () => { live = false; subscription.remove(); };
   }, []);
   useEffect(() => {
+    if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !providerProfileLink ||
+        handledProviderProfileLink.current === providerProfileLink) return;
+    handledProviderProfileLink.current = providerProfileLink;
+    void openProviderProfileLink(providerProfileLink.providerKey).then(outcome => {
+      if (outcome !== 'opened') showAlert(...PROVIDER_LINK_ALERTS[outcome]);
+    });
+  }, [providerProfileLink, isNavReady, isLoggedIn, isLoading, pendingReactivation, showAlert]);
+  useEffect(() => {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !connectReturn ||
         handledConnectReturn.current === connectReturn) return;
     handledConnectReturn.current = connectReturn;
     void requestMode('provider').then(mode => {
       if (mode !== 'provider' || !navigationRef.isReady()) return;
+      // Usually the provider is still on the Payments screen they left for
+      // Stripe from (My Profile, Settings or Home all have one). Hand it the
+      // result there, so its X goes back to where they opened it. Moving them
+      // to the Profile tab's copy put Payments alone on a fresh stack, and X
+      // then fell through to the first tab, the calendar.
+      const current = navigationRef.getCurrentRoute() as { name: string; key: string } | undefined;
+      if (current?.name === 'Payments') {
+        navigationRef.dispatch({ ...CommonActions.setParams({ stripeReturn: connectReturn }), source: current.key });
+        return;
+      }
+      // initial: false keeps the Profile tab's root under Payments (see navigateNested).
       navigationRef.navigate('MainTabs', {
-        screen: 'Profile', params: { screen: 'Payments', params: { stripeReturn: connectReturn } },
+        screen: 'Profile', params: { screen: 'Payments', initial: false, params: { stripeReturn: connectReturn } },
       } as never);
     });
   }, [connectReturn, isNavReady, isLoggedIn, isLoading, pendingReactivation]);
@@ -165,10 +205,10 @@ export default function RootNavigation() {
               two trees look alike on arrival, so direction is the only cue the
               user gets that the switch did what they expected. */}
           <Text style={[styles.switchFrom, { color: switchingDestinationTheme.sub }]}>
-            {switchingTo === 'provider' ? t('shared.modeSwitch.leavingClient') : t('shared.modeSwitch.leavingProvider')}
+            {tr(switchingTo === 'provider' ? 'shared.modeSwitch.leavingClient' : 'shared.modeSwitch.leavingProvider')}
           </Text>
           <Text style={[styles.switchText, { color: switchingDestinationTheme.text }]}>
-            {switchingTo === 'provider' ? t('shared.modeSwitch.toProvider') : t('shared.modeSwitch.toClient')}
+            {tr(switchingTo === 'provider' ? 'shared.modeSwitch.toProvider' : 'shared.modeSwitch.toClient')}
           </Text>
         </View>
       </View>
@@ -246,6 +286,7 @@ export default function RootNavigation() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    <DialogHost />
     </>
   );
 }

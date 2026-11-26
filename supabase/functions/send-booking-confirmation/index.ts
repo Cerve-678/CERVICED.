@@ -17,8 +17,9 @@
 // already does — this is not reachable by a user session.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
+import { bookingConfirmationEmail, requestNotAcceptedEmail } from '../_shared/emailTemplates.ts';
 import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
+import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -50,8 +51,12 @@ serve(async (req) => {
   }
 
   try {
-    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-    if (!jwt || jwt !== SERVICE_ROLE_KEY) {
+    // Not a plain string compare: the vault holds the legacy eyJ… service key
+    // while the runtime may be handed the newer sb_secret_… one, and an exact
+    // match 403'd every call from 10 Oct 2026 (no confirmation email went out
+    // for three weeks). isServiceRoleRequest accepts either, as release-payouts
+    // has since its own 403 on 11 Oct.
+    if (!(await isServiceRoleRequest(req.headers.get('Authorization')))) {
       return json({ error: 'This endpoint is called by the database only.' }, 403);
     }
 
@@ -64,14 +69,52 @@ serve(async (req) => {
       .from('bookings')
       .select(
         'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
-        'provider_address_snapshot, client_address, booking_date, booking_time, provider_id, ' +
-        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status',
+        'client_address, booking_date, booking_time, provider_id, ' +
+        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request, declined_at',
       )
       .eq('id', bookingId)
       .maybeSingle();
 
     if (bookingError || !booking) return json({ error: 'Booking not found.' }, 404);
     if (!booking.customer_email) return json({ skipped: 'no customer email' });
+
+    // A request that ended without being accepted: the provider declined it,
+    // or it expired unanswered, which is treated as declined. queue_booking_confirmation_email asks for this
+    // as the request is cancelled; declined_at (stamped in the same write, by
+    // a trigger that runs after the queueing one) is what tells it apart from
+    // the client withdrawing it, which gets nothing. Sent once, by the
+    // trigger: the confirmation stamps and their retry job are left alone.
+    if (booking.status === 'cancelled') {
+      if (!booking.declined_at) return json({ skipped: 'cancelled, not a declined request' });
+      const amount = Number(booking.amount_paid) || 0;
+      const status = booking.payment_status ?? 'pending';
+      const kind: 'released' | 'refunded' | 'none' =
+        status === 'authorised' || status === 'not_charged' ? 'released'
+          : ['fully_paid', 'deposit_paid', 'refund_pending', 'refunded', 'partially_refunded'].includes(status)
+            ? 'refunded' : 'none';
+      // No answer in time counts as declined, the same as the app's label.
+      const { subject, html } = requestNotAcceptedEmail({
+        providerName: booking.provider_name_snapshot?.trim() || 'your provider',
+        service: booking.service_name_snapshot || 'your appointment',
+        date: formatLongDate(booking.booking_date),
+        time: formatTime12(booking.booking_time),
+        money: { kind, amount },
+      });
+      const sent = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `booking-request-ended-${booking.id}`,
+        },
+        body: JSON.stringify({ from: FROM_EMAIL, to: booking.customer_email, subject, html }),
+      });
+      if (!sent.ok) {
+        console.error(`[booking-confirmation] request-ended ${booking.id} failed: ${await sent.text()}`);
+        return json({ error: 'Send failed.' }, 502);
+      }
+      return json({ sent: true, kind: 'request declined' });
+    }
 
     // A mobile provider travels to the client, so the address that belongs in
     // the client's confirmation is their own — the same rule the app applies
@@ -82,19 +125,36 @@ serve(async (req) => {
     // and the itemised services need the add-on snapshots written alongside
     // the booking (claim_cart_booking_slots sets the money and the status in
     // the same UPDATE that queues this email, so both are final by now).
-    const [{ data: provider }, { data: addOns, error: addOnsError }] = await Promise.all([
+    // The provider's venue goes through booking_released_venue(), which returns
+    // it only once the provider's release setting allows (the same check the
+    // app's client_bookings view makes). An email can't be unsent, so it
+    // must never carry an address the client couldn't see in the app yet.
+    const [
+      { data: provider },
+      { data: addOns, error: addOnsError },
+      { data: venueRows, error: venueError },
+    ] = await Promise.all([
       supabase.from('providers').select('business_type').eq('id', booking.provider_id).maybeSingle(),
       supabase.from('booking_add_ons').select('name_snapshot, price_snapshot').eq('booking_id', booking.id).limit(50),
+      supabase.rpc('booking_released_venue', { p_booking_id: booking.id }),
     ]);
     if (addOnsError) throw addOnsError;
+    if (venueError) throw venueError;
 
     const isMobile = provider?.business_type === 'mobile';
-    const location = (isMobile ? booking.client_address : booking.provider_address_snapshot)
-      || 'Address shared on confirmation';
+    const releasedAddress: string | null =
+      (Array.isArray(venueRows) ? venueRows[0]?.address : null) ?? null;
+    const location = (isMobile ? booking.client_address : releasedAddress)
+      || 'Shared before your appointment';
 
     // Raw — the template escapes its own HTML and leaves the subject as plain
     // text, so a service called "Gel manicure & art" no longer reaches the
     // inbox as "Gel manicure &amp; art".
+    // A request the provider hasn't accepted yet gets "Request sent", not
+    // "Booking confirmed". When it's accepted, queue_booking_confirmation_email
+    // clears the stamps and this runs again for the confirmed email.
+    const isRequest = booking.status === 'pending';
+
     const { subject, html } = bookingConfirmationEmail({
       providerName: booking.provider_name_snapshot?.trim() || 'your provider',
       service: booking.service_name_snapshot || 'your appointment',
@@ -109,6 +169,9 @@ serve(async (req) => {
       amountPaid: Number(booking.amount_paid) || 0,
       paymentType: booking.payment_type ?? 'full',
       paymentStatus: booking.payment_status ?? 'pending',
+      isRequest,
+      isOutOfHours: booking.is_emergency_request === true,
+      clientEmail: booking.customer_email,
     });
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -116,6 +179,14 @@ serve(async (req) => {
       headers: {
         Authorization: `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        // The database retries a confirmation it never saw confirmed
+        // (retry_unsent_booking_confirmations), so the same booking can reach
+        // here more than once. Resend collapses repeats of one key within 24h,
+        // which is what stops a slow first attempt plus a retry becoming two
+        // emails.
+        // The request and the confirmed email are two different emails, so
+        // they need two keys, or the confirmed one would be swallowed.
+        'Idempotency-Key': `${isRequest ? 'booking-request' : 'booking-confirmation'}-${booking.id}`,
       },
       body: JSON.stringify({ from: FROM_EMAIL, to: booking.customer_email, subject, html }),
     });
@@ -131,6 +202,25 @@ serve(async (req) => {
         .eq('id', booking.id);
       console.error(`[booking-confirmation] ${booking.id} failed: ${errText}`);
       return json({ error: 'Send failed.' }, 502);
+    }
+
+    // Recorded here, by the only party that knows Resend accepted it, so the
+    // retry job can tell "never sent" from "sent". Without it, every booking
+    // was sent up to three times once emails got through again (2026-10-31):
+    // this half of a3ffa2fe (25 Sep) never reached main, though its retry job
+    // went live. A failed stamp is logged, not surfaced: the email did go out,
+    // and the idempotency key above covers a needless retry.
+    // Only while the booking is still in the state this email described: if
+    // the request was accepted while the request email was going out, the
+    // stamps now belong to the confirmed email, and stamping here would
+    // stop the retry job sending it.
+    const stamp = supabase
+      .from('bookings')
+      .update({ confirmation_email_sent_at: new Date().toISOString(), confirmation_email_error: null })
+      .eq('id', booking.id);
+    const { error: stampError } = await (isRequest ? stamp.eq('status', 'pending') : stamp.neq('status', 'pending'));
+    if (stampError) {
+      console.error(`[booking-confirmation] ${booking.id} sent but could not be recorded: ${stampError.message}`);
     }
 
     return json({ sent: true });

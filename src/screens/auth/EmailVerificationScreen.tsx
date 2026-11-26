@@ -5,13 +5,14 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import type { TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,12 +30,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { toUserMessage } from '../../utils/userFacingError';
+import { withTimeout } from '../../utils/withTimeout';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
+
+// How long the code screen waits for the sign-up answers to save before
+// opening the app anyway. The save is one small write and usually takes well
+// under a second; past this, the app opens from the sign-up details and the
+// save carries on in the background, so nobody sits on a spinning button.
+export const SIGNUP_SAVE_WAIT_MS = 5_000;
+const SIGNUP_SAVE_RETRY_LIMIT_MS = 30_000;
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
 
 export default function EmailVerificationScreen({ navigation, route }: Props) {
-  useAuth(); // keep context mounted so auth state is available
+  const { beginSignupVerification, completeVerifiedSignup, cancelSignupVerification } = useAuth();
+  // Leaving mid-check hands the sign-in back to the usual path. A no-op once
+  // the check has finished, which is when this screen normally closes.
+  useEffect(() => () => cancelSignupVerification(), [cancelSignupVerification]);
   const { isDarkMode, palette: t } = useTheme();
   const insets = useSafeAreaInsets();
   const email = route.params?.email ?? '';
@@ -42,10 +56,10 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-  // A short wait before the code can be resent, so a second tap doesn't
-  // send a second email while the first is still arriving.
-  const RESEND_WAIT_S = 30;
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
+  // Supabase rate-limits email sends. Keeping this at a minute prevents the
+  // UI from offering a resend the backend will immediately reject.
+  const RESEND_WAIT_S = 60;
   const [resendIn, setResendIn] = useState(RESEND_WAIT_S);
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -83,11 +97,13 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsVerifying(true);
+    beginSignupVerification();
     try {
       let session: Awaited<ReturnType<typeof verifySignupOtp>>;
       try {
         session = await verifySignupOtp(email, token);
       } catch {
+        cancelSignupVerification();
         Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
         return;
       }
@@ -123,15 +139,18 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         instagram:             meta['instagram']             ?? null,
         tiktok:                meta['tiktok']                ?? null,
         website:               meta['website']               ?? null,
-        hair_type:             meta['hair_type']             ?? null,
-        skin_type:             meta['skin_type']             ?? null,
+        hair_type:             toPickColumn(meta['hair_type']),
+        skin_type:             toPickColumn(meta['skin_type']),
         allergies:             meta['allergies']             ?? [],
         skin_concerns:         meta['skin_concerns']         ?? [],
-        style_vibe:            meta['style_vibe']            ?? null,
+        style_vibe:            toPickColumn(meta['style_vibe']),
         treatment_history:     meta['treatment_history']     ?? [],
         medical_notes:         meta['medical_notes']         ?? null,
         photography_consent:   meta['photography_consent']   ?? true,
         service_locations:     meta['service_locations']     ?? [],
+        // A client's "Where are you based?" — the column Account > Your area
+        // edits, so checkout's mobile-provider area is filled from day one.
+        client_area:           meta['client_area']           ?? null,
         location_text:         meta['location']              ?? null,
         maintenance_frequency: meta['maintenance_frequency'] ?? null,
         referral_source:       meta['referral_source']       ?? null,
@@ -148,31 +167,63 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         languages_spoken:      meta['languages_spoken']        ?? [],
         specialties:           meta['specialties']             ?? [],
         price_range:               meta['price_range']               ?? null,
+        price_bands:               meta['price_bands']               ?? [],
         preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
         preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
         external_booking_url:      meta['external_booking_url']      ?? null,
       };
 
+      let saved: Awaited<ReturnType<typeof upsertVerifiedUserProfile>> | null = null;
       try {
-        await upsertVerifiedUserProfile(profilePayload);
+        saved = await withTimeout(
+          upsertVerifiedUserProfile(profilePayload),
+          SIGNUP_SAVE_WAIT_MS,
+          'Sign-up profile save',
+        );
       } catch (upsertError) {
         // This is the account's only chance to save its signup answers — the
         // auth user already exists at this point regardless of outcome, and
         // nothing later retries it. Silently swallowing this (as before,
         // logger.warn only) left the user signed in with a blank profile and
-        // no indication anything went wrong. Retry once in place; only
-        // surface failure to the user if the retry also fails.
-        logger.error('Profile upsert failed, retrying once:', upsertError);
-        try {
-          await upsertVerifiedUserProfile(profilePayload);
-        } catch (retryError) {
-          logger.error('Profile upsert retry also failed:', retryError);
-          Alert.alert(
-            'Almost there',
-            "Your account was created, but we couldn't save some of your details just now. " +
-            'You can fill in anything missing from Settings.'
-          );
-        }
+        // no indication anything went wrong. Retry once, in the background so
+        // the app opens now. It opens the usual way, and AuthContext keeps
+        // re-reading the row until it lands (PROFILE_RETRY_DELAYS_MS); only
+        // tell the user if the retry also fails.
+        logger.error('Profile save slow or failed — opening the app and retrying in the background:', upsertError);
+        withTimeout(upsertVerifiedUserProfile(profilePayload), SIGNUP_SAVE_RETRY_LIMIT_MS, 'Sign-up profile save retry')
+          .catch((retryError) => {
+            logger.error('Profile upsert retry also failed:', retryError);
+            Alert.alert(
+              'Almost there',
+              "Your account was created, but we couldn't save some of your details just now. " +
+              'You can fill in anything missing from Settings.'
+            );
+          });
+      }
+
+      // An account pending deletion goes the usual way, which holds it at the
+      // reactivation prompt; so does a save that didn't land in time.
+      if (saved && !saved.deletionRequested) {
+        completeVerifiedSignup({
+          id: session.userId,
+          name: profilePayload.name,
+          email: profilePayload.email,
+          phone: profilePayload.phone,
+          dob: dob || '',
+          accountType: saved.role === 'provider' ? 'provider' : 'user',
+          loginMethod: 'email',
+          hasClientProfile: saved.hasClientProfile,
+          businessName: profilePayload.business_name ?? undefined,
+          businessEmail: profilePayload.business_email ?? undefined,
+          gender: profilePayload.gender,
+          has_kids: profilePayload.has_kids,
+          service_interests: profilePayload.service_interests,
+          clientArea: profilePayload.client_area,
+        }, session.authSession);
+      } else {
+        // The session is valid, but the row isn't confirmed (or needs the
+        // reactivation prompt). The usual sign-in path handles both.
+        cancelSignupVerification();
       }
 
       // Non-blocking: the account exists either way and nothing here should
@@ -210,6 +261,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         }).catch(() => {});
       }
     } catch (err: any) {
+      cancelSignupVerification();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       logger.error('OTP verification error:', err);
       Alert.alert('Error', 'Something went wrong. Please try again.');
@@ -227,9 +279,13 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       inputRefs.current[0]?.focus();
       setResendIn(RESEND_WAIT_S);
       Alert.alert('Sent!', 'A new code has been sent to your email.');
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', "Couldn't resend the code. Please try again.");
+      Alert.alert('Could not resend code', toUserMessage(
+        error,
+        'Please wait a minute before trying again.',
+        'EmailVerificationScreen.resendSignupOtp',
+      ));
     } finally {
       setResending(false);
     }
@@ -237,7 +293,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 32 }]}>

@@ -10,6 +10,7 @@ import {
   getUserProfileById,
   upgradeUserToProvider,
   updateUserContactDetails,
+  createSocialProfileIfMissing,
   updateClientProfileFields,
   cancelAccountDeletionRequest,
   deleteClientAccountProfile,
@@ -19,14 +20,30 @@ import {
   signOutCurrentSession,
   subscribeToAuthStateChanges,
   getProviderOwnershipForUserId,
+  becomeFullMember as becomeFullMemberRpc,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { resetExploreSeen } from '../utils/exploreSeen';
+import { STORAGE_KEYS as LOCATION_STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
+import { momentsMemoryStorageKey } from '../features/social/momentsMemory';
+import { useSocialSettingsStore } from '../stores/useSocialSettingsStore';
 import { withTimeout } from '../utils/withTimeout';
+import { toPickColumn } from '../features/beauty-profile/pickList';
+import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 import type { ProviderBookingMode } from '../types/database';
+import { accountDeletionError } from '../utils/accountDeletionError';
+import { revokeAppleSignInForDeletion, shouldRevokeAppleSignIn } from '../services/appleSignInRevocation';
 
 export type AccountType = 'user' | 'provider';
+
+/** Gaps between background retries of a profile load that failed. */
+const PROFILE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
+// How long a sign-up code check may hold back the normal sign-in. If the
+// screen never finishes (a stalled request, the person backing out), the next
+// sign-in after this is handled as usual rather than ignored.
+export const SIGNUP_VERIFICATION_HOLD_MS = 20_000;
 
 /** Whether the once-per-session "which provider profile do I own?" lookup has
  *  produced an answer. 'failed' is deliberately distinct from a 'resolved'
@@ -66,15 +83,18 @@ export interface ClientProfileData {
   dobMonth: string;
   dobYear: string;
   hairType: string;
-  skinType: string;
+  skinType: string[];
   skinConcerns: string[];
-  styleVibe: string;
+  styleVibe: string[];
   allergies: string[];
   treatmentHistory: string[];
   medicalNotes: string;
   photographyConsent: boolean;
   serviceInterests: string[];
   serviceLocations: string[];
+  /** "Where are you based?" from sign-up — users.client_area, the same column
+   *  Account > Your area edits. Omitted or blank leaves the column alone. */
+  clientArea?: string;
   maintenanceFrequency: string;
   referralSource: string;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -105,19 +125,30 @@ interface AuthContextType {
    *  null for an account with no provider hat. Resolved with myProviderId,
    *  and from the sign-up answer before the providers row exists. */
   myBookingMode: ProviderBookingMode | null;
+  /** Link-only → full member, one way, on the server only. Does NOT flip
+   *  myBookingMode: the conversion screen lives inside the link-only tabs and
+   *  would unmount mid-animation, so it calls enterFullMemberMode() when the
+   *  provider taps through. Throws on failure; the caller shows the error. */
+  becomeFullMember: () => Promise<void>;
+  /** Swaps the provider tabs for the full set once becomeFullMember() has
+   *  succeeded. Unmounts every link-only screen, including its caller. */
+  enterFullMemberMode: () => void;
   switchMode: () => Promise<void>;
-  upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
+  upgradeToProvider: (businessName: string, businessEmail: string | null, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
     yearsExperience?: string;
-    priceRange?: string; externalBookingUrl?: string; preferredContactMethods?: string[];
+    priceRange?: string; priceBands?: string[]; externalBookingUrl?: string; preferredContactMethods?: string[];
     accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
     preferredPaymentMethods?: string[];
     referralSource?: string;
   }) => Promise<void>;
   addClientProfile: (profileData: ClientProfileData) => Promise<void>;
   login: (userData?: UserData) => void;
+  beginSignupVerification: () => void;
+  completeVerifiedSignup: (userData: UserData, verifiedSession: Session) => void;
+  cancelSignupVerification: () => void;
   logout: () => Promise<void>;
   deleteClientProfile: () => Promise<void>;
   deleteProviderProfile: () => Promise<void>;
@@ -129,18 +160,6 @@ interface AuthContextType {
   isReactivating: boolean;
   reactivateAccount: () => Promise<void>;
   declineReactivation: () => Promise<void>;
-}
-
-/** Turns a failed delete_client_profile/delete_provider_profile RPC result
- *  into a message worth showing the user (as opposed to a raw error code). */
-function accountDeletionError(data: any): Error {
-  if (data?.error === 'upcoming_bookings') {
-    const count = data?.count ?? 0;
-    return new Error(
-      `You have ${count} upcoming appointment${count === 1 ? '' : 's'}. Please cancel or complete ${count === 1 ? 'it' : 'them'} first.`
-    );
-  }
-  return new Error(data?.error || 'Could not delete your account.');
 }
 
 /** Best-effort cleanup of a user's own <uid>/ folder in a storage bucket —
@@ -218,6 +237,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // provider would keep the null they were resolved to at login.
   }, [user?.id, user?.accountType]);
 
+  const becomeFullMember = useCallback(async () => {
+    try {
+      await becomeFullMemberRpc();
+    } catch (error) {
+      // The RPC refuses when the account already takes bookings through
+      // CERVICED — which is what a second call sees after a first one landed
+      // server-side but never reached the app (a dropped response, a retry).
+      // That's the outcome they asked for, not a failure: ask the DB what's
+      // true and only rethrow if they really are still link-only.
+      if (!user?.id) throw error;
+      const { bookingMode } = await getProviderOwnershipForUserId(user.id);
+      if (bookingMode !== 'cerviced') throw error;
+    }
+  }, [user?.id]);
+
+  const enterFullMemberMode = useCallback(() => {
+    setMyBookingMode('cerviced');
+  }, []);
+
   // Mirrors activeMode for applyMode's noop check without pulling activeMode
   // into that callback's deps (which would otherwise force it to be
   // re-created — and re-registered via registerModeSetter — on every switch).
@@ -244,7 +282,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The auth subscription is intentionally installed once. Keep the latest
   // profile loader in a ref so it does not close over stale role-resolution
   // logic without repeatedly tearing down the Supabase subscription.
-  const loadUserProfileRef = useRef<(activeSession: Session) => Promise<void>>(async () => {});
+  const loadUserProfileRef = useRef<(activeSession: Session, options?: { isRetry?: boolean }) => Promise<void>>(async () => {});
+  const userRef = useRef(user);
+  userRef.current = user;
+  // Launch only: the first profile load may open the app from the saved
+  // profile copy instead of waiting on the server (authProfileSnapshot.ts).
+  const startupRestorePendingRef = useRef(true);
+  // True while `user` came from a users-row read this session, so only a
+  // confirmed profile is ever saved. A metadata fallback never is, and nor is
+  // the restored copy itself: re-saving it would renew its date on every
+  // launch and its 30-day limit would never apply.
+  const profileConfirmedRef = useRef(false);
+  // When the sign-up code check started, or null when none is in progress.
+  const signupVerificationRef = useRef<number | null>(null);
+  const authSessionRef = useRef<Session | null>(null);
+
+  // Keep the saved copy current with every confirmed change to `user`,
+  // including edits made in the app after launch.
+  useEffect(() => {
+    if (isLoggedIn && user && profileConfirmedRef.current) {
+      void saveAuthProfileSnapshot(user);
+    }
+  }, [isLoggedIn, user]);
+
+  // Signed in, but the users row couldn't be read, so the app is running on
+  // session metadata with hats unknown. Nothing else would read it again until
+  // the next launch, leaving a provider who has a client account being offered
+  // a new one. Keep trying in the background, and again on every resume.
+  const profileUnconfirmed = isLoggedIn && !!user && user.hasClientProfile === undefined;
+  useEffect(() => {
+    if (!profileUnconfirmed || !session) return;
+    let stopped = false;
+    let inFlight = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tryAgain = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      await loadUserProfileRef.current(session, { isRetry: true }).catch(() => {});
+      inFlight = false;
+    };
+    const schedule = (attempt: number) => {
+      const delay = PROFILE_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) return;
+      timer = setTimeout(() => {
+        void tryAgain().then(() => {
+          if (!stopped) schedule(attempt + 1);
+        });
+      }, delay);
+    };
+    schedule(0);
+    const appStateSub = AppState.addEventListener('change', state => {
+      if (state === 'active') void tryAgain();
+    });
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      appStateSub.remove();
+    };
+  }, [profileUnconfirmed, session]);
 
   // Expo Go can't receive remote push (dropped in SDK 53) — mirror notification
   // rows as local notifications instead so content is still visible while
@@ -276,6 +371,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // so we only use it as the single source of truth — no separate getSession() call.
     const unsubscribeAuth = subscribeToAuthStateChanges(async (event, session) => {
       logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
+      authSessionRef.current = session;
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
         profileLoadVersion.current += 1;
@@ -311,10 +407,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // for the latter so the user isn't confused why they're on the login screen.
       if (event === 'SIGNED_OUT') {
         profileLoadVersion.current += 1;
+        signupVerificationRef.current = null;
         if (!intentionalLogoutRef.current) {
           Alert.alert('Signed out', "You've been signed out. Please sign in again.");
         }
         intentionalLogoutRef.current = false;
+        // Signed out here or by the server (password changed elsewhere, token
+        // revoked): the saved profile copy goes with the session.
+        profileConfirmedRef.current = false;
+        void clearAuthProfileSnapshot();
         setUser(null);
         setIsLoggedIn(false);
         setSession(null);
@@ -324,9 +425,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(session);
       if (session?.user) {
+        // verifyOtp emits SIGNED_IN before the verification screen has saved
+        // the signup answers. Let that screen finish the write and open the app
+        // from its confirmed data, without racing an extra profile read.
+        const heldSince = signupVerificationRef.current;
+        if (event === 'SIGNED_IN' && heldSince !== null && Date.now() - heldSince < SIGNUP_VERIFICATION_HOLD_MS) {
+          return;
+        }
         await loadUserProfileRef.current(session);
       } else {
         profileLoadVersion.current += 1;
+        // Launch found no session (or it couldn't be refreshed), so the next
+        // profile load is a sign-in, which waits for the server rather than
+        // any saved copy, and the copy of whoever was signed in goes.
+        startupRestorePendingRef.current = false;
+        profileConfirmedRef.current = false;
+        void clearAuthProfileSnapshot();
         setUser(null);
         setIsLoggedIn(false);
         setIsLoading(false);
@@ -340,9 +454,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const loadUserProfile = useCallback(async (session: Session) => {
+  const loadUserProfile = useCallback(async (session: Session, options?: { isRetry?: boolean }) => {
     const version = ++profileLoadVersion.current;
     const isCurrent = () => version === profileLoadVersion.current;
+    const isRetry = options?.isRetry === true;
+    // Set when launch opened the app from the saved profile copy.
+    let shownFromSnapshot = false;
+    // A failed read must never replace a profile that's already on screen with
+    // session metadata, which can't say whether a provider has a client hat.
+    const keepsShownProfile = () => {
+      const current = userRef.current;
+      return isRetry
+        || shownFromSnapshot
+        || (current?.id === session.user.id && typeof current.hasClientProfile === 'boolean');
+    };
+    // Consumed up front so that only the very first load after launch, with
+    // any outcome, can ever use the copy.
+    const isLaunchRestore = startupRestorePendingRef.current;
+    startupRestorePendingRef.current = false;
     try {
       logger.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
 
@@ -357,12 +486,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const meta = session.user.user_metadata as Record<string, any>;
 
+      // Launch: open the app straight away from the last confirmed profile,
+      // then refresh it from the server below. The first request after the
+      // API has been idle is the slowest one, and this used to hold the
+      // loading screen for it. Any later load (sign-in, reactivation, hat
+      // changes) still waits for the server as before.
+      if (isLaunchRestore) {
+        const saved = await readAuthProfileSnapshot<UserData>(session.user.id);
+        if (!isCurrent()) return;
+        if (saved) {
+          const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
+          if (!isCurrent()) return;
+          setActiveMode(resolveRestoredMode(savedMode, saved.accountType, saved.hasClientProfile === true));
+          profileConfirmedRef.current = false;
+          setUser(saved);
+          setIsLoggedIn(true);
+          setIsLoading(false);
+          shownFromSnapshot = true;
+          logger.log('[AuthContext] opened from saved profile — refreshing in background');
+        }
+      }
+
       let profile = null;
       let profileError: Error | null = null;
       try {
         profile = await withTimeout(
           getUserProfileById(session.user.id),
-          8_000,
+          // The short limit is there so sign-in isn't held on the loading
+          // screen. A retry holds nothing up, and a slow answer is still an answer.
+          isRetry ? 30_000 : 8_000,
           'Profile restore',
         );
       } catch (err: any) {
@@ -371,11 +523,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!isCurrent()) return;
 
+      if (profileError && keepsShownProfile()) {
+        // Already showing a real profile, which is better than session
+        // metadata. Keep it; the next launch or sign-in tries again.
+        logger.warn('[AuthContext] profile refresh failed — keeping shown profile:', profileError.message);
+        registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
+        return;
+      }
+
       if (profileError) {
         // Transient failure — network, 401 from expired token before auto-refresh
         // completes, RLS policy, etc. Session is valid; keep the user logged in
         // using whatever is known from session metadata.
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
+        profileConfirmedRef.current = false;
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         if (!isCurrent()) return;
@@ -401,6 +562,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // A first Apple or Google sign-in has a verified session and no users
+      // row, and nothing else creates one. bookings.user_id needs it, as does
+      // every profile save. The Before You Can Book checklist then asks for
+      // whatever the sign-in didn't share. Failing here falls through to the
+      // session-only path below, whose retry comes back through this.
+      const signedInWith = session.user.app_metadata?.['provider'];
+      if (!profile && session.user.email && signedInWith && signedInWith !== 'email') {
+        try {
+          await withTimeout(
+            createSocialProfileIfMissing({
+              id: session.user.id,
+              email: session.user.email,
+              loginMethod: signedInWith,
+              nameFromSession: meta?.['full_name'] ?? meta?.['name'],
+            }),
+            8_000,
+            'Profile create',
+          );
+          profile = await withTimeout(getUserProfileById(session.user.id), 8_000, 'Profile restore');
+        } catch (err: any) {
+          logger.warn('[AuthContext] could not create the profile row for a', signedInWith, 'sign-in:', err?.message);
+        }
+        if (!isCurrent()) return;
+      }
+
       if (profile) {
         logger.log('[AuthContext] profile found — role:', profile.role);
 
@@ -410,6 +596,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // but isLoggedIn stays false so RootNavigation never shows the main app.
         if (profile.deletion_requested_at) {
           logger.log('[AuthContext] account pending deletion — holding for reactivation prompt');
+          profileConfirmedRef.current = false;
+          void clearAuthProfileSnapshot();
           setUser({
             id: profile.id,
             name: profile.name ?? '',
@@ -460,16 +648,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, restoredMode).catch(() => {});
         }
         if (!isCurrent()) return;
+        profileConfirmedRef.current = true;
         setUser(userData);
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
         registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
+      } else if (keepsShownProfile()) {
+        // RLS answers a read sent without a valid token with zero rows, which
+        // looks exactly like a missing row, so this isn't proof the row is gone.
+        logger.warn('[AuthContext] profile read returned no row — keeping shown profile');
       } else {
         // PGRST116: no profile row yet.
         // (a) New signup race — upsert in EmailVerificationScreen hasn't completed.
         //     user_metadata carries name/role from signUp call.
         // (b) Missing row for an existing account.
-        // In both cases: session is valid, keep the user logged in.
+        // (c) A read sent without a valid token, which RLS answers with zero rows.
+        // In all cases: session is valid, keep the user logged in. The retry
+        // effect reads the row again.
+        profileConfirmedRef.current = false;
+        void clearAuthProfileSnapshot();
         if (meta?.['name']) {
           logger.log('[AuthContext] no profile row — signup race, using metadata fallback');
           const role = (meta['role'] as AccountType) ?? 'user';
@@ -509,6 +706,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Unexpected JS error. Don't sign the user out — the session is still valid.
       // Fall back to session metadata so they stay in the app.
       logger.error('[AuthContext] unexpected error in loadUserProfile:', error);
+      // Already showing a real profile: keep it rather than downgrading
+      // to session metadata.
+      if (keepsShownProfile()) return;
+      // The metadata user below must never be saved over a real copy.
+      profileConfirmedRef.current = false;
       try {
         const meta = session.user.user_metadata as Record<string, any>;
         const role = (meta?.['role'] as AccountType) ?? 'user';
@@ -592,13 +794,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Updates the DB role, local state, and activeMode all in one call.
   const upgradeToProvider = useCallback(async (
     businessName: string,
-    businessEmail: string,
+    businessEmail: string | null,
     extras?: {
       businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
       dobDay?: string; dobMonth?: string; dobYear?: string;
       serviceInterests?: string[]; serviceLocations?: string[];
       yearsExperience?: string;
-      priceRange?: string; externalBookingUrl?: string; preferredContactMethods?: string[];
+      priceRange?: string; priceBands?: string[]; externalBookingUrl?: string; preferredContactMethods?: string[];
       accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
       preferredPaymentMethods?: string[];
       referralSource?: string;
@@ -610,7 +812,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...user,
       accountType: 'provider',
       businessName,
-      businessEmail,
+      ...(businessEmail ? { businessEmail } : {}),
     };
     setUser(upgraded);
     setActiveMode('provider');
@@ -628,19 +830,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
       ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
       : null;
+    // Only written when answered, so a skipped question can't blank an area
+    // the account already saved from Account > Your area.
+    const clientArea = profileData.clientArea?.trim() || null;
     try {
       await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
-      hair_type: profileData.hairType || null,
-      skin_type: profileData.skinType || null,
+      hair_type: toPickColumn(profileData.hairType),
+      skin_type: toPickColumn(profileData.skinType),
       skin_concerns: profileData.skinConcerns,
-      style_vibe: profileData.styleVibe || null,
+      style_vibe: toPickColumn(profileData.styleVibe),
       allergies: profileData.allergies,
       treatment_history: profileData.treatmentHistory,
       medical_notes: profileData.medicalNotes || null,
       photography_consent: profileData.photographyConsent,
       service_interests: profileData.serviceInterests,
       service_locations: profileData.serviceLocations,
+      ...(clientArea ? { client_area: clientArea } : {}),
       maintenance_frequency: profileData.maintenanceFrequency || null,
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
@@ -651,7 +857,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
     } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
-    setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
+    setUser({ ...user, ...(dob ? { dob } : {}), ...(clientArea ? { clientArea } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   }, [user]);
@@ -659,6 +865,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // No-op: only called from AuthScreen which is not in the navigation stack.
   // All real auth goes through onAuthStateChange → loadUserProfile.
   const login = useCallback((_userData?: UserData) => {}, []);
+
+  const beginSignupVerification = useCallback(() => {
+    signupVerificationRef.current = Date.now();
+  }, []);
+
+  const completeVerifiedSignup = useCallback((userData: UserData, verifiedSession: Session) => {
+    signupVerificationRef.current = null;
+    if (verifiedSession.user.id !== userData.id || !verifiedSession.user.email_confirmed_at) {
+      // Shouldn't happen. Sign in the usual way rather than show an error to
+      // someone whose account is fine.
+      logger.error('[AuthContext] verified signup session does not match the saved profile — loading it instead');
+      void loadUserProfileRef.current(verifiedSession);
+      return;
+    }
+    profileLoadVersion.current += 1; // discard a profile read started before the upsert
+    startupRestorePendingRef.current = false;
+    profileConfirmedRef.current = true;
+    authSessionRef.current = verifiedSession;
+    setSession(verifiedSession);
+    const mode = userData.accountType === 'provider' ? 'provider' : 'client';
+    setActiveMode(mode);
+    void AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, mode).catch(() => {});
+    setUser(userData);
+    setIsLoggedIn(true);
+    setIsLoading(false);
+    registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
+  }, []);
+
+  const cancelSignupVerification = useCallback(() => {
+    // Nothing held: the check already finished, or it ran past the hold and
+    // the sign-in went through the usual way. Loading again would only repeat it.
+    if (signupVerificationRef.current === null) return;
+    signupVerificationRef.current = null;
+    const currentSession = authSessionRef.current;
+    if (currentSession?.user?.email_confirmed_at) {
+      void loadUserProfileRef.current(currentSession);
+    }
+  }, []);
 
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
@@ -670,6 +914,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (
       partial.name !== undefined
       || partial.phone !== undefined
+      || partial.dob !== undefined
       || partial.clientAddress !== undefined
       || partial.clientArea !== undefined
     ) {
@@ -677,7 +922,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: updated.name,
         phone: updated.phone ?? '',
         // Only written when this call is actually changing it, so an unrelated
-        // updateUser({ name }) can't wipe a saved address.
+        // updateUser({ name }) can't wipe a saved address or date of birth.
+        ...(partial.dob !== undefined ? { dob: partial.dob || null } : {}),
         ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
         ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
       });
@@ -689,16 +935,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Mark as intentional so the SIGNED_OUT event handler suppresses the alert
     intentionalLogoutRef.current = true;
     const loggedOutUserId = user?.id;
+    profileConfirmedRef.current = false;
     // Clear local state immediately — navigator switches to auth screens right away
     setUser(null);
     setIsLoggedIn(false);
     setSession(null);
     setActiveMode('client');
     // Clear all user-specific AsyncStorage keys so they don't bleed into the next account
+    resetExploreSeen();
     await AsyncStorage.multiRemove([
       '@app_notifications',
       '@user_learning_data',
       ...(loggedOutUserId ? [`@provider_reg_data_${loggedOutUserId}`] : []),
+      // Which providers this account was asked to recommend — a list of
+      // places they've booked, so it doesn't stay on a handed-on phone.
+      ...(loggedOutUserId ? [momentsMemoryStorageKey(loggedOutUserId)] : []),
       'bookmarked_videos',
       'saved_portfolio_items',
       'planner_events',
@@ -708,7 +959,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // next account that logs in on this device.
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
+      // Which Explore photos this phone has shown — browsing history.
+      STORAGE_KEYS.EXPLORE_SEEN,
+      // Home's Near You choice on this phone. It outranks the account's Your
+      // area, so leaving it would measure the next account from this one's
+      // pick (see planClientLocation).
+      LOCATION_STORAGE_KEYS.MANUAL_LOCATION,
+      LOCATION_STORAGE_KEYS.NEAR_YOU_USE_DEVICE,
     ]).catch(() => {});
+    useSocialSettingsStore.getState().reset();
+    await clearAuthProfileSnapshot();
     await unregisterPushToken().catch(() => {});
     // Biometric enrollment intentionally survives logout — the entire point
     // of enabling Face ID is to skip password re-entry on the NEXT sign-in,
@@ -766,6 +1026,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearStorageFolder('avatars', user.id);
 
     if ((data as any).full_account_deleted) {
+      // The session is still valid here (deletion only stamps the account), so
+      // the revoke call can prove who is asking. Never throws.
+      if (shouldRevokeAppleSignIn(session?.user)) await revokeAppleSignInForDeletion();
       await logout();
       return;
     }
@@ -791,6 +1054,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
 
     if ((data as any).full_account_deleted) {
+      // The session is still valid here (deletion only stamps the account), so
+      // the revoke call can prove who is asking. Never throws.
+      if (shouldRevokeAppleSignIn(session?.user)) await revokeAppleSignInForDeletion();
       await logout();
       return;
     }
@@ -802,14 +1068,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus, myBookingMode,
-    switchMode, upgradeToProvider, addClientProfile, login, logout,
+    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember, enterFullMemberMode,
+    switchMode, upgradeToProvider, addClientProfile, login,
+    beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus, myBookingMode,
-    switchMode, upgradeToProvider, addClientProfile, login, logout,
+    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember, enterFullMemberMode,
+    switchMode, upgradeToProvider, addClientProfile, login,
+    beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   ]);

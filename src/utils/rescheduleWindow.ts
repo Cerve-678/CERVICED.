@@ -122,3 +122,19 @@ export function parseRescheduleRequestToken(token: string): [date: string, time:
   const i = token.indexOf(' ');
   return i < 0 ? [token, ''] : [token.slice(0, i), token.slice(i + 1).trim()];
 }
+
+/**
+ * The last day a booking can move to when its provider allows only the same
+ * calendar month (booking_policies.rescheduleWithin 'same_month', enforced by
+ * request_reschedule_own_booking). Local midnight of that day.
+ */
+export function sameMonthLastDay(currentDate: string): Date | null {
+  const booked = toLocalDate(currentDate);
+  if (Number.isNaN(booked.getTime())) return null;
+  return new Date(booked.getFullYear(), booked.getMonth() + 1, 0);
+}
+
+/** Whether `date` ("YYYY-MM-DD") is in the same calendar month as the booking. */
+export function isSameMonth(date: string, currentDate: string): boolean {
+  return date.slice(0, 7) === currentDate.slice(0, 7);
+}

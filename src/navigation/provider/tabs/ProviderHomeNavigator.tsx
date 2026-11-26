@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderHomeScreen from '../../../screens/provider/ProviderHomeScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
@@ -9,7 +10,6 @@ import ProviderConversationScreen from '../../../screens/provider/ProviderConver
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
@@ -18,8 +18,10 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
+import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import LinkOnlyHomeScreen from '../../../screens/provider/LinkOnlyHomeScreen';
 import LinkOnlyAnalyticsScreen from '../../../screens/provider/LinkOnlyAnalyticsScreen';
+import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
 import ProviderBeccaNavigator from './ProviderBeccaNavigator';
 import { ProviderHomeStackParamList } from '../../types';
 import { useTranslation } from '../../../i18n';
@@ -50,6 +52,11 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
         component={LinkOnlyAnalyticsScreen}
         options={{ headerShown: false }}
       />
+      <ProviderHomeStack.Screen
+        name="FullCervicedFeatures"
+        component={FullCervicedFeaturesScreen}
+        options={{ headerShown: false }}
+      />
       {/* Link-only providers have no Becca tab, so Becca is pushed from
           their Home as its own stack. */}
       <ProviderHomeStack.Screen
@@ -60,6 +67,12 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
       <ProviderHomeStack.Screen
         name="ProviderHomeMain"
         component={ProviderHomeScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="AccountHolderDetails"
+        component={AdminCreateAccountScreen}
         options={{ headerShown: false }}
       />
 
@@ -132,6 +145,12 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
       />
 
       <ProviderHomeStack.Screen
+        name="Automations"
+        component={ProviderAutomationsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
         name="ProviderConversation"
         component={ProviderConversationScreen}
         options={{ headerShown: false, presentation: 'card' }}
@@ -161,14 +180,6 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
           name="Notifications"
           component={NotificationsScreen}
           options={{ headerShown: false }}
-        />
-        <ProviderHomeStack.Screen
-          name="DevSettings"
-          component={DevSettingsScreen}
-          options={{
-            headerShown: false,
-            presentation: 'modal',
-          }}
         />
         <ProviderHomeStack.Screen
           name="ProviderSchedule"

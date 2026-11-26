@@ -3,6 +3,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import ProviderInboxScreen from '../screens/provider/ProviderInboxScreen';
 import { getProviderConversations } from '../services/databaseService';
 
+// Gesture Handler 3's swipeable installs native bindings as it mounts, and these
+// tests never swipe, so the row just renders its content. Its props are kept so
+// a test can check how each row is set up.
+const mockSwipeableProps: { childrenContainerStyle?: { backgroundColor?: string } }[] = [];
+jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => ({
+  __esModule: true,
+  default: ({ children, ...props }: { children: React.ReactNode }) => {
+    mockSwipeableProps.push(props);
+    return children;
+  },
+}));
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: any) => require('react').useEffect(callback, [callback]),
 }));
@@ -28,6 +39,7 @@ const navigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSwipeableProps.length = 0;
   (getProviderConversations as jest.Mock).mockResolvedValue(conversations);
 });
 
@@ -59,4 +71,33 @@ it('shows a load failure instead of an empty or misclassified inbox', async () =
   await waitFor(() => expect(screen.getByText("Couldn't load your inbox")).toBeTruthy());
   expect(screen.queryByText('No client messages yet')).toBeNull();
   errorLog.mockRestore();
+});
+
+it('gives each row a solid background so Mark read and Reply stay hidden until swiped', async () => {
+  render(<ProviderInboxScreen navigation={navigation} route={{ params: { initialFilter: 'enquiries' } }} />);
+  await screen.findByText('Visitor');
+  expect(mockSwipeableProps.length).toBeGreaterThan(0);
+  for (const props of mockSwipeableProps) {
+    expect(props.childrenContainerStyle?.backgroundColor).toBe('#FFFFFF');
+  }
+});
+
+it('filters the open tab by read state and name, and offers a way out when nothing matches', async () => {
+  render(<ProviderInboxScreen navigation={navigation} route={{ params: { initialFilter: 'enquiries' } }} />);
+  await screen.findByText('Visitor');
+
+  fireEvent.press(screen.getByText('Read'));
+  expect(screen.queryByText('Visitor')).toBeNull();
+  expect(screen.getByText('Nothing matches')).toBeTruthy();
+
+  fireEvent.press(screen.getByText('Clear filters'));
+  expect(screen.getByText('Visitor')).toBeTruthy();
+
+  fireEvent.press(screen.getByText('Unread'));
+  expect(screen.getByText('Visitor')).toBeTruthy();
+
+  fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'nobody');
+  expect(screen.queryByText('Visitor')).toBeNull();
+  fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'vis');
+  expect(screen.getByText('Visitor')).toBeTruthy();
 });

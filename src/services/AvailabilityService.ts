@@ -12,13 +12,16 @@ import {
   getMyUpcomingBookedSpans,
   getAvailabilityWeeklyScheduleRows,
   getProviderBusySpans,
-  getProviderBookingWindowDays,
+  getProviderBookingHorizon,
+  getServicesOpenWithin,
   resolveActiveProviderIdByDisplayName,
 } from './databaseService';
 import type { ClientBookedSpan } from './databaseService';
 import type { BookingConflictResult } from '../types/booking';
 import { logger } from '../utils/logger';
+import { bookableDayCount, isBeyondHorizon, type BookingHorizonSettings } from '../utils/bookingHorizon';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
+import { formatLatestStart, latestStartMinutes, startsTooLate } from '../utils/latestStart';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -584,6 +587,19 @@ const fetchBufferByServiceId = async (
   return map;
 };
 
+// Each service's latest start in minutes (null = none). Same cached rows as
+// fetchBufferByServiceId, so asking for both costs one query, not two.
+const fetchLatestStartByServiceId = async (
+  serviceIds: (string | null | undefined)[],
+): Promise<Map<string, number | null>> => {
+  const distinct = Array.from(new Set(serviceIds.filter((id): id is string => !!id)));
+  const map = new Map<string, number | null>();
+  if (distinct.length === 0) return map;
+  const data = await getAvailabilityServiceBufferRows(distinct);
+  for (const row of data) map.set(row.id, latestStartMinutes(row.latest_start_time));
+  return map;
+};
+
 // Resolve a provider identifier to its UUID. Callers may pass either the
 // real provider UUID (used as-is, no lookup) or a display name (looked up
 // by exact case-insensitive match) — every entry point below accepts both,
@@ -725,13 +741,7 @@ async function findBackToBackSlotsForDate(
 
   const settings = bundle.settings;
 
-  const windowDays = settings?.booking_window_days ?? 60;
-  if (windowDays > 0) {
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + windowDays);
-    maxDate.setHours(23, 59, 59, 999);
-    if (dateObj > maxDate) return null;
-  }
+  if (isBeyondHorizon(settings, date)) return null;
 
   const intervalMins = settings?.slot_interval_mins ?? 60;
   const bufferMins = settings?.buffer_mins ?? 0;
@@ -754,13 +764,14 @@ async function findBackToBackSlotsForDate(
   // services — the existing bookings' padding is baked into their spans.
   const busySpans = await fetchBusySpans(providerId, date, date);
 
-  const bufferByServiceId = await fetchBufferByServiceId(
-    services.map(s => s.serviceId),
-    bufferMins
-  );
+  const [bufferByServiceId, latestByServiceId] = await Promise.all([
+    fetchBufferByServiceId(services.map(s => s.serviceId), bufferMins),
+    fetchLatestStartByServiceId(services.map(s => s.serviceId)),
+  ]);
 
   const chainDurations = services.map(s => (s.duration ? parseDurationToMinutes(s.duration) : 60));
   const chainBuffers = services.map(s => bufferByServiceId.get(s.serviceId) ?? { before: 0, after: bufferMins });
+  const chainLatest = services.map(s => latestByServiceId.get(s.serviceId) ?? null);
 
   for (const window of windows) {
     const windowEnd = parse24HTimeToMinutes(window.end_time);
@@ -776,6 +787,10 @@ async function findBackToBackSlotsForDate(
         const start = i === 0 ? cursor : cursor + chainBuffers[i - 1]!.after + chainBuffers[i]!.before;
         const end = start + chainDurations[i]!;
         if (end > windowEnd) { fits = false; break; }
+        // Each service in the chain answers to its own latest start, so a
+        // colour that must start by 2pm can't be pushed past it by the
+        // service booked before it.
+        if (startsTooLate(start, chainLatest[i]!)) { fits = false; break; }
         chain.push({ start, end });
         cursor = end;
       }
@@ -829,6 +844,31 @@ export const AvailabilityService = {
    */
   async resolveProvider(providerIdOrName: string): Promise<string | null> {
     return resolveProviderId(providerIdOrName);
+  },
+
+  /**
+   * How far ahead this provider can be booked (rolling window or monthly
+   * release) — the inputs to utils/bookingHorizon, so a picker can say WHY
+   * dates past the edge are empty and, for a monthly release, when they open.
+   * Read from the same cached settings row the slot lookups use. Null when
+   * the provider can't be resolved or read; callers just show nothing extra.
+   */
+  async getBookingHorizon(providerIdOrName: string): Promise<BookingHorizonSettings | null> {
+    const providerId = providerIdOrName ? await resolveProviderId(providerIdOrName) : null;
+    if (!providerId) return null;
+    try {
+      const settings = (await getAvailabilityProviderCore(providerId)).settings;
+      return settings
+        ? {
+            booking_window_days: settings.booking_window_days,
+            schedule_release_day: settings.schedule_release_day,
+            schedule_release_time: settings.schedule_release_time,
+          }
+        : null;
+    } catch (error) {
+      logger.error('Error reading booking horizon:', error);
+      return null;
+    }
   },
 
   /**
@@ -935,22 +975,20 @@ export const AvailabilityService = {
         dateReasons.push('blocked_date');
       }
 
-      // Enforce booking window — reject dates too far ahead
-      const windowDays = settings?.booking_window_days ?? 60;
-      if (windowDays > 0) {
-        const maxDate = new Date();
-        maxDate.setDate(maxDate.getDate() + windowDays);
-        maxDate.setHours(23, 59, 59, 999);
-        if (dateObj > maxDate) {
-          if (!policy.beyondWindow) return [];
-          dateReasons.push('beyond_window');
-        }
+      // Enforce booking window (rolling, or what a monthly release has
+      // opened so far) — reject dates too far ahead
+      if (isBeyondHorizon(settings, date)) {
+        if (!policy.beyondWindow) return [];
+        dateReasons.push('beyond_window');
       }
 
       const intervalMins = settings?.slot_interval_mins ?? 60;
       const step = [15, 30, 60].includes(intervalMins) ? intervalMins : 60;
       const bufferMins = settings?.buffer_mins ?? 0;
       const newBuffer = bufferFromRow(bundle.serviceBuffer, bufferMins);
+      // The service's own latest start. A hard stop like the trigger's: a
+      // later start is never offered, not even as a request.
+      const latestStart = latestStartMinutes(bundle.serviceBuffer?.latest_start_time);
 
       // Enforce minimum notice — a slot starting sooner than this from now
       // isn't offered at all (matches the server-side enforce_booking_bookability
@@ -974,6 +1012,7 @@ export const AvailabilityService = {
       // ordinary, unconditional slot.
       const candidates = new Map<number, EmergencyReason[]>();
       const offer = (startMins: number, reasons: EmergencyReason[]) => {
+        if (startsTooLate(startMins, latestStart)) return;
         // Later callers never widen an existing entry: normal working hours
         // are generated first and must stay unconditional even where the
         // out-of-hours pass would also reach them.
@@ -1214,6 +1253,16 @@ export const AvailabilityService = {
         const noticeConflict = await checkNoticeWindow(providerId, date, time, policy.shortNotice);
         if (noticeConflict) return noticeConflict;
 
+        // The service's own latest start — no opt-in waives it, so it's
+        // checked whatever kind of booking this is. Same words as the
+        // trigger, which would refuse it at the hold anyway.
+        if (serviceId && startsTooLate(newStartMinutes, latestStartMinutes(bundle.serviceBuffer?.latest_start_time))) {
+          return {
+            hasConflict: true,
+            message: `This service has to start by ${formatLatestStart(bundle.serviceBuffer?.latest_start_time)}.`,
+          };
+        }
+
         // Check the slot falls within the provider's working hours
         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
         const windows = resolveWorkingWindows(
@@ -1284,6 +1333,11 @@ export const AvailabilityService = {
       serviceId?: string | undefined;
       /** See isSlotAvailable — set from CartItem.emergencyRequest. */
       isEmergencyRequest?: boolean | undefined;
+      /** A waitlist slot already held for this client (CartItem.waitlistHold).
+       *  Its own hold makes the slot read as taken, so the "is it free" check
+       *  is skipped; prepare_checkout confirms the hold is theirs. The clash
+       *  checks against the client's diary and the rest of the cart still run. */
+      heldForClient?: boolean | undefined;
     }[]
   ): Promise<BookingConflictResult> {
     const conflicts: BookingConflictResult['conflicts'] = [];
@@ -1349,7 +1403,7 @@ export const AvailabilityService = {
     // time, turns an N-item cart's checkout check from N sequential round
     // trips into one wave of N — the difference is most visible on a
     // multi-service, same-provider booking.
-    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId));
+    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId) && !b.heldForClient);
     const slotChecks = await Promise.all(
       nonStaleBookings.map(booking =>
         this.isSlotAvailable(
@@ -1372,9 +1426,9 @@ export const AvailabilityService = {
       if (staleItemIds.has(booking.cartItemId)) continue;
 
       // Check against existing bookings in storage
-      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId)!;
+      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId);
 
-      if (existingConflict.hasConflict) {
+      if (existingConflict?.hasConflict) {
         conflicts.push({
           cartItemId: booking.cartItemId,
           message: existingConflict.message || 'Time slot is no longer available',
@@ -1471,155 +1525,60 @@ export const AvailabilityService = {
   },
 
   /**
-   * Whether a provider has ANY open, non-conflicting slot within the next
-   * `withinDays` days, for each of several services at once — the same
-   * booking-window / min-notice / buffer rules as getAvailableSlots. The
-   * provider-level settings/availability/windows/blocked-dates/overrides/
-   * bookings are each fetched once regardless of how many services are
-   * asked about, instead of once per service, since none of that depends on
-   * which service is being checked. Used to gate "fully booked" UI (e.g. a
-   * waitlist button) so it only appears when there's genuinely nothing to
-   * book soon, not on every service unconditionally.
+   * Whether each service has ANY free slot within the next `withinDays` days
+   * (never past what the provider has opened). Asked of the server's
+   * get_services_open_within — the same check the bell's "has space again"
+   * alert and Search's 7-day badge use, so the profile's "Fully Booked" can't
+   * disagree with them. Used to gate "fully booked" UI (e.g. a waitlist
+   * button) so it only appears when there's genuinely nothing to book.
    *
-   * `secondaryWithinDays`, when passed, adds a second (smaller) horizon
-   * answered from the SAME provider-data fetch and day-by-day scan as
-   * `withinDays` — for a caller (ProviderProfileScreen) that used to call
-   * this function twice back-to-back with different horizons, duplicating
-   * ~6 Supabase queries and the whole per-service/per-day scan. Returned as
-   * `result.secondary`, `undefined` when the param is omitted.
+   * `secondaryWithinDays`, when passed, answers a second (smaller) horizon
+   * from the same call — derived from each service's earliest free day — as
+   * `result.secondary`; `undefined` when the param is omitted.
    */
   async hasNearTermAvailabilityForServices(
-    providerIdOrName: string,
-    services: { serviceId: string; duration?: string }[],
+    services: { serviceId: string }[],
     withinDays = 14,
     secondaryWithinDays?: number
   ): Promise<Map<string, boolean> & { secondary?: Map<string, boolean> }> {
     // Fail open — don't show "fully booked" waitlist UI off the back of a
-    // network hiccup or an unknown provider; that's a misleading,
-    // high-consequence guess.
+    // network hiccup or a service the server didn't answer for; that's a
+    // misleading, high-consequence guess.
     const failOpen: Map<string, boolean> & { secondary?: Map<string, boolean> } = new Map<string, boolean>();
     for (const s of services) failOpen.set(s.serviceId, true);
     if (secondaryWithinDays !== undefined) failOpen.secondary = new Map(failOpen);
     if (services.length === 0) return failOpen;
 
     try {
-      const providerId = await resolveProviderId(providerIdOrName);
-      if (!providerId) return failOpen;
-
+      const rows = await getServicesOpenWithin(
+        services.map(s => s.serviceId),
+        Math.max(withinDays, secondaryWithinDays ?? 0),
+      );
+      const byId = new Map(rows.map(row => [row.service_id, row]));
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const core = await getAvailabilityProviderCore(providerId);
-      const settings = core.settings;
-      const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
-
-      const windowDays = settings?.booking_window_days ?? 60;
-      // Scan out to whichever requested horizon is larger — one fetch/scan
-      // covers both answers, since the smaller horizon's answer is just
-      // "did an open slot turn up within its own, shorter day range."
-      const requestedMax = secondaryWithinDays !== undefined
-        ? Math.max(withinDays, secondaryWithinDays)
-        : withinDays;
-      const horizon = windowDays > 0 ? Math.min(requestedMax, windowDays) : requestedMax;
-      const secondaryHorizon = secondaryWithinDays !== undefined
-        ? (windowDays > 0 ? Math.min(secondaryWithinDays, windowDays) : secondaryWithinDays)
-        : undefined;
-      if (horizon <= 0) {
-        const map: Map<string, boolean> & { secondary?: Map<string, boolean> } = new Map<string, boolean>();
-        for (const s of services) map.set(s.serviceId, false);
-        if (secondaryHorizon !== undefined) map.secondary = new Map(map);
-        return map;
-      }
-
-      const endDate = new Date(today);
-      endDate.setDate(endDate.getDate() + horizon);
-      const startStr = toLocalDateStr(today);
-      const endStr = toLocalDateStr(endDate);
-
-      const [exceptions, busySpans] = await Promise.all([
-        getAvailabilityDateExceptions(providerId, startStr, endStr),
-        fetchBusySpans(providerId, startStr, endStr),
-      ]);
-
-      const blockedDates = new Set(exceptions.blockedDates);
-      const availByDow = new Map<number, { open_time: string; close_time: string; is_closed: boolean }>();
-      for (const row of core.legacyRows) availByDow.set(row.day_of_week, row);
-      const windowsByDow = new Map<number, WorkingWindow[]>();
-      for (const row of core.windowRows) {
-        const list = windowsByDow.get(row.day_of_week) ?? [];
-        list.push(row);
-        windowsByDow.set(row.day_of_week, list);
-      }
-      const overridesByDate = new Map<string, { is_closed: boolean; start_time: string | null; end_time: string | null }[]>();
-      for (const row of exceptions.overrides) {
-        const list = overridesByDate.get(row.availability_date) ?? [];
-        list.push(row);
-        overridesByDate.set(row.availability_date, list);
-      }
-
-      const bufferMins = settings?.buffer_mins ?? 0;
-      const intervalMins = settings?.slot_interval_mins ?? 60;
-
-      const busyByDate = groupBusyByDate(busySpans);
-
-      // One batched lookup for the requested services' own buffers. Existing
-      // bookings need no lookup — their spans arrive already padded.
-      const bufferByServiceId = await fetchBufferByServiceId(
-        services.map(s => s.serviceId),
-        bufferMins
-      );
-
       const result: Map<string, boolean> & { secondary?: Map<string, boolean> } = new Map<string, boolean>();
-      const secondaryResult = secondaryHorizon !== undefined ? new Map<string, boolean>() : undefined;
-      for (const service of services) {
-        const durationMinutes = service.duration ? parseDurationToMinutes(service.duration) : 60;
-        const newBuffer = bufferByServiceId.get(service.serviceId) ?? { before: 0, after: bufferMins };
-
-        let hasAvailability = false;
-        let hasSecondaryAvailability = false;
-        for (let i = 0; i < horizon; i++) {
-          const d = new Date(today);
-          d.setDate(d.getDate() + i);
-          const dateStr = toLocalDateStr(d);
-          if (blockedDates.has(dateStr)) continue;
-
-          const windows = resolveWorkingWindows(
-            windowsByDow.get(d.getDay()) ?? [],
-            overridesByDate.get(dateStr) ?? [],
-            availByDow.get(d.getDay()) ?? null,
-          );
-          if (windows.length === 0) continue;
-          const daySlots = windows.flatMap(window =>
-            generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
-              .filter(t => parseTimeToMinutes(t) + durationMinutes <= parse24HTimeToMinutes(window.end_time))
-              .filter(t => slotStartMs(dateStr, parseTimeToMinutes(t)) >= earliestStart),
-          );
-          if (daySlots.length === 0) continue;
-
-          const dayBusy = busyByDate.get(dateStr) ?? [];
-          const hasOpenSlot = daySlots.some(t => {
-            const slotStart = parseTimeToMinutes(t);
-            const slotEnd = slotStart + durationMinutes;
-            const newEffStart = slotStart - newBuffer.before;
-            const newEffEnd = slotEnd + newBuffer.after;
-            return !dayBusy.some(span => doTimesOverlap(newEffStart, newEffEnd, span.start, span.end));
-          });
-          if (hasOpenSlot) {
-            // Days are scanned in ascending order, so the first hit is
-            // necessarily the earliest open slot — safe to derive the
-            // secondary (smaller-horizon) answer from it and stop here.
-            hasAvailability = true;
-            if (secondaryHorizon !== undefined && i < secondaryHorizon) hasSecondaryAvailability = true;
-            break;
-          }
+      const secondary = secondaryWithinDays !== undefined ? new Map<string, boolean>() : undefined;
+      for (const { serviceId } of services) {
+        const row = byId.get(serviceId);
+        if (!row) {
+          result.set(serviceId, true);
+          secondary?.set(serviceId, true);
+          continue;
         }
-        result.set(service.serviceId, hasAvailability);
-        secondaryResult?.set(service.serviceId, hasSecondaryAvailability);
+        result.set(serviceId, row.has_slot);
+        if (secondary) {
+          const daysAway = row.next_available
+            ? Math.round((new Date(`${row.next_available}T00:00:00`).getTime() - today.getTime()) / 86_400_000)
+            : null;
+          secondary.set(serviceId, daysAway !== null && daysAway < (secondaryWithinDays as number));
+        }
       }
-      if (secondaryResult) result.secondary = secondaryResult;
+      if (secondary) result.secondary = secondary;
       return result;
     } catch (error) {
-      console.error('Error checking near-term availability:', error);
+      logger.error('Error checking service availability:', error);
       return failOpen;
     }
   },
@@ -1653,8 +1612,8 @@ export const AvailabilityService = {
       // and resolveNextAvailableSlot then hands the client a slot in the past.
       const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
 
-      const windowDays = settings?.booking_window_days ?? 60;
-      const horizon = windowDays > 0 ? Math.min(searchDays, windowDays) : searchDays;
+      const openDays = bookableDayCount(settings);
+      const horizon = openDays !== null ? Math.min(searchDays, openDays) : searchDays;
       if (horizon <= 0) return null;
 
       const endDate = new Date(today);
@@ -1689,10 +1648,11 @@ export const AvailabilityService = {
       const durationMinutes = serviceDuration ? parseDurationToMinutes(serviceDuration) : 60;
 
       // Only the new service's own buffer — existing spans arrive padded.
-      const bufferByServiceId = await fetchBufferByServiceId(
-        serviceId ? [serviceId] : [],
-        bufferMins
-      );
+      const [bufferByServiceId, latestByServiceId] = await Promise.all([
+        fetchBufferByServiceId(serviceId ? [serviceId] : [], bufferMins),
+        fetchLatestStartByServiceId(serviceId ? [serviceId] : []),
+      ]);
+      const latestStart = serviceId ? latestByServiceId.get(serviceId) ?? null : null;
       const newBuffer = serviceId
         ? bufferByServiceId.get(serviceId) ?? { before: 0, after: bufferMins }
         : { before: 0, after: bufferMins };
@@ -1713,6 +1673,7 @@ export const AvailabilityService = {
         const daySlots = windows.flatMap(window =>
           generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
             .filter(t => parseTimeToMinutes(t) + durationMinutes <= parse24HTimeToMinutes(window.end_time))
+            .filter(t => !startsTooLate(parseTimeToMinutes(t), latestStart))
             .filter(t => slotStartMs(dateStr, parseTimeToMinutes(t)) >= earliestStart),
         );
         if (daySlots.length === 0) continue;
@@ -1839,8 +1800,8 @@ export const AvailabilityService = {
 
   /**
    * Same as findBackToBackSlots but walks forward from today looking for
-   * the FIRST day the whole chain fits, up to `withinDays` (bounded by the
-   * provider's own booking_window_days, same horizon rule as
+   * the FIRST day the whole chain fits, up to `withinDays` (bounded by what
+   * the provider has opened — utils/bookingHorizon — same horizon rule as
    * hasNearTermAvailabilityForServices). Powers a "schedule these together"
    * action from the cart: a client shouldn't have to guess which day even
    * has room for every service before finding out slot-by-slot that the
@@ -1856,8 +1817,8 @@ export const AvailabilityService = {
       const providerId = await resolveProviderId(providerIdOrName);
       if (!providerId) return null;
 
-      const windowDays = await getProviderBookingWindowDays(providerId);
-      const horizon = windowDays > 0 ? Math.min(withinDays, windowDays) : withinDays;
+      const openDays = bookableDayCount(await getProviderBookingHorizon(providerId));
+      const horizon = openDays !== null ? Math.min(withinDays, openDays) : withinDays;
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);

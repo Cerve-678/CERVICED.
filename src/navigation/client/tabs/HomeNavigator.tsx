@@ -2,17 +2,18 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../../../screens/client/HomeScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import { BOOKING_DETAIL_OPTIONS } from '../bookingDetailOptions';
 import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import SearchScreen from '../../../screens/client/SearchScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
+import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvidersScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import OffersScreen from '../../../screens/client/OffersScreen';
 import { HomeStackParamList } from '../../types';
 import { useTranslation } from '../../../i18n';
@@ -112,6 +113,24 @@ export default function HomeNavigator() {
         }}
       />
 
+      <HomeStack.Screen
+        name="ActivityCentre"
+        component={ActivityCentreScreen}
+        options={{
+          title: t('profile.forYou.activity.title'),
+          presentation: 'card',
+          headerTransparent: false,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
+          headerTitleStyle: {
+            fontFamily: 'BakbakOne',
+            fontSize: 22,
+            color: theme.text,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
+
       {/* PUSH NAVIGATION for Cart — CartScreen renders its own header, so the
           native stack header must stay hidden (matches CartNavigator's CartMain). */}
       <HomeStack.Screen
@@ -138,7 +157,9 @@ export default function HomeNavigator() {
       <HomeStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: true, presentation: 'card' }}
+        // Set here, not only in the screen's own setOptions, so the first
+        // frame of the push has no back-button text or route-name title.
+        options={BOOKING_DETAIL_OPTIONS}
       />
       <HomeStack.Screen
         name="ExternalBookingDetail"
@@ -169,16 +190,6 @@ export default function HomeNavigator() {
           component={NotificationsScreen}
           options={{
             headerShown: false,
-          }}
-        />
-
-        {/* Developer Settings - Modal presentation */}
-        <HomeStack.Screen
-          name="DevSettings"
-          component={DevSettingsScreen}
-          options={{
-            headerShown: false,
-            presentation: 'modal',
           }}
         />
       </HomeStack.Group>

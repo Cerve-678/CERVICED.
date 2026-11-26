@@ -6,19 +6,24 @@ import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import MessagesScreen from '../../../screens/client/MessagesScreen';
 import ProfileInfoScreen from '../../../screens/client/ProfileInfoScreen';
 import BeautyProfileScreen from '../../../screens/client/BeautyProfileScreen';
+import CircleScreen from '../../../screens/client/CircleScreen';
 import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import NotificationsSettingsScreen from '../../../screens/client/NotificationsSettingsScreen';
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
-import SubscriptionScreen from '../../../screens/client/SubscriptionScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
-import AboutScreen from '../../../screens/shared/AboutScreen';
-import TermsScreen from '../../../screens/shared/TermsScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
+import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
+import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
+import AdminCreatedAccountsScreen from '../../../screens/shared/AdminCreatedAccountsScreen';
+import AdminListingNudgesScreen from '../../../screens/shared/AdminListingNudgesScreen';
 import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
+import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import { BOOKING_DETAIL_OPTIONS } from '../bookingDetailOptions';
 import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
@@ -28,14 +33,16 @@ import CartScreen from '../../../screens/client/CartScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import { ProfileStackParamList } from '../../types';
-import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 export default function ProfileNavigator() {
-  const { theme } = useTheme();
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const { theme, palette } = useTheme();
 
   return (
     <ProfileStack.Navigator>
@@ -55,6 +62,21 @@ export default function ProfileNavigator() {
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
+        name="Circle"
+        component={CircleScreen}
+        options={{
+          title: tr('beautyProfile.circle.title'),
+          presentation: 'card',
+          headerBackTitle: tr('common.back'),
+          headerShadowVisible: false,
+          // palette.bg is what ThemedBackground paints, so the header and
+          // the screen read as one surface (theme.background differs).
+          headerStyle: { backgroundColor: palette.bg },
+          headerTintColor: palette.text,
+          headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: palette.text },
+        }}
+      />
+      <ProfileStack.Screen
         name="ChangePassword"
         component={ChangePasswordScreen}
         options={{ headerShown: false }}
@@ -67,11 +89,6 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="PaymentMethods"
         component={PaymentMethodsScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
-        name="Subscription"
-        component={SubscriptionScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
@@ -90,18 +107,33 @@ export default function ProfileNavigator() {
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
-        name="About"
-        component={AboutScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
-        name="Terms"
-        component={TermsScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
         name="ReportProblem"
         component={ReportProblemScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminMoney"
+        component={AdminMoneyScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminCreateAccount"
+        component={AdminCreateAccountScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminCreatedAccounts"
+        component={AdminCreatedAccountsScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminListingNudges"
+        component={AdminListingNudgesScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
@@ -113,22 +145,22 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="ProviderChat"
         component={ProviderChatScreen}
-        options={{ headerShown: true, presentation: 'card', headerBackTitle: t('common.back') }}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: tr('common.back') }}
       />
 
       <ProfileStack.Screen
         name="Messages"
         component={MessagesScreen}
-        options={{ headerShown: true, title: t('shared.nav.messages'), headerBackTitle: t('common.back') }}
+        options={{ headerShown: true, title: tr('profile.forYou.messages.title'), headerBackTitle: tr('common.back') }}
       />
 
       <ProfileStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
         options={{
-          title: t('shared.nav.providerProfile'),
+          title: tr('shared.nav.providerProfile'),
           presentation: 'card',
-          headerBackTitle: t('shared.nav.profile'),
+          headerBackTitle: tr('shared.nav.profile'),
           headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
@@ -150,11 +182,29 @@ export default function ProfileNavigator() {
         name="Bookings"
         component={BookingsScreen}
         options={{
-          title: t('shared.nav.trackAppointment'),
+          title: tr('shared.nav.trackAppointment'),
           presentation: 'card',
-          headerBackTitle: t('shared.nav.profile'),
+          headerBackTitle: tr('shared.nav.profile'),
           headerTransparent: false,
           headerShadowVisible: false,
+          headerTitleStyle: {
+            fontFamily: 'BakbakOne',
+            fontSize: 22,
+            color: theme.text,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
+
+      <ProfileStack.Screen
+        name="ActivityCentre"
+        component={ActivityCentreScreen}
+        options={{
+          title: tr('profile.forYou.activity.title'),
+          presentation: 'card',
+          headerTransparent: false,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
             fontFamily: 'BakbakOne',
             fontSize: 22,
@@ -173,7 +223,9 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: true, presentation: 'card' }}
+        // Set here, not only in the screen's own setOptions, so the first
+        // frame of the push has no back-button text or route-name title.
+        options={BOOKING_DETAIL_OPTIONS}
       />
       <ProfileStack.Screen
         name="ExternalBookingDetail"
@@ -191,7 +243,7 @@ export default function ProfileNavigator() {
         name="BookmarkedProviders"
         component={BookmarkedProvidersScreen}
         options={{
-          title: t('shared.nav.savedProviders'),
+          title: tr('shared.nav.savedProviders'),
           presentation: 'card',
           headerShown: false,
         }}
@@ -199,7 +251,7 @@ export default function ProfileNavigator() {
 
       <ProfileStack.Group screenOptions={{
         presentation: 'fullScreenModal',
-        headerBackTitle: t('common.close'),
+        headerBackTitle: tr('common.close'),
         headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.text,
       }}>
@@ -207,7 +259,7 @@ export default function ProfileNavigator() {
           name="Notifications"
           component={NotificationsScreen}
           options={{
-            title: t('shared.nav.notifications'),
+            title: tr('profile.pref.notifications.title'),
             presentation: 'formSheet',
             headerShown: false,
           }}
@@ -226,7 +278,7 @@ export default function ProfileNavigator() {
           name="InfoReg"
           component={InfoRegScreen}
           options={{
-            title: t('shared.nav.providerRegistration'),
+            title: tr('shared.nav.providerRegistration'),
             presentation: 'fullScreenModal',
             headerShown: false,
           }}

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, ViewProps, StatusBar } from 'react-native';
+import { View, ViewProps,} from 'react-native';
+import { FocusAwareStatusBar } from './FocusAwareStatusBar';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface ThemedViewProps extends ViewProps {
@@ -18,7 +19,7 @@ export function ThemedView({ useBackground = true, style, children, ...props }: 
       ]}
       {...props}
     >
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       {children}
     </View>
   );

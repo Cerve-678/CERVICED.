@@ -1,10 +1,13 @@
-import type { BusinessType } from '../../types/database';
+import type { OwnSections } from './ownSections';
+import type { BusinessType, LogoFraming } from '../../types/database';
 
 export interface ProviderProfileAddOn {
   id: string | number;
   name: string;
   price: number;
   description: string;
+  /** Minutes this add-on adds to the appointment. 0 = no extra time. */
+  extraMinutes: number;
 }
 
 export interface ProviderProfileService {
@@ -22,8 +25,6 @@ export interface ProviderProfileService {
   minAge?: number | null;
   contraindications?: string[];
   aftercareNotes?: string;
-  /** Explicit provider selection. Empty or absent means not stated. */
-  skinTonesSuitable?: string[];
   serviceType?: string | null;
 }
 
@@ -33,7 +34,14 @@ export interface ProviderProfileData {
   providerName: string;
   providerService: string;
   providerLogo: any;
+  /** How the provider framed their logo in Info Reg (the circle, here). */
+  providerLogoFraming: LogoFraming | null;
   location: string;
+  /** Public "How to get there", shown in Additional Information. */
+  publicDirections: string;
+  /** The provider's own sections (Key Information, FAQs…), cleaned. Each
+   *  shows as its own section under Additional Information. */
+  ownSections: OwnSections;
   businessType: BusinessType | null;
   rating: number;
   /** providers.automation_settings.scheduleReleaseDay — day of month (1-31)
@@ -42,6 +50,8 @@ export interface ProviderProfileData {
    *  slots_text field, which could say anything regardless of the provider's
    *  actual release cadence. */
   scheduleReleaseDay: number | null;
+  /** 'HH:MM' UK time the release day opens; 9am when never chosen. */
+  scheduleReleaseTime: string;
   aboutText: string;
   /** Flattened across every service type — the "all services" view. Kept as
    *  the shape it has always been so callers that don't care about types
@@ -102,14 +112,21 @@ export interface ProviderProfileData {
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
-  travelRadius: string;
+  /** providers.products_used, a comma-separated brand list — split with
+   *  splitProductsUsed (features/business-details/productBrands.ts). */
   productsUsed: string;
+  /** "I work with", shown in Additional Information. Each empty when not stated. */
+  clientele: string[];
+  skinTonesCatered: string[];
+  hairTypesCatered: string[];
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     depositMode?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;
@@ -117,9 +134,13 @@ export interface ProviderProfileData {
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
-    // Read by EmergencyBookingPrompt (via BookingSheet/MultiBookingSheet) while
-    // EMERGENCY_BOOKINGS_ENABLED is on. Authored on PoliciesScreen.
+    /** Every page, in order. policyImageUrl is the first, for older builds. */
+    policyImageUrls?: string[];
+    // Authored on PoliciesScreen, shown in the Policy tab. EmergencyBookingPrompt
+    // also reads it while EMERGENCY_BOOKINGS_ENABLED is on.
     emergencyBookingPolicy?: string;
+    travelPolicy?: string;
+    depositNonRefundable?: boolean;
   } | null;
   cancellationNoticeHours: number;
   waitlistEnabled: boolean;

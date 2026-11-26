@@ -60,6 +60,9 @@ jest.mock('../lib/supabase', () => {
               )
             : chain(() => ({ data: [], error: null }), true),
       }),
+      // searchProviders' ranked service search — no matches here, so the
+      // provider queries above stay the ones under test.
+      rpc: async () => ({ data: [], error: null }),
     },
   };
 });

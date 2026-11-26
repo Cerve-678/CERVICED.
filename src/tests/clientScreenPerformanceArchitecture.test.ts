@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const readScreen = (name: string): string =>
   fs.readFileSync(
@@ -18,8 +19,13 @@ describe('client screen performance contracts', () => {
   it('bounds the initial Explore queries and never keeps the feed spinner forever', () => {
     const source = readScreen('ExploreScreen');
 
-    expect(source).toContain('DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20');
-    expect(source).toContain('DISCOVER_INITIAL_SERVICE_LIMIT = 10');
+    // The first load is a bounded, shuffled pool (no wider than the repo-wide
+    // 200-row list cap) so the top of Explore isn't only the newest uploads;
+    // scroll pages after it stay small.
+    expect(source).toContain('DISCOVER_FIRST_PORTFOLIO_POOL = 200');
+    expect(source).toContain('DISCOVER_FIRST_SERVICE_POOL = 40');
+    expect(source).toContain('DISCOVER_PAGE_PORTFOLIO_LIMIT = 20');
+    expect(source).toContain('DISCOVER_PAGE_SERVICE_LIMIT = 10');
     expect(source).toContain('const loadNextDiscoverPage');
     expect(source).toContain('getExplorePortfolioItems(');
     expect(source).toContain('cursor.portfolioOffset');
@@ -29,12 +35,9 @@ describe('client screen performance contracts', () => {
 
   it('uses a lean public projection for Explore portfolio cards', () => {
     const source = readScreen('ExploreScreen');
-    const database = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const database = readDatabaseLayer();
 
-    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT)');
+    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_FIRST_PORTFOLIO_POOL)');
     expect(database).toContain('const EXPLORE_PORTFOLIO_SELECT');
     expect(database).toContain('.select(EXPLORE_PORTFOLIO_SELECT)');
   });
@@ -48,10 +51,13 @@ describe('client screen performance contracts', () => {
 
     expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 20');
     expect(source).toContain('portfolioItems.slice(0, discoverVisibleCount)');
-    expect(source).toContain('favouriteItems.slice(0, favouritesVisibleCount)');
+    // Favourites (or the open collection inside it) is windowed the same way.
+    expect(source).toContain('shownFavouriteItems.slice(0, favouritesWindow)');
+    // ...and while a collection's looks fly in, only the cards they land on.
+    expect(source).toContain('flight ? Math.min(flight.count, favouritesVisibleCount) : favouritesVisibleCount');
     expect(source).toContain('.filter(i => i.aspectRatioIsFallback)');
     expect(source).toContain('data={visiblePortfolioItems}');
-    expect(cardSource).toContain('const shouldAnimate = index < 10');
+    expect(cardSource).toContain('const shouldAnimate = entrance && index < 10');
   });
 
   it('records only a settled Search query, not every keystroke', () => {
@@ -76,7 +82,10 @@ describe('client screen performance contracts', () => {
     expect(source).toContain('Location.watchPositionAsync(');
     expect(source).not.toContain('setInterval(getUserLocation');
     expect(source).toContain("type BookingsListRow =");
-    expect(source).toContain('const WaitlistCard = React.memo');
+    // Waitlist rows are a memoized card rendered by the virtualized list.
+    expect(source).toContain("import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard'");
+    expect(fs.readFileSync(path.join(__dirname, '..', 'features', 'bookings', 'WaitlistPlaceCard.tsx'), 'utf8'))
+      .toContain('export const WaitlistPlaceCard = React.memo');
     expect(source).toContain('data={virtualizedListRows}');
     expect(source).toContain('renderItem={renderBookingsListRow}');
     expect(source).toContain('ListHeaderComponent={(');
@@ -114,10 +123,7 @@ describe('client screen performance contracts', () => {
   });
 
   it('uses an explicit public projection for provider discovery lists', () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const source = readDatabaseLayer();
     const providerListSection = source.slice(
       source.indexOf('const PUBLIC_PROVIDER_SUMMARY_SELECT'),
       source.indexOf('export async function getProviderPriceRanges'),

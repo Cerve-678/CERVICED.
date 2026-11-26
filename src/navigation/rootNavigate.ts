@@ -9,6 +9,60 @@
  */
 
 import { navigationRef } from './navigationRef';
+import { logger } from '../utils/logger';
+
+type MaybeState = { routeNames?: string[]; routes?: { state?: MaybeState }[] } | undefined;
+
+/** Whether any navigator currently mounted anywhere in the tree has a route
+ *  called `name`. Only an initialised navigator state carries `routeNames`,
+ *  so a tab tree that hasn't rendered yet doesn't count. */
+function hasRoute(state: MaybeState, name: string): boolean {
+  if (!state) return false;
+  if (state.routeNames?.includes(name)) return true;
+  return (state.routes ?? []).some(route => hasRoute(route.state, name));
+}
+
+/** Long enough for the provider's booking-mode lookup on a slow connection;
+ *  short enough that a tap doesn't fire minutes later out of nowhere. */
+const ROUTE_MOUNT_TIMEOUT_MS = 10_000;
+
+/** Only one wait at a time: a newer navigation supersedes an older one still
+ *  waiting, rather than both landing in a row once the tabs appear. */
+let cancelPendingWait: (() => void) | null = null;
+
+/**
+ * Run `run` once a navigator holding `tab` is mounted — straight away if it
+ * already is.
+ *
+ * A navigate fired at a tab that isn't mounted isn't queued, it's dropped
+ * with "was not handled by any navigator". That is what a push tap did on
+ * the provider hat while ProviderTabNavigation was still showing its spinner
+ * (it draws no tabs until the booking mode is known), and it applies equally
+ * to a tap that arrives while the sign-in screens are up.
+ */
+function whenTabMounted(tab: string, run: () => void): void {
+  cancelPendingWait?.();
+  cancelPendingWait = null;
+  if (hasRoute(navigationRef.getRootState() as MaybeState, tab)) {
+    run();
+    return;
+  }
+  const stop = () => {
+    unsubscribe();
+    clearTimeout(timer);
+    if (cancelPendingWait === stop) cancelPendingWait = null;
+  };
+  const unsubscribe = navigationRef.addListener('state', () => {
+    if (!hasRoute(navigationRef.getRootState() as MaybeState, tab)) return;
+    stop();
+    run();
+  });
+  const timer = setTimeout(() => {
+    stop();
+    logger.warn(`[rootNavigate] '${tab}' never appeared; dropped the navigation`);
+  }, ROUTE_MOUNT_TIMEOUT_MS);
+  cancelPendingWait = stop;
+}
 
 /**
  * Deep-link into a screen inside a tab's stack.
@@ -31,7 +85,9 @@ export function navigateNested(
   params?: Record<string, unknown>,
 ): void {
   if (!navigationRef.isReady()) return;
-  (navigationRef as any).navigate(tab, { screen, params, initial: false });
+  whenTabMounted(tab, () => {
+    (navigationRef as any).navigate(tab, { screen, params, initial: false });
+  });
 }
 
 /**
@@ -44,7 +100,38 @@ export function navigateNested(
  */
 export function navigateTab(tab: string): void {
   if (!navigationRef.isReady()) return;
-  (navigationRef as any).navigate(tab);
+  whenTabMounted(tab, () => {
+    (navigationRef as any).navigate(tab);
+  });
+}
+
+/**
+ * Open one of the provider's bookings the way tapping it on the Home calendar
+ * does: the calendar on that booking's day underneath, its detail page on top
+ * (with the reschedule sheet up, when asked). Back lands on the calendar.
+ *
+ * One reset of the Home stack, not two navigates. Two in a row overwrite each
+ * other's nested params before the stack re-renders, and in v7 a navigate to
+ * ProviderHomeMain while something sits above it pushes a SECOND calendar
+ * rather than returning to the first.
+ */
+export function openProviderBookingOnCalendar(
+  bookingId: string,
+  date: string,
+  openReschedule: boolean,
+): void {
+  if (!navigationRef.isReady()) return;
+  whenTabMounted('ProviderHome', () => {
+    (navigationRef as any).navigate('ProviderHome', {
+      state: {
+        index: 1,
+        routes: [
+          { name: 'ProviderHomeMain', params: { jumpToDate: date } },
+          { name: 'BookingDetail', params: { bookingId, ...(openReschedule ? { openReschedule: true } : {}) } },
+        ],
+      },
+    });
+  });
 }
 
 /** Only one dismiss-then-navigate can be in flight at a time — a second tap

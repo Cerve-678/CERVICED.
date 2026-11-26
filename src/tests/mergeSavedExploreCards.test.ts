@@ -30,4 +30,17 @@ describe('mergeSavedExploreCards', () => {
     expect(mergeSavedExploreCards(['kept'], [card('removed')], [card('kept'), card('removed')]))
       .toEqual([card('kept')]);
   });
+
+  it('keeps saves already on screen while Favourites reloads, so an open collection never empties', () => {
+    // Re-opening Favourites: Discover only holds one of the saves, the rest
+    // were loaded last time and must not drop out until the fetch returns.
+    const alreadyShown = [card('in-folder-1'), card('in-folder-2'), card('in-discover')];
+    const cards = mergeSavedExploreCards(
+      ['in-folder-1', 'in-folder-2', 'in-discover'],
+      [card('in-discover')],
+      alreadyShown,
+    );
+
+    expect(cards.map((item) => item.id)).toEqual(['in-discover', 'in-folder-2', 'in-folder-1']);
+  });
 });
