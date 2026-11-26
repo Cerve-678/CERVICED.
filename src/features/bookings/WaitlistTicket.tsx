@@ -100,6 +100,7 @@ export function WaitlistTicket({
           {shown && state === 'held' && shown.offerExpiresAt && (
             <>
               <View style={styles.ticket}>
+                {ticketEdge()}
                 <View style={styles.top}>
                   <HoldRing expiresAt={shown.offerExpiresAt} onEnd={onHoldEnded} />
                   <Text style={styles.xl}>{shown.offeredDate ? formatShortDayDate(shown.offeredDate) : tr('clientBooking.waitlist.yourSlot')}</Text>
@@ -146,6 +147,7 @@ export function WaitlistTicket({
           {shown && state === 'waiting' && (
             <>
               <View style={styles.ticket}>
+                {ticketEdge()}
                 <View style={styles.top}>
                   <Text style={styles.cap}>{tr('clientBooking.waitlist.inLineFor')}</Text>
                   <Text style={styles.lg}>{shown.serviceName}</Text>
@@ -195,6 +197,13 @@ export function WaitlistTicket({
         <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>
       </View>
     );
+  }
+
+  // The ticket's outline, drawn as its first child so the notches paint over
+  // it. A border on the ticket itself sits on top of every child on iOS and
+  // ran straight across each notch, so they didn't look cut out.
+  function ticketEdge() {
+    return <View pointerEvents="none" style={styles.edge} />;
   }
 
   function ticketCut() {
@@ -311,14 +320,11 @@ const createStyles = (P: Palette) =>
     ticket: {
       backgroundColor: P.card,
       borderRadius: 26,
-      borderWidth: 1,
-      borderColor: P.border,
+      // No shadow: overflow hidden clips it on iOS anyway, and a shadow follows
+      // the ticket's straight edge across each side notch, filling it in.
       overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
     },
+    edge: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 26, borderWidth: 1, borderColor: P.border },
     top: { alignItems: 'center', paddingHorizontal: 18, paddingTop: 20, paddingBottom: 18, gap: 4 },
     bottom: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18, gap: 10 },
     cut: { height: 24, justifyContent: 'center' },
