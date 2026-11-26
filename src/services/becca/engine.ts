@@ -28,11 +28,13 @@ import type {
   EntityBag,
   PendingAction,
   PersonalContext,
+  ProviderRef,
+  ResolvedEntity,
   Understanding,
 } from "./types";
 import { scoreToConfidence, SUGGESTION_MEMORY } from "./types";
 import userLearningService from "../userLearningService";
-import { resolveEntities } from "./entityResolver";
+import { resolveEntities, resolveProvider } from "./entityResolver";
 import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
 import { capabilitiesFor, fitsSetup, getCapability, thinkingFor, toToolSchema } from "./registry";
@@ -669,9 +671,24 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
 
   // A required entity that never resolved means we can't run the capability
   // honestly — ask for the missing piece instead of running it half-blind.
-  const missing = (capability.needs ?? []).find(
+  let missing = (capability.needs ?? []).find(
     (n) => n.required && entities[n.kind as keyof EntityBag] == null,
   );
+  // "is there a deposit?" with no provider named, from a client whose upcoming
+  // bookings are all with one provider: that's who they mean. Not when Becca
+  // has just shown a list — then "which one?" is the honest question — and
+  // the reply names the provider (see buildAssumption) so it's never silent.
+  let providerFromBooking = false;
+  if (missing?.kind === "provider" && hat === "client" && !(conversation?.lastProviders?.length)) {
+    const booked = await soleUpcomingProvider(bookings);
+    if (booked) {
+      entities = { ...entities, provider: booked };
+      providerFromBooking = true;
+      missing = (capability.needs ?? []).find(
+        (n) => n.required && entities[n.kind as keyof EntityBag] == null,
+      );
+    }
+  }
   if (missing) {
     if (isAskableKind(missing.kind)) {
       holdQuestion(hat, { capabilityId: capability.id, kind: missing.kind, entities: settled(entities) });
@@ -762,7 +779,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
 
   // Medium confidence: state the assumption rather than let it pass silently.
   const assumption =
-    understanding.confidence === "medium"
+    understanding.confidence === "medium" || providerFromBooking
       ? result.assumption ?? buildAssumption(entities, result.text, fromMessage, capability)
       : undefined;
 
@@ -1442,6 +1459,34 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
   }, hat, { title: "Let’s narrow it down" });
 }
 
+/** Distinct provider names across upcoming bookings, soonest first. */
+function upcomingProviderNames(bookings: ConfirmedBooking[]): string[] {
+  return [...new Set(
+    bookings
+      .filter((b) => b.status === BookingStatus.UPCOMING)
+      .sort((a, b) => `${a.bookingDate} ${a.bookingTime}`.localeCompare(`${b.bookingDate} ${b.bookingTime}`))
+      .map((b) => b.providerName),
+  )];
+}
+
+/**
+ * The provider behind every upcoming booking, when there is exactly one.
+ * Resolved by name the same way a typed name is, so it carries the slug
+ * navigation needs and stays has_gone_live gated (searchProviders).
+ */
+async function soleUpcomingProvider(
+  bookings: ConfirmedBooking[],
+): Promise<ResolvedEntity<"provider", ProviderRef> | undefined> {
+  const names = upcomingProviderNames(bookings);
+  if (names.length !== 1) return undefined;
+  try {
+    return (await resolveProvider(names[0]!, [])).resolved;
+  } catch {
+    // Resolution touches the network; failing to infer just means asking.
+    return undefined;
+  }
+}
+
 function buildMissingEntityReply(
   kind: string,
   hat: BeccaHat,
@@ -1489,8 +1534,13 @@ function buildMissingEntityReply(
     }, hat, { title: "Choose a service" });
   }
   if (kind === "provider") {
-    // The providers just shown are the likeliest answer, one tap each.
-    const shown = (conversation?.lastProviders ?? []).slice(0, 4);
+    // The providers just shown are the likeliest answer, one tap each, then
+    // the ones they're booked with ("is there a deposit?" with two booked).
+    const booked = upcomingProviderNames(bookings)
+      .map((name) => ({ slug: name, displayName: name }));
+    const shown = [...(conversation?.lastProviders ?? []), ...booked]
+      .filter((p, i, all) => all.findIndex((q) => q.displayName === p.displayName) === i)
+      .slice(0, 4);
     return message_({
       content: shown.length > 0
         ? "Which provider do you mean? Pick one or type their name."
