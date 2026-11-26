@@ -54,7 +54,7 @@ export function HeroPhotoPicker({
   if (items.length === 0) {
     return (
       <Text style={[styles.empty, { color: subColor }]}>
-        Add photos to your portfolio in My Profile and you can pick them here.
+        {tr('discover.page.addPhotosToYourPortfolioIn')}
       </Text>
     );
   }
@@ -82,7 +82,7 @@ export function HeroPhotoPicker({
               accessibilityRole="checkbox"
               accessibilityState={{ checked: on, disabled: full }}
               accessibilityLabel={`${item.caption ? `Portfolio photo: ${item.caption}` : 'Portfolio photo'}${on ? `, shows ${limit === 1 ? 'at the top' : `in place ${slot}`}` : ''}`}
-              accessibilityHint={full ? `You've picked ${limit}. Untick one to swap it.` : undefined}
+              accessibilityHint={full ? tr('discover.page.pickedLimit', { limit }) : undefined}
             >
               <Image source={{ uri: item.image_url }} style={styles.photo} contentFit="cover" transition={0} recyclingKey={item.id} />
               <View style={[styles.badge, on ? { backgroundColor: accent, borderColor: accent } : styles.badgeOff]}>
@@ -94,7 +94,7 @@ export function HeroPhotoPicker({
       </View>
       <View style={styles.footer}>
         <Text style={[styles.count, { color: subColor }]}>
-          {picked.length === 0 ? 'Showing your newest' : `${picked.length} of ${limit} picked`}
+          {picked.length === 0 ? tr('discover.page.showingYourNewest') : tr('discover.page.pickedOf', { n: picked.length, total: limit })}
         </Text>
         {picked.length > 0 ? (
           <TouchableOpacity
@@ -105,7 +105,7 @@ export function HeroPhotoPicker({
             }}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Clear your picked photos"
+            accessibilityLabel={tr('discover.page.clearYourPickedPhotos')}
           >
             <Text style={[styles.clearText, { color: accent }]}>{tr('common.clear')}</Text>
           </TouchableOpacity>

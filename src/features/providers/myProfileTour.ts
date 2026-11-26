@@ -1,4 +1,5 @@
-/**
+
+import { tr } from '../../i18n/translate';/**
  * The words and order of the My Profile spotlight tour. Kept apart from the
  * screen so the copy can be tested; the screen adds a ref to each step by key.
  *
@@ -31,7 +32,7 @@ export function myProfileTourSteps({ isLive, hasQrButton }: MyProfileTourContext
   return [
     {
       key: 'logo',
-      title: 'See what clients see',
+      title: tr('discover.page.seeWhatClientsSee'),
       body: isLive
         ? 'Tap your logo to see your page the way clients see it.'
         : 'Once you’re live, tap your logo to see your page the way clients see it.',
@@ -40,14 +41,14 @@ export function myProfileTourSteps({ isLive, hasQrButton }: MyProfileTourContext
     },
     {
       key: 'edit',
-      title: 'Edit your page',
-      body: 'Add your business name and description, create your services, set your address and add your portfolio.',
+      title: tr('discover.page.editYourPage'),
+      body: tr('discover.page.addYourBusinessNameAndDescription'),
       icon: 'create-outline',
       radius: 999,
     },
     {
       key: 'shortcuts',
-      title: 'Shortcuts',
+      title: tr('discover.page.shortcuts'),
       body: hasQrButton
         ? 'Set your hours, change your colours and fonts, or show a client your QR code.'
         : 'Set your hours, or change your colours and fonts.',
@@ -56,15 +57,15 @@ export function myProfileTourSteps({ isLive, hasQrButton }: MyProfileTourContext
     },
     {
       key: 'tabs',
-      title: 'Dashboard and Services',
-      body: 'Dashboard shows how your page is doing. Services is your price list: add a service, or swipe one left to hide it from clients.',
+      title: tr('discover.page.dashboardAndServices'),
+      body: tr('discover.page.dashboardShowsHowYourPageIs'),
       icon: 'albums-outline',
       radius: 999,
     },
     {
       key: 'status',
-      title: 'How close you are',
-      body: 'The ring shows how close you are to going live. Tap View details to see what’s left.',
+      title: tr('discover.page.howCloseYouAre'),
+      body: tr('discover.page.theRingShowsHowCloseYou'),
       icon: 'pie-chart-outline',
       radius: 26,
     },

@@ -17,10 +17,10 @@ import { useTranslation } from '../../i18n';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const PERKS: { icon: IconName; title: string }[] = [
-  { icon: 'color-palette-outline', title: 'Every colour set' },
-  { icon: 'text-outline', title: 'Every font' },
-  { icon: 'sparkles-outline', title: 'Every hero finish' },
-  { icon: 'brush-outline', title: 'Make your own colours' },
+  { icon: 'color-palette-outline', get title() { return tr('discover.page.everyColourSet'); } },
+  { icon: 'text-outline', get title() { return tr('discover.page.everyFont'); } },
+  { icon: 'sparkles-outline', get title() { return tr('discover.page.everyHeroFinish'); } },
+  { icon: 'brush-outline', get title() { return tr('discover.page.makeYourOwnColours'); } },
   { icon: 'ribbon-outline', get title() { return tr('providerAccount.account.achievements.title'); } },
 ];
 
@@ -76,7 +76,7 @@ export function FullCervicedLockedSheet({ visible, title, note, onClose, onSeeMo
             activeOpacity={0.85}
             accessibilityRole="button"
           >
-            <Text style={[styles.primaryText, { color: P.onAccent }]}>See what full members get</Text>
+            <Text style={[styles.primaryText, { color: P.onAccent }]}>{tr('discover.page.seeWhatFullMembersGet')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={onClose} activeOpacity={0.7} accessibilityRole="button">
             <Text style={[styles.secondaryText, { color: P.sub }]}>{tr('common.notNow')}</Text>

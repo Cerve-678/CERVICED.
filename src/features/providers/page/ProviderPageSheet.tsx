@@ -241,7 +241,7 @@ export function ProviderPageSheet({
               }}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={`Go to ${PAGE_SECTION_TITLES[key]}`}
+              accessibilityLabel={tr('discover.page.goToA11y', { name: PAGE_SECTION_TITLES[key] })}
             >
               <Text
                 style={[styles.jumpBarText, { color: onAccentInk(adaptiveAccentColor).text }]}
@@ -440,7 +440,7 @@ export function ProviderPageSheet({
                         site, so CERVICED applies none of this. */}
                     {isLinkOnly && rows.length > 0 && (
                       <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
-                        These policies are handled on their booking site.
+                        {tr('discover.page.thesePoliciesAreHandledOnTheir')}
                       </Text>
                     )}
                   </View>
@@ -461,7 +461,7 @@ export function ProviderPageSheet({
                   styles.policyImageFab,
                   { backgroundColor: adaptiveAccentColor },
                 ]}
-                accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : tr('discover.profile.viewFullPolicyA11y')}
+                accessibilityLabel={policyPages.length > 1 ? tr('discover.page.viewPolicyPagesA11y', { count: policyPages.length }) : tr('discover.profile.viewFullPolicyA11y')}
                 accessibilityRole="button"
               >
                 <Ionicons
@@ -519,7 +519,7 @@ export function ProviderPageSheet({
                 const footer = (ink: { text: string; sub: string }) =>
                   isLinkOnly && rows.length > 0 ? (
                     <Text style={[styles.policyHandledNote, { color: ink.sub }]}>
-                      These policies are handled on their booking site.
+                      {tr('discover.page.thesePoliciesAreHandledOnTheir')}
                     </Text>
                   ) : null;
                 if (pageStyle.policies === "band") {
@@ -583,7 +583,7 @@ export function ProviderPageSheet({
 
         {!takingBookings && closureReason ? (
           <Text style={{ color: OP.sub, fontSize: 13, marginBottom: 10 }}>
-            Not taking bookings: {closureReason.toLowerCase()}
+            {tr('discover.page.notTakingBookings2')} {closureReason.toLowerCase()}
           </Text>
         ) : null}
 

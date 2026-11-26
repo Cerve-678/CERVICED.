@@ -26,6 +26,8 @@ import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { CalendarChooserSheet } from './CalendarChooserSheet';
 import { resetCalendarSyncThrottle, syncCalendarBusyTimes } from './calendarBusySync';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface CalendarSyncPalette {
   bg: string;
@@ -48,6 +50,8 @@ function blockedLine(status: CalendarSyncStatus | null): string {
 }
 
 export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [phase, setPhase] = useState<Phase>('loading');
   const [status, setStatus] = useState<CalendarSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -66,7 +70,7 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
       setStatus(await getMyCalendarSyncStatus());
     } catch (e) {
       logger.error('[CalendarSyncCard] sync failed', e);
-      setError("Couldn't sync just now. Check your connection and try again.");
+      setError(tr('discover.page.couldnTSyncJustNowCheck'));
     } finally {
       setSyncing(false);
     }
@@ -85,7 +89,7 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
     } catch (e) {
       logger.error('[CalendarSyncCard] could not load calendar sync', e);
       setPhase('connected');
-      setError("Couldn't check your calendar sync just now.");
+      setError(tr('discover.page.couldnTCheckYourCalendarSync'));
     }
   }, [sync]);
 
@@ -104,7 +108,7 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
       setChooserOpen(true);
     } catch (e) {
       logger.error('[CalendarSyncCard] could not list calendars', e);
-      setError("Couldn't read the calendars on this phone.");
+      setError(tr('discover.page.couldnTReadTheCalendarsOn'));
     }
   }, []);
 
@@ -138,7 +142,7 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
     } catch (e) {
       logger.error('[CalendarSyncCard] disconnect failed', e);
       setChooserOpen(false);
-      setError("Couldn't disconnect just now. Your busy times are still blocked; try again in a moment.");
+      setError(tr('discover.page.couldnTDisconnectJustNowYour'));
     }
   }, []);
 
@@ -149,9 +153,9 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
           <Ionicons name="sync-outline" size={18} color={C.accent} />
         </View>
         <View style={styles.flex}>
-          <Text style={[styles.title, { color: C.text }]}>Calendar Sync</Text>
+          <Text style={[styles.title, { color: C.text }]}>{tr('discover.page.calendarSync')}</Text>
           <Text style={[styles.sub, { color: C.sub }]}>
-            {phase === 'connected' ? blockedLine(status) : 'Take bookings somewhere else too? Stop double bookings.'}
+            {phase === 'connected' ? blockedLine(status) : tr('discover.page.takeBookingsSomewhereElseTooStop')}
           </Text>
         </View>
         {phase === 'connected' && (
@@ -161,9 +165,9 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Choose calendars"
+            accessibilityLabel={tr('discover.page.chooseCalendars')}
           >
-            <Text style={[styles.pillText, { color: C.accent }]}>Calendars</Text>
+            <Text style={[styles.pillText, { color: C.accent }]}>{tr('discover.page.calendars')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -173,13 +177,13 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
       {phase === 'disconnected' && (
         <>
           <Text style={[styles.body, { color: C.sub }]}>
-            Connect the calendar on your phone that your other bookings go into (Fresha, Booksy, Acuity and most others can add them to iPhone or Google Calendar). Clients won't be able to book you here when you're busy there.
+            {tr('discover.page.connectCalendarBody')}
           </Text>
           <Text style={[styles.body, { color: C.sub }]}>
-            We only send the times you're busy, never what's in your calendar.
+            {tr('discover.page.weOnlySendTheTimesYou')}
           </Text>
           <TouchableOpacity style={[styles.button, { backgroundColor: C.accent }]} onPress={openChooser} activeOpacity={0.85}>
-            <Text style={[styles.buttonText, { color: C.onAccent }]}>Connect calendar</Text>
+            <Text style={[styles.buttonText, { color: C.onAccent }]}>{tr('discover.page.connectCalendar')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -187,10 +191,10 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
       {phase === 'denied' && (
         <>
           <Text style={[styles.body, { color: C.sub }]}>
-            CERVICED doesn't have access to your calendar. You can turn it on in your phone's Settings.
+            {tr('discover.page.cervicedDoesnTHaveAccessTo')}
           </Text>
           <TouchableOpacity style={[styles.button, { backgroundColor: C.accent }]} onPress={() => { void Linking.openSettings(); }} activeOpacity={0.85}>
-            <Text style={[styles.buttonText, { color: C.onAccent }]}>Open Settings</Text>
+            <Text style={[styles.buttonText, { color: C.onAccent }]}>{tr('discover.page.openSettings')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -198,7 +202,7 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
       {phase === 'connected' && (
         <>
           <Text style={[styles.body, { color: C.sub }]}>
-            Clients can't book times you're busy in your chosen calendars. It updates when you open CERVICED, so open the app after taking a booking somewhere else.
+            {tr('discover.page.clientsCanTBookTimesYou')}
           </Text>
           <TouchableOpacity
             style={[styles.button, styles.outlineButton, { borderColor: C.accent }, syncing && styles.disabled]}
@@ -208,7 +212,7 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
           >
             {syncing
               ? <ActivityIndicator color={C.accent} />
-              : <Text style={[styles.buttonText, { color: C.accent }]}>Sync now</Text>}
+              : <Text style={[styles.buttonText, { color: C.accent }]}>{tr('discover.page.syncNow')}</Text>}
           </TouchableOpacity>
         </>
       )}
@@ -224,9 +228,9 @@ export function CalendarSyncCard({ C }: { C: CalendarSyncPalette }) {
         onSave={saveChoice}
         onClose={() => setChooserOpen(false)}
         onDisconnect={phase === 'connected' ? disconnect : undefined}
-        body="Switch on the calendars your other bookings go into. Clients won't be able to book you when you're busy in them."
-        saveLabel="Block these busy times"
-        disconnectLabel="Disconnect calendar sync"
+        body={tr('discover.page.switchOnTheCalendarsYourOther')}
+        saveLabel={tr('discover.page.blockTheseBusyTimes')}
+        disconnectLabel={tr('discover.page.disconnectCalendarSync')}
       />
     </View>
   );

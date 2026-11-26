@@ -214,6 +214,8 @@ export function PageSectionHeading({
   /** A Custom section's own name, drawn in place of the style's wording. */
   title?: string | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const style = palette.pageStyle;
   const custom = ownTitle?.trim() || null;
   const title = custom ?? PAGE_SECTION_TITLES[section];
@@ -637,7 +639,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.pillMarkRow}>
           <View style={[headingStyles.pillMark, { backgroundColor: tone }]} />
           <Text style={[headingStyles.pillMarkTitle, { color: ink }]} numberOfLines={1}>
-            {section === "portfolio" && !custom ? "my work" : words.toLowerCase()}
+            {section === "portfolio" && !custom ? tr('discover.page.myWorkLower') : words.toLowerCase()}
           </Text>
         </View>
       );
@@ -646,7 +648,7 @@ export function PageSectionHeading({
       // Latte: a plain serif title in the band's ink. The portfolio is "My work".
       return (
         <Text {...a11y} style={[headingStyles.pourSerif, { color: ink }]} numberOfLines={2}>
-          {section === "portfolio" && !custom ? "My work" : title}
+          {section === "portfolio" && !custom ? tr('discover.page.myWork') : title}
         </Text>
       );
     case "shopSerif":
@@ -1187,7 +1189,7 @@ export function LatteBookBar({
   return (
     <View style={[surfaceStyles.pour, surfaceStyles.pourBar, { backgroundColor: bar }]}>
       <View style={surfaceStyles.pourBarText}>
-        <Text style={[surfaceStyles.pourBarPrice, { color: ink.text }]} numberOfLines={1}>{price ? `from ${price}` : "Book in"}</Text>
+        <Text style={[surfaceStyles.pourBarPrice, { color: ink.text }]} numberOfLines={1}>{price ? tr('discover.page.fromPrice', { price }) : tr('discover.page.bookIn')}</Text>
         {serviceName ? <Text style={[surfaceStyles.pourBarSub, { color: ink.sub }]} numberOfLines={1}>{serviceName}</Text> : null}
       </View>
       <TouchableOpacity
@@ -1404,6 +1406,8 @@ export function RuledJumpBar({
   sheet: string;
   onJump?: ((section: PageSectionKey) => void) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const ink = sheetInk(sheet);
   const rule = outlineInk(sheet);
   return (
@@ -1423,7 +1427,7 @@ export function RuledJumpBar({
                 onPress={() => onJump(section)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={`Go to ${PAGE_SECTION_TITLES[section]}`}
+                accessibilityLabel={tr('discover.page.goToA11y', { name: PAGE_SECTION_TITLES[section] })}
               >
                 {label}
               </TouchableOpacity>

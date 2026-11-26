@@ -1,5 +1,6 @@
 
-import { tr } from '../../i18n';/**
+import { tr } from '../../i18n/translate';
+/**
  * Filters for the provider Inbox list: read state, how recent the last
  * message is, and a name search. Pure, so the screen and its tests share one
  * definition of what each chip means.
@@ -17,14 +18,14 @@ export interface InboxFilters {
 export const NO_INBOX_FILTERS: InboxFilters = { read: null, date: null, search: '' };
 
 export const INBOX_READ_CHIPS: { key: InboxReadFilter; label: string }[] = [
-  { key: 'unread', label: 'Unread' },
-  { key: 'read', label: 'Read' },
+  { key: 'unread', get label() { return tr('discover.page.unread'); } },
+  { key: 'read', get label() { return tr('discover.page.read'); } },
 ];
 
 export const INBOX_DATE_CHIPS: { key: InboxDateFilter; label: string }[] = [
   { key: 'today', get label() { return tr('common.date.today'); } },
-  { key: 'last7', label: 'Last 7 days' },
-  { key: 'older', label: 'Older' },
+  { key: 'last7', get label() { return tr('discover.page.last7Days'); } },
+  { key: 'older', get label() { return tr('discover.page.older'); } },
 ];
 
 /** The fields a conversation needs for filtering. */

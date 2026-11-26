@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { CALENDAR_VIEW_OPTIONS, type CalendarView } from '../provider-bookings/calendarViewPreference';
 import type { ReleaseQuickView } from './releaseQuickView';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   /** undefined while the profile hasn't loaded yet (the row holds its
@@ -33,6 +35,8 @@ export function ManageScheduleRows({
   release, onOpenRelease, calendarView, onChangeCalendarView,
   textColor, subTextColor, accentColor, onAccentColor, chipBg, borderColor,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
     <View>
       {release !== null && (
@@ -45,7 +49,7 @@ export function ManageScheduleRows({
             }}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={release ? `${release.title}. ${release.lines.join('. ')}. Change in Scheduling.` : 'Release day. Change in Scheduling.'}
+            accessibilityLabel={release ? `${release.title}. ${release.lines.join('. ')}. ${tr('discover.page.changeInScheduling')}` : tr('discover.page.releaseDayChangeInScheduling')}
           >
             <Ionicons name="calendar-number-outline" size={18} color={accentColor} />
             <View style={st.releaseText}>
@@ -63,7 +67,7 @@ export function ManageScheduleRows({
       )}
 
       <Text style={[st.label, { color: subTextColor }]}>CALENDAR VIEW</Text>
-      <Text style={[st.line, { color: subTextColor }]}>How your calendar on Home opens</Text>
+      <Text style={[st.line, { color: subTextColor }]}>{tr('discover.page.howYourCalendarOnHomeOpens')}</Text>
       <View style={st.chips} accessibilityRole="radiogroup">
         {CALENDAR_VIEW_OPTIONS.map(option => {
           const picked = calendarView === option.key;
@@ -79,7 +83,7 @@ export function ManageScheduleRows({
               activeOpacity={0.7}
               accessibilityRole="radio"
               accessibilityState={{ selected: picked }}
-              accessibilityLabel={`${option.label} view`}
+              accessibilityLabel={tr('discover.page.viewA11y', { name: option.label })}
             >
               <Ionicons name={option.icon} size={15} color={picked ? onAccentColor : accentColor} />
               <Text style={[st.chipText, { color: picked ? onAccentColor : textColor }]}>{option.label}</Text>

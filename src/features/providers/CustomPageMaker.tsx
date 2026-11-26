@@ -109,14 +109,14 @@ export function CustomPageMaker({
       {/* Where they stand. No separate start button: any pick below, or Tap
           Your Page, moves the page to Custom. */}
       <View style={sectionStyle}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>Your Own Page</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('discover.page.yourOwnPage')}</Text>
         {active ? (
           <View style={[styles.activeRow, styles.activeRowGap]}>
             <Ionicons name="checkmark-circle" size={18} color={accent} />
-            <Text style={[styles.sectionSubFlat, { color: P.sub }]}>Your page is using Custom. Choose a style under Layout to switch back.</Text>
+            <Text style={[styles.sectionSubFlat, { color: P.sub }]}>{tr('discover.page.yourPageIsUsingCustomChoose')}</Text>
           </View>
         ) : (
-          <Text style={[styles.sectionSub, { color: P.sub }]}>A plain page you make yourself. Tap your page, or pick a look and fonts below.</Text>
+          <Text style={[styles.sectionSub, { color: P.sub }]}>{tr('discover.page.aPlainPageYouMakeYourself')}</Text>
         )}
         {/* Changing one part at a time happens on the page itself. */}
         <TouchableOpacity
@@ -124,14 +124,14 @@ export function CustomPageMaker({
           onPress={guard(onOpenTapEdit)}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={locked ? 'Tap your page, locked' : 'Tap your page: change a part by tapping it on your page'}
+          accessibilityLabel={locked ? tr('discover.page.tapYourPageLocked') : tr('discover.page.tapYourPageChangeAPart')}
         >
           <View style={styles.tapEditIcon}>
             <Ionicons name={locked ? 'lock-closed' : 'hand-left-outline'} size={18} color="#FFFFFF" />
           </View>
           <View style={styles.coloursText}>
-            <Text style={styles.tapEditTitle}>Tap Your Page</Text>
-            <Text style={styles.tapEditSub}>See your page and tap the part you want to change.</Text>
+            <Text style={styles.tapEditTitle}>{tr('discover.page.tapYourPage')}</Text>
+            <Text style={styles.tapEditSub}>{tr('discover.page.seeYourPageAndTapThe')}</Text>
           </View>
           <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
         </TouchableOpacity>
@@ -139,8 +139,8 @@ export function CustomPageMaker({
 
       {/* 1 · A look to start from: each sets every part of the page at once. */}
       <View style={sectionStyle}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>Start From a Look</Text>
-        <Text style={[styles.sectionSub, { color: P.sub }]}>Each one sets your whole page. Then use Tap Your Page to change any part.</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('discover.page.startFromALook')}</Text>
+        <Text style={[styles.sectionSub, { color: P.sub }]}>{tr('discover.page.eachOneSetsYourWholePage')}</Text>
         <View style={styles.layoutGrid}>
           {CUSTOM_LAYOUTS.map(layout => {
             const selected = active && look === layout.key;
@@ -166,8 +166,8 @@ export function CustomPageMaker({
 
       {/* 2 · Fonts */}
       <View style={sectionStyle}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>Fonts</Text>
-        <Text style={[styles.sectionSub, { color: P.sub }]}>Your name, your headings and your text.</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('discover.page.fonts')}</Text>
+        <Text style={[styles.sectionSub, { color: P.sub }]}>{tr('discover.page.yourNameYourHeadingsAndYour')}</Text>
         <View style={[styles.segment, { backgroundColor: P.surface }]}>
           {(['sets', 'mix'] as const).map(key => {
             const selected = mode === key;
@@ -180,7 +180,7 @@ export function CustomPageMaker({
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
               >
-                <Text style={[styles.segmentLabel, { color: selected ? P.text : P.sub }]}>{key === 'sets' ? 'Font Sets' : 'Mix Your Own'}</Text>
+                <Text style={[styles.segmentLabel, { color: selected ? P.text : P.sub }]}>{key === 'sets' ? tr('discover.page.fontSets') : tr('discover.page.mixYourOwn')}</Text>
               </TouchableOpacity>
             );
           })}
@@ -212,7 +212,7 @@ export function CustomPageMaker({
                       activeOpacity={0.8}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={`${fontSet.name} fonts`}
+                      accessibilityLabel={tr('discover.page.fontsA11y', { name: fontSet.name })}
                     >
                       <Text
                         style={[styles.setName, {
@@ -226,7 +226,7 @@ export function CustomPageMaker({
                         {fontSet.name}
                       </Text>
                       <Text style={[styles.setHeading, { color: P.text, fontFamily: heading.fontFamily, fontSize: Math.round(14 * (heading.sizeScale ?? 1)) }]} numberOfLines={1}>{tr('discover.profile.services')}</Text>
-                      <Text style={[styles.setText, { color: P.sub, fontFamily: text.fontFamily }]} numberOfLines={1}>Your text</Text>
+                      <Text style={[styles.setText, { color: P.sub, fontFamily: text.fontFamily }]} numberOfLines={1}>{tr('discover.page.yourText')}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -262,7 +262,7 @@ export function CustomPageMaker({
 
       {/* 3 · Corners */}
       <View style={sectionStyle}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>Finishing Touches</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('discover.page.finishingTouches')}</Text>
         <Text style={[styles.groupLabel, styles.touchLabel, { color: P.sub }]}>CORNERS</Text>
         <View style={[styles.segment, { backgroundColor: P.surface }]}>
           {CARD_SHAPES.map(shape => {
@@ -289,11 +289,11 @@ export function CustomPageMaker({
         onPress={() => { tap(); onOpenColours(); }}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel="Your colours are set in Colours. Open Colours"
+        accessibilityLabel={tr('discover.page.yourColoursAreSetInColours')}
       >
         <View style={styles.coloursText}>
-          <Text style={[styles.sectionTitle, { color: P.text }]}>Colours</Text>
-          <Text style={[styles.sectionSubFlat, { color: P.sub }]}>Your page uses the colours you set in Colours.</Text>
+          <Text style={[styles.sectionTitle, { color: P.text }]}>{tr('discover.page.colours')}</Text>
+          <Text style={[styles.sectionSubFlat, { color: P.sub }]}>{tr('discover.page.yourPageUsesTheColoursYou')}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={P.sub} />
       </TouchableOpacity>
@@ -381,10 +381,12 @@ export function CustomTapPanel({
   accent: string;
   bottomInset: number;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
   return (
     <View style={[styles.panel, { paddingBottom: bottomInset + 12 }]}>
-      <Text style={styles.panelHint}>Tap a part of your page, or pick one here</Text>
+      <Text style={styles.panelHint}>{tr('discover.page.tapAPartOfYourPage')}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.panelTabs}>
         {CUSTOM_PARTS.map(p => {
           const selected = p.key === part;
