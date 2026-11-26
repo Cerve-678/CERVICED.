@@ -210,7 +210,7 @@ export const providerSetup = {
   'providerSetup.ui.pleaseChooseYourServiceType': 'Please choose your service type.',
   'providerSetup.ui.popular': 'Popular',
   'providerSetup.ui.published': 'Published',
-  'providerSetup.ui.saveAmpPublish': 'Save &amp; Publish',
+  'providerSetup.ui.saveAmpPublish': 'Save & Publish',
   'providerSetup.ui.serviceType': 'Service type',
   'providerSetup.ui.servicesPrices': 'Services & prices',
   'providerSetup.ui.shownOnYourPublicProfileOptional': 'Shown on your public profile (optional).',

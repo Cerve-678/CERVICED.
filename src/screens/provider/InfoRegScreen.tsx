@@ -4497,7 +4497,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
               onPress={() => { tapSelect(); openLegalPage('provider-terms'); }}
             >
-              CERVICED Terms &amp; Conditions
+              CERVICED Terms & Conditions
             </Text>
             {providerData.termsAcceptedAt
               ? ` — agreed ${formatLongDate(providerData.termsAcceptedAt)}`
@@ -6201,7 +6201,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   the provider wants beside these — it just no longer owns this
                   one. Storage is unchanged: this is the policy body of their
                   is_terms row, exactly what get_provider_terms serves. */}
-              <Text style={[styles.policyLabel, { marginTop: 18 }]}>YOUR TERMS &amp; CONDITIONS</Text>
+              <Text style={[styles.policyLabel, { marginTop: 18 }]}>YOUR TERMS & CONDITIONS</Text>
               <Text style={styles.addressHint}>
                 Clients read and agree to these before they can add you to their basket (optional).
               </Text>
