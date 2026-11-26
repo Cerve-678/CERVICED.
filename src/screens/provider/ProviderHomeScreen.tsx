@@ -21,6 +21,7 @@ import {
   Easing,
   PanResponder,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +33,7 @@ import {
   ConfirmedBooking,
 } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { DEFAULT_CALENDAR_VIEW, nextCalendarView, useCalendarViewPreference, type CalendarView } from '../../features/provider-bookings/calendarViewPreference';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { storage } from '../../utils/storage';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
@@ -45,16 +47,18 @@ import {
   hasMyProviderGoLiveAddress,
   getServiceDurationsByIds,
   subscribeToProviderBookingChanges,
-  getUnreadNotificationCount,
   countProviderServices,
+  getCurrentAccountDetailsPending,
   getOrCreateConversation,
   forgetCachedReads,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
-import { findScheduleIssues, primaryIssue, SCHEDULE_ISSUE_LABEL_KEYS, type ScheduleIssue } from '../../utils/scheduleIssues';
-import { resolveTimelineRange } from '../../utils/dayTimelineRange';
+import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../utils/scheduleIssues';
+import { assignOverlapColumns, resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
+import { useAutoCalendarSync } from '../../features/providers/calendarBusySync';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { withTimeout } from '../../utils/withTimeout';
 import type {
   DbProviderAvailability,
@@ -62,8 +66,7 @@ import type {
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
 } from '../../types/database';
-import { formatTime12, formatSectionTitle, dateToYMD, formatDurationMinutes, overridesFromDate, formatLongDate, monthName, dayName } from '../../utils/dateUtils';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes, overridesFromDate, formatDayRangeShortMonth } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import * as Haptics from 'expo-haptics';
 
@@ -79,6 +82,9 @@ import {
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
+import { readableAbsoluteSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -87,21 +93,26 @@ const CP = { card: '#252220', border: 'rgba(126,102,103,0.18)' }; // static Styl
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const STATUS_CFG: Record<string, { bg: string; dbg: string; color: string; labelKey: TranslationKey }> = {
-  confirmed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', labelKey: 'providerBookings.status.confirmed'  },
-  pending:     { bg: '#FBF1E0', dbg: '#3D2E10', color: '#B8730A', labelKey: 'providerBookings.status.pending'    },
-  completed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', labelKey: 'providerBookings.status.completed'  },
-  cancelled:   { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', labelKey: 'providerBookings.status.cancelled'  },
-  no_show:     { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', labelKey: 'providerBookings.status.noShowTitle' },
-  in_progress: { bg: '#F3EAFF', dbg: '#2E1A40', color: '#7B2FBE', labelKey: 'providerBookings.status.inProgressTitle' },
-  upcoming:    { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', labelKey: 'providerBookings.status.confirmed'  },
+const STATUS_CFG: Record<string, { bg: string; dbg: string; color: string; label: string }> = {
+  confirmed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', get label() { return tr('providerBookings.status.confirmed'); }   },
+  pending:     { bg: '#FBF1E0', dbg: '#3D2E10', color: '#B8730A', get label() { return tr('providerBookings.status.pending'); }     },
+  completed:   { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', get label() { return tr('providerBookings.status.completed'); }   },
+  cancelled:   { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', get label() { return tr('providerBookings.status.cancelled'); }   },
+  no_show:     { bg: '#FDEAEA', dbg: '#3D1B1B', color: '#C73535', get label() { return tr('providerBookings.status.noShowTitle'); }     },
+  in_progress: { bg: '#F3EAFF', dbg: '#2E1A40', color: '#7B2FBE', get label() { return tr('providerBookings.status.inProgressTitle'); } },
+  upcoming:    { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', get label() { return tr('providerBookings.status.confirmed'); }   },
 };
 
-function statusCfg(s: string) {
+function statusCfg(s: string, declinedAt?: string | null) {
+  // A request you (or the 24-hour expiry) turned down is stored as cancelled.
+  if (s === 'cancelled' && declinedAt) return { ...STATUS_CFG['cancelled']!, label: tr('providerBookings.status.declined') };
   return STATUS_CFG[s] ?? STATUS_CFG['completed']!;
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
+
+const MONTH_NAMES  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_FULL     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 function formatDateString(date: Date): string {
   return dateToYMD(date);
@@ -121,7 +132,7 @@ function parseTimeToMinutes(t: string): number {
 }
 
 
-function countdownLabel(bookingDate: string, bookingTime: string, t: (key: TranslationKey, params?: Record<string, string | number>) => string): string | null {
+function countdownLabel(bookingDate: string, bookingTime: string): string | null {
   const [y, mo, d] = bookingDate.split('-').map(Number);
   const mins = parseTimeToMinutes(bookingTime);
   const dt   = new Date(y!, mo! - 1, d!);
@@ -129,12 +140,10 @@ function countdownLabel(bookingDate: string, bookingTime: string, t: (key: Trans
   const ms  = dt.getTime() - Date.now();
   if (ms <= 0 || ms > 172_800_000) return null;
   const m = Math.round(ms / 60_000);
-  if (m < 60) return t('providerBookings.home.countdown.minutes', { minutes: m });
+  if (m < 60) return `in ${m}m`;
   const h  = Math.floor(m / 60);
   const rm = m % 60;
-  return rm
-    ? t('providerBookings.home.countdown.hoursMinutes', { hours: h, minutes: rm })
-    : t('providerBookings.home.countdown.hours', { hours: h });
+  return rm ? `in ${h}h ${rm}m` : `in ${h}h`;
 }
 
 function sectionLabel(dateStr: string): string {
@@ -176,8 +185,11 @@ function getMonthDays(year: number, month: number) {
 
 function formatCreatedAt(iso: string): string {
   const d = new Date(iso);
+  const date = d.getDate();
+  const dayName = DAY_FULL[d.getDay()];
+  const month = MONTH_NAMES[d.getMonth()];
   const time = formatTime12(d);
-  return `${formatLongDate(d)}, ${time}`;
+  return `${dayName} ${ordinalSuffix(date)} ${month} ${d.getFullYear()}, ${time}`;
 }
 
 // ─── Date strip ───────────────────────────────────────────────────────────────
@@ -220,19 +232,18 @@ interface BookingCardProps {
 }
 
 function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
-  const { t } = useTranslation();
-  const cfg   = statusCfg(booking.status);
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const cfg   = statusCfg(booking.status, booking.declinedAt);
   const past  = isPastBooking(booking.bookingDate, booking.bookingTime);
-  const eta   = countdownLabel(booking.bookingDate, booking.bookingTime, t);
+  const eta   = countdownLabel(booking.bookingDate, booking.bookingTime);
   const addOns = booking.addOns?.reduce((s, a) => s + a.price, 0) ?? 0;
   const total  = booking.price + addOns;
   const ref    = formatBookingRef(booking);
   const pillBg = dark ? cfg.dbg : cfg.bg;
 
   const expandScale = useRef(new Animated.Value(1)).current;
-  const expandLabel = expansionState === 0
-    ? t('providerBookings.home.card.expand')
-    : expansionState === 1 ? t('providerBookings.home.card.more') : t('providerBookings.home.card.collapse');
+  const expandLabel = expansionState === 0 ? 'Expand' : expansionState === 1 ? 'More' : 'Collapse';
 
   const handleExpand = (e: any) => {
     e.stopPropagation?.();
@@ -265,7 +276,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
                 that's both double-booked AND on a blocked date needs both
                 facts to be actionable. Ordered worst-first by primaryIssue's
                 severity ranking. */}
-            {orderedIssueLabels(issues).map(kind => t(SCHEDULE_ISSUE_LABEL_KEYS[kind])).join(' · ')}
+            {orderedIssueLabels(issues).join(' · ')}
           </Text>
         </View>
       )}
@@ -273,7 +284,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
       {/* Row 1 — pill + time + expand */}
       <View style={bc.topRow}>
         <View style={[bc.pill, { backgroundColor: pillBg }]}>
-          <Text style={[bc.pillText, { color: cfg.color }]}>{t(cfg.labelKey)}</Text>
+          <Text style={[bc.pillText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
         <View style={bc.topRight}>
           {!!booking.bookingTime && (
@@ -304,7 +315,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
       {/* Row 3 — client + countdown */}
       <View style={bc.row3}>
         <Text style={[bc.client, { color: P.sub, textDecorationLine: past ? 'line-through' : 'none' }]} numberOfLines={1}>
-          {booking.customerName || t('providerBookings.clientFallback')}
+          {booking.customerName || 'Client'}
         </Text>
         {!!eta && (
           <View style={[bc.etaBadge, { backgroundColor: dark ? P.iconBg : '#E4EEF8' }]}>
@@ -316,19 +327,19 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
       {/* ── Booking Summary (state ≥ 1) ── */}
       {expansionState >= 1 && (
         <View style={[bc.expand, { borderTopColor: P.sep }]}>
-          <Text style={[bc.expandHdr, { color: P.sub }]}>{t('providerBookings.home.card.summaryHeader')}</Text>
-          <SummaryRow label={t('providerBookings.home.card.service')}  value={booking.serviceName} P={P} />
-          <SummaryRow label={t('providerBookings.home.card.time')}     value={booking.bookingTime} P={P} />
-          <SummaryRow label={t('providerBookings.home.card.duration')} value={booking.duration} P={P} />
-          <SummaryRow label={t('providerBookings.home.card.price')}    value={`£${booking.price}`} P={P} />
+          <Text style={[bc.expandHdr, { color: P.sub }]}>{tr('providerBookings.home.card.summaryHeader')}</Text>
+          <SummaryRow label={tr('providerBookings.home.card.service')}  value={booking.serviceName} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.time')}     value={booking.bookingTime} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.duration')} value={booking.duration} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.price')}    value={`£${booking.price}`} P={P} />
           {booking.addOns && booking.addOns.length > 0 && booking.addOns.map(a => (
-            <Text key={a.id} style={bc.addOn}>{t('providerBookings.home.card.withAddOn', { name: a.name, price: a.price })}</Text>
+            <Text key={a.id} style={bc.addOn}>{tr('providerBookings.home.withAddOn', { name: a.name, price: `£${a.price}` })}</Text>
           ))}
           {!!booking.notes && (
-            <SummaryRow label={t('providerBookings.home.card.clientNotes')} value={`"${booking.notes}"`} italic P={P} />
+            <SummaryRow label={tr('providerBookings.home.card.clientNotes')} value={`"${booking.notes}"`} italic P={P} />
           )}
           <View style={[bc.payRow, { marginTop: 10 }]}>
-            <Text style={[bc.summaryLabel, { color: P.sub }]}>{t('providerBookings.home.card.serviceTotal')}  </Text>
+            <Text style={[bc.summaryLabel, { color: P.sub }]}>{tr('providerBookings.home.card.serviceTotal')}  </Text>
             <Text style={[bc.summaryVal, { color: P.text }]}>£{total}</Text>
           </View>
           {booking.paymentType === 'deposit' ? (
@@ -336,21 +347,21 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
             // deposit — never the provider's money, so this shows the
             // deposit alone.
             <>
-              <Text style={bc.deposit}>{t('providerBookings.home.card.depositPaid', { amount: booking.depositAmount ?? 0 })}</Text>
-              <Text style={bc.balance}>{t('providerBookings.home.card.balanceDue', { amount: booking.remainingBalance ?? 0 })}</Text>
+              <Text style={bc.deposit}>Deposit paid – £{booking.depositAmount ?? 0}</Text>
+              <Text style={bc.balance}>Balance due – £{booking.remainingBalance ?? 0}</Text>
             </>
           ) : (
-            <Text style={bc.deposit}>{t('providerBookings.home.card.paidInFull', { amount: total })}</Text>
+            <Text style={bc.deposit}>Paid in full – £{total}</Text>
           )}
-          <SummaryRow label={t('providerBookings.home.card.paymentMethod')} value={booking.paymentMethod || t('providerBookings.home.card.cardFallback')} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.paymentMethod')} value={booking.paymentMethod || 'Card'} P={P} />
         </View>
       )}
 
       {/* ── Relevant Info (state ≥ 2) ── */}
       {expansionState >= 2 && (
         <View style={[bc.expand, { borderTopColor: P.sep }]}>
-          <Text style={[bc.expandHdr, { color: P.sub }]}>{t('providerBookings.home.card.relevantHeader')}</Text>
-          <SummaryRow label={t('providerBookings.home.card.bookedDate')} value={formatCreatedAt(booking.createdAt)} P={P} />
+          <Text style={[bc.expandHdr, { color: P.sub }]}>{tr('providerBookings.home.card.relevantHeader')}</Text>
+          <SummaryRow label={tr('providerBookings.home.card.bookedDate')} value={formatCreatedAt(booking.createdAt)} P={P} />
           {/* The client's note, not `bookingInstructions` — that field is this
               provider's OWN instructions copy (PoliciesScreen), so it read as
               the app quoting them back to themselves. Same swap as
@@ -358,9 +369,9 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
           {!!booking.notes && (
             <Text style={[bc.instructions, { color: P.sub }]}>“{booking.notes}”</Text>
           )}
-          <SummaryRow label={t('providerBookings.home.card.bookingRef')} value={ref} P={P} />
+          <SummaryRow label={tr('providerBookings.home.card.bookingRef')} value={ref} P={P} />
           <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={() => { tap(); onViewMessages(); }}>
-            <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>{t('providerBookings.home.card.viewMessages')}</Text>
+            <Text style={[bc.msgBtnTxt, { color: P.onAccent }]}>{tr('providerBookings.home.card.viewMessages')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -382,7 +393,7 @@ function SummaryRow({ label, value, italic, P }: { label: string; value: string;
 /** Where each shared go-live step is fixed, from the Home stack. All four are
  *  registered on this navigator so the tap pushes rather than bouncing to
  *  another tab's root. */
-const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
+const GO_LIVE_STEP_SCREENS: Record<Exclude<GoLiveStepKey, 'ownerDetails'>, string> = {
   profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
@@ -395,6 +406,7 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   stripe: 'Payments',
   portfolio: 'EditProfile',
   terms: 'EditProfile',
+  automations: 'Automations',
 };
 
 const ISSUE_COLOR = '#FF9500';
@@ -403,15 +415,14 @@ const ISSUE_COLOR = '#FF9500';
  *  prop identity on every render of the list. */
 const EMPTY_ISSUES: readonly ScheduleIssue[] = [];
 
-/** Worst-first, using the same ranking primaryIssue applies. Returns the
- *  issue kinds; the card translates each at render. */
-function orderedIssueLabels(issues: readonly ScheduleIssue[]): ScheduleIssue['kind'][] {
+/** Worst-first, using the same ranking primaryIssue applies. */
+function orderedIssueLabels(issues: readonly ScheduleIssue[]): string[] {
   const remaining = [...issues];
-  const ordered: ScheduleIssue['kind'][] = [];
+  const ordered: string[] = [];
   while (remaining.length > 0) {
     const next = primaryIssue(remaining);
     if (!next) break;
-    ordered.push(next.kind);
+    ordered.push(next.label);
     remaining.splice(remaining.indexOf(next), 1);
   }
   return ordered;
@@ -496,7 +507,6 @@ interface DayTimelineProps {
 }
 
 function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, onRefresh, availability, isBlocked }: DayTimelineProps) {
-  const { t } = useTranslation();
   // Measured per render, not captured at module load: booking blocks are laid
   // out as a fraction of the width left beside the time column.
   const { width: screenWidth } = useWindowDimensions();
@@ -542,22 +552,12 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
     return { booking: b, top, height, col: 0, cols: 1, colorIdx: i % BLOCK_COLORS.length };
   });
 
-  // Simple overlap detection: assign columns
-  for (let i = 0; i < positioned.length; i++) {
-    const a = positioned[i]!;
-    let col = 0;
-    const usedCols = new Set<number>();
-    for (let j = 0; j < i; j++) {
-      const b = positioned[j]!;
-      const aEnd = a.top + a.height;
-      const bEnd = b.top + b.height;
-      if (a.top < bEnd && aEnd > b.top) usedCols.add(b.col);
-    }
-    while (usedCols.has(col)) col++;
-    a.col = col;
-  }
-  const maxCols = Math.max(1, ...positioned.map(p => p.col + 1));
-  positioned.forEach(p => { p.cols = maxCols; });
+  // Side-by-side columns for clashing bookings, counted per clash so the
+  // rest of the day stays full width.
+  assignOverlapColumns(positioned).forEach((c, i) => {
+    positioned[i]!.col = c.col;
+    positioned[i]!.cols = c.cols;
+  });
 
   const bookingAreaW = screenWidth - TIME_COL_W - 32;
 
@@ -658,7 +658,7 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
 
           {/* Booking blocks */}
           {positioned.map(({ booking, top, height, col, cols, colorIdx }) => {
-            const cfg   = statusCfg(booking.status);
+            const cfg   = statusCfg(booking.status, booking.declinedAt);
             const color = booking.status === BookingStatus.CANCELLED ? CANCELLED_BLOCK : BLOCK_COLORS[colorIdx]!;
             const blockW = bookingAreaW / cols - 4;
             const left   = col * (bookingAreaW / cols) + 2;
@@ -702,19 +702,19 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
                 </Text>
                 {height > 44 && (
                   <Text style={{ fontSize: 11, color: P.sub, marginTop: 1 }} numberOfLines={1}>
-                    {booking.customerName || t('providerBookings.clientFallback')}
+                    {booking.customerName || 'Client'}
                   </Text>
                 )}
                 {height > 60 && (
                   <View style={{ position: 'absolute', top: 4, right: 6, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5, backgroundColor: color.dark + '55' }}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: color.dark }}>{t(cfg.labelKey)}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: color.dark }}>{cfg.label}</Text>
                   </View>
                 )}
                 {topIssue && (
                   <View
                     style={{ position: 'absolute', bottom: 4, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFB340', alignItems: 'center', justifyContent: 'center' }}
                     accessible
-                    accessibilityLabel={issues.map(i => t(SCHEDULE_ISSUE_LABEL_KEYS[i.kind])).join('. ')}
+                    accessibilityLabel={issues.map(i => i.label).join('. ')}
                   >
                     <Text style={{ fontSize: 9, fontWeight: '900', color: '#2E1E08' }}>!</Text>
                   </View>
@@ -730,19 +730,32 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
 
 // ─── Week view ────────────────────────────────────────────────────────────
 
-// Deliberately more compact than the day timeline's HOUR_H=64 — seven columns
-// have to share the width a single day timeline gets to itself.
-const WK_HOUR_H     = 56;
-const WK_TIME_COL_W = 44;
-// Right-hand spacer in both the day-header row and the grid; the header's
-// "next week" arrow lives in it so the columns stay pixel-aligned.
-const WK_ARROW_COL_W = 32;
+// Seven columns share the width one day timeline gets, so each day is only
+// about 46px wide. Space goes to the cards instead: hours are taller than the
+// day timeline's (a 30-minute booking gets 36px, room for a name and a line
+// of service), the time column is narrower with smaller labels, and the week
+// arrows sit in their own row above the days rather than in a gutter beside
+// them. The arrows used to take a 32px spacer at the right of every row,
+// which left each day about 40px and cut the cards' words off.
+const WK_HOUR_H     = 72;
+const WK_TIME_COL_W = 34;
+// Shortest a card draws, so a 15-minute booking still has room for a name.
+const WK_MIN_BLOCK_H = 24;
 // Headroom above the first hour line, mirroring the day timeline's own
 // TL_TOP_INSET — and the same generous +80 buffer it adds beyond the raw
 // hours height, so the ScrollView's reported content size actually covers
 // the last hour/booking plus the bottom tab-bar clearance instead of
 // truncating the scrollable range short of the real content.
 const WK_TOP_INSET  = 14;
+// The day letters and date circles sit this far left of their column's
+// centre (asked for 2026-11-09, 8 then 16: on a phone they read as right of
+// the days below). All seven move by the same amount, taps included.
+const WK_HEADER_NUDGE_LEFT = 16;
+
+/** First word of the client's name for a week card, "Client" when there's none. */
+function firstNameOf(name: string | null | undefined): string {
+  return name?.trim().split(/\s+/)[0] || 'Client';
+}
 
 function getMondayOf(dateStr: string): Date {
   const d   = new Date(dateStr + 'T00:00:00');
@@ -784,7 +797,8 @@ function WeekView({
   weekDates, bookingsByDate, scheduleIssues, availability, blockedDateStrings,
   selectedDate, onSelectDate, onPressBooking, P, refreshing, onRefresh,
 }: WeekViewProps) {
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -832,34 +846,37 @@ function WeekView({
 
   const goPrevWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, -7)); }, [selectedDate, onSelectDate]);
   const goNextWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, 7)); }, [selectedDate, onSelectDate]);
+  const weekRangeLabel = formatDayRangeShortMonth(weekDates[0] ?? selectedDate, weekDates[weekDates.length - 1] ?? selectedDate);
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Week title with the arrows either side. Arrows are the only way to
+          page: a swipe gesture on the grid was tried, but a PanResponder
+          wrapping the ScrollView made its own vertical scroll feel broken
+          even when gated to horizontal drags. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, marginHorizontal: 16, marginBottom: 8 }}>
+        <TouchableOpacity onPress={goPrevWeek} accessibilityLabel={tr('providerBookings.home.previousWeek')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+          <Ionicons name="chevron-back" size={18} color={P.sub} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: P.text, minWidth: 120, textAlign: 'center' }}>{weekRangeLabel}</Text>
+        <TouchableOpacity onPress={goNextWeek} accessibilityLabel={tr('providerBookings.home.nextWeek')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+          <Ionicons name="chevron-forward" size={18} color={P.sub} />
+        </TouchableOpacity>
+      </View>
+
       {/* Day headers, aligned with the columns below — same date-circle
           treatment as the date strip and month grid so "selected" and
-          "today" read the same way in every view. The week arrows sit at
-          either end of this row, in the time gutter and in a spacer the grid
-          mirrors, so paging a week needs no row of its own. Arrows are the
-          only way to page: a swipe gesture on the grid was tried, but a
-          PanResponder wrapping the ScrollView made its own vertical scroll
-          feel broken even when gated to horizontal drags. */}
+          "today" read the same way in every view. */}
       <View style={{ flexDirection: 'row', marginHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: P.border }}>
-        {/* Bottom-aligned with a 5px lift: the date circle is 36 tall and the
-            arrow 26, so this centres the arrow on the numbers whatever height
-            the day-letter row above them ends up. flex-start keeps it clear of
-            Monday's circle, which overlaps the gutter by 8. */}
-        <View style={{ width: WK_TIME_COL_W, alignItems: 'flex-start', justifyContent: 'flex-end' }}>
-          <TouchableOpacity onPress={goPrevWeek} accessibilityLabel={t('providerBookings.home.previousWeek')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }} style={{ padding: 4, marginBottom: 5 }}>
-            <Ionicons name="chevron-back" size={18} color={P.sub} />
-          </TouchableOpacity>
-        </View>
+        <View style={{ width: WK_TIME_COL_W }} />
         {/* Same spacer + flex:1-wrapper-of-flex:1-columns nesting as the grid
             below, so the two rows resolve to pixel-identical column widths
-            instead of two separately-computed flex layouts that could drift. */}
-        <View style={{ flex: 1, flexDirection: 'row' }}>
+            instead of two separately-computed flex layouts that could drift.
+            The nudge is a transform so those widths stay identical. */}
+        <View style={{ flex: 1, flexDirection: 'row', transform: [{ translateX: -WK_HEADER_NUDGE_LEFT }] }}>
           {weekDates.map(dateStr => {
             const dt      = new Date(dateStr + 'T00:00:00');
-            const dayLetter = dayName(dt.getDay(), 'short').charAt(0);
+            const dayName = ['S','M','T','W','T','F','S'][dt.getDay()] ?? '';
             const isToday = dateStr === TODAY_STR;
             const isSel   = dateStr === selectedDate;
             return (
@@ -875,7 +892,7 @@ function WeekView({
                     inside the circle, which a fresh set of styles here
                     lacked. */}
                 <Text style={[s.tileDayLetter, { color: isToday && !isSel ? P.accent : P.sub }]}>
-                  {dayLetter}
+                  {dayName}
                 </Text>
                 <View style={[
                   s.dateCircle,
@@ -883,7 +900,7 @@ function WeekView({
                 ]}>
                   <Text style={[
                     s.tileNum,
-                    { color: isSel ? '#fff' : isToday ? P.bg : P.text, fontWeight: '700' },
+                    { color: isSel ? P.onAccent : isToday ? P.bg : P.text, fontWeight: '700' },
                   ]}>
                     {dt.getDate()}
                   </Text>
@@ -891,11 +908,6 @@ function WeekView({
               </TouchableOpacity>
             );
           })}
-        </View>
-        <View style={{ width: WK_ARROW_COL_W, alignItems: 'flex-end', justifyContent: 'flex-end' }}>
-          <TouchableOpacity onPress={goNextWeek} accessibilityLabel={t('providerBookings.home.nextWeek')} hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ padding: 4, marginBottom: 5 }}>
-            <Ionicons name="chevron-forward" size={18} color={P.sub} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -912,8 +924,8 @@ function WeekView({
               const hh = h % 24;
               const label = hh === 0 ? '12am' : hh < 12 ? `${hh}am` : hh === 12 ? '12pm' : `${hh - 12}pm`;
               return (
-                <View key={h} style={{ position: 'absolute', top: i * WK_HOUR_H - 8, width: WK_TIME_COL_W, alignItems: 'flex-end', paddingRight: 6 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: P.sub }} numberOfLines={1}>{label}</Text>
+                <View key={h} style={{ position: 'absolute', top: i * WK_HOUR_H - 7, width: WK_TIME_COL_W, alignItems: 'flex-end', paddingRight: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '500', color: P.sub }} numberOfLines={1}>{label}</Text>
                 </View>
               );
             })}
@@ -932,24 +944,15 @@ function WeekView({
                 const startMin = parseTimeToMinutes(b.bookingTime);
                 const dur      = parseDurationToMinutes(b.duration);
                 const top      = Math.max(0, ((startMin - WK_START_HOUR * 60) / 60) * WK_HOUR_H);
-                const height   = Math.max(16, (dur / 60) * WK_HOUR_H);
+                const height   = Math.max(WK_MIN_BLOCK_H, (dur / 60) * WK_HOUR_H);
                 return { booking: b, top, height, col: 0, cols: 1, colorIdx: i % BLOCK_COLORS.length };
               });
-              // Same simple overlap-column assignment as the day timeline.
-              for (let i = 0; i < positioned.length; i++) {
-                const a = positioned[i]!;
-                let col = 0;
-                const used = new Set<number>();
-                for (let j = 0; j < i; j++) {
-                  const b = positioned[j]!;
-                  const aEnd = a.top + a.height, bEnd = b.top + b.height;
-                  if (a.top < bEnd && aEnd > b.top) used.add(b.col);
-                }
-                while (used.has(col)) col++;
-                a.col = col;
-              }
-              const maxCols = Math.max(1, ...positioned.map(p => p.col + 1));
-              positioned.forEach(p => { p.cols = maxCols; });
+              // Same overlap columns as the day timeline: only bookings that
+              // actually clash share the width.
+              assignOverlapColumns(positioned).forEach((c, i) => {
+                positioned[i]!.col = c.col;
+                positioned[i]!.cols = c.cols;
+              });
 
               return (
                 <View
@@ -977,8 +980,13 @@ function WeekView({
                     }
                     return blocks;
                   })()}
+                  {/* Explicit height, not bottom: 0. Every child of this row is
+                      absolutely positioned, so the row itself is 0px tall and a
+                      top/bottom-anchored shade collapsed to nothing: the closed
+                      day showed clean while the open days' out-of-hours bands
+                      (which have real heights) made them look like the shut ones. */}
                   {(isBlocked || dayAvail?.is_closed) && (
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: WK_HEIGHT, backgroundColor: 'rgba(0,0,0,0.4)' }} />
                   )}
 
                   {/* Booking blocks */}
@@ -989,6 +997,8 @@ function WeekView({
                     const topIssue = primaryIssue(issues);
                     const blockW   = 100 / cols;
                     const left     = col * blockW;
+                    // 4px of card padding, a 12px name line, then 11px per service line.
+                    const serviceLines = Math.max(0, Math.floor((height - 4 - 12) / 11));
                     return (
                       <TouchableOpacity
                         key={booking.id}
@@ -1007,13 +1017,14 @@ function WeekView({
                           overflow: 'hidden',
                           opacity: past ? 0.5 : 1,
                         }}>
-                          {height > 22 && (
-                            <Text style={{ fontSize: 9, fontWeight: '700', color: color.dark }} numberOfLines={1}>
-                              {booking.bookingTime}
-                            </Text>
-                          )}
-                          {height > 32 && (
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: P.text }} numberOfLines={1}>
+                          {/* No start time: the card's place on the grid already
+                              says it. The client's first name, then the service
+                              wrapping onto as many lines as the card has room for. */}
+                          <Text style={{ fontSize: 10, lineHeight: 12, fontWeight: '700', color: P.text }} numberOfLines={1}>
+                            {firstNameOf(booking.customerName)}
+                          </Text>
+                          {serviceLines > 0 && (
+                            <Text style={{ fontSize: 9.5, lineHeight: 11, fontWeight: '500', color: P.text, opacity: 0.85 }} numberOfLines={serviceLines}>
                               {booking.serviceName}
                             </Text>
                           )}
@@ -1025,13 +1036,12 @@ function WeekView({
               );
             })}
           </View>
-          <View style={{ width: WK_ARROW_COL_W }} />
 
           {/* Now line — spans the full grid width, not just today's column,
               so it reads as "this moment" across the whole week rather than
               a mark stuck inside one day's box. */}
           {todayInWeek && showNowLine && (
-            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: WK_ARROW_COL_W, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
+            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: 0, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
           )}
         </View>
       </ScrollView>
@@ -1063,8 +1073,9 @@ function SkeletonCard() {
 // ─── Section header ───────────────────────────────────────────────────────────
 
 function SectionBanner({ dateStr, P }: { dateStr: string; P: AppTheme }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode: dark } = useTheme();
-  const { t } = useTranslation();
   const banner = dark ? '#3A2E2F' : '#5C4033';
   const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
   const todayLabel = dark ? 'rgba(240,236,231,0.50)' : 'rgba(0,0,0,0.45)';
@@ -1072,12 +1083,12 @@ function SectionBanner({ dateStr, P }: { dateStr: string; P: AppTheme }) {
   if (kind === 'today') {
     return (
       <View style={sh.todayWrap}>
-        <Text style={[sh.todayText, { color: todayLabel }]}>{t('common.date.today')}</Text>
+        <Text style={[sh.todayText, { color: todayLabel }]}>{tr('common.date.today')}</Text>
       </View>
     );
   }
   const title    = sectionTitle(dateStr);
-  const subtitle = kind === 'tomorrow' ? t('common.date.tomorrow') : kind === 'yesterday' ? t('common.date.yesterday') : undefined;
+  const subtitle = kind === 'tomorrow' ? 'Tomorrow' : kind === 'yesterday' ? 'Yesterday' : undefined;
   return (
     <View style={[sh.banner, { backgroundColor: banner }]}>
       <Text style={[sh.bannerTitle, { color: bannerText }]}>{title}</Text>
@@ -1105,8 +1116,9 @@ type ListRow =
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ProviderHomeScreen({ navigation, route }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode: dark, palette: P } = useTheme();
-  const { t } = useTranslation();
   // Measured per render, not captured at module load: the add-sheet's
   // offscreen resting position is a full screen height, and the month grid
   // divides the width into seven cells.
@@ -1123,8 +1135,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Expansion states per booking
   const [expansionStates, setExpansionStates] = useState<Record<string, ExpansionState>>({});
 
-  // View mode: list, timeline, or full week (timeline is default — Apple Calendar style)
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'week'>('timeline');
+  // View mode: list, timeline (full day), or week. Opens in the provider's
+  // saved choice (My Profile → Manage → Calendar view); the view button below
+  // changes that same saved choice, so the two never disagree.
+  const [viewMode, setViewMode] = useState<CalendarView>(DEFAULT_CALENDAR_VIEW);
 
   // Month calendar toggle
   const [showMonth, setShowMonth]   = useState(false);
@@ -1138,7 +1152,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const [loading,   setLoading]     = useState(true);
   // Provider-role unread badge for the header bell. Counts only recipient_role
   // = 'provider' rows, so it never reflects the same user's client-side unread.
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount('provider');
   const [refreshing,setRefreshing]  = useState(false);
 
   // Provider availability
@@ -1197,9 +1211,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // while its start timer was pending — it just waits for the return to Home.
   const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
-  const viewModeBtnRef = useRef<View>(null);
-  const fabRef = useRef<View>(null);
-  const bellRef = useRef<View>(null);
+  const viewModeBtnRef = useRef<ViewInstance>(null);
+  const fabRef = useRef<ViewInstance>(null);
+  const bellRef = useRef<ViewInstance>(null);
 
   // Deliberately NOT gated on setupStatus any more. It used to be, because
   // the tour's second step spotlighted the go-live checklist card and that
@@ -1220,38 +1234,38 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     return [
       {
         key: 'tabs',
-        title: t('providerBookings.home.tour.tabsTitle'),
-        body: t('providerBookings.home.tour.tabsBody'),
+        title: tr('providerBookings.home.tour.tabsTitle'),
+        body: tr('providerBookings.home.tour.tabsBody'),
         target: { rect: tabRect },
         radius: Platform.OS === 'android' ? 0 : tabRect.height / 2,
         icon: 'apps',
       },
       {
         key: 'view-mode',
-        title: t('providerBookings.home.tour.viewModeTitle'),
-        body: t('providerBookings.home.tour.viewModeBody'),
+        title: tr('providerBookings.home.tour.viewModeTitle'),
+        body: tr('providerBookings.home.tour.viewModeBodyRemember'),
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
       },
       {
         key: 'fab',
-        title: t('providerBookings.home.tour.fabTitle'),
-        body: t('providerBookings.home.tour.fabBody'),
+        title: tr('providerBookings.home.tour.fabTitle'),
+        body: tr('providerBookings.home.tour.fabBody'),
         target: { ref: fabRef },
         radius: 26,
         icon: 'add-circle',
       },
       {
         key: 'bell',
-        title: t('providerBookings.home.tour.bellTitle'),
-        body: t('providerBookings.home.tour.bellBody'),
+        title: tr('providerBookings.home.tour.bellTitle'),
+        body: tr('providerBookings.home.tour.bellBody'),
         target: { ref: bellRef },
         radius: 17,
         icon: 'notifications',
       },
     ];
-  }, [screenWidth, screenHeight, insets.bottom, t]);
+  }, [screenWidth, screenHeight, insets.bottom]);
 
   // Which step keys this account still has coming; null until resolved.
   const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
@@ -1360,13 +1374,15 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     ]).start();
   }, [listOpacity, listSlide, selectedDate]);
 
-  // Auto-scroll strip to today on mount
+  // The date strip's last laid-out width: it centres the picked day when it
+  // first gets a width and whenever that width changes (see its onLayout).
+  // Cleared when the strip unmounts (month or week view), so it centres again
+  // when it comes back instead of opening at the start of the range.
+  const stripWidthRef = useRef(0);
+  const stripShown = !showMonth && viewMode !== 'week';
   useEffect(() => {
-    const t = setTimeout(() => {
-      stripRef.current?.scrollToIndex({ index: TODAY_IDX, animated: false, viewPosition: 0.4 });
-    }, 150);
-    return () => clearTimeout(t);
-  }, []);
+    if (!stripShown) stripWidthRef.current = 0;
+  }, [stripShown]);
 
   // A booking just added outside "today" (e.g. a custom-time squeeze-in) jumps
   // the calendar straight to that day, so the provider sees it land instead of
@@ -1391,12 +1407,28 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // The daily-recap notification ("Today's Schedule") lands here in list view:
   // it summarises the day as a list, so the timeline would answer a different
   // question. Cleared after use so a later re-focus doesn't force the mode again.
+  // A one-off: it doesn't change the saved view, and the saved view loading
+  // late doesn't undo it.
+  const viewModeForcedRef = useRef(false);
   useEffect(() => {
     const requested = route.params?.viewMode;
     if (!requested) return;
+    viewModeForcedRef.current = true;
     setViewMode(requested);
     navigation.setParams({ viewMode: undefined });
   }, [route.params?.viewMode, navigation]);
+
+  const [savedViewMode, saveViewMode] = useCalendarViewPreference(user?.id);
+  const lastSavedViewModeRef = useRef<CalendarView | null>(null);
+  useEffect(() => {
+    if (!savedViewMode) return;
+    // The first load yields to a notification's forced view; a later change
+    // (made in My Profile) always applies.
+    const isFirstLoad = lastSavedViewModeRef.current === null;
+    lastSavedViewModeRef.current = savedViewMode;
+    if (isFirstLoad && viewModeForcedRef.current) return;
+    setViewMode(savedViewMode);
+  }, [savedViewMode]);
 
   // Fetch bookings. `providerId`, when the caller already has it (the
   // combined focus effect below fetches the profile once for both this and
@@ -1441,10 +1473,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       .catch(err => logger.error('[ProviderHome] service duration lookup failed:', err));
     return () => { cancelled = true; };
   }, [bookings]);
-  // Keep the header bell's unread badge in sync (provider-role notifications only)
-  useFocusEffect(useCallback(() => {
-    getUnreadNotificationCount('provider').then(setUnreadCount).catch((err) => logger.error('[ProviderHome] unread count load failed:', err));
-  }, []));
+  // Calendar sync: busy times in the calendars they chose on Scheduling &
+  // Availability stop clients booking those times. Does nothing until they
+  // connect one.
+  useAutoCalendarSync();
 
   // Bookings + availability/blocked-dates, reloaded together on every focus
   // (e.g. after editing in ProviderScheduleScreen) from ONE profile fetch —
@@ -1496,7 +1528,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       return Promise.all([
         countProviderServices(profile.id),
         hasMyProviderGoLiveAddress(profile.id).catch(() => false),
-      ]).then(([serviceCount, goLiveAddress]) => {
+        getCurrentAccountDetailsPending(),
+      ]).then(([serviceCount, goLiveAddress, detailsPending]) => {
         if (cancelled) return;
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
@@ -1519,6 +1552,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           // present without an extra read.
           stripeSet: deriveStripeGoLiveField(profile),
           isLive: !!profile.has_gone_live,
+          detailsPending,
         });
 
         // Go-live celebration: only on a genuine false->true transition,
@@ -1772,7 +1806,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     [calMonth]
   );
 
-  const monthLabel = `${monthName(calMonth.getMonth())} ${calMonth.getFullYear()}`;
+  const monthLabel = `${MONTH_NAMES[calMonth.getMonth()]} ${calMonth.getFullYear()}`;
 
   // Handlers
   const toggleExpand = useCallback((id: string) => {
@@ -1788,13 +1822,13 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     const providerId = booking.providerId;
     if (!clientUserId || !providerId) return;
     try {
-      const clientName = booking.customerName || t('providerBookings.clientFallback');
+      const clientName = booking.customerName || 'Client';
       const conversationId = await getOrCreateConversation(providerId, clientUserId);
       navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
     } catch {
-      Alert.alert(t('common.error'), t('providerBookings.home.chatOpenFailed'));
+      Alert.alert(tr('common.error'), tr('providerBookings.home.chatOpenFailed'));
     }
-  }, [navigation, t]);
+  }, [navigation]);
 
   const handleDateTap = useCallback((dateStr: string) => {
     tap();
@@ -1811,9 +1845,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Month label derived from selected date
   const displayMonth = useMemo(() => {
     const [y, mo] = selectedDate.split('-').map(Number);
-    return `${monthName(mo! - 1)} ${y}`;
-    // t: the month name is in the app language, so recompute when it changes.
-  }, [selectedDate, t]);
+    return `${MONTH_NAMES[mo! - 1]} ${y}`;
+  }, [selectedDate]);
 
   return (
     <View style={[s.root, { backgroundColor: P.bg }]}>
@@ -1833,18 +1866,23 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               onPress={() => handleDateTap(TODAY_STR)}
               style={[s.todayChip, { backgroundColor: P.accent }]}
             >
-              <Text style={[s.todayChipTxt, { color: P.ice }]}>{t('common.date.today')}</Text>
+              <Text style={[s.todayChipTxt, { color: P.onAccent }]}>{tr('common.date.today')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               ref={viewModeBtnRef}
               // Tap order: timeline (the default) → list → week → back to timeline.
-              onPress={() => { tap(); setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline'); }}
+              onPress={() => {
+                tap();
+                const next = nextCalendarView(viewMode);
+                setViewMode(next);
+                saveViewMode(next);
+              }}
               style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
               <Ionicons
                 name={viewMode === 'list' ? 'list-outline' : viewMode === 'timeline' ? 'time-outline' : 'calendar-outline'}
                 size={17}
-                color={P.ice}
+                color={P.onAccent}
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -1872,10 +1910,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             }}
           >
             <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
-              {t('providerBookings.home.setup.title')}
+              {tr('providerBookings.home.setup.title')}
             </Text>
             <Text style={{ fontSize: 12, color: P.sub, marginTop: 4 }}>
-              {t('providerBookings.home.setup.body')}
+              {tr('providerBookings.home.setup.body')}
             </Text>
             <TouchableOpacity
               onPress={() => { tap(); navigation.navigate('EditProfile' as never); }}
@@ -1886,8 +1924,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 backgroundColor: P.accent,
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{t('providerBookings.home.setup.getStarted')}</Text>
-              <Ionicons name="chevron-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: P.onAccent }}>{tr('providerBookings.home.setup.getStarted')}</Text>
+              <Ionicons name="chevron-forward" size={14} color={P.onAccent} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </View>
         )}
@@ -1933,7 +1971,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {buildGoLiveSteps(setupStatus).filter(step => step.blocking).map(step => (
               <TouchableOpacity
                 key={step.key}
-                onPress={() => { tap(); navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never); }}
+                onPress={() => {
+                  tap();
+                  if (step.key === 'ownerDetails') {
+                    navigation.navigate('AccountHolderDetails', { addDetailsForCurrentUser: true });
+                  } else {
+                    navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never);
+                  }
+                }}
                 disabled={step.done}
                 activeOpacity={0.7}
                 style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}
@@ -1974,9 +2019,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
             {/* Day letter headers */}
             <View style={s.dayHeaderRow}>
-              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              {['S','M','T','W','T','F','S'].map((d, i) => (
                 <View key={i} style={[s.dayHeaderCell, { width: cellSize }]}>
-                  <Text style={[s.dayHeaderTxt, { color: P.sub }]}>{dayName(i, 'short').charAt(0)}</Text>
+                  <Text style={[s.dayHeaderTxt, { color: P.sub }]}>{d}</Text>
                 </View>
               ))}
             </View>
@@ -2003,7 +2048,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                     ]}>
                       <Text style={[
                         s.calNum,
-                        isSel && { color: '#fff', fontWeight: '700' },
+                        isSel && { color: P.onAccent, fontWeight: '700' },
                         isToday && !isSel && { color: P.bg, fontWeight: '700' },
                         !isSel && !isToday && { color: P.text },
                       ]}>
@@ -2022,7 +2067,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
         {/* ── Date strip — hidden when month calendar is open, and in week
              view, which draws its own day-of-week header row already ──── */}
-        {!showMonth && viewMode !== 'week' && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
+        {stripShown && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
           <FlatList
             ref={stripRef}
             data={STRIP_DATES}
@@ -2031,13 +2076,25 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.stripContent}
             getItemLayout={(_, index) => ({ length: STRIDE, offset: STRIDE * index, index })}
+            // Centre the picked day once the strip knows how wide it is, and
+            // again whenever that width changes (rotation, an iPad window
+            // resized). This used to be a 150ms timer on mount: on a slow first
+            // launch it fired before the strip had a width, and `viewPosition`
+            // against a zero-wide strip put today 40% off the left edge.
+            onLayout={e => {
+              const width = e.nativeEvent.layout.width;
+              if (width === 0 || width === stripWidthRef.current) return;
+              stripWidthRef.current = width;
+              const idx = STRIP_DATES.indexOf(selectedDate);
+              stripRef.current?.scrollToIndex({ index: idx >= 0 ? idx : TODAY_IDX, animated: false, viewPosition: 0.4 });
+            }}
             onScrollToIndexFailed={info => {
               stripRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
             }}
             renderItem={({ item: dateStr }) => {
               const [, , dd] = dateStr.split('-').map(Number);
               const dt       = new Date(dateStr + 'T00:00:00');
-              const dayLetter = dayName(dt.getDay(), 'short').charAt(0);
+              const dayName  = ['S','M','T','W','T','F','S'][dt.getDay()] ?? '';
               const isToday  = dateStr === TODAY_STR;
               const isSel    = dateStr === selectedDate;
               const count    = countByDate[dateStr] ?? 0;
@@ -2050,7 +2107,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 >
                   {/* Day letter */}
                   <Text style={[s.tileDayLetter, { color: isToday && !isSel ? P.accent : P.sub }]}>
-                    {dayLetter}
+                    {dayName}
                   </Text>
 
                   {/* Date circle */}
@@ -2061,7 +2118,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                   ]}>
                     <Text style={[
                       s.tileNum,
-                      isSel && { color: '#fff', fontWeight: '700' },
+                      isSel && { color: P.onAccent, fontWeight: '700' },
                       isToday && !isSel && { color: P.bg, fontWeight: '700' },
                       !isSel && !isToday && { color: P.text },
                     ]}>
@@ -2084,7 +2141,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: viewMode === 'week' ? 20 : 2, borderRadius: 12, backgroundColor: dark ? '#3D1B1B' : '#FDEAEA', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="ban-outline" size={16} color="#C73535" />
             <Text style={{ color: '#C73535', fontSize: 13, fontWeight: '600' }}>
-              {isSelectedDateBlocked ? t('providerBookings.home.dayBlocked') : t('providerBookings.home.dayClosed')}
+              {isSelectedDateBlocked ? tr('providerBookings.home.dayBlocked') : tr('providerBookings.home.dayClosed')}
             </Text>
           </View>
         )}
@@ -2144,11 +2201,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                   return (
                     <View style={s.emptyDay}>
                       <Ionicons name="calendar-outline" size={36} color={P.sub} style={{ opacity: 0.45, marginBottom: 10 }} />
-                      <Text style={[s.emptyTitle, { color: P.text }]}>{t('providerBookings.home.empty.title')}</Text>
+                      <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBookings.home.empty.title')}</Text>
                       <Text style={[s.emptySub, { color: P.sub }]}>
                         {/* YYYY-MM-DD strings compare correctly as text. A day that's
                             already gone reads in the past tense. */}
-                        {item.dateStr === todayStr ? t('providerBookings.home.empty.freeToday') : item.dateStr < todayStr ? t('providerBookings.home.empty.wasFree') : t('providerBookings.home.empty.isFree')}
+                        {item.dateStr === todayStr ? tr('providerBookings.home.empty.freeToday') : item.dateStr < todayStr ? 'This day was free' : 'This day is free'}
                       </Text>
                     </View>
                   );
@@ -2187,7 +2244,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         ]}
         onPress={openSheet}
       >
-        <Ionicons name="add" size={26} color={P.ice} />
+        <Ionicons name="add" size={26} color={P.onAccent} />
       </TouchableOpacity>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
@@ -2209,17 +2266,17 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           >
             <Text style={{ fontSize: 44 }}>🎉</Text>
             <Text style={{ fontSize: 20, fontWeight: '800', color: P.text, marginTop: 12, textAlign: 'center' }}>
-              {t('providerBookings.home.live.title')}
+              {tr('providerBookings.home.live.title')}
             </Text>
             <Text style={{ fontSize: 14, color: P.sub, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
-              {t('providerBookings.home.live.body')}
+              {tr('providerBookings.home.live.body')}
             </Text>
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); setShowGoLiveCelebration(false); }}
               style={{ marginTop: 20, backgroundColor: P.accent, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 }}
             >
-              <Text style={{ color: P.ice, fontWeight: '700', fontSize: 15 }}>{t('providerBookings.home.live.cta')}</Text>
+              <Text style={{ color: P.onAccent, fontWeight: '700', fontSize: 15 }}>{tr('providerBookings.home.live.cta')}</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -2246,29 +2303,31 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             <View style={[s.sheetHandle, { backgroundColor: P.border }]} />
           </View>
 
-          <Text style={[s.sheetTitle, { color: P.sub }]}>{t('providerBookings.home.sheet.title')}</Text>
+          <Text style={[s.sheetTitle, { color: P.sub }]}>{tr('providerBookings.home.sheet.title')}</Text>
 
+          {/* These routes hide the bottom nav: add a new row's route to
+              QUICK_ACCESS_ROUTES in navigation/tabBarVisibility.ts too. */}
           {([
-            { icon: 'add-circle-outline',      title: 'providerBookings.home.sheet.addBooking', sub: 'providerBookings.home.sheet.addBookingSub', route: 'AddBooking'       },
-            { icon: 'calendar-outline',        title: 'providerBookings.home.sheet.schedule',   sub: 'providerBookings.home.sheet.scheduleSub',   route: 'ProviderSchedule' },
-            { icon: 'pricetag-outline',        title: 'providerBookings.home.sheet.promotions', sub: 'providerBookings.home.sheet.promotionsSub', route: 'Promotions'       },
-            { icon: 'people-outline',          title: 'providerBookings.home.sheet.clientele',  sub: 'providerBookings.home.sheet.clienteleSub',  route: 'Clientele'        },
-            { icon: 'document-text-outline',   title: 'providerBookings.home.sheet.infoPack',   sub: 'providerBookings.home.sheet.infoPackSub',   route: 'InfoPacks'        },
-            { icon: 'clipboard-outline',       title: 'providerBookings.home.sheet.forms',      sub: 'providerBookings.home.sheet.formsSub',      route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'providerBookings.home.sheet.inbox',      sub: 'providerBookings.home.sheet.inboxSub',      route: 'ProviderInbox'    },
+            { icon: 'add-circle-outline',      title: tr('providerBookings.home.sheet.addBooking'), sub: tr('providerBookings.home.sheet.addBookingSub'),        route: 'AddBooking'       },
+            { icon: 'calendar-outline',        title: tr('providerBookings.home.sheet.schedule'),    sub: tr('providerBookings.home.sheet.scheduleSub'),      route: 'ProviderSchedule' },
+            { icon: 'pricetag-outline',        title: tr('providerBookings.home.sheet.promotions'),  sub: tr('providerBookings.home.sheet.promotionsSub'),            route: 'Promotions'       },
+            { icon: 'people-outline',          title: tr('providerBookings.home.sheet.clientele'),   sub: tr('providerBookings.home.sheet.clienteleSub'),    route: 'Clientele'        },
+            { icon: 'document-text-outline',   title: tr('providerBookings.home.sheet.infoPack'),   sub: tr('providerBookings.home.sheet.infoPackSub'),route: 'InfoPacks'        },
+            { icon: 'clipboard-outline',       title: tr('providerBookings.home.sheet.forms'),       sub: tr('providerBookings.home.sheet.formsSub'),        route: 'ProviderIntakeForm' },
+            { icon: 'chatbubble-outline',      title: tr('providerBookings.home.sheet.inbox'),       sub: tr('providerBookings.home.sheet.inboxSub'),        route: 'ProviderInbox'    },
           ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
-            <React.Fragment key={item.route}>
+            <React.Fragment key={item.title}>
               <TouchableOpacity
                 style={s.sheetRow}
                 activeOpacity={0.72}
                 onPress={() => { closeSheet(); navigation.navigate(item.route as any); }}
               >
                 <View style={[s.sheetIconWrap, { backgroundColor: P.accent }]}>
-                  <Ionicons name={item.icon} size={21} color={P.ice} />
+                  <Ionicons name={item.icon} size={21} color={P.onAccent} />
                 </View>
                 <View style={s.sheetRowText}>
-                  <Text style={[s.sheetRowTitle, { color: P.text }]}>{t(item.title)}</Text>
-                  <Text style={[s.sheetRowSub, { color: P.sub }]}>{t(item.sub)}</Text>
+                  <Text style={[s.sheetRowTitle, { color: P.text }]}>{item.title}</Text>
+                  <Text style={[s.sheetRowSub, { color: P.sub }]}>{item.sub}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={17} color={P.sub} />
               </TouchableOpacity>
@@ -2357,8 +2416,7 @@ const s = StyleSheet.create({
   // Add-action sheet
   sheet: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    ...readableAbsoluteSheet(12),
     bottom: Platform.OS === 'ios' ? 28 : 16,
     borderRadius: 28,
     paddingHorizontal: 20,

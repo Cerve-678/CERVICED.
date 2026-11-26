@@ -1,4 +1,5 @@
 import { settleCheckout } from '../_shared/settleCheckout.ts';
+import { declineKey } from '../_shared/checkoutCharge.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 
@@ -17,7 +18,9 @@ interface RequestBody {
   paymentIntentId: string;
   // Capture and settle the server reservation, or cancel before authorisation.
   // Once authorised, completion belongs to the server and signed webhook.
-  action: 'capture' | 'cancel';
+  // 'decline_seen': the payment sheet has just shown the client a refused
+  // attempt, so reconcile-checkouts needn't tell them about it again.
+  action: 'capture' | 'cancel' | 'decline_seen';
 }
 
 Deno.serve(async (req: Request) => {
@@ -48,7 +51,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body: RequestBody = await req.json();
-    if (!body.checkoutBatchId || !body.paymentIntentId || (body.action !== 'capture' && body.action !== 'cancel')) {
+    if (!body.checkoutBatchId || !body.paymentIntentId || !['capture', 'cancel', 'decline_seen'].includes(body.action)) {
       return new Response(JSON.stringify({ error: 'Invalid request' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -74,6 +77,15 @@ Deno.serve(async (req: Request) => {
     }
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    if (body.action === 'decline_seen') {
+      // Marks the refused attempt the client was just shown, by its own id, so
+      // a later attempt that fails unseen (the app closed) is still told.
+      const seen = declineKey(existing);
+      if (seen && existing.status === 'requires_payment_method' && existing.metadata?.decline_seen !== seen) {
+        await stripe.paymentIntents.update(existing.id, { metadata: { decline_seen: seen } });
+      }
+      return new Response(JSON.stringify({ status: existing.status }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     if (body.action === 'cancel') {
       if (batch.status === 'finalised' || ['succeeded', 'processing', 'requires_capture'].includes(existing.status)) {
         return new Response(JSON.stringify({ error: 'Payment is being completed. Check your bookings.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

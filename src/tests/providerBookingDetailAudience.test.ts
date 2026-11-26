@@ -38,19 +38,19 @@ describe("provider booking surfaces show the client's side, not their own copy",
   });
 
   it("gives both provider surfaces the client's note instead", () => {
-    expect(detail).toContain("t('providerBookings.detail.clientNote')");
+    expect(detail).toContain("tr('providerBookings.detail.clientNote')");
     expect(detail).toContain("{booking.notes}");
     expect(home).toContain("booking.notes");
   });
 
   it("reports client-address status in Location for a mobile provider", () => {
     expect(detail).toContain("const isMobileProvider = addressSettings?.business_type === 'mobile'");
-    expect(detail).toContain("providerBookings.detail.address.clientReceived");
-    expect(detail).toContain("providerBookings.detail.address.waitingForClient");
+    expect(detail).toContain("Client address received");
+    expect(detail).toContain("Waiting for client’s address");
     // The release states below it are for a provider whose OWN address is the
     // venue — never reachable on a mobile booking.
     const mobileBranch = detail.indexOf(") : isMobileProvider ? (");
-    const releaseBranch = detail.indexOf("providerBookings.detail.address.sendToClient");
+    const releaseBranch = detail.indexOf("tr('providerBookings.detail.address.sendToClient')");
     expect(mobileBranch).toBeGreaterThan(-1);
     expect(releaseBranch).toBeGreaterThan(mobileBranch);
   });
@@ -64,15 +64,18 @@ describe("provider booking surfaces show the client's side, not their own copy",
     // appointment's Location and vanished when the policy landed.
     const guard = detail.indexOf("!addressKnown ? (");
     const mobileBranch = detail.indexOf(") : isMobileProvider ? (");
-    const ownAddressFallback = detail.indexOf("value={booking.address}");
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(mobileBranch);
-    // The provider's own address stays reachable — for a provider whose venue
-    // genuinely is their own address — but only downstream of both gates.
-    expect(ownAddressFallback).toBeGreaterThan(mobileBranch);
     // Loaded is tracked separately from the value: `addressSettings === null`
     // cannot tell "not back yet" from "no policy set".
     expect(detail).toContain("const [addressSettingsLoaded, setAddressSettingsLoaded]");
+  });
+
+  it("never reads the provider's own address back to them as the Location", () => {
+    // Reported 2026-11-08: a failed policy read made a mobile provider look
+    // like a venue, and the row showed their own address instead of the one
+    // the client sent. The row reports status only, whatever the policy.
+    expect(detail).not.toContain("value={booking.address}");
   });
 
   it("shows no venue at all for a cancelled booking, ahead of every other Location guard", () => {

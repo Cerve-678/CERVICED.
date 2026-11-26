@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const readProviderScreen = (name: string): string =>
   fs.readFileSync(
@@ -84,10 +85,7 @@ describe('provider screen performance contracts', () => {
       path.join(__dirname, '..', 'features', 'providers', 'ServiceEditorSheet.tsx'),
       'utf8',
     );
-    const db = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const db = readDatabaseLayer();
 
     // The editor only offers visibility when editing. A new service always
     // starts on the menu, so its draft must not carry an isActive at all.
@@ -141,7 +139,7 @@ describe('provider screen performance contracts', () => {
     expect(clientele).toContain('contentContainerStyle={[anSt.scroll, { paddingBottom: bottomSafeGap }]}');
     expect(clientele).not.toContain('marginBottom: BOTTOM_SAFE_GAP');
     expect(detail).toContain("const PROVIDER_IN_PROGRESS_PURPLE = '#7B2FBE'");
-    expect(detail).toContain("color={P.accent} label={t('providerBookings.detail.action.complete')}");
+    expect(detail).toContain("color={P.accent} label={tr('providerBookings.detail.action.complete')}");
     expect(detail).toContain('paddingBottom: Math.max(40, insets.bottom + 16)');
     expect(detail).not.toContain('styles.modalOverlay, { paddingBottom:');
     expect(detail).not.toContain('styles.pickerModalWrap, { paddingBottom:');

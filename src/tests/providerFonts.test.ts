@@ -1,0 +1,58 @@
+// Pins the business-name fonts: every one sits in a listed collection, every
+// one is actually loaded at start-up (an unloaded family silently falls back
+// to the system font), and the thin scripts are the only ones drawn larger.
+import { APP_FONTS } from '../constants/appFonts';
+import {
+  DEFAULT_PROVIDER_FONT,
+  FONT_COLLECTIONS,
+  PROVIDER_FONTS,
+  resolveProviderFontFamily,
+  resolveProviderFontScale,
+  resolveProviderNameLineHeight,
+} from '../constants/providerFonts';
+
+const loadedFamilies = new Set(Object.keys(APP_FONTS));
+
+describe('provider fonts', () => {
+  it('loads every font family at start-up (APP_FONTS)', () => {
+    for (const font of PROVIDER_FONTS) {
+      const loaded = loadedFamilies.has(font.fontFamily);
+      expect({ font: font.key, loaded }).toEqual({ font: font.key, loaded: true });
+    }
+  });
+
+  it('puts every font in a collection the picker lists, under its own key', () => {
+    const collections = new Set(FONT_COLLECTIONS.map(c => c.key));
+    for (const font of PROVIDER_FONTS) expect(collections.has(font.collection)).toBe(true);
+    const keys = PROVIDER_FONTS.map(f => f.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('carries the owner’s fifteen picks alongside the original nine', () => {
+    expect(PROVIDER_FONTS.filter(f => f.collection !== 'classics')).toHaveLength(15);
+    expect(PROVIDER_FONTS.filter(f => f.collection === 'classics')).toHaveLength(9);
+  });
+
+  it('keeps Prata as the default and the fallback for an unknown key', () => {
+    expect(resolveProviderFontFamily(DEFAULT_PROVIDER_FONT)).toBe('Prata-Regular');
+    expect(resolveProviderFontFamily('no-such-font')).toBe('Prata-Regular');
+    expect(resolveProviderFontFamily(null)).toBe('Prata-Regular');
+  });
+
+  it('only draws the thin scripts larger', () => {
+    expect(resolveProviderFontScale('sacramento')).toBeGreaterThan(1);
+    expect(resolveProviderFontScale('great-vibes')).toBeGreaterThan(1);
+    expect(resolveProviderFontScale('playfair-display')).toBe(1);
+    expect(resolveProviderFontScale(null)).toBe(1);
+  });
+});
+
+describe('the business name line height', () => {
+  it('leaves room above tall letters, more for the looping scripts', () => {
+    expect(resolveProviderNameLineHeight('default', 30)).toBe(42);
+    expect(resolveProviderNameLineHeight(null, 30)).toBe(42);
+    expect(resolveProviderNameLineHeight('great-vibes', 36)).toBeGreaterThanOrEqual(36 * 1.7);
+    expect(resolveProviderNameLineHeight('sacramento', 39)).toBeGreaterThanOrEqual(39 * 1.7);
+    expect(resolveProviderNameLineHeight('lobster', 30)).toBeGreaterThanOrEqual(30 * 1.55);
+  });
+});

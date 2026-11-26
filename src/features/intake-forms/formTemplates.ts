@@ -1,6 +1,7 @@
 import type { IntakeFormQuestion } from '../../services/databaseService';
 import type { ServiceCategory } from '../../types/database';
 import type { TranslationKey } from '../../i18n/types';
+import { tr } from '../../i18n/translate';
 
 // ── Form templates ───────────────────────────────────────────────────────────
 // Templates follow the provider's service type (HAIR, NAILS, …), not whatever
@@ -63,7 +64,7 @@ export function templateSubtitle(tpl: FormTemplate, t: (key: TranslationKey) => 
 const TEMPLATES: FormTemplate[] = [
   // ── Consultation forms (one per category — the general "what are we doing today" form) ──
   {
-    id: 'hair', category: 'HAIR', kind: 'consultation', label: 'Hair Consultation Form', subtitle: 'Colour, cuts, treatments',
+    id: 'hair', category: 'HAIR', kind: 'consultation', get label() { return tr('providerBookings.forms.template.hair.label'); }, get subtitle() { return tr('providerBookings.forms.template.hair.subtitle'); },
     keywords: ['hair', 'colour', 'color', 'cut', 'blowout', 'blow dry', 'highlight', 'balayage', 'keratin', 'relaxer', 'perm', 'toner', 'gloss', 'trim', 'extension', 'weave', 'loc', 'braids'],
     questions: [
       { type: 'choice', label: 'What is your hair type?', required: true, options: ['Straight', 'Wavy', 'Curly', 'Coily', '4A', '4B', '4C'] },
@@ -77,7 +78,7 @@ const TEMPLATES: FormTemplate[] = [
     ],
   },
   {
-    id: 'nails', category: 'NAILS', kind: 'consultation', label: 'Nail Consultation Form', subtitle: 'Gel, acrylic, nail art',
+    id: 'nails', category: 'NAILS', kind: 'consultation', get label() { return tr('providerBookings.forms.template.nails.label'); }, get subtitle() { return tr('providerBookings.forms.template.nails.subtitle'); },
     keywords: ['nail', 'gel', 'acrylic', 'manicure', 'pedicure', 'infill', 'removal', 'shellac', 'sns', 'dip'],
     questions: [
       { type: 'choice', label: 'Service booked', required: true, options: ['Gel manicure', 'Acrylic set', 'Nail art', 'Pedicure', 'Infill', 'Removal'] },
@@ -90,7 +91,7 @@ const TEMPLATES: FormTemplate[] = [
     ],
   },
   {
-    id: 'lashes', category: 'LASHES', kind: 'consultation', label: 'Lash Consultation Form', subtitle: 'Extensions, lifts, tints',
+    id: 'lashes', category: 'LASHES', kind: 'consultation', get label() { return tr('providerBookings.forms.template.lashes.label'); }, get subtitle() { return tr('providerBookings.forms.template.lashes.subtitle'); },
     keywords: ['lash', 'extension', 'lash lift', 'tint', 'classic set', 'hybrid', 'volume', 'mega volume'],
     questions: [
       { type: 'choice', label: 'Type of lash service', required: true, options: ['Classic set', 'Hybrid set', 'Volume set', 'Infill', 'Removal', 'Lash lift & tint'] },
@@ -103,7 +104,7 @@ const TEMPLATES: FormTemplate[] = [
     ],
   },
   {
-    id: 'brows', category: 'BROWS', kind: 'consultation', label: 'Brow Consultation Form', subtitle: 'Wax, thread, lamination',
+    id: 'brows', category: 'BROWS', kind: 'consultation', get label() { return tr('providerBookings.forms.template.brows.label'); }, get subtitle() { return tr('providerBookings.forms.template.brows.subtitle'); },
     keywords: ['brow', 'eyebrow', 'thread', 'threading', 'lamination', 'microblading', 'powder brow', 'henna'],
     questions: [
       { type: 'choice', label: 'Brow service booked', required: true, options: ['Wax & tint', 'Thread & tint', 'Lamination', 'Microblading', 'Powder brows', 'Combo brows'] },
@@ -116,10 +117,10 @@ const TEMPLATES: FormTemplate[] = [
     ],
   },
   {
-    id: 'skin', category: 'AESTHETICS', kind: 'consultation', label: 'Skin Consultation Form', subtitle: 'Facials, peels, aesthetics',
+    id: 'skin', category: 'AESTHETICS', kind: 'consultation', get label() { return tr('providerBookings.forms.template.skin.label'); }, get subtitle() { return tr('providerBookings.forms.template.skin.subtitle'); },
     keywords: ['skin', 'facial', 'peel', 'derma', 'aesthetic', 'hydra', 'microneedle', 'botox', 'filler', 'glow', 'led', 'microdermabrasion', 'hifu'],
     questions: [
-      { type: 'choice', label: 'Skin type', required: true, options: ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'] },
+      { type: 'choice', get label() { return tr('beautyProfile.todo.skinType'); }, required: true, options: ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'] },
       { type: 'choice', label: 'Main skin concern', required: true, options: ['Acne', 'Hyperpigmentation', 'Ageing / fine lines', 'Dehydration', 'Redness / rosacea', 'General glow'] },
       { type: 'yesno',  label: 'Any known allergies or sensitivities?', required: true },
       { type: 'text',   label: 'Please describe any allergies', required: false },
@@ -131,10 +132,10 @@ const TEMPLATES: FormTemplate[] = [
     ],
   },
   {
-    id: 'mua', category: 'MUA', kind: 'consultation', label: 'Makeup Consultation Form', subtitle: 'Glam, bridal, editorial',
+    id: 'mua', category: 'MUA', kind: 'consultation', get label() { return tr('providerBookings.forms.template.mua.label'); }, get subtitle() { return tr('providerBookings.forms.template.mua.subtitle'); },
     keywords: ['makeup', 'make-up', 'mua', 'bridal', 'glam', 'foundation', 'airbrush', 'makeover'],
     questions: [
-      { type: 'choice', label: 'Skin type', required: true, options: ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'] },
+      { type: 'choice', get label() { return tr('beautyProfile.todo.skinType'); }, required: true, options: ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'] },
       { type: 'text',   label: 'What is the occasion?', required: true },
       { type: 'choice', label: 'Desired look', required: true, options: ['Natural / no-makeup', 'Soft glam', 'Full glam', 'Editorial', 'Bridal'] },
       { type: 'yesno',  label: 'Any known allergies to makeup products?', required: true },
@@ -217,7 +218,7 @@ const TEMPLATES: FormTemplate[] = [
  *  generic; a provider who wants trade-specific questions builds a custom
  *  form. */
 const GENERAL_TEMPLATE: FormTemplate = {
-  id: 'general', category: null, kind: 'consultation', label: 'Client Consultation Form', subtitle: 'General health & preferences',
+  id: 'general', category: null, kind: 'consultation', get label() { return tr('providerBookings.forms.template.general.label'); }, get subtitle() { return tr('providerBookings.forms.template.general.subtitle'); },
   keywords: [],
   questions: [
     { type: 'text',   label: 'What are you hoping to have done today?', required: true },

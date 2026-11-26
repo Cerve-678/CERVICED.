@@ -1,6 +1,8 @@
 import type { ProviderWithServices } from '../../types/database';
 import { formatServiceDuration } from './profilePresentation';
 import type { ProviderProfileData, ProviderProfileService } from './profileTypes';
+import { toReleaseTime } from '../../utils/bookingHorizon';
+import { normalizeOwnSections } from './ownSections';
 
 /** Converts the database provider model into the client profile view model. */
 export function mapProviderProfileData(provider: ProviderWithServices): ProviderProfileData {
@@ -46,6 +48,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
           name: addOn.name,
           price: Number(addOn.price),
           description: addOn.description ?? '',
+          extraMinutes: Number(addOn.extra_minutes ?? 0),
         })),
       // null = never stated → treated as safe (no warning), matching the
       // provider toggle's off-by-default meaning. Only an explicit false shows
@@ -55,7 +58,6 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
       minAge: service.min_age,
       contraindications: service.contraindications ?? [],
       aftercareNotes: service.aftercare_notes ?? '',
-      skinTonesSuitable: service.skin_tones_suitable ?? [],
       serviceType: service.service_type ?? null,
     };
 
@@ -86,10 +88,14 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     providerName: provider.display_name.toUpperCase(),
     providerService: provider.service_category,
     providerLogo: provider.logo_url ? { uri: provider.logo_url } : null,
+    providerLogoFraming: provider.logo_framing ?? null,
     location: provider.location_text ?? '',
+    publicDirections: provider.public_directions?.trim() ?? '',
+    ownSections: normalizeOwnSections(provider.profile_sections),
     businessType: provider.business_type ?? null,
     rating: Number(provider.rating),
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
+    scheduleReleaseTime: toReleaseTime(provider.automation_settings?.scheduleReleaseTime),
     aboutText: provider.about_text ?? '',
     gradient: (provider.gradient && provider.gradient.length >= 2
       ? provider.gradient
@@ -127,8 +133,10 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     walkInsWelcome: provider.walk_ins_welcome ?? false,
     groupBookingsAvailable: provider.group_bookings_available ?? false,
     veganCrueltyFree: provider.vegan_cruelty_free ?? false,
-    travelRadius: provider.travel_radius ?? '',
     productsUsed: provider.products_used ?? '',
+    clientele: provider.clientele ?? [],
+    skinTonesCatered: provider.skin_tones_catered ?? [],
+    hairTypesCatered: provider.hair_types_catered ?? [],
     bookingPolicies: provider.booking_policies ?? null,
     cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
     waitlistEnabled: provider.automation_settings?.waitlistEnabled !== false,

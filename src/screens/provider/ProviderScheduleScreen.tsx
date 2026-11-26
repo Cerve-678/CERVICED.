@@ -40,13 +40,17 @@ import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD, dayName } 
 import { useTranslation } from '../../i18n';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import CloseScheduleSection from '../../features/providers/CloseScheduleSection';
+import { navigateAfterDismiss, openProviderBookingOnCalendar } from '../../navigation/rootNavigate';
+import { toReleaseDay } from '../../utils/bookingHorizon';
+import { readableSheet } from '../../constants/readableWidth';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -58,7 +62,7 @@ const DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -141,6 +145,7 @@ export default function ProviderScheduleScreen() {
 
   const [tab, setTab] = useState<'hours' | 'blocked'>('hours');
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [releaseDay, setReleaseDay] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   // Hours tab opens as a read-only summary; the header Edit button flips it
   // into the editable state (tappable chips, day toggles, Add break, Save).
@@ -179,6 +184,7 @@ export default function ProviderScheduleScreen() {
       const profile = await getMyProviderProfile();
       if (!profile) return;
       setProviderId(profile.id);
+      setReleaseDay(toReleaseDay(profile.automation_settings?.scheduleReleaseDay));
 
       const [avail, windows, blocked, ovr] = await Promise.all([
         getProviderAvailability(profile.id),
@@ -449,10 +455,25 @@ export default function ProviderScheduleScreen() {
             onPress={setTab}
             accentColor={P.accent}
             inactiveTextColor={P.sub}
-            activeTextColor={P.ice}
+            activeTextColor={P.onAccent}
             scrollable={false}
           />
         </View>
+        )}
+
+        {!hoursOnly && providerId && (
+          <CloseScheduleSection
+            providerId={providerId}
+            releaseDay={releaseDay}
+            palette={P}
+            isDarkMode={isDarkMode}
+            showToast={showToast}
+            onOpenBooking={(bookingId, date, openReschedule) => {
+              // After the sheet has slid away: iOS won't present the booking's
+              // reschedule sheet while this one is still dismissing.
+              navigateAfterDismiss(() => openProviderBookingOnCalendar(bookingId, date, openReschedule));
+            }}
+          />
         )}
 
         {/* ── Hours tab ───────────────────────────────────────────────────── */}
@@ -537,8 +558,8 @@ export default function ProviderScheduleScreen() {
                 disabled={saving}
               >
                 {saving
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>{editing ? t('providerBookings.schedule.saveHours') : t('providerBookings.schedule.editHours')}</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>{editing ? t('providerBookings.schedule.saveHours') : t('providerBookings.schedule.editHours')}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -621,8 +642,8 @@ export default function ProviderScheduleScreen() {
                 disabled={addingBlock}
               >
                 {addingBlock
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>{t('providerBookings.schedule.blockThisDate')}</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>{t('providerBookings.schedule.blockThisDate')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -722,8 +743,8 @@ export default function ProviderScheduleScreen() {
                 disabled={addingOverride}
               >
                 {addingOverride
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>{t('providerBookings.schedule.saveCustom')}</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>{t('providerBookings.schedule.saveCustom')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -852,7 +873,7 @@ const s = StyleSheet.create({
   // never leaks through the sheet — the sheet's own background covers everything below it.
   pickerModalWrap: { flex: 1, flexDirection: 'column' },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
   pickerHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerLabel:   { fontSize: 15, fontWeight: '600' },
   pickerDone:    { fontSize: 15, fontWeight: '700' },

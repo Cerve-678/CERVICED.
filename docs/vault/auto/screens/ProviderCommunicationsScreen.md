@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `Communications`
 
 ## → Navigates to
-- [[BusinessInfoScreen\|BusinessInfo]]
+- _— none —_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

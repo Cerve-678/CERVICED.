@@ -113,6 +113,57 @@ Every turn produces a confidence score. Three bands:
 Becca never invents an answer. Confirmed as the chosen fallback behaviour.
 This band is also **the exact seam the LLM replaces** — see 3.1.
 
+**Typos.** `matcher.ts` also accepts a phrase whose words are keyboard slips
+of the real ones ("cancle my booking", "show my reveiws"), using `isTypoOf`
+in `src/utils/fuzzyMatch.ts`: words of 3 letters or fewer never fuzz, the
+first letter must match, and it allows one slip up to 8 letters, two beyond.
+A typo'd match scores below an exact one and is capped under **High**. A word
+Becca already knows (any phrase word, any service word, or `NOT_TYPOS` in
+`matcher.ts`) is never treated as a typo, so "cancer" is not "cancel" and
+"massage" is not "messages". When a real word gets misread, add it to
+`NOT_TYPOS` along with a test in `beccaTypos.test.ts`.
+
+**Asking for a missing detail (2026-11-25).** When Becca knows the question
+but one detail is missing, she asks for it and then answers the *original*
+question with the reply: "what are the reviews like" → "Which provider do you
+mean?" → "lola studio" → Lola Studio's reviews. Four details can be asked for:
+appointment, service, provider and day. Three pieces make it work:
+
+- `matcher.ts` picks a question that is missing exactly one detail when
+  nothing matched confidently and its words alone clearly point at it (an
+  exact phrase of 6+ characters, at least 0.1 ahead of what did match and of
+  any rival). The missing-detail penalty still decides ranking; it no longer
+  turns a clear question into "didn't catch that". Missing two details (bare
+  "what about") still falls back. A confident match is never overridden.
+- `engine.ts` holds the open question in `ConversationContext.awaiting` for
+  one turn. A reply of 5 words or fewer that supplies the detail answers it,
+  and so does a longer one that matches nothing else. Anything else drops it.
+  Picking from "which did you mean?" matches keeps it open.
+- `entityResolver.ts` reads the whole short reply as a provider name while a
+  provider is awaited, so lowercase names and multi-word names that share a
+  first word ("Lola Studio" vs "Lola Nails") resolve.
+
+The option buttons send just the detail ("Nails", "Tomorrow", a provider
+shown on screen). If the AI router picks a question whose detail is missing,
+Becca asks for it the same way rather than discarding the pick.
+`beccaFollowUpQuestions.test.ts` covers it.
+
+**Learning from misses.** Every reply carries `understood` (the capability
+that answered, or `null` for the fallback). `missLog.ts` holds a typed miss
+until the person's next move, then records it once through
+`record_becca_miss`: resolved by a tapped "did you mean" option (`chip`),
+by asking again in other words (`reworded`), or unresolved. The server never
+stores a question that mentions health or another sensitive subject
+(keyword check; the review deletes any that slip through), blanks emails,
+phone numbers, street addresses,
+postcodes and @handles, and deletes rows after 90 days or when the person
+deletes a Becca chat, that hat's profile or the account
+(`20261110170000_becca_misses.sql`, user decisions 2026-11-10). Nothing
+changes Becca by itself: the weekly `/review-becca-misses` turns resolved
+pairs into new phrases through a normal PR, and reports unresolved themes
+as things Becca can't do yet. The same log is the scorecard for deciding
+whether to switch the AI router on in production.
+
 ---
 
 ## 2. What Becca can do with NO AI
@@ -137,7 +188,7 @@ already reachable.
 | "Do I need to fill anything in?" | `getPendingIntakeFormsForMe`, `getMyBookingActionItems` | **genuinely useful, entirely unreachable today** |
 | "What did they send me to read?" | `getInfoPacksByBooking` | aftercare/prep packs |
 | "Remind me what I booked last time" | `getRebookableService` | |
-| "Book that again" | `getRebookableService` → deep-link | one-tap rebook |
+| "Book that again" | `getRebookableService` → `pendingAction` → cart | ✅ built 2026-11-03: one tap puts the last completed booking in the cart at today's price (`features/bookings/rebook.ts`, shared with Bookings and Booking Detail); two buttons when it had add-ons still offered (with / without). Cart via `EngineInput.addToCart`, client hat only |
 
 #### Discovery & booking
 | Capability | Backing function |
@@ -169,7 +220,7 @@ already reachable.
 | Proactive: "You usually rebook every 4 weeks — it's been 5" | interaction history + booking cadence |
 
 ⚠️ **Health-adjacent — handle with care, do not let Becca freelance:**
-`getUserHealthProfile`, `getClientBeautyProfile` hold patch-test requirements,
+`getUserHealthProfile`, `getUserBeautyProfile` hold patch-test requirements,
 pregnancy-safety flags and contraindications. Becca may **surface a provider's
 stated requirement** ("Lola requires a patch test 48h before") and **flag that
 a form is outstanding**. She must **never** give a safety opinion, interpret a
@@ -229,6 +280,17 @@ what the app actually processed.
   `RescheduleScreen` with that booking already loaded, not a bare screen.
 - **Same brain, two hats** — one capability registry, `hat` field gates it.
   Provider Becca can never reach a client capability.
+- **Link-only pros get a narrower provider hat** (2026-10-20). A provider
+  with `booking_mode = 'external'` takes bookings on their own site, so only
+  capabilities marked `fitsLinkOnly` run for them: `pv.inbox`,
+  `pv.notifications`, `pv.hours`, `pv.reach`, `pv.availability`, `pv.help`.
+  `pv.timeoff` is left out because their Opening Hours screen has no blocked
+  dates. Understanding still sees the whole hat, so the matcher, or a model
+  reading `toToolSchema`, recognises "what's on today?" as a bookings
+  question. The engine then answers "That isn't part of your setup" through
+  `fitsSetup()` and never runs it. Every chip they're offered (starters,
+  follow-ups, fallback alternatives, and a final filter in `message_`) leads
+  to a fitting capability. See `src/tests/beccaLinkOnly.test.ts`.
 
 ---
 
@@ -373,8 +435,10 @@ list over adding a capability whenever the underlying answer is the same.
 
 Becca now performs a small set of writes herself, but **never as a side effect
 of understanding a message**. A capability returns a `pendingAction`; the
-engine renders exactly two chips (confirm / "Not now") and holds the action in
-memory; only an explicit tap runs it. A misread intent therefore costs a tap,
+engine renders the confirm chip and "Not now" (plus a second confirm chip when
+the action carries an `alternative`, e.g. rebook with / without add-ons) and
+holds the action in memory; only an explicit tap runs it. Running either
+confirm chip retires the other. A misread intent therefore costs a tap,
 not a mutation — which matters most precisely where the parser is weakest.
 
 Properties verified end-to-end against a stubbed DB:
@@ -493,7 +557,14 @@ intent.
   ("recommend something") uses it. It is deliberately honest about thin
   history: `hasUsefulHistory()` gates it, and below the threshold Becca says
   she doesn't know your taste yet rather than dressing a generic list up as a
-  personal recommendation.
+  personal recommendation. Since 2026-11-09 it also reads the client's Beauty
+  Profile through `features/beauty-profile/suitedIdeas.ts` (the same ideas as
+  the profile's "Suited to you" card): with thin history but a filled-in
+  profile it answers from the profile ("Hair type: 4C" → silk press, knotless
+  braids…), each row saying which answer it came from, and with real history
+  it adds up to three profile ideas as chips. Preference answers only:
+  `suitedIdeas` never reads skin tone, skin concerns, sensitive areas,
+  allergies or medical notes (§2.1).
 - **Booking mutations still never happen in chat.** Cancel and reschedule
   deep-link into the screen that owns the write, with the record preloaded.
   The `pendingAction` mechanism exists and could carry them, but a

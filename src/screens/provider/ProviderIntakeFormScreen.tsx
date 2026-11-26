@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
@@ -12,11 +13,12 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SafeAreaView } from '../../components/SafeArea';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import {
   getIntakeFormByBooking,
@@ -27,7 +29,8 @@ import {
   saveFormToLibrary,
   updateLibraryForm,
   deleteLibraryForm,
-  sendLibraryFormToClient,
+  sendLibraryFormToBookings,
+  getBookingIdsWithLibraryForm,
   IntakeFormQuestion,
   IntakeForm,
   LibraryForm,
@@ -41,15 +44,20 @@ import {
   declaredCategories,
   detectTemplate,
   getRelevantTemplates,
-  templateLabel,
-  templateSubtitle,
 } from '../../features/intake-forms/formTemplates';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { FormsWelcome } from '../../features/intake-forms/FormsWelcome';
+import { DEADLINE_OPTIONS, deadlineLabel, dueByLabel } from '../../features/intake-forms/formDeadline';
+import { appointmentLabel, formProblem, sentFormsMessage, upcomingForForms } from '../../features/intake-forms/sendForms';
+import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { useHowItWorks } from '../../components/HowItWorksSheet';
+import { logger } from '../../utils/logger';
+import { tr, trp, useTranslation } from '../../i18n';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
 
-const DARK  = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)' };
-const LIGHT = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#5C4033', ice: '#FFFFFF', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(92,64,51,0.12)' };
+const DARK  = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', onAccent: '#1A1815', ice: '#FFFFFF', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)' };
+const LIGHT = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#5C4033', onAccent: '#FFFFFF', ice: '#FFFFFF', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(92,64,51,0.12)' };
 // AdaptiveTabBar: position absolute, bottom: 34, minHeight: 80
 const TAB_BAR_CLEARANCE = 80;
 
@@ -68,13 +76,13 @@ function makeId() { return Math.random().toString(36).slice(2, 9); }
  *  hasn't set any policy yet — nothing to build a form from. */
 function buildPolicyTemplate(policyRows: PolicyDisplayRow[]): FormTemplate | null {
   if (policyRows.length === 0) return null;
-  const body = policyRows.map(r => `${r.label}: ${r.value}`).join('\n');
+  const body = policyRows.map(r => [`${r.label}: ${r.value}`, ...(r.notes ?? [])].join('\n')).join('\n');
   return {
     id: 'policy-agreement',
     category: null,
     kind: 'policy',
-    label: 'Policy Agreement',
-    subtitle: 'Cancellation, deposit & no-show policy',
+    label: tr('providerBookings.forms.template.policy.label'),
+    subtitle: tr('providerBookings.forms.template.policy.subtitle'),
     keywords: [],
     questions: [
       {
@@ -117,19 +125,25 @@ const TERMS_TEMPLATE: FormTemplate = {
 };
 
 // ── Question type config ─────────────────────────────────────────────────────
-const Q_TYPES: { type: IntakeFormQuestion['type']; labelKey: TranslationKey; icon: string }[] = [
-  { type: 'text',   labelKey: 'providerBookings.forms.qType.text',   icon: 'create-outline' },
-  { type: 'yesno',  labelKey: 'providerBookings.forms.qType.yesNo',  icon: 'checkmark-circle-outline' },
-  { type: 'choice', labelKey: 'providerBookings.forms.qType.choice', icon: 'list-outline' },
-  { type: 'policy', labelKey: 'providerBookings.forms.qType.policy', icon: 'document-text-outline' },
+const Q_TYPES: { type: IntakeFormQuestion['type']; label: string; icon: string }[] = [
+  { type: 'text',   get label() { return tr('providerBookings.forms.qType.text'); },     icon: 'create-outline' },
+  { type: 'yesno',  get label() { return tr('providerBookings.forms.qType.yesNo'); }, icon: 'checkmark-circle-outline' },
+  { type: 'choice', get label() { return tr('providerBookings.forms.qType.choice'); },   icon: 'list-outline' },
+  { type: 'policy', get label() { return tr('providerBookings.forms.qType.policy'); },   icon: 'document-text-outline' },
 ];
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 type Mode = 'picker' | 'builder' | 'readonly';
+
+/** The appointment list opened from the builder's Save & Send: the form
+ *  being written, saved only when Save & send is pressed. */
+const DRAFT_FORM = '__draft__';
 type PickerTab = 'myForms' | 'templates';
 
 export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Opened two ways: from a booking (all params set — builder pre-fills the
   // service, sending goes straight to that client) or from Quick Access with
   // no params at all (pure library — sending opens a booking picker below).
@@ -150,7 +164,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
   const { showToast, DialogHost } = useAppDialog();
-  const { t, tp } = useTranslation();
+  const { user } = useAuth();
 
   // ── Global state ──────────────────────────────────────────────────────────
   const [mode, setMode]           = useState<Mode>('picker');
@@ -168,7 +182,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
   // ── Builder state ─────────────────────────────────────────────────────────
   const [editingId, setEditingId]           = useState<string | null>(null); // library form being edited
-  const [title, setTitle]                   = useState(() => t('providerBookings.forms.defaultTitle', { service: serviceName }));
+  const [title, setTitle]                   = useState(`${serviceName} – Consultation Form`);
   const [questions, setQuestions]           = useState<IntakeFormQuestion[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [isTerms, setIsTerms] = useState(false);
@@ -180,7 +194,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     providerServiceNames.every(name => selectedServices.includes(name));
   const [autoSend, setAutoSend]             = useState(false);
   const [requiresSignature, setRequiresSignature] = useState(false);
+  const [deadlineHours, setDeadlineHours]   = useState<number | null>(null);
   const [saving, setSaving]                 = useState(false);
+  // One save or send at a time. `saving` only disables the buttons after the
+  // next render, so a quick second tap used to start a second save and add
+  // the same form to My Forms twice.
+  const busyRef = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // ── Readonly state ────────────────────────────────────────────────────────
@@ -192,7 +211,14 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   // ── Booking picker (opened from Quick Access — no booking context yet) ────
   const [pickingBookingFor, setPickingBookingFor] = useState<string | null>(null); // library form id
   const [pickableBookings, setPickableBookings] = useState<BookingWithAddOns[]>([]);
+  const [pickedBookingIds, setPickedBookingIds] = useState<string[]>([]);
+  // Appointments that already have this form: shown, but can't be picked.
+  const [alreadySentIds, setAlreadySentIds] = useState<string[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+
+  // ── How Forms work (first visit, then the ⓘ) ──────────────────────────────
+  const welcome = useHowItWorks();
+  const welcomeCheckedRef = useRef(false);
 
   const autoTemplate = detectTemplate(serviceName, relevantTemplates);
 
@@ -219,39 +245,40 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const openBuilderBlank = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     setEditingId(null);
-    setTitle(t('providerBookings.forms.defaultTitle', { service: serviceName }));
+    setTitle(`${serviceName} – Consultation Form`);
     setQuestions([]);
     setSelectedServices([]);
     setAutoSend(false);
     setRequiresSignature(false);
+    setDeadlineHours(null);
     setMode('builder');
-  }, [serviceName, t]);
+  }, [serviceName]);
 
   const openBuilderFromTemplate = useCallback((tpl: FormTemplate) => {
     Haptics.selectionAsync().catch(() => {});
     setEditingId(null);
-    // Seeds the form's title (the provider's own, editable content) in the
-    // app language; question text stays as written.
-    setTitle(templateLabel(tpl, t));
+    setTitle(tpl.label);
     setQuestions(tpl.questions.map(q => ({ ...q, id: makeId() })));
     setSelectedServices([]);
     setAutoSend(false);
     setRequiresSignature(false);
+    setDeadlineHours(null);
     // Carried through the save so get_provider_terms can find this one row
     // among a library that also holds medical-history and patch-test forms.
     setIsTerms(tpl.kind === 'terms');
     setMode('builder');
-  }, [t]);
+  }, []);
 
   const openBuilderFromLibrary = useCallback((form: LibraryForm) => {
     Haptics.selectionAsync().catch(() => {});
     setEditingId(form.id);
     setTitle(form.title);
     setQuestions(form.questions.map(q => ({ ...q, id: makeId() })));
-    setSelectedServices(form.serviceNames);
+    setSelectedServices([...new Set(form.serviceNames)]);
     setAutoSend(form.autoSend);
     setRequiresSignature(form.requiresSignature);
     setIsTerms(form.isTerms);
+    setDeadlineHours(form.deadlineHours);
     setMode('builder');
   }, []);
 
@@ -267,7 +294,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         ]);
 
         setLibraryForms(forms);
-        const svcNames = services.map(s => s.name);
+        // Forms link to services by name, so two services with the same name
+        // (e.g. "Skin Consultation" in two categories) are one choice here.
+        // Listed twice, they also gave two chips the same key.
+        const svcNames = [...new Set(services.map(s => s.name))];
         setProviderServiceNames(svcNames);
         setRelevantTemplates(getRelevantTemplates(
           declaredCategories(
@@ -306,6 +336,25 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     init();
   }, [bookingId, existingFormId, openTerms, openBuilderFromLibrary, openBuilderFromTemplate]);
 
+  // First visit to the library: the welcome, once per account
+  // (users.seen_tours). Only when the screen lands on the library itself —
+  // opening straight into a client's answers or the terms editor is the
+  // wrong moment, and the welcome waits for the next library visit.
+  useEffect(() => {
+    if (loading || !user?.id || welcomeCheckedRef.current) return;
+    welcomeCheckedRef.current = true;
+    if (mode !== 'picker') return;
+    let alive = true;
+    resolveTourForUser(TOUR_KEYS.PROVIDER_FORMS, [{ key: 'welcome' }], user.id)
+      .then(decision => {
+        if (!alive || !decision.show) return;
+        welcome.showOnArrival();
+        void recordTourSeen(TOUR_KEYS.PROVIDER_FORMS, user.id);
+      })
+      .catch(error => logger.error('[Forms] welcome check failed:', error));
+    return () => { alive = false; };
+  }, [loading, mode, user?.id, welcome.showOnArrival]);
+
 
   const toggleService = useCallback((name: string) => {
     setSelectedServices(prev =>
@@ -319,11 +368,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setQuestions(prev => [...prev, {
       id: makeId(),
       type,
-      label: type === 'policy' ? t('providerBookings.forms.policyQuestionDefault') : '',
+      label: type === 'policy' ? 'Policy Agreement' : '',
       required: type === 'policy' ? true : false,
       ...(type === 'choice' ? { options: ['', ''] } : {}),
     }]);
-  }, [t]);
+  }, []);
 
   const updateQuestion = useCallback((id: string, patch: Partial<IntakeFormQuestion>) => {
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, ...patch } : q));
@@ -358,30 +407,31 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
   // ── Save to library ───────────────────────────────────────────────────────
   const handleSaveToLibrary = useCallback(async (): Promise<LibraryForm | null> => {
-    if (questions.length === 0) { showToast(t('providerBookings.forms.toast.addQuestion'), 'warning'); return null; }
-    if (questions.some(q => !q.label.trim())) { showToast(t('providerBookings.forms.toast.labelRequired'), 'warning'); return null; }
+    const problem = formProblem(questions);
+    if (problem) { showToast(problem, 'warning'); return null; }
+    if (busyRef.current) return null;
+    busyRef.current = true;
     setSaving(true);
     try {
+      const fields = {
+        title: title.trim() || 'Consultation Form',
+        questions,
+        serviceNames: selectedServices,
+        autoSend,
+        requiresSignature,
+        isTerms,
+        deadlineHours: isTerms ? null : deadlineHours,
+      };
       let saved: LibraryForm;
       if (editingId) {
-        await updateLibraryForm(editingId, {
-          title: title.trim() || t('providerBookings.forms.fallbackTitle'),
-          questions,
-          serviceNames: selectedServices,
-          autoSend,
-          requiresSignature,
-          isTerms,
-        });
-        saved = { id: editingId, providerId: '', title, questions, serviceNames: selectedServices, autoSend, requiresSignature, isTerms, sentCount: 0, createdAt: '' };
+        await updateLibraryForm(editingId, fields);
+        saved = { id: editingId, providerId: '', ...fields, sentCount: 0, createdAt: '' };
       } else {
-        saved = await saveFormToLibrary({
-          title: title.trim() || t('providerBookings.forms.fallbackTitle'),
-          questions,
-          serviceNames: selectedServices,
-          autoSend,
-          requiresSignature,
-          isTerms,
-        });
+        saved = await saveFormToLibrary(fields);
+        // From here on this builder edits the form it just made. Without
+        // this, Save & Send followed by closing the client list (or a second
+        // Save) added another copy to My Forms every time.
+        setEditingId(saved.id);
       }
       // Refresh library
       const updated = await getProviderFormLibrary();
@@ -389,64 +439,106 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return saved;
     } catch {
-      showToast(t('providerBookings.forms.toast.saveFailed'), 'error');
+      showToast(tr('providerBookings.forms.toast.saveFailed'), 'error');
       return null;
     } finally {
+      busyRef.current = false;
       setSaving(false);
     }
-  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, isTerms, showToast, t]);
+  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, isTerms, deadlineHours, showToast]);
 
   // ── Send to client ────────────────────────────────────────────────────────
-  // Opened from a booking: bookingId/clientUserId are already known — send
-  // straight away. Opened from Quick Access (library-only): no target yet,
-  // so open a booking picker first and recurse once one is chosen.
-  const handleSendToClient = useCallback(async (libraryFormId: string, targetBookingId?: string, targetClientUserId?: string) => {
-    const toBookingId = targetBookingId ?? bookingId;
-    const toClientUserId = targetClientUserId ?? clientUserId;
-
-    if (!toBookingId || !toClientUserId) {
-      setLoadingBookings(true);
-      setPickingBookingFor(libraryFormId);
-      try {
-        const all = await getProviderBookings();
-        const upcoming = all.filter(b => b.status === 'pending' || b.status === 'confirmed');
-        setPickableBookings(upcoming);
-      } catch {
-        showToast(t('providerBookings.forms.toast.loadBookingsFailed'), 'error');
-        setPickingBookingFor(null);
-      } finally {
-        setLoadingBookings(false);
-      }
-      return;
+  // Opened from a booking: send straight to that client. Opened from Quick
+  // Access (library only): pick the appointments first. Save & Send from the
+  // builder opens the same list for the form being written (DRAFT_FORM) and
+  // saves it only when "Save & send" is pressed with people picked.
+  const openBookingPicker = useCallback(async (formId: string) => {
+    setLoadingBookings(true);
+    setPickedBookingIds([]);
+    setAlreadySentIds([]);
+    setPickingBookingFor(formId);
+    try {
+      const upcoming = upcomingForForms(await getProviderBookings(0), Date.now());
+      const savedId = formId === DRAFT_FORM ? editingId : formId;
+      const already = savedId ? await getBookingIdsWithLibraryForm(savedId, upcoming.map(b => b.id)) : [];
+      setPickableBookings(upcoming);
+      setAlreadySentIds(already);
+    } catch {
+      showToast(tr('providerBookings.forms.toast.loadBookingsFailed'), 'error');
+      setPickingBookingFor(null);
+    } finally {
+      setLoadingBookings(false);
     }
+  }, [editingId, showToast]);
 
+  const sendToBookings = useCallback(async (libraryFormId: string, targets: { bookingId: string; clientUserId: string }[]) => {
+    if (busyRef.current || targets.length === 0) return;
+    busyRef.current = true;
     setSaving(true);
     try {
-      // sendLibraryFormToClient looks up the provider profile itself and already
-      // notifies the client (intake_form_received / "Form to Complete") — a second
-      // insert here used to double-send the push.
-      await sendLibraryFormToClient(libraryFormId, toBookingId, toClientUserId);
+      // sendLibraryFormToBookings looks up the provider profile itself and
+      // already notifies each client (intake_form_received / "Form to
+      // Complete") — a second insert here used to double-send the push.
+      const sent = await sendLibraryFormToBookings(libraryFormId, targets);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(t('providerBookings.forms.toast.sent'), 'success');
+      showToast(sentFormsMessage(sent.length, targets.length), 'success');
       setPickingBookingFor(null);
+      setPickedBookingIds([]);
       if (hasBookingContext) navigation.goBack();
+      else setMode('picker');
     } catch {
-      showToast(t('providerBookings.forms.toast.sendFailed'), 'error');
+      showToast(tr('providerBookings.forms.toast.sendFailed'), 'error');
     } finally {
+      busyRef.current = false;
       setSaving(false);
     }
-  }, [bookingId, clientUserId, hasBookingContext, navigation, showToast, t]);
+  }, [hasBookingContext, navigation, showToast]);
 
-  const handlePickBookingForSend = useCallback((booking: BookingWithAddOns) => {
-    if (!pickingBookingFor) return;
+  // From a library card. A form saved before the empty-form check can still
+  // be empty, so it's checked here too.
+  const handleSendToClient = useCallback((form: Pick<LibraryForm, 'id' | 'questions'>) => {
+    const problem = formProblem(form.questions);
+    if (problem) { showToast(tr('providerBookings.forms.editFirst', { problem }), 'warning'); return; }
+    if (bookingId && clientUserId) {
+      void sendToBookings(form.id, [{ bookingId, clientUserId }]);
+    } else {
+      void openBookingPicker(form.id);
+    }
+  }, [bookingId, clientUserId, openBookingPicker, sendToBookings, showToast]);
+
+  const togglePickedBooking = useCallback((id: string) => {
     Haptics.selectionAsync().catch(() => {});
-    handleSendToClient(pickingBookingFor, booking.id, booking.user_id);
-  }, [pickingBookingFor, handleSendToClient]);
+    setPickedBookingIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  }, []);
+
+  const sendToPickedBookings = useCallback(async () => {
+    if (!pickingBookingFor) return;
+    const targets = pickableBookings
+      .filter(b => pickedBookingIds.includes(b.id) && !alreadySentIds.includes(b.id) && !!b.user_id)
+      .map(b => ({ bookingId: b.id, clientUserId: b.user_id }));
+    if (targets.length === 0) return;
+    let formId = pickingBookingFor;
+    if (formId === DRAFT_FORM) {
+      const saved = await handleSaveToLibrary();
+      if (!saved) return;
+      formId = saved.id;
+    }
+    await sendToBookings(formId, targets);
+  }, [pickingBookingFor, pickableBookings, pickedBookingIds, alreadySentIds, handleSaveToLibrary, sendToBookings]);
 
   const handleSaveAndSend = useCallback(async () => {
-    const saved = await handleSaveToLibrary();
-    if (saved) await handleSendToClient(saved.id);
-  }, [handleSaveToLibrary, handleSendToClient]);
+    const problem = formProblem(questions);
+    if (problem) { showToast(problem, 'warning'); return; }
+    if (bookingId && clientUserId) {
+      // From a booking: the client is already known, so save and send.
+      const saved = await handleSaveToLibrary();
+      if (saved) await sendToBookings(saved.id, [{ bookingId, clientUserId }]);
+      return;
+    }
+    // Pick who first; nothing is saved until Save & send.
+    Haptics.selectionAsync().catch(() => {});
+    void openBookingPicker(DRAFT_FORM);
+  }, [questions, bookingId, clientUserId, handleSaveToLibrary, sendToBookings, openBookingPicker, showToast]);
 
   const handleDeleteLibraryForm = useCallback(async (id: string) => {
     try {
@@ -454,9 +546,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       setLibraryForms(prev => prev.filter(f => f.id !== id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch {
-      showToast(t('providerBookings.forms.toast.deleteFailed'), 'error');
+      showToast(tr('providerBookings.forms.toast.deleteFailed'), 'error');
     }
-  }, [showToast, t]);
+  }, [showToast]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -467,7 +559,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     );
   }
 
-  const canSave = questions.length > 0 && questions.every(q => q.label.trim());
+  const canSave = formProblem(questions) === null;
+  // The welcome's example is this provider's own best template, if any.
+  const welcomeExample = autoTemplate ?? relevantTemplates[0];
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -484,13 +578,24 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: P.text }]}>
-              {mode === 'readonly' ? t('providerBookings.forms.title.responses')
-                : mode === 'builder' ? (editingId ? t('providerBookings.forms.title.edit') : t('providerBookings.forms.title.create'))
-                : t('providerBookings.forms.title.forms')}
+              {mode === 'readonly' ? tr('providerBookings.forms.title.responses')
+                : mode === 'builder' ? (editingId ? 'Edit Form' : 'Create Form')
+                : 'Forms'}
             </Text>
+            {mode === 'picker' && (
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); welcome.show(); }}
+                hitSlop={10}
+                activeOpacity={0.7}
+                style={[styles.infoBtn, { backgroundColor: P.iconBg }]}
+                accessibilityLabel={tr('providerBookings.forms.howA11y')}
+              >
+                <Ionicons name="information" size={13} color={P.text} />
+              </TouchableOpacity>
+            )}
             {mode === 'builder' && questions.length > 0 && (
               <View style={[styles.qPill, { backgroundColor: P.surface, borderColor: P.border }]}>
-                <Text style={[styles.qPillText, { color: P.sub }]}>{t('providerBookings.forms.questionCountShort', { count: questions.length })}</Text>
+                <Text style={[styles.qPillText, { color: P.sub }]}>{questions.length}q</Text>
               </View>
             )}
           </View>
@@ -501,7 +606,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={[styles.iconBtn, { backgroundColor: P.accent }]}
             >
-              <Ionicons name="add" size={20} color="#fff" />
+              <Ionicons name="add" size={20} color={P.onAccent} />
             </TouchableOpacity>
           )}
           {mode === 'builder' && (
@@ -532,8 +637,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 >
                   <Text style={[styles.tabLabel, { color: pickerTab === tab ? P.accent : P.sub }]}>
                     {tab === 'myForms'
-                      ? (libraryForms.length > 0 ? t('providerBookings.forms.tab.myFormsCount', { count: libraryForms.length }) : t('providerBookings.forms.tab.myForms'))
-                      : t('providerBookings.forms.tab.templates')}
+                      ? `${tr('providerBookings.forms.myForms')}${libraryForms.length > 0 ? ` (${libraryForms.length})` : ''}`
+                      : tr('providerBookings.forms.tab.templates')}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -549,18 +654,19 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 libraryForms.length === 0 ? (
                   <View style={[styles.emptyState, { borderColor: P.border }]}>
                     <Ionicons name="document-text-outline" size={40} color={P.sub} style={{ marginBottom: 12 }} />
-                    <Text style={[styles.emptyTitle, { color: P.text }]}>{t('providerBookings.forms.empty.title')}</Text>
+                    <Text style={[styles.emptyTitle, { color: P.text }]}>{tr('providerBookings.forms.empty.title')}</Text>
                     <Text style={[styles.emptySub, { color: P.sub }]}>
-                      {t('providerBookings.forms.empty.body')}
+                      {tr('providerBookings.forms.emptyLine1')}{'\n'}{tr('providerBookings.forms.emptyLine2')}
                     </Text>
                   </View>
                 ) : (
-                  libraryForms.map(f => (
+                  libraryForms.map((f, i) => (
                     <LibraryFormCard
                       key={f.id}
                       form={f}
+                      index={i}
                       P={P}
-                      onSend={() => handleSendToClient(f.id)}
+                      onSend={() => handleSendToClient(f)}
                       onEdit={() => openBuilderFromLibrary(f)}
                       onDelete={() => handleDeleteLibraryForm(f.id)}
                     />
@@ -573,7 +679,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 <>
                   {autoTemplate && (
                     <>
-                      <Text style={[styles.sectionHeading, { color: P.sub }]}>{t('providerBookings.forms.section.suggested')}</Text>
+                      <Text style={[styles.sectionHeading, { color: P.sub }]}>{tr('providerBookings.forms.section.suggested')}</Text>
                       <TouchableOpacity
                         style={[styles.formRow, styles.formRowAccent, { backgroundColor: P.card, borderColor: P.accent + '55' }]}
                         onPress={() => openBuilderFromTemplate(autoTemplate)}
@@ -581,39 +687,39 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       >
                         <View style={{ flex: 1 }}>
                           <View style={styles.formRowTop}>
-                            <Text style={[styles.formRowTitle, { color: P.text }]}>{templateLabel(autoTemplate, t)}</Text>
+                            <Text style={[styles.formRowTitle, { color: P.text }]}>{autoTemplate.label}</Text>
                             <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}>
-                              <Text style={[styles.badgeText, { color: P.accent }]}>{t('providerBookings.forms.bestMatch')}</Text>
+                              <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.bestMatch')}</Text>
                             </View>
                           </View>
                           <Text style={[styles.formRowSub, { color: P.sub }]}>
-                            {templateSubtitle(autoTemplate, t)}  ·  {tp('providerBookings.forms.questionCount', autoTemplate.questions.length)}
+                            {autoTemplate.subtitle}  ·  {autoTemplate.questions.length} questions
                           </Text>
                         </View>
                         <Ionicons name="chevron-forward" size={16} color={P.accent} />
                       </TouchableOpacity>
-                      {relevantTemplates.filter(tpl => tpl.id !== autoTemplate.id).length > 0 && (
-                        <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{t('providerBookings.forms.section.otherTemplates')}</Text>
+                      {relevantTemplates.filter(t => t.id !== autoTemplate.id).length > 0 && (
+                        <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{tr('providerBookings.forms.section.otherTemplates')}</Text>
                       )}
                     </>
                   )}
 
                   {!autoTemplate && (
-                    <Text style={[styles.sectionHeading, { color: P.sub }]}>{t('providerBookings.forms.section.templates')}</Text>
+                    <Text style={[styles.sectionHeading, { color: P.sub }]}>{tr('providerBookings.forms.section.templates')}</Text>
                   )}
 
                   <View style={styles.templateGrid}>
-                    {relevantTemplates.filter(tpl => tpl.id !== autoTemplate?.id).map(tpl => (
+                    {relevantTemplates.filter(t => t.id !== autoTemplate?.id).map(tpl => (
                       <TouchableOpacity
                         key={tpl.id}
                         style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
                         onPress={() => openBuilderFromTemplate(tpl)}
                         activeOpacity={0.75}
                       >
-                        <Text style={[styles.templateCardLabel, { color: P.text }]}>{templateLabel(tpl, t)}</Text>
-                        <Text style={[styles.templateCardSub, { color: P.sub }]}>{templateSubtitle(tpl, t)}</Text>
+                        <Text style={[styles.templateCardLabel, { color: P.text }]}>{tpl.label}</Text>
+                        <Text style={[styles.templateCardSub, { color: P.sub }]}>{tpl.subtitle}</Text>
                         <View style={styles.templateCardFoot}>
-                          <Text style={[styles.templateCardCount, { color: P.sub }]}>{tp('providerBookings.forms.questionCount', tpl.questions.length)}</Text>
+                          <Text style={[styles.templateCardCount, { color: P.sub }]}>{tpl.questions.length} questions</Text>
                           <Ionicons name="arrow-forward" size={13} color={P.sub} />
                         </View>
                       </TouchableOpacity>
@@ -629,7 +735,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       window, deposit, no-show); this is prose the provider
                       writes, and it's the one form clients can read from the
                       booking sheet before they book. */}
-                  <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{t('providerBookings.forms.section.terms')}</Text>
+                  <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{tr('providerBookings.forms.section.terms')}</Text>
                   <View style={styles.templateGrid}>
                     <TouchableOpacity
                       style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
@@ -640,11 +746,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       }}
                       activeOpacity={0.75}
                     >
-                      <Text style={[styles.templateCardLabel, { color: P.text }]}>{templateLabel(TERMS_TEMPLATE, t)}</Text>
-                      <Text style={[styles.templateCardSub, { color: P.sub }]}>{templateSubtitle(TERMS_TEMPLATE, t)}</Text>
+                      <Text style={[styles.templateCardLabel, { color: P.text }]}>{TERMS_TEMPLATE.label}</Text>
+                      <Text style={[styles.templateCardSub, { color: P.sub }]}>{TERMS_TEMPLATE.subtitle}</Text>
                       <View style={styles.templateCardFoot}>
                         <Text style={[styles.templateCardCount, { color: P.sub }]}>
-                          {libraryForms.some(f => f.isTerms) ? t('providerBookings.forms.terms.written') : t('providerBookings.forms.terms.notWritten')}
+                          {libraryForms.some(f => f.isTerms) ? tr('providerBookings.forms.terms.written') : tr('providerBookings.forms.terms.notWritten')}
                         </Text>
                         <Ionicons name="arrow-forward" size={13} color={P.sub} />
                       </View>
@@ -657,17 +763,17 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       built fresh from live booking_policies each time. */}
                   {policyTemplate && (
                     <>
-                      <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{t('providerBookings.forms.section.policies')}</Text>
+                      <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>{tr('providerBookings.forms.section.policies')}</Text>
                       <View style={styles.templateGrid}>
                         <TouchableOpacity
                           style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
                           onPress={() => openBuilderFromTemplate(policyTemplate)}
                           activeOpacity={0.75}
                         >
-                          <Text style={[styles.templateCardLabel, { color: P.text }]}>{templateLabel(policyTemplate, t)}</Text>
-                          <Text style={[styles.templateCardSub, { color: P.sub }]}>{templateSubtitle(policyTemplate, t)}</Text>
+                          <Text style={[styles.templateCardLabel, { color: P.text }]}>{policyTemplate.label}</Text>
+                          <Text style={[styles.templateCardSub, { color: P.sub }]}>{policyTemplate.subtitle}</Text>
                           <View style={styles.templateCardFoot}>
-                            <Text style={[styles.templateCardCount, { color: P.sub }]}>{t('providerBookings.forms.policy.prefilled')}</Text>
+                            <Text style={[styles.templateCardCount, { color: P.sub }]}>{tr('providerBookings.forms.policy.prefilled')}</Text>
                             <Ionicons name="arrow-forward" size={13} color={P.sub} />
                           </View>
                         </TouchableOpacity>
@@ -691,12 +797,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             showsVerticalScrollIndicator={false}
           >
             {/* Title */}
-            <Text style={[styles.fieldLabel, { color: P.sub }]}>{t('providerBookings.forms.field.title')}</Text>
+            <Text style={[styles.fieldLabel, { color: P.sub }]}>{tr('providerBookings.forms.field.title')}</Text>
             <TextInput
               style={[styles.titleInput, { color: P.text, backgroundColor: P.card, borderColor: P.border }]}
               value={title}
               onChangeText={setTitle}
-              placeholder={t('providerBookings.forms.field.titlePlaceholder')}
+              placeholder={tr('providerBookings.forms.field.titlePlaceholder')}
               placeholderTextColor={P.sub}
             />
 
@@ -707,7 +813,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     provider offers, which meant tapping every chip one at a
                     time. Doubles as Clear, so the same control undoes it. */}
                 <View style={styles.serviceLinkHeader}>
-                  <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 0 }]}>{t('providerBookings.forms.field.links')}</Text>
+                  <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 0 }]}>{tr('providerBookings.forms.field.links')}</Text>
                   <TouchableOpacity
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
@@ -717,12 +823,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     activeOpacity={0.6}
                   >
                     <Text style={[styles.serviceLinkAction, { color: P.accent }]}>
-                      {allServicesSelected ? t('providerBookings.forms.field.clearAll') : t('providerBookings.forms.field.selectAll')}
+                      {allServicesSelected ? tr('providerBookings.forms.field.clearAll') : tr('providerBookings.forms.field.selectAll')}
                     </Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={[styles.fieldHint, { color: P.sub }]}>
-                  {t('providerBookings.forms.field.linksHint')}
+                  {tr('providerBookings.forms.field.linksHint')}
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceChipsScroll} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
                   {providerServiceNames.map((name) => {
@@ -746,8 +852,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 {selectedServices.length > 0 && (
                   <View style={[styles.autoSendRow, { borderColor: P.border }]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.autoSendLabel, { color: P.text }]}>{t('providerBookings.forms.autoSend.label')}</Text>
-                      <Text style={[styles.autoSendSub, { color: P.sub }]}>{t('providerBookings.forms.autoSend.sub')}</Text>
+                      <Text style={[styles.autoSendLabel, { color: P.text }]}>{tr('providerBookings.forms.autoSend.label')}</Text>
+                      <Text style={[styles.autoSendSub, { color: P.sub }]}>{tr('providerBookings.forms.autoSend.sub')}</Text>
                     </View>
                     <Switch
                       value={autoSend}
@@ -780,14 +886,14 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
             {questions.length === 0 && (
               <View style={[styles.builderEmpty, { borderColor: P.border }]}>
-                <Text style={[styles.builderEmptyText, { color: P.sub }]}>{t('providerBookings.forms.builder.empty')}</Text>
+                <Text style={[styles.builderEmptyText, { color: P.sub }]}>{tr('providerBookings.forms.builder.empty')}</Text>
               </View>
             )}
 
             {/* Add question */}
-            <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>{t('providerBookings.forms.builder.addQuestion')}</Text>
+            <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>{tr('providerBookings.forms.builder.addQuestion')}</Text>
             <View style={styles.addRow}>
-              {Q_TYPES.map(({ type, labelKey, icon }) => (
+              {Q_TYPES.map(({ type, label, icon }) => (
                 <TouchableOpacity
                   key={type}
                   style={[styles.addBtn, { backgroundColor: P.card, borderColor: P.border }]}
@@ -795,16 +901,44 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                   activeOpacity={0.7}
                 >
                   <Ionicons name={icon as any} size={18} color={P.text} />
-                  <Text style={[styles.addBtnText, { color: P.text }]}>{t(labelKey)}</Text>
+                  <Text style={[styles.addBtnText, { color: P.text }]}>{label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
+            {/* Deadline — not on Terms, which a client reads before booking */}
+            {!isTerms && (
+              <>
+                <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>DEADLINE</Text>
+                <Text style={[styles.fieldHint, { color: P.sub }]}>
+                  {tr('providerBookings.forms.dueHint')}
+                </Text>
+                <View style={styles.deadlineRow}>
+                  {DEADLINE_OPTIONS.map(o => {
+                    const on = deadlineHours === o.hours;
+                    return (
+                      <TouchableOpacity
+                        key={o.label}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                        style={[styles.serviceChip, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.accent + '18' : P.card }]}
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); setDeadlineHours(o.hours); }}
+                        activeOpacity={0.7}
+                      >
+                        {on && <Ionicons name="checkmark" size={12} color={P.accent} />}
+                        <Text style={[styles.serviceChipText, { color: on ? P.accent : P.sub }]}>{o.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
             {/* Signature toggle */}
             <View style={[styles.autoSendRow, { borderColor: P.border, marginTop: 8 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.autoSendLabel, { color: P.text }]}>{t('providerBookings.forms.signature.label')}</Text>
-                <Text style={[styles.autoSendSub, { color: P.sub }]}>{t('providerBookings.forms.signature.sub')}</Text>
+                <Text style={[styles.autoSendLabel, { color: P.text }]}>{tr('providerBookings.forms.signature.label')}</Text>
+                <Text style={[styles.autoSendSub, { color: P.sub }]}>{tr('providerBookings.forms.signature.sub')}</Text>
               </View>
               <Switch
                 value={requiresSignature}
@@ -828,7 +962,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             {existingForm?.requiresSignature && (
               <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44', alignSelf: 'flex-start', marginBottom: 16 }]}>
                 <Ionicons name="pencil-outline" size={11} color={P.accent} />
-                <Text style={[styles.badgeText, { color: P.accent }]}>{t('providerBookings.forms.signature.required')}</Text>
+                <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.signature.required')}</Text>
               </View>
             )}
             <View style={[styles.divider, { backgroundColor: P.border }]} />
@@ -846,14 +980,16 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             ))}
             {existingForm?.clientSignature && (
               <View style={[styles.signatureBox, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 6 }]}>{t('providerBookings.forms.signature.client')}</Text>
+                <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 6 }]}>{tr('providerBookings.forms.signature.client')}</Text>
                 <Text style={[styles.signatureText, { color: P.text }]}>{existingForm.clientSignature}</Text>
               </View>
             )}
             {existingForm?.status === 'pending' && (
               <View style={[styles.pendingBanner, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Ionicons name="time-outline" size={16} color={P.sub} />
-                <Text style={[styles.pendingText, { color: P.sub }]}>{t('providerBookings.forms.awaitingResponse')}</Text>
+                <Text style={[styles.pendingText, { color: P.sub }]}>
+                  {existingForm.dueAt ? tr('providerBookings.forms.awaitingDue', { due: dueByLabel(existingForm.dueAt) ?? '' }) : tr('providerBookings.forms.awaitingResponse')}
+                </Text>
               </View>
             )}
           </ScrollView>
@@ -874,7 +1010,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               >
                 {saving
                   ? <ActivityIndicator color={P.accent} size="small" />
-                  : <Text style={[styles.saveBtnText, { color: canSave ? P.accent : P.sub }]}>{t('providerBookings.forms.footer.save')}</Text>
+                  : <Text style={[styles.saveBtnText, { color: canSave ? P.accent : P.sub }]}>{tr('providerBookings.forms.footer.save')}</Text>
                 }
               </TouchableOpacity>
               <TouchableOpacity
@@ -883,7 +1019,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 disabled={saving || !canSave}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.sendBtnText, { color: canSave ? '#fff' : P.sub }]}>{t('providerBookings.forms.footer.saveSend')}</Text>
+                {saving
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[styles.sendBtnText, { color: canSave ? P.onAccent : P.sub }]}>{tr('providerBookings.forms.footer.saveSend')}</Text>
+                }
               </TouchableOpacity>
             </View>
           </View>
@@ -892,40 +1031,48 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
       {/* ── Form Preview Modal ── */}
       <Modal visible={showPreview} animationType="none" presentationStyle="pageSheet" onRequestClose={() => setShowPreview(false)}>
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <SafeAreaView style={[styles.previewRoot, { backgroundColor: P.bg }]} edges={['top', 'bottom']}>
           <View style={[styles.previewHeader, { borderBottomColor: P.border }]}>
             <View style={{ width: 36 }} />
             <View style={{ alignItems: 'center' }}>
-              <Text style={[styles.previewTitle, { color: P.text }]}>{t('providerBookings.forms.preview.title')}</Text>
-              <Text style={[styles.previewSub, { color: P.sub }]}>{t('providerBookings.forms.preview.sub')}</Text>
+              <Text style={[styles.previewTitle, { color: P.text }]}>{tr('providerBookings.forms.preview.title')}</Text>
+              <Text style={[styles.previewSub, { color: P.sub }]}>{tr('providerBookings.forms.preview.sub')}</Text>
             </View>
             <TouchableOpacity onPress={() => setShowPreview(false)} style={[styles.iconBtn, { backgroundColor: P.surface }]}>
               <Ionicons name="close" size={18} color={P.text} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.previewContent} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.previewFormTitle, { color: P.text }]}>{title || t('providerBookings.forms.fallbackTitle')}</Text>
-            <Text style={[styles.previewFormSub, { color: P.sub }]}>{tp('providerBookings.forms.questionCount', questions.length)}{requiresSignature ? `  ·  ${t('providerBookings.forms.signature.required')}` : ''}</Text>
+            <Text style={[styles.previewFormTitle, { color: P.text }]}>{title || 'Consultation Form'}</Text>
+            <Text style={[styles.previewFormSub, { color: P.sub }]}>{trp('providerBookings.forms.questions', questions.length)}{requiresSignature ? `  ·  ${tr('providerBookings.forms.signatureRequired')}` : ''}</Text>
+            {!isTerms && deadlineHours != null && (
+              <Text style={[styles.previewFormSub, { color: P.accent, marginTop: -4 }]}>
+                {tr('providerBookings.forms.fillInBy', { deadline: deadlineLabel(deadlineHours).toLowerCase() })}
+              </Text>
+            )}
             <View style={[styles.divider, { backgroundColor: P.border, marginBottom: 20 }]} />
             {questions.length === 0 ? (
               <View style={[styles.builderEmpty, { borderColor: P.border }]}>
-                <Text style={[styles.builderEmptyText, { color: P.sub }]}>{t('providerBookings.forms.preview.noQuestions')}</Text>
+                <Text style={[styles.builderEmptyText, { color: P.sub }]}>{tr('providerBookings.forms.preview.noQuestions')}</Text>
               </View>
             ) : questions.map((q, idx) => (
               <View key={q.id} style={[styles.previewQ, { backgroundColor: P.card, borderColor: P.border }]}>
                 <View style={styles.previewQTop}>
                   <Text style={[styles.previewQNum, { color: P.sub }]}>{idx + 1}</Text>
-                  {q.required && <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}><Text style={[styles.badgeText, { color: P.accent }]}>{t('common.required')}</Text></View>}
+                  {q.required && <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}><Text style={[styles.badgeText, { color: P.accent }]}>{tr('common.required')}</Text></View>}
                 </View>
-                <Text style={[styles.previewQLabel, { color: P.text }]}>{q.label || t('providerBookings.forms.preview.noQuestionText')}</Text>
+                <Text style={[styles.previewQLabel, { color: P.text }]}>{q.label || '(no question text)'}</Text>
                 {q.type === 'text' && (
                   <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg }]}>
-                    <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>{t('providerBookings.forms.preview.typeAnswer')}</Text>
+                    <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>{tr('providerBookings.forms.preview.typeAnswer')}</Text>
                   </View>
                 )}
                 {q.type === 'yesno' && (
                   <View style={styles.previewYesNo}>
-                    {[t('common.yes'), t('common.no')].map(v => (
+                    {['Yes', 'No'].map(v => (
                       <View key={v} style={[styles.previewYesNoBtn, { borderColor: P.border, backgroundColor: P.bg }]}>
                         <Text style={[{ color: P.sub, fontSize: 14, fontWeight: '600' }]}>{v}</Text>
                       </View>
@@ -937,15 +1084,21 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     {(q.options ?? []).map((opt, oi) => (
                       <View key={oi} style={[styles.previewChoice, { borderColor: P.border, backgroundColor: P.bg }]}>
                         <View style={[styles.previewRadio, { borderColor: P.sub }]} />
-                        <Text style={[{ color: opt ? P.text : P.sub, fontSize: 14 }]}>{opt || t('providerBookings.forms.optionN', { n: oi + 1 })}</Text>
+                        <Text style={[{ color: opt ? P.text : P.sub, fontSize: 14 }]}>{opt || `Option ${oi + 1}`}</Text>
                       </View>
                     ))}
                   </View>
                 )}
                 {q.type === 'policy' && (
-                  <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg, height: 'auto' }]}>
-                    <Text style={{ color: P.text, fontSize: 13, lineHeight: 19 }}>{q.body || t('providerBookings.forms.preview.noPolicyText')}</Text>
-                  </View>
+                  <>
+                    <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg, height: 'auto' }]}>
+                      <Text style={{ color: P.text, fontSize: 13, lineHeight: 19 }}>{q.body || '(no policy text)'}</Text>
+                    </View>
+                    {/* What the client taps to agree, as on their form. */}
+                    <View style={[styles.previewYesNoBtn, styles.previewAckBtn, { borderColor: P.border, backgroundColor: P.bg }]}>
+                      <Text style={{ color: P.sub, fontSize: 14, fontWeight: '600' }}>I acknowledge this policy</Text>
+                    </View>
+                  </>
                 )}
               </View>
             ))}
@@ -955,22 +1108,25 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                   <Text style={[styles.previewQNum, { color: P.sub }]}>{questions.length + 1}</Text>
                   <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}>
                     <Ionicons name="pencil-outline" size={10} color={P.accent} />
-                    <Text style={[styles.badgeText, { color: P.accent }]}>{t('providerBookings.forms.signature.badge')}</Text>
+                    <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.signature.badge')}</Text>
                   </View>
                 </View>
-                <Text style={[styles.previewQLabel, { color: P.text }]}>{t('providerBookings.forms.preview.fullNameSignature')}</Text>
+                <Text style={[styles.previewQLabel, { color: P.text }]}>{tr('providerBookings.forms.preview.fullNameSignature')}</Text>
                 <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg }]}>
-                  <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>{t('providerBookings.forms.preview.typeFullName')}</Text>
+                  <Text style={[{ color: P.sub, fontSize: 14, fontStyle: 'italic' }]}>{tr('providerBookings.forms.preview.typeFullName')}</Text>
                 </View>
               </View>
             )}
           </ScrollView>
         </SafeAreaView>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
 
-      {/* ── Booking picker — shown when "Send to Client" is tapped from the
-            library with no booking already in context (i.e. opened from
-            Quick Access rather than from a specific booking). ── */}
+      {/* ── Appointment picker — shown when "Send to clients" is tapped from
+            the library with no booking already in context (opened from Quick
+            Access rather than from a specific booking). Pick as many
+            upcoming appointments as you like, then send once. ── */}
       <Modal
         visible={!!pickingBookingFor}
         animationType="fade"
@@ -979,41 +1135,93 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPickingBookingFor(null)} />
-          <View style={{ maxHeight: '75%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 14, paddingBottom: insets.bottom + 20 }}>
+          <View style={{ maxHeight: '80%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 14, paddingBottom: insets.bottom + 16 }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, alignSelf: 'center', backgroundColor: P.border, marginBottom: 14 }} />
-            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>{t('providerBookings.forms.picker.title')}</Text>
-            <Text style={{ fontSize: 12, color: P.sub, textAlign: 'center', marginBottom: 14, paddingHorizontal: 24 }}>
-              {t('providerBookings.forms.picker.sub')}
+            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>{tr('providerBookings.forms.whoTitle')}</Text>
+            <Text style={{ fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginBottom: 10, paddingHorizontal: 24 }}>
+              {pickingBookingFor === DRAFT_FORM
+                ? tr('providerBookings.forms.whoDraft')
+                : tr('providerBookings.forms.who')}
             </Text>
             {loadingBookings ? (
               <ActivityIndicator color={P.accent} style={{ marginVertical: 30 }} />
             ) : pickableBookings.length === 0 ? (
               <Text style={{ fontSize: 13, color: P.sub, textAlign: 'center', paddingVertical: 30, paddingHorizontal: 24 }}>
-                {t('providerBookings.forms.picker.empty')}
+                {tr('providerBookings.forms.noUpcoming')}
               </Text>
             ) : (
-              <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
-                {pickableBookings.map(b => (
+              <>
+                <TouchableOpacity
+                  style={styles.pickAllRow}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    const open = pickableBookings.filter(b => !alreadySentIds.includes(b.id)).map(b => b.id);
+                    setPickedBookingIds(prev => (prev.length === open.length ? [] : open));
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <Text style={[styles.serviceLinkAction, { color: P.accent }]}>
+                    {pickedBookingIds.length > 0 && pickedBookingIds.length === pickableBookings.filter(b => !alreadySentIds.includes(b.id)).length ? tr('providerBookings.forms.field.clearAll') : tr('providerBookings.forms.field.selectAll')}
+                  </Text>
+                </TouchableOpacity>
+                <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+                  {pickableBookings.map(b => {
+                    const has = alreadySentIds.includes(b.id);
+                    const on = !has && pickedBookingIds.includes(b.id);
+                    return (
+                      <TouchableOpacity
+                        key={b.id}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on, disabled: has }}
+                        disabled={has}
+                        style={[styles.formRow, { backgroundColor: P.card, borderColor: on ? P.accent : P.border, opacity: has ? 0.5 : 1 }]}
+                        activeOpacity={0.75}
+                        onPress={() => togglePickedBooking(b.id)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.formRowTitle, { color: P.text }]}>{b.customer_name ?? 'Client'}</Text>
+                          <Text style={[styles.formRowSub, { color: P.sub }]}>
+                            {b.service_name_snapshot} · {appointmentLabel(b)}
+                          </Text>
+                          {has && <Text style={[styles.formRowSub, { color: P.sub }]}>{tr('providerBookings.forms.alreadyHas')}</Text>}
+                        </View>
+                        <Ionicons name={has ? 'checkmark-done' : on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? P.accent : P.sub} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
                   <TouchableOpacity
-                    key={b.id}
-                    style={[styles.formRow, { backgroundColor: P.card, borderColor: P.border }]}
-                    activeOpacity={0.75}
-                    onPress={() => handlePickBookingForSend(b)}
+                    style={[styles.sendBtn, { flex: 0, backgroundColor: pickedBookingIds.length > 0 ? P.accent : P.surface }]}
+                    onPress={() => { void sendToPickedBookings(); }}
+                    disabled={saving || pickedBookingIds.length === 0}
+                    activeOpacity={0.8}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.formRowTitle, { color: P.text }]}>{b.customer_name ?? t('providerBookings.clientFallback')}</Text>
-                      <Text style={[styles.formRowSub, { color: P.sub }]}>
-                        {b.service_name_snapshot} · {b.booking_date}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={P.sub} />
+                    {saving
+                      ? <ActivityIndicator color={P.onAccent} size="small" />
+                      : <Text style={[styles.sendBtnText, { color: pickedBookingIds.length > 0 ? P.onAccent : P.sub }]}>
+                          {pickedBookingIds.length === 0
+                            ? tr('providerBookings.forms.pickWho')
+                            : trp(pickingBookingFor === DRAFT_FORM ? 'providerBookings.forms.saveSendTo' : 'providerBookings.forms.sendTo', pickedBookingIds.length)}
+                        </Text>
+                    }
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                </View>
+              </>
             )}
           </View>
         </View>
       </Modal>
+
+      <FormsWelcome
+        visible={welcome.open}
+        P={P}
+        exampleTitle={welcomeExample?.label ?? 'Consultation Form'}
+        exampleQuestions={welcomeExample ? welcomeExample.questions.filter(q => q.type !== 'policy' && q.label.trim()) : []}
+        serviceChips={providerServiceNames}
+        onStart={() => { welcome.hide(); setPickerTab('templates'); }}
+        onClose={welcome.hide}
+      />
 
       <DialogHost />
     </View>
@@ -1022,23 +1230,40 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
 // ── LibraryFormCard ──────────────────────────────────────────────────────────
 
-function LibraryFormCard({ form, P, onSend, onEdit, onDelete }: {
+function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
   form:     LibraryForm;
+  index:    number;
   P:        typeof DARK;
   onSend:   () => void;
   onEdit:   () => void;
   onDelete: () => void;
 }) {
-  const { t, tp } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  // Eases in on mount, a short stagger down the list — same motion as the
+  // Info Packs cards.
+  const fade = useRef(new Animated.Value(0)).current;
+  const lift = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    const delay = Math.min(index * 50, 250);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 260, delay, useNativeDriver: true }),
+      Animated.spring(lift, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
+    ]).start();
+  }, [fade, index, lift]);
+  // Each linked service once: a name can be saved twice from before services
+  // were listed once each.
+  const linkedServices = useMemo(() => [...new Set(form.serviceNames)], [form.serviceNames]);
+
   return (
-    <View style={[styles.libraryCard, { backgroundColor: P.card, borderColor: P.border }]}>
+    <Animated.View style={[styles.libraryCard, { backgroundColor: P.card, borderColor: P.border, opacity: fade, transform: [{ translateY: lift }] }]}>
       {/* Top row */}
       <View style={styles.libraryCardTop}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.libraryCardTitle, { color: P.text }]}>{form.title}</Text>
           <Text style={[styles.libraryCardMeta, { color: P.sub }]}>
-            {tp('providerBookings.forms.questionCount', form.questions.length)}
-            {form.sentCount > 0 ? `  ·  ${t('providerBookings.forms.sentCount', { count: form.sentCount })}` : ''}
+            {form.questions.length} question{form.questions.length !== 1 ? 's' : ''}
+            {form.sentCount > 0 ? `  ·  ${tr('providerBookings.forms.sentTimes', { count: form.sentCount })}` : ''}
           </Text>
         </View>
         <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 8 }}>
@@ -1054,23 +1279,29 @@ function LibraryFormCard({ form, P, onSend, onEdit, onDelete }: {
         {form.requiresSignature && (
           <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
             <Ionicons name="pencil-outline" size={10} color={P.sub} />
-            <Text style={[styles.badgeText, { color: P.sub }]}>{t('providerBookings.forms.signature.badge')}</Text>
+            <Text style={[styles.badgeText, { color: P.sub }]}>{tr('providerBookings.forms.signature.badge')}</Text>
           </View>
         )}
         {form.autoSend && (
           <View style={[styles.badge, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}>
             <Ionicons name="flash-outline" size={10} color={P.accent} />
-            <Text style={[styles.badgeText, { color: P.accent }]}>{t('providerBookings.forms.autoSend.badge')}</Text>
+            <Text style={[styles.badgeText, { color: P.accent }]}>{tr('providerBookings.forms.autoSend.badge')}</Text>
           </View>
         )}
-        {form.serviceNames.slice(0, 3).map(name => (
+        {form.deadlineHours != null && (
+          <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
+            <Ionicons name="time-outline" size={10} color={P.sub} />
+            <Text style={[styles.badgeText, { color: P.sub }]}>{tr('providerBookings.forms.due', { deadline: deadlineLabel(form.deadlineHours).toLowerCase() })}</Text>
+          </View>
+        )}
+        {linkedServices.slice(0, 3).map(name => (
           <View key={name} style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
             <Text style={[styles.badgeText, { color: P.sub }]}>{name}</Text>
           </View>
         ))}
-        {form.serviceNames.length > 3 && (
+        {linkedServices.length > 3 && (
           <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
-            <Text style={[styles.badgeText, { color: P.sub }]}>{t('providerBookings.forms.moreCount', { count: form.serviceNames.length - 3 })}</Text>
+            <Text style={[styles.badgeText, { color: P.sub }]}>+{linkedServices.length - 3} more</Text>
           </View>
         )}
       </View>
@@ -1078,9 +1309,9 @@ function LibraryFormCard({ form, P, onSend, onEdit, onDelete }: {
       {/* Send button */}
       <TouchableOpacity style={[styles.librarySendBtn, { borderColor: P.accent + '55', backgroundColor: P.accent + '10' }]} onPress={onSend} activeOpacity={0.75}>
         <Ionicons name="send-outline" size={14} color={P.accent} />
-        <Text style={[styles.librarySendBtnText, { color: P.accent }]}>{t('providerBookings.forms.sendToClient')}</Text>
+        <Text style={[styles.librarySendBtnText, { color: P.accent }]}>{tr('providerBookings.forms.sendToClients')}</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1094,9 +1325,10 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
   onUpdateOption:   (qId: string, idx: number, value: string) => void;
   onRemoveOption:   (qId: string, idx: number) => void;
 }) {
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const TYPE_ICON: Record<string, string>  = { text: 'create-outline', yesno: 'checkmark-circle-outline', choice: 'list-outline', policy: 'document-text-outline' };
-  const TYPE_LABEL: Record<string, string> = { text: t('providerBookings.forms.qType.text'), yesno: t('providerBookings.forms.qType.yesNo'), choice: t('providerBookings.forms.qType.choice'), policy: t('providerBookings.forms.qType.policy') };
+  const TYPE_LABEL: Record<string, string> = { text: tr('providerBookings.forms.qType.text'), yesno: 'Yes / No', choice: 'Choice', policy: 'Policy' };
 
   return (
     <View style={[styles.qCard, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -1105,7 +1337,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
           <Ionicons name={TYPE_ICON[question.type] as any} size={12} color={P.sub} />
           <Text style={[styles.qTypeTagText, { color: P.sub }]}>{TYPE_LABEL[question.type]}</Text>
         </View>
-        <Text style={[styles.qNum, { color: P.sub }]}>{t('providerBookings.forms.questionNumber', { n: index + 1 })}</Text>
+        <Text style={[styles.qNum, { color: P.sub }]}>Q{index + 1}</Text>
         {!isReadOnly && (
           <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={() => onRemoveQuestion(question.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="trash-outline" size={15} color="#FF3B30" />
@@ -1119,14 +1351,14 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
             style={[styles.qLabelInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg }]}
             value={question.label}
             onChangeText={v => onUpdateQuestion(question.id, { label: v })}
-            placeholder={t('providerBookings.forms.questionPlaceholder')} placeholderTextColor={P.sub} multiline
+            placeholder={tr('providerBookings.forms.questionPlaceholder')} placeholderTextColor={P.sub} multiline
           />
       }
 
       {!isReadOnly && (
         <TouchableOpacity style={styles.requiredRow} onPress={() => onUpdateQuestion(question.id, { required: !question.required })} activeOpacity={0.7}>
           <View style={[styles.requiredDot, { backgroundColor: question.required ? P.accent : 'transparent', borderColor: question.required ? P.accent : P.sub }]} />
-          <Text style={[styles.requiredLabel, { color: question.required ? P.accent : P.sub }]}>{t('common.required')}</Text>
+          <Text style={[styles.requiredLabel, { color: question.required ? P.accent : P.sub }]}>{tr('common.required')}</Text>
         </TouchableOpacity>
       )}
 
@@ -1138,7 +1370,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
               <TextInput
                 style={[styles.optionInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg }]}
                 value={opt} onChangeText={v => onUpdateOption(question.id, oi, v)}
-                placeholder={t('providerBookings.forms.optionN', { n: oi + 1 })} placeholderTextColor={P.sub}
+                placeholder={tr('providerBookings.forms.optionN', { n: oi + 1 })} placeholderTextColor={P.sub}
               />
               {(question.options ?? []).length > 2 && (
                 <TouchableOpacity onPress={() => onRemoveOption(question.id, oi)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1148,7 +1380,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
             </View>
           ))}
           <TouchableOpacity onPress={() => onAddOption(question.id)} style={styles.addOptionBtn}>
-            <Text style={[styles.addOptionText, { color: P.accent }]}>{t('providerBookings.forms.addOption')}</Text>
+            <Text style={[styles.addOptionText, { color: P.accent }]}>{tr('providerBookings.forms.addOption')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1158,7 +1390,7 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
           style={[styles.qLabelInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg, marginTop: 10, minHeight: 90 }]}
           value={question.body ?? ''}
           onChangeText={v => onUpdateQuestion(question.id, { body: v })}
-          placeholder={t('providerBookings.forms.policyPlaceholder')}
+          placeholder={tr('providerBookings.forms.policyPlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           textAlignVertical="top"
@@ -1170,12 +1402,12 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
 
       {isReadOnly && existingAnswer !== null && (
         <View style={[styles.answerBox, { backgroundColor: P.surface, borderColor: P.border }]}>
-          <Text style={[styles.answerLabel, { color: P.sub }]}>{t('providerBookings.forms.clientAnswer')}</Text>
+          <Text style={[styles.answerLabel, { color: P.sub }]}>{tr('providerBookings.forms.clientAnswer')}</Text>
           <Text style={[styles.answerText, { color: P.text }]}>{existingAnswer}</Text>
         </View>
       )}
       {isReadOnly && existingAnswer === null && (
-        <Text style={[styles.noAnswer, { color: P.sub }]}>{t('providerBookings.forms.noAnswer')}</Text>
+        <Text style={[styles.noAnswer, { color: P.sub }]}>{tr('providerBookings.forms.noAnswer')}</Text>
       )}
     </View>
   );
@@ -1193,6 +1425,7 @@ const styles = StyleSheet.create({
   },
   iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  infoBtn: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   headerTitle:  { fontSize: 17, fontWeight: '600', letterSpacing: -0.3 },
   qPill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 7, paddingVertical: 2 },
   qPillText: { fontSize: 11, fontWeight: '600' },
@@ -1295,6 +1528,9 @@ const styles = StyleSheet.create({
   saveBtn: { flex: 1, borderWidth: 1.5, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   saveBtnText: { fontSize: 15, fontWeight: '700' },
   sendBtn: { flex: 1, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  deadlineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  previewAckBtn: { flex: 0, alignSelf: 'flex-start', paddingHorizontal: 16, marginTop: 8 },
+  pickAllRow: { alignSelf: 'flex-end', paddingHorizontal: 20, paddingVertical: 6 },
   sendBtnText: { fontSize: 15, fontWeight: '700' },
 
   // Preview modal

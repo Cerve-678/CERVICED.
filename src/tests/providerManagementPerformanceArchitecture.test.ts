@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (relative: string): string =>
   fs.readFileSync(path.join(__dirname, '..', relative), 'utf8');
@@ -66,7 +67,7 @@ describe('provider management performance contracts', () => {
   });
 
   it('bounds owner promotion and nested service collections', () => {
-    const source = read('services/databaseService.ts');
+    const source = readDatabaseLayer();
     const promotions = source.slice(
       source.indexOf('export async function getMyPromotions'),
       source.indexOf('export interface UpsertPromotionInput'),
@@ -92,15 +93,20 @@ describe('provider management performance contracts', () => {
   });
 
   it('keeps provider refund controls usable while typing a reason', () => {
-    const source = read('screens/provider/ProviderBookingDetailScreen.tsx');
+    // One sheet serves the booking detail screen and Payments → Booking payments.
+    const source = read('components/IssueRefundSheet.tsx');
+    expect(read('screens/provider/ProviderBookingDetailScreen.tsx')).toContain('<IssueRefundSheet');
+    expect(read('components/ProviderStripePayments.tsx')).toContain('<IssueRefundSheet');
 
     // The sheet rides above the keyboard, and focusing the amount or note
     // scrolls the form so the field stays in view while typing.
     expect(source).toContain('<KeyboardAvoidingView');
-    expect(source).toContain('refundFormScrollRef.current?.scrollToEnd');
+    expect(source).toContain('scrollRef.current?.scrollToEnd');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
-    expect(source).toContain("t('providerBookings.detail.issueRefund')");
-    expect(source).toContain("{t('common.cancel')}</Text>");
+    expect(source).toContain('Issue a refund');
+    // The way out stays on screen: "Cancel", or "Go back" once the provider
+    // has tapped the refund button and is confirming.
+    expect(source).toContain(`{confirming ? 'Go back' : 'Cancel'}</Text>`);
   });
 
   it('saves the full weekly schedule through one atomic RPC', () => {
