@@ -108,7 +108,7 @@ Curated: [[Payments]] · **256 files**
 - … +226 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **493 files**
+Curated: [[Booking Flow]] · **492 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(710)_
 - `src/screens/client/CartScreen.tsx` _(659)_
@@ -139,10 +139,10 @@ Curated: [[Booking Flow]] · **493 files**
 - `src/services/database/infoPacks.ts` _(110)_
 - `src/services/database/reschedule.ts` _(109)_
 - `src/types/booking.ts` _(109)_
-- … +463 more
+- … +462 more
 
 ## Notifications
-Curated: [[Notifications]] · **259 files**
+Curated: [[Notifications]] · **261 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(415)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **259 files**
 - `supabase/phase1_schema.sql` _(29)_
 - `src/navigation/RootNavigation.tsx` _(28)_
 - `supabase/consolidate_address_release_notification.sql` _(28)_
-- … +229 more
+- … +231 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **120 files**
@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **120 files**
 - … +90 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **128 files**
+Curated: [[Booking Flow]] · **129 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(274)_
 - `src/screens/client/BookingsScreen.tsx` _(189)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(129)_
@@ -234,14 +234,14 @@ Curated: [[Booking Flow]] · **128 files**
 - `src/i18n/catalogs/es/clientBooking.ts` _(31)_
 - `src/i18n/catalogs/fr/clientBooking.ts` _(31)_
 - `src/i18n/catalogs/pl/clientBooking.ts` _(31)_
-- `src/features/bookings/WaitlistPlaceCard.tsx` _(28)_
 - `src/screens/client/CartScreen.tsx` _(26)_
+- `src/features/bookings/WaitlistPlaceCard.tsx` _(25)_
 - `src/features/bookings/waitlist.ts` _(21)_
 - `supabase/waitlist_schema.sql` _(20)_
 - `src/features/bookings/useWaitlistHoldActions.ts` _(19)_
 - `supabase/booking_flow_fixes.sql` _(19)_
 - `src/services/databaseService.ts` _(18)_
-- … +98 more
+- … +99 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **307 files**
@@ -312,7 +312,7 @@ Curated: [[Contexts]] · **281 files**
 - … +251 more
 
 ## Becca / AI
-Curated: [[Services]] · **95 files**
+Curated: [[Services]] · **96 files**
 - `src/screens/shared/BeccaScreen.tsx` _(149)_
 - `src/services/becca/engine.ts` _(66)_
 - `src/i18n/catalogs/en/shared.ts` _(60)_
@@ -343,7 +343,7 @@ Curated: [[Services]] · **95 files**
 - `src/i18n/catalogs/en/settings.ts` _(11)_
 - `src/i18n/catalogs/fr/settings.ts` _(11)_
 - `src/i18n/catalogs/pl/clientAccount.ts` _(11)_
-- … +65 more
+- … +66 more
 
 ## Cart & checkout
 Curated: [[Payments]] · **142 files**

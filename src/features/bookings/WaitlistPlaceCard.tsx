@@ -12,6 +12,8 @@ import {
   waitlistCardState,
   waitlistDatesLabel,
 } from './waitlist';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface WaitlistPlaceCardProps {
   place: MyWaitlistPlace;
@@ -37,6 +39,8 @@ interface WaitlistPlaceCardProps {
 export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
   place, nowMs, busy, onConfirmAndPay, onPass, onOpen, onRejoin, onDismiss, onHoldEnded,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
   const state = waitlistCardState(place, nowMs);
@@ -48,7 +52,7 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
       <View style={[styles.card, styles.heldCard]}>
         <View style={styles.rowBetween}>
           <View style={[styles.pill, { backgroundColor: P.accent }]}>
-            <Text style={[styles.pillText, { color: P.onAccent }]}>Held for you</Text>
+            <Text style={[styles.pillText, { color: P.onAccent }]}>{tr('shared.newc.heldForYou')}</Text>
           </View>
           <WaitlistHoldCountdown
             expiresAt={place.offerExpiresAt}
@@ -76,9 +80,9 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
             disabled={busy}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={`Pass on ${slot ?? 'this slot'}`}
+            accessibilityLabel={tr('shared.newc2.passOn', { slot: slot ?? tr('shared.newc2.thisSlot') })}
           >
-            <Text style={[styles.buttonText, { color: P.sub }]}>Pass it on</Text>
+            <Text style={[styles.buttonText, { color: P.sub }]}>{tr('shared.newc.passItOn')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: P.accent }]}
@@ -86,11 +90,11 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
             disabled={busy}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={`Confirm and pay for ${slot ?? 'this slot'}`}
+            accessibilityLabel={tr('shared.newc2.confirmPayFor', { slot: slot ?? tr('shared.newc2.thisSlot') })}
           >
             {busy
               ? <ActivityIndicator color={P.onAccent} size="small" />
-              : <Text style={[styles.buttonText, { color: P.onAccent }]}>Confirm & pay</Text>}
+              : <Text style={[styles.buttonText, { color: P.onAccent }]}>{tr('shared.newc.confirmPay')}</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -103,7 +107,7 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
         onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(place); }}
         style={({ pressed }) => [styles.card, pressed && styles.pressed]}
         accessibilityRole="button"
-        accessibilityLabel={`${who}, ${placeInLineLabel(place.placeInLine)}, ${waitlistDatesLabel(place.preferredDates)}. Open your ticket.`}
+        accessibilityLabel={`${who}, ${placeInLineLabel(place.placeInLine)}, ${waitlistDatesLabel(place.preferredDates)}. ${tr('shared.newc2.openTicket')}`}
       >
         <View style={styles.rowBetween}>
           <View style={styles.names}>
@@ -132,17 +136,17 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
           <Ionicons name="time-outline" size={18} color={P.accentText} />
         </View>
         <View style={styles.names}>
-          <Text style={styles.service} numberOfLines={2}>{slot ? `${slot} has gone` : 'Your held slot has gone'}</Text>
+          <Text style={styles.service} numberOfLines={2}>{slot ? tr('shared.newc2.slotGone', { slot }) : tr('shared.newc.yourHeldSlotHasGone')}</Text>
           <Text style={styles.sub} numberOfLines={1}>{who}</Text>
         </View>
       </View>
       <Text style={styles.note}>
         {passed
-          ? "You passed on it, so you've come off this waitlist."
+          ? tr('shared.newc.youPassedOnItSoYou')
           : until
-          ? `It was held for you until ${until}, so you've come off this waitlist.`
+          ? tr('shared.newc2.heldUntilOff', { time: until })
           : "Its time ran out, so you've come off this waitlist."}
-        {' '}Rejoin to be offered the next slot that opens.
+        {' '}{tr('shared.newc.rejoinToBeOfferedTheNext')}
       </Text>
       <View style={styles.buttons}>
         <TouchableOpacity
@@ -152,7 +156,7 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
           activeOpacity={0.7}
           accessibilityRole="button"
         >
-          <Text style={[styles.buttonText, { color: P.sub }]}>Dismiss</Text>
+          <Text style={[styles.buttonText, { color: P.sub }]}>{tr('shared.notifications.dismiss')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.button, { backgroundColor: P.accent }]}
@@ -160,11 +164,11 @@ export const WaitlistPlaceCard = React.memo<WaitlistPlaceCardProps>(({
           disabled={busy}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={`Rejoin the ${place.serviceName} waitlist`}
+          accessibilityLabel={tr('shared.newc2.rejoinA11y', { service: place.serviceName })}
         >
           {busy
             ? <ActivityIndicator color={P.onAccent} size="small" />
-            : <Text style={[styles.buttonText, { color: P.onAccent }]}>Rejoin</Text>}
+            : <Text style={[styles.buttonText, { color: P.onAccent }]}>{tr('shared.newc.rejoin')}</Text>}
         </TouchableOpacity>
       </View>
     </View>

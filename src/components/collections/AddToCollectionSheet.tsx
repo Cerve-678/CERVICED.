@@ -10,6 +10,8 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { CollectionFolder } from './CollectionFolder';
 import { CollectionForm } from './CollectionForm';
 import { CollectionSheetFrame } from './CollectionSheetFrame';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface AddToCollectionSheetProps {
   host: CollectionHost;
@@ -21,6 +23,8 @@ interface AddToCollectionSheetProps {
  * database refuses otherwise), so one that isn't yet is hearted first.
  */
 export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const sheet = useCollectionsStore(s => s.sheet);
   const collections = useCollectionsStore(s => s.collections);
@@ -54,7 +58,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
     if (bookmarks.isPortfolioSaved(id)) return;
     await bookmarks.savePortfolioItem(id);
     if (!useBookmarkStore.getState().isPortfolioSaved(id)) {
-      throw new Error('Could not save this look to Favourites');
+      throw new Error(tr('shared.newc.couldNotSaveThisLookTo'));
     }
   }, []);
 
@@ -76,7 +80,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
   const handleCreate = useCallback(async () => {
     if (!itemId || busyId) return;
     if (!name.trim()) {
-      setError('Give your collection a name.');
+      setError(tr('shared.newc.giveYourCollectionAName'));
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -96,7 +100,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
         setCreating(false);
         setError(toUserMessageAllowingDbGuard(
           e,
-          `Made ${made.name}, but couldn't add this look. Tap it to try again.`,
+          tr('shared.newc2.madeButFailed', { name: made.name }),
           'collections.createAdd',
         ));
       } else {
@@ -110,8 +114,8 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
   return (
     <CollectionSheetFrame
       visible={visible}
-      title="Add to a collection"
-      subtitle={creating ? 'Make a folder for this look.' : 'Tap a folder to put this look in it, or tap again to take it out.'}
+      title={tr('shared.newc.addToACollection')}
+      subtitle={creating ? tr('shared.newc.makeAFolderForThisLook') : tr('shared.newc.tapAFolderToPutThis')}
       onClose={closeSheet}
     >
       {!creating && (
@@ -131,7 +135,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
                 <View style={styles.rowText}>
                   <Text style={[styles.rowName, { color: P.text }]} numberOfLines={1}>{collection.name}</Text>
                   <Text style={[styles.rowCount, { color: P.sub }]}>
-                    {collection.itemIds.length === 1 ? '1 look' : `${collection.itemIds.length} looks`}
+                    {collection.itemIds.length === 1 ? tr('shared.newc.n1Look') : tr('shared.newc2.nLooks', { count: collection.itemIds.length })}
                   </Text>
                 </View>
                 {busyId === collection.id ? (
@@ -157,7 +161,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
             <View style={[styles.newIcon, { backgroundColor: P.surface }]}>
               <Ionicons name="add" size={24} color={P.text} />
             </View>
-            <Text style={[styles.rowName, { color: P.text }]}>New collection</Text>
+            <Text style={[styles.rowName, { color: P.text }]}>{tr('shared.newc.newCollection')}</Text>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -184,7 +188,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
             style={[styles.button, { backgroundColor: P.surface }]}
             activeOpacity={0.7}
           >
-            <Text style={[styles.buttonText, { color: P.text }]}>Back</Text>
+            <Text style={[styles.buttonText, { color: P.text }]}>{tr('common.back')}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -196,7 +200,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
           {busyId === 'new' ? (
             <ActivityIndicator color={P.onAccent} />
           ) : (
-            <Text style={[styles.buttonText, { color: P.onAccent }]}>{creating ? 'Make it and add' : 'Done'}</Text>
+            <Text style={[styles.buttonText, { color: P.onAccent }]}>{creating ? tr('shared.newc.makeItAndAdd') : tr('common.done')}</Text>
           )}
         </TouchableOpacity>
       </View>

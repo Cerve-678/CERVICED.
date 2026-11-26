@@ -34,6 +34,8 @@ import {
   type Size,
 } from '../utils/cropRect';
 import { logger } from '../utils/logger';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const HANDLE_HIT = 44;
 const CORNER = 22;
@@ -89,6 +91,8 @@ function handleMark(handle: CropHandle): object {
 }
 
 export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancelLabel = 'Cancel', progressLabel = null }: ImageCropModalProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const [source, setSource] = useState<ImageRef | null>(null);
   const [imageSize, setImageSize] = useState<Size | null>(null);
@@ -293,8 +297,8 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
 
         <Text style={st.hint}>
           {failed
-            ? "Couldn't crop that photo. Try again, or drag back out to use the whole photo."
-            : 'Pinch to zoom in. Drag the corners or edges to crop. Leave it as it is to use the whole photo.'}
+            ? tr('shared.newc.couldnTCropThatPhotoTry')
+            : tr('shared.newc.pinchToZoomInDragThe')}
         </Text>
       </View>
     </Modal>

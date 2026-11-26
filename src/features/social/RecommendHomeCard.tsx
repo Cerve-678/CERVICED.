@@ -11,6 +11,8 @@ import type { AppTheme } from '../../constants/theme';
 import { FONT_BODY, FONT_DISPLAY, GhostButton, PrimaryButton, hapticLight } from '../maintenance/ui';
 import { initialsFor } from './presentation';
 import { visitWhenLabel } from './circleMoments';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const HEART = '#FF2D78';
 
@@ -30,6 +32,8 @@ interface Props {
 export function RecommendHomeCard({
   providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onClose, P, errorColour,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
     <View style={[styles.card, { backgroundColor: P.card, borderColor: P.accent }]}>
       <View style={styles.top}>
@@ -49,15 +53,15 @@ export function RecommendHomeCard({
           <Text style={[styles.label, { color: P.sub }]} numberOfLines={1}>
             {`${visitWhenLabel(bookingDate, new Date())} · ${providerName}`.toUpperCase()}
           </Text>
-          <Text style={[styles.title, { color: P.text }]}>How was it?</Text>
-          <Text style={[styles.body, { color: P.sub }]}>Recommend them to the people who follow you.</Text>
+          <Text style={[styles.title, { color: P.text }]}>{tr('shared.newc.howWasIt')}</Text>
+          <Text style={[styles.body, { color: P.sub }]}>{tr('shared.newc.recommendThemToThePeopleWho')}</Text>
         </View>
         <TouchableOpacity
           onPress={() => { hapticLight(); onClose(); }}
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
-          accessibilityLabel="Close recommendation"
+          accessibilityLabel={tr('shared.newc.closeRecommendation')}
           activeOpacity={0.6}
         >
           <Ionicons name="close" size={18} color={P.sub} />
@@ -65,8 +69,8 @@ export function RecommendHomeCard({
       </View>
       {error ? <Text style={[styles.error, { color: errorColour }]}>{error}</Text> : null}
       <View style={styles.buttons}>
-        <PrimaryButton label="Recommend" icon="heart" onPress={onRecommend} disabled={busy} P={P} style={styles.grow} />
-        <GhostButton label="Book again" onPress={onBookAgain} disabled={busy} P={P} />
+        <PrimaryButton label={tr('shared.newc.recommend')} icon="heart" onPress={onRecommend} disabled={busy} P={P} style={styles.grow} />
+        <GhostButton label={tr('shared.newc.bookAgain')} onPress={onBookAgain} disabled={busy} P={P} />
       </View>
     </View>
   );

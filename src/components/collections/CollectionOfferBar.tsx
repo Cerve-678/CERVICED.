@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCollectionsStore, type CollectionHost } from '../../stores/useCollectionsStore';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const SHOW_FOR_MS = 4500;
 
@@ -19,6 +21,8 @@ interface CollectionOfferBarProps {
  * ignoring it loses nothing.
  */
 export function CollectionOfferBar({ host, bottom }: CollectionOfferBarProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const offer = useCollectionsStore(s => s.offer);
   const clearOffer = useCollectionsStore(s => s.clearOffer);
@@ -58,7 +62,7 @@ export function CollectionOfferBar({ host, bottom }: CollectionOfferBarProps) {
     >
       <View style={[styles.bar, { backgroundColor: P.accent }]}>
         <Ionicons name="heart" size={16} color="#FF2D78" />
-        <Text style={[styles.text, { color: P.onAccent }]} numberOfLines={1}>Saved</Text>
+        <Text style={[styles.text, { color: P.onAccent }]} numberOfLines={1}>{tr('profile.card.saved.label')}</Text>
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -69,7 +73,7 @@ export function CollectionOfferBar({ host, bottom }: CollectionOfferBarProps) {
           accessibilityRole="button"
         >
           <Ionicons name="folder-open-outline" size={15} color={P.accent} />
-          <Text style={[styles.actionText, { color: P.accent }]}>Add to a collection</Text>
+          <Text style={[styles.actionText, { color: P.accent }]}>{tr('shared.newc.addToACollection')}</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>

@@ -9,6 +9,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { AppTheme } from '../../constants/theme';
 import { FONT_BODY, FONT_DISPLAY, GhostButton, PrimaryButton, Sheet } from '../maintenance/ui';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   visible: boolean;
@@ -22,6 +24,8 @@ interface Props {
 }
 
 export function WhereIGoIntroSheet({ visible, busy, error, onGotIt, onTurnOff, onClose, P, errorColour }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
     <Sheet visible={visible} onClose={onClose} P={P}>
       {/* The provider card is a gradient until there is a real provider to show. */}
@@ -35,16 +39,16 @@ export function WhereIGoIntroSheet({ visible, busy, error, onGotIt, onTurnOff, o
         <View style={[styles.face, { backgroundColor: P.accent, borderColor: P.card }]}>
           <Text style={[styles.faceText, { color: P.onAccent }]}>YOU</Text>
         </View>
-        <Text style={styles.previewLabel}>A provider you visit</Text>
+        <Text style={styles.previewLabel}>{tr('shared.newc.aProviderYouVisit')}</Text>
       </LinearGradient>
-      <Text style={[styles.title, { color: P.text }]}>Your followers can see where you go</Text>
+      <Text style={[styles.title, { color: P.text }]}>{tr('shared.newc.yourFollowersCanSeeWhereYou')}</Text>
       <Text style={[styles.body, { color: P.sub }]}>
-        From now on, your face shows on the providers you visit. Never what you had done.
+        {tr('shared.newc.fromNowOnYourFaceShows')}
       </Text>
       {error ? <Text style={[styles.body, { color: errorColour }]}>{error}</Text> : null}
       <View style={styles.buttons}>
-        <PrimaryButton label="Got it" onPress={onGotIt} disabled={busy} P={P} style={styles.grow} />
-        <GhostButton label="Turn it off" onPress={onTurnOff} disabled={busy} P={P} style={styles.grow} />
+        <PrimaryButton label={tr('common.gotIt')} onPress={onGotIt} disabled={busy} P={P} style={styles.grow} />
+        <GhostButton label={tr('shared.newc.turnItOff')} onPress={onTurnOff} disabled={busy} P={P} style={styles.grow} />
       </View>
     </Sheet>
   );

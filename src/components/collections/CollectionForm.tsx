@@ -4,6 +4,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { COLLECTION_PALETTES } from '../../constants/collectionColors';
 import { COLLECTION_COLORS, COLLECTION_NAME_MAX, type CollectionColor } from '../../types/collections';
 import { CollectionFolder } from './CollectionFolder';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface CollectionFormProps {
   name: string;
@@ -16,20 +18,22 @@ interface CollectionFormProps {
 
 /** Name box plus the three pastel folders to pick a colour from. */
 export function CollectionForm({ name, color, onChangeName, onChangeColor, onSubmit, autoFocus }: CollectionFormProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   return (
     <View style={styles.wrap}>
       <TextInput
         value={name}
         onChangeText={onChangeName}
-        placeholder="Name it, like Nails or Wedding"
+        placeholder={tr('shared.newc.nameItLikeNailsOrWedding')}
         placeholderTextColor={P.sub}
         maxLength={COLLECTION_NAME_MAX}
         autoFocus={autoFocus}
         returnKeyType="done"
         onSubmitEditing={onSubmit}
         style={[styles.input, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-        accessibilityLabel="Collection name"
+        accessibilityLabel={tr('shared.newc.collectionName')}
       />
       <View style={styles.colours}>
         {COLLECTION_COLORS.map(option => {
