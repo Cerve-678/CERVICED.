@@ -220,11 +220,11 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
     contact.location
       ? { label: tr('discover.profile.contactRow.location'), value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
       : null,
-    contact.phone ? { label: tr('discover.profile.contactRow.phone'), value: "Message ›", url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
+    contact.phone ? { label: tr('discover.profile.contactRow.phone'), value: tr('discover.profile.contactAction.message'), url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
     contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
-    contact.email ? { label: tr('discover.profile.contactRow.email'), value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
+    contact.email ? { label: tr('discover.profile.contactRow.email'), value: tr('discover.profile.contactAction.send'), url: `mailto:${contact.email}`, publicLink: false } : null,
     contact.instagram ? { label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
-    websiteUrl ? { label: tr('discover.profile.contactRow.website'), value: "Visit ›", url: websiteUrl, publicLink: true } : null,
+    websiteUrl ? { label: tr('discover.profile.contactRow.website'), value: tr('discover.profile.contactAction.visit'), url: websiteUrl, publicLink: true } : null,
   ] as (ContactRow | null)[]).filter((row): row is ContactRow => row != null);
 
   return (
@@ -233,7 +233,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
         const content = (
           <>
             <Text style={[styles.hoursLabel, { color: ink.sub }]}>{row.label}</Text>
-            <Text style={[styles.contactValue, { color: ink.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
+            <Text style={[styles.contactValue, { color: ink.text }]} numberOfLines={row.label === tr('discover.profile.contactRow.location') ? 2 : 1}>{row.value}</Text>
           </>
         );
         return row.url ? (
