@@ -78,7 +78,7 @@ Curated: [[Payments]] · **257 files**
 - `src/screens/client/CartScreen.tsx` _(340)_
 - `src/screens/provider/PaymentsScreen.tsx` _(229)_
 - `src/features/cart/StripePaymentSheet.tsx` _(177)_
-- `src/components/ProviderStripePayments.tsx` _(126)_
+- `src/components/ProviderStripePayments.tsx` _(125)_
 - `src/components/BookingSheet.tsx` _(118)_
 - `src/i18n/catalogs/en/providerBusiness.ts` _(116)_
 - `src/screens/client/BookingDetailScreen.tsx` _(110)_

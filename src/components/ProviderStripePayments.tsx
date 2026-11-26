@@ -306,13 +306,6 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
             </View>
           </View>
         </View>
-        {feesToCharge.length > 0 && <TouchableOpacity accessibilityRole="button" onPress={() => pick('bookings')} activeOpacity={0.75} style={styles.plainRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.label, { color: C.text }]}>{feesToCharge.length === 1 ? '1 fee you can charge' : `${feesToCharge.length} fees you can charge`}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>Open the booking payment to charge it, within 24 hours of the appointment.</Text>
-          </View>
-          <Text style={[styles.link, { color: C.accentText }]}>{tr('providerBusiness.analytics.tile.bookings')}</Text>
-        </TouchableOpacity>}
         <TouchableOpacity accessibilityRole="button" onPress={() => pick('payouts')} activeOpacity={0.75} style={styles.plainRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{nextPayout ? `Next payday · ${money(nextPayout.amount, nextPayout.currency)}` : 'Next payday'}</Text>
