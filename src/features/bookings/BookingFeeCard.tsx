@@ -10,11 +10,13 @@ import { buildPaymentSheetAppearance } from '../payments/paymentSheetAppearance'
 import { formatShortDayDate } from '../../utils/dateUtils';
 import { PaymentRequestError } from '../../utils/paymentRequestError';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { feeChargeWindow, feeDisputeOpen, liveFee } from './bookingFeeRules';
-import { tr, useTranslation } from '../../i18n';
+import { bookingFeeButtons, feeChargeWindow, feeDisputeOpen, feeKindLabel, liveFee } from './bookingFeeRules';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
-// Late-arrival and no-show fees on one booking (auto-memory
-// late-and-no-show-fees-decision). The provider charges within 24 hours and
+// Late-arrival, no-show and late cancellation fees on one booking (auto-memory
+// late-and-no-show-fees-decision, late-cancel-half-top-up). The provider
+// charges within 24 hours of the appointment's end and
 // answers disputes; the client sees the charge and can dispute it within 7
 // days. CERVICED never decides — the server enforces every rule shown here.
 //
@@ -43,35 +45,38 @@ interface Props {
   role: 'provider' | 'client';
   colors: BookingFeeColors;
   /** The other party's name, for copy ("Ask Sam to…"). */
-  otherName?: string;
+  otherName?: string | undefined;
   /** Changes when the booking's status changes, so the card re-reads (e.g. just marked no-show). */
   refreshKey?: string;
   showConfirm: (title: string, message: string | undefined, buttons: { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }[]) => void;
   showAlert: (title: string, message?: string) => void;
+  /** Provider's booking page: only the charge button(s), and once a fee is
+   *  charged, that button greyed out with the result. Nothing here navigates;
+   *  refunds and disputes are on the booking's payment in Payments & payouts. */
+  bookingPage?: boolean;
+  /** Sits inside the Booking payment sheet's card as a section, not a card of its own. */
+  embedded?: boolean;
+  /** After any charge, refund, request or dispute answer, so the parent re-reads. */
+  onChanged?: (() => void) | undefined;
 }
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
-// Fee rules and dispute wording are held in English (clientBookingHeld), so
-// sentences explaining them use the held fee names; status lines and buttons
-// use the translated ones.
-const kindLabel = (kind: BookingFeeKind) =>
-  (kind === 'late' ? tr('clientBooking.fee.kind.late') : tr('clientBooking.fee.kind.noShow'));
-const kindLabelHeld = (kind: BookingFeeKind) =>
-  (kind === 'late' ? tr('clientBooking.fee.kindHeld.late') : tr('clientBooking.fee.kindHeld.noShow'));
+const kindLabel = feeKindLabel;
 
 function errorMessage(err: unknown, fallback: string, context: string): string {
   if (err instanceof PaymentRequestError) return err.message;
   return toUserMessageAllowingDbGuard(err, fallback, context);
 }
 
-export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert }: Props) {
+export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert, bookingPage, embedded, onChanged }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [charges, setCharges] = useState<BookingFeeCharge[] | null>(null);
   const [terms, setTerms] = useState<BookingFeeTerms | null>(null);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<'dispute' | 'keep' | null>(null);
   const [text, setText] = useState('');
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
-  const { t } = useTranslation();
 
   const load = useCallback(async () => {
     try {
@@ -94,6 +99,21 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   const lastFailed = charges?.[0]?.status === 'failed' ? charges[0] : null;
   const window = terms && !fee ? feeChargeWindow(terms, Date.now()) : null;
 
+  // Provider's booking page: a button per fee on their policy, greyed out
+  // until it can be charged. Re-checked every minute while one shows, so it
+  // turns on (and goes) without leaving the page.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const feeButtons = useMemo(
+    () => (role === 'provider' && bookingPage && terms && !fee ? bookingFeeButtons(terms, nowMs) : []),
+    [role, bookingPage, terms, fee, nowMs],
+  );
+  const hasFeeButtons = feeButtons.length > 0;
+  useEffect(() => {
+    if (!hasFeeButtons) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [hasFeeButtons]);
+
   const run = useCallback(async (action: () => Promise<string | void>, fallback: string, context: string, done?: string) => {
     setBusy(true);
     try {
@@ -107,32 +127,33 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
     } finally {
       setBusy(false);
       await load();
+      onChanged?.();
     }
-  }, [load, showAlert]);
+  }, [load, showAlert, onChanged]);
 
   const confirmCharge = (kind: BookingFeeKind, amountPence: number) => {
-    showConfirm(t('clientBooking.fee.chargeConfirmTitle', { amount: pounds(amountPence) }), t('clientBooking.fee.chargeConfirmMessage', { client: otherName || 'the client', fee: kindLabelHeld(kind) }), [
-      { text: t('common.notNow'), style: 'cancel' },
-      { text: t('clientBooking.fee.chargeButton', { amount: pounds(amountPence) }), onPress: () => void run(async () => {
+    showConfirm(tr('clientBooking.fee.chargeConfirmTitle', { amount: pounds(amountPence) }), `This charges ${otherName || 'the client'}'s saved card the ${kindLabel(kind)} they agreed to when booking. They'll be told and can dispute it with you.`, [
+      { text: tr('common.notNow'), style: 'cancel' },
+      { text: tr('clientBooking.fee.chargeButton', { amount: pounds(amountPence) }), onPress: () => void run(async () => {
         const result = await chargeBookingFee(bookingId, kind);
         return result.status === 'awaiting_client'
-          ? tr('clientBooking.fee.chargeAwaitingClient', { client: otherName || 'the client', date: formatShortDayDate(new Date(result.payBy)) })
-          : tr('clientBooking.fee.charged');
-      }, t('clientBooking.fee.error.charge'), 'BookingFeeCard.charge') },
+          ? `The card couldn't be charged, so ${otherName || 'the client'} has been asked to pay by ${formatShortDayDate(new Date(result.payBy))}. You'll be told when they do.`
+          : 'Fee charged';
+      }, 'Could not charge this fee.', 'BookingFeeCard.charge') },
     ]);
   };
 
   const confirmRefund = (charge: BookingFeeCharge) => {
-    showConfirm(t('clientBooking.fee.refundConfirmTitle', { amount: pounds(charge.amountPence) }), t('clientBooking.fee.refundConfirmMessage', { client: otherName || 'The client' }), [
-      { text: t('common.notNow'), style: 'cancel' },
-      { text: t('clientBooking.fee.refundFee'), style: 'destructive', onPress: () => void run(() => refundBookingFee(charge.id), t('clientBooking.fee.error.refund'), 'BookingFeeCard.refund', t('clientBooking.fee.refunded')) },
+    showConfirm(tr('clientBooking.fee.refundConfirmTitle', { amount: pounds(charge.amountPence) }), `${otherName || 'The client'} gets the whole fee back, and it comes off what you're paid.`, [
+      { text: tr('common.notNow'), style: 'cancel' },
+      { text: tr('clientBooking.fee.refundFee'), style: 'destructive', onPress: () => void run(() => refundBookingFee(charge.id), 'Could not refund this fee.', 'BookingFeeCard.refund', 'Fee refunded') },
     ]);
   };
 
   const confirmCancelRequest = (charge: BookingFeeCharge) => {
-    showConfirm(t('clientBooking.fee.cancelRequestTitle'), t('clientBooking.fee.cancelRequestMessage', { client: otherName || 'The client', fee: kindLabelHeld(charge.kind) }), [
-      { text: t('clientBooking.fee.keepItOpen'), style: 'cancel' },
-      { text: t('clientBooking.fee.cancelRequest'), style: 'destructive', onPress: () => void run(() => cancelBookingFeeRequest(charge.id), t('clientBooking.fee.error.cancelRequest'), 'BookingFeeCard.cancelRequest', t('clientBooking.fee.requestCancelled')) },
+    showConfirm(tr('clientBooking.fee.cancelRequestTitle'), `${otherName || 'The client'} won't be able to pay the ${kindLabel(charge.kind)} any more.`, [
+      { text: tr('clientBooking.fee.keepItOpen'), style: 'cancel' },
+      { text: tr('clientBooking.fee.cancelRequest'), style: 'destructive', onPress: () => void run(() => cancelBookingFeeRequest(charge.id), 'Could not cancel this request.', 'BookingFeeCard.cancelRequest', 'Request cancelled') },
     ]);
   };
 
@@ -148,84 +169,124 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
         { accent: C.accent, onAccent: C.onAccent, bg: C.card, surface: C.card, border: C.border, sub: C.sub }, C.text,
       ),
     });
-    if (initError) throw new Error(initError.message || tr('clientBooking.fee.error.openPayment'));
+    if (initError) throw new Error(initError.message || 'Could not open payment.');
     const { error: presentError } = await presentPaymentSheet();
     if (presentError) {
       if (presentError.code === 'Canceled') return;
-      throw new Error(presentError.message || tr('clientBooking.fee.error.paymentFailed'));
+      throw new Error(presentError.message || 'Your payment did not go through.');
     }
     await confirmBookingFeePayment(charge.id);
-    return tr('clientBooking.fee.paid');
-  }, t('clientBooking.fee.error.pay'), 'BookingFeeCard.pay');
+    return 'Fee paid';
+  }, 'Could not take this payment.', 'BookingFeeCard.pay');
 
   if (!charges) return null;
+
+  // Just the button (user, 2026-11-19: "charge late should just be the charge
+  // late button, nothing else"). Once charged it stays, greyed out, saying
+  // what happened; it never opens Payments (user: pressing it shouldn't take
+  // you there). The fee shows on the booking's payment in Payments & payouts.
+  if (role === 'provider' && bookingPage) {
+    if (fee) {
+      const done = feeOutcomeLabel(fee, otherName);
+      return (
+        <View style={st.buttonsOnly}>
+          <View accessible accessibilityLabel={done} style={[st.button, { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}>
+            <Text style={[st.buttonText, { color: C.sub }]}>{done}</Text>
+          </View>
+        </View>
+      );
+    }
+    if (!hasFeeButtons) return null;
+    return (
+      <View style={st.buttonsOnly}>
+        {feeButtons.map(b => {
+          const label = `Charge ${shortFeeName(b.kind).toLowerCase()} · ${pounds(b.pence)}`;
+          const off = !b.enabled || busy;
+          return (
+            <TouchableOpacity
+              key={b.kind}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}. ${b.note}`}
+              accessibilityState={{ disabled: off }}
+              disabled={off}
+              onPress={() => confirmCharge(b.kind, b.pence)}
+              activeOpacity={0.75}
+              style={[st.button, b.enabled
+                ? { backgroundColor: C.accent }
+                : { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}
+            >
+              {busy && b.enabled
+                ? <ActivityIndicator color={C.onAccent} size="small" />
+                : <Text style={[st.buttonText, { color: b.enabled ? C.onAccent : C.sub }]}>{label}</Text>}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  }
 
   const body: React.ReactNode[] = [];
 
   if (role === 'provider' && !fee && window?.open) {
     if (terms?.lateFeePence && window.canCharge.late) {
-      body.push(<Action key="late" C={C} busy={busy} label={t('clientBooking.fee.chargeLate', { amount: pounds(terms.lateFeePence) })} onPress={() => confirmCharge('late', terms.lateFeePence!)} />);
+      body.push(<Action key="late" C={C} busy={busy} label={tr('clientBooking.fee.chargeLate', { amount: pounds(terms.lateFeePence) })} onPress={() => confirmCharge('late', terms.lateFeePence!)} />);
     }
     if (terms?.noShowFeePence && window.canCharge.no_show) {
-      body.push(<Action key="no_show" C={C} busy={busy} label={t('clientBooking.fee.chargeNoShow', { amount: pounds(terms.noShowFeePence) })} onPress={() => confirmCharge('no_show', terms.noShowFeePence!)} />);
+      body.push(<Action key="no_show" C={C} busy={busy} label={tr('clientBooking.fee.chargeNoShow', { amount: pounds(terms.noShowFeePence) })} onPress={() => confirmCharge('no_show', terms.noShowFeePence!)} />);
+    }
+    if (terms?.lateCancelFeePence && window.canCharge.late_cancel) {
+      // The deposit is already kept; this is the rest up to half the price.
+      const half = terms.depositPence + terms.lateCancelFeePence;
+      body.push(<Text key="kept" style={[st.title, { color: C.text }]}>You kept the {pounds(terms.depositPence)} deposit.</Text>);
+      body.push(<Text key="why" style={[st.sub, { color: C.sub }]}>
+        Your policy is half the price ({pounds(half)}), so you can charge {otherName || 'the client'}'s saved card {pounds(terms.lateCancelFeePence)} more. If you don't, nothing more is taken.
+      </Text>);
+      body.push(<Action key="late_cancel" C={C} busy={busy} label={`Charge late-cancel fee · ${pounds(terms.lateCancelFeePence)}`} onPress={() => confirmCharge('late_cancel', terms.lateCancelFeePence!)} />);
     }
     if (body.length > 0) {
-      body.unshift(<Text key="until" style={[st.sub, { color: C.sub }]}>{t('clientBooking.fee.chargeUntil', { time: window.closesAtLabel })}</Text>);
-      if (lastFailed) body.unshift(<Text key="failed" style={[st.sub, { color: C.sub }]}>{t('clientBooking.fee.lastAttemptFailed')}</Text>);
+      body.unshift(<Text key="until" style={[st.sub, { color: C.sub }]}>You can charge until {window.closesAtLabel}.</Text>);
+      if (lastFailed) body.unshift(<Text key="failed" style={[st.sub, { color: C.sub }]}>Your last attempt couldn't be collected — the client's bank declined it.</Text>);
     }
   }
 
   if (fee) {
-    const label = t('clientBooking.fee.amountKind', { amount: pounds(fee.amountPence), fee: kindLabel(fee.kind) });
-    if (fee.status === 'processing') body.push(<Text key="s" style={[st.title, { color: C.text }]}>{t('clientBooking.fee.statusCharging', { label })}</Text>);
+    const label = `${pounds(fee.amountPence)} ${kindLabel(fee.kind)}`;
+    if (fee.status === 'processing') body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · charging…</Text>);
     if (fee.status === 'awaiting_client') {
       const by = fee.payBy ? formatShortDayDate(new Date(fee.payBy)) : null;
       if (role === 'provider') {
-        body.push(<Text key="s" style={[st.title, { color: C.text }]}>{t('clientBooking.fee.statusWaitingForClient', { label, client: otherName || t('clientBooking.fee.theClient') })}</Text>);
-        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{[
-          by ? t('clientBooking.fee.providerAwaitingBy', { date: by }) : t('clientBooking.fee.providerAwaiting'),
-          fee.nextRetryAt ? t('clientBooking.fee.providerRetry') : null,
-          t('clientBooking.fee.nothingTaken'),
-        ].filter(Boolean).join(' ')}</Text>);
-        body.push(<Action key="cancel" C={C} busy={busy} label={t('clientBooking.fee.cancelRequest')} ghost onPress={() => confirmCancelRequest(fee)} />);
+        body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · waiting for {otherName || 'the client'} to pay</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>The saved card couldn't be charged, so they've been asked to pay{by ? ` by ${by}` : ''}.{fee.nextRetryAt ? ' Their card will also be tried again automatically.' : ''} Nothing has been taken yet.</Text>);
+        body.push(<Action key="cancel" C={C} busy={busy} label={tr('clientBooking.fee.cancelRequest')} ghost onPress={() => confirmCancelRequest(fee)} />);
       } else {
-        body.push(<Text key="s" style={[st.title, { color: C.text }]}>{t('clientBooking.fee.statusToPay', { label })}</Text>);
-        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{[
-          by
-            ? t('clientBooking.fee.clientAwaitingBy', { provider: otherName || 'Your provider', date: by })
-            : t('clientBooking.fee.clientAwaiting', { provider: otherName || 'Your provider' }),
-          fee.nextRetryAt ? t('clientBooking.fee.clientRetry') : null,
-        ].filter(Boolean).join(' ')}</Text>);
-        body.push(<Action key="pay" C={C} busy={busy} label={t('clientBooking.fee.payButton', { amount: pounds(fee.amountPence) })} onPress={() => payFee(fee)} />);
+        body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} to pay</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{otherName || 'Your provider'} couldn't take the fee you agreed to from your saved card. Please pay it{by ? ` by ${by}` : ''}.{fee.nextRetryAt ? " We'll also try your card again, and you'll only ever pay it once." : ''}</Text>);
+        body.push(<Action key="pay" C={C} busy={busy} label={tr('clientBooking.fee.payButton', { amount: pounds(fee.amountPence) })} onPress={() => payFee(fee)} />);
       }
     }
-    if (fee.status === 'refunded') body.push(<Text key="s" style={[st.title, { color: C.text }]}>{t('clientBooking.fee.statusRefunded', { label })}</Text>);
+    if (fee.status === 'refunded') body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · refunded</Text>);
     if (fee.status === 'succeeded') {
-      body.push(<Text key="s" style={[st.title, { color: C.text }]}>{t('clientBooking.fee.statusCharged', { label })}</Text>);
+      body.push(<Text key="s" style={[st.title, { color: C.text }]}>{label} · charged</Text>);
       const open = !!fee.disputedAt && !fee.disputeResolvedAt;
       if (fee.disputedAt) {
         body.push(<Text key="d" style={[st.sub, { color: C.sub }]}>
-          {role === 'provider'
-            ? t('clientBooking.fee.clientDisputed', { client: otherName || 'Your client', reason: fee.disputeReason ?? '' })
-            : t('clientBooking.fee.youDisputed', { reason: fee.disputeReason ?? '' })}
+          {role === 'provider' ? `${otherName || 'Your client'} disputed it` : 'You disputed it'}: "{fee.disputeReason}"
         </Text>);
       }
       if (fee.disputeOutcome === 'kept') {
         body.push(<Text key="o" style={[st.sub, { color: C.sub }]}>
-          {role === 'provider'
-            ? t('clientBooking.fee.youKept', { response: fee.disputeResponse ?? '' })
-            : t('clientBooking.fee.providerKept', { provider: otherName || 'Your provider', response: fee.disputeResponse ?? '' })}
+          {role === 'provider' ? 'You kept the fee' : `${otherName || 'Your provider'} kept the fee`}: "{fee.disputeResponse}"
         </Text>);
       }
       if (role === 'provider') {
         if (open && draft !== 'keep') {
-          body.push(<Action key="keep" C={C} busy={busy} label={t('clientBooking.fee.keepFee')} ghost onPress={() => setDraft('keep')} />);
+          body.push(<Action key="keep" C={C} busy={busy} label={tr('clientBooking.fee.keepFee')} ghost onPress={() => setDraft('keep')} />);
         }
-        if (draft !== 'keep') body.push(<Action key="refund" C={C} busy={busy} label={t('clientBooking.fee.refundFee')} ghost onPress={() => confirmRefund(fee)} />);
+        if (draft !== 'keep') body.push(<Action key="refund" C={C} busy={busy} label={tr('clientBooking.fee.refundFee')} ghost onPress={() => confirmRefund(fee)} />);
       } else if (!fee.disputedAt && feeDisputeOpen(fee, Date.now()) && draft !== 'dispute') {
-        body.push(<Action key="dispute" C={C} busy={busy} label={t('clientBooking.fee.disputeButton')} ghost onPress={() => setDraft('dispute')} />);
+        body.push(<Action key="dispute" C={C} busy={busy} label={tr('clientBooking.fee.disputeButton')} ghost onPress={() => setDraft('dispute')} />);
       } else if (open) {
-        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>{t('clientBooking.fee.waitingForReply', { provider: otherName || t('clientBooking.fee.yourProvider') })}</Text>);
+        body.push(<Text key="w" style={[st.sub, { color: C.sub }]}>Waiting for {otherName || 'your provider'} to reply.</Text>);
       }
     }
   }
@@ -237,31 +298,43 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder={isDispute ? t('clientBooking.fee.disputePlaceholder') : t('clientBooking.fee.keepPlaceholder')}
+          placeholder={isDispute ? tr('clientBooking.fee.disputePlaceholder') : tr('clientBooking.fee.keepPlaceholder')}
           placeholderTextColor={C.sub}
           multiline
           maxLength={1000}
           style={[st.input, { color: C.text, borderColor: C.border }]}
         />
-        <Action C={C} busy={busy} label={isDispute ? t('clientBooking.fee.sendTo', { provider: otherName || t('clientBooking.fee.yourProvider') }) : t('clientBooking.fee.keepAndTell')}
+        <Action C={C} busy={busy} label={isDispute ? tr('clientBooking.fee.sendTo', { provider: otherName || 'your provider' }) : tr('clientBooking.fee.keepAndTell')}
           onPress={() => void run(
             () => (isDispute ? disputeBookingFee(fee!.id, text) : keepDisputedBookingFee(fee!.id, text)),
-            isDispute ? t('clientBooking.fee.error.dispute') : t('clientBooking.fee.error.keep'),
+            isDispute ? 'Could not send your dispute.' : 'Could not save your answer.',
             isDispute ? 'BookingFeeCard.dispute' : 'BookingFeeCard.keep',
-            isDispute ? t('clientBooking.fee.disputeSent') : undefined,
+            isDispute ? 'Sent — they can refund it or explain why it stands.' : undefined,
           )} />
-        <Action C={C} busy={busy} label={t('common.cancel')} ghost onPress={() => { setDraft(null); setText(''); }} />
+        <Action C={C} busy={busy} label={tr('common.cancel')} ghost onPress={() => { setDraft(null); setText(''); }} />
       </View>,
     );
   }
 
   if (body.length === 0) return null;
   return (
-    <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
-      <Text style={[st.heading, { color: C.sub }]}>{t('clientBooking.fee.heading').toUpperCase()}</Text>
+    <View style={embedded ? [st.section, { borderTopColor: C.border }] : [st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+      <Text style={[st.heading, { color: C.sub }]}>{fee?.kind === 'late_cancel' || (window?.canCharge.late_cancel && !fee) ? 'LATE CANCELLATION' : 'LATE & NO-SHOW FEES'}</Text>
       {body}
     </View>
   );
+}
+
+const shortFeeName = (kind: BookingFeeKind) => (kind === 'late' ? 'Late fee' : kind === 'no_show' ? 'No-show fee' : 'Late-cancel fee');
+
+/** What the greyed-out button on the booking page says once a fee is charged. */
+function feeOutcomeLabel(fee: BookingFeeCharge, otherName: string | undefined): string {
+  const name = shortFeeName(fee.kind);
+  if (fee.status === 'processing') return `${name} · charging…`;
+  if (fee.status === 'awaiting_client') return `${name} · waiting for ${otherName || 'the client'} to pay`;
+  if (fee.status === 'refunded') return `${name} refunded · ${pounds(fee.amountPence)}`;
+  if (fee.disputedAt && !fee.disputeResolvedAt) return `${name} disputed · ${pounds(fee.amountPence)}`;
+  return `${name} charged · ${pounds(fee.amountPence)}`;
 }
 
 function Action({ C, label, onPress, busy, ghost }: { C: BookingFeeColors; label: string; onPress: () => void; busy: boolean; ghost?: boolean }) {
@@ -282,4 +355,6 @@ const st = StyleSheet.create({
   input: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, fontSize: 14, textAlignVertical: 'top', marginBottom: 8 },
   button: { borderRadius: 20, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  buttonsOnly: { marginHorizontal: 16, marginTop: 12, gap: 8 },
+  section: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 18, marginTop: 8, gap: 8 },
 });

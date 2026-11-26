@@ -7,10 +7,10 @@
 // the entry from their own list.
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -60,15 +60,8 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
     });
   }, [navigation, P]);
 
-  // The pill would sit over the bottom of the booking card and its actions, so
-  // hide it here (same as BookingDetailScreen). useFocusEffect, so it is
-  // hidden again on return from the provider profile, whose cleanup restores it.
-  useFocusEffect(useCallback(() => {
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [navigation]));
+  // The pill would sit over the bottom of the booking card and its actions.
+  useHideTabBar();
 
   const load = useCallback(() => {
     getMyExternalBooking(externalBookingId)
@@ -190,7 +183,7 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
           <View style={styles.card}>
             <View style={styles.providerRow}>
               {provider?.logo_url ? (
-                <Image source={{ uri: provider.logo_url }} style={styles.logo} contentFit="cover" transition={0} />
+                <LogoCircle uri={provider.logo_url} framing={provider.logo_framing} style={styles.logo} />
               ) : (
                 <View style={[styles.logo, { backgroundColor: P.accent }]}>
                   <Text style={[styles.initials, { color: P.onAccent }]}>{initials}</Text>

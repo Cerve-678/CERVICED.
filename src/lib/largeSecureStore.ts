@@ -12,11 +12,21 @@ import * as aesjs from 'aes-js';
  *  AsyncStorage in plaintext — readable via filesystem access on a
  *  rooted/jailbroken device or an extracted backup. */
 class LargeSecureStore {
+  /** SecureStore throws on any key with characters other than letters, digits,
+   *  ".", "-" and "_", and our AsyncStorage keys start with "@". A name that's
+   *  already valid has to stay exactly as it is: the signed-in session's
+   *  encryption key is stored under one, and renaming it would make the saved
+   *  session unreadable and sign the person out. */
+  private secureStoreKey(key: string): string {
+    return `${key.replace(/[^\w.-]/g, '_')}_key`;
+  }
+
   private async getEncryptionKey(key: string): Promise<Uint8Array> {
-    let hex = await SecureStore.getItemAsync(`${key}_key`);
+    const secureKey = this.secureStoreKey(key);
+    let hex = await SecureStore.getItemAsync(secureKey);
     if (!hex) {
       hex = aesjs.utils.hex.fromBytes(crypto.getRandomValues(new Uint8Array(32)));
-      await SecureStore.setItemAsync(`${key}_key`, hex);
+      await SecureStore.setItemAsync(secureKey, hex);
     }
     return aesjs.utils.hex.toBytes(hex);
   }
@@ -31,7 +41,7 @@ class LargeSecureStore {
     const stored = await AsyncStorage.getItem(key);
     if (!stored) return null;
 
-    const hasKey = !!(await SecureStore.getItemAsync(`${key}_key`));
+    const hasKey = !!(await SecureStore.getItemAsync(this.secureStoreKey(key)));
     if (!hasKey) return stored;
 
     const [ivHex, cipherHex] = stored.split(':');
@@ -61,7 +71,7 @@ class LargeSecureStore {
 
   async removeItem(key: string): Promise<void> {
     await AsyncStorage.removeItem(key);
-    await SecureStore.deleteItemAsync(`${key}_key`);
+    await SecureStore.deleteItemAsync(this.secureStoreKey(key));
   }
 }
 

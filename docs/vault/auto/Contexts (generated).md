@@ -7,10 +7,10 @@
 
 **8 contexts.** Curated overview: [[Contexts]].
 
-- `src/contexts/AuthContext.tsx` — `AuthProvider`, `useAuth`
+- `src/contexts/AuthContext.tsx` — `AuthProvider`, `SIGNUP_VERIFICATION_HOLD_MS`, `useAuth`
 - `src/contexts/BookingContext.tsx` — `BookingProvider`, `createBookingDateTime`, `useBooking`
-- `src/contexts/CartContext.tsx` — `CartProvider`, `useCart`
-- `src/contexts/DisplaySettingsContext.tsx` — `DisplaySettingsProvider`, `useDisplaySettings`
+- `src/contexts/CartContext.tsx` — `CartProvider`, `offlineProviderItems`, `useCart`
+- `src/contexts/DisplaySettingsContext.tsx` — `DisplaySettingsProvider`, `useDisplaySettings`, `useOptionalLanguage`, `VisitorDisplaySettingsProvider`
 - `src/contexts/FontContext.tsx` — `FontProvider`, `useFont`
 - `src/contexts/RegistrationContext.tsx` — `RegistrationProvider`, `useRegistration`
 - `src/contexts/StatusBarTintContext.tsx` — `StatusBarTintProvider`, `useDarkTopArea`, `useStatusBarTint`

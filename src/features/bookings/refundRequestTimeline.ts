@@ -1,10 +1,11 @@
 import { formatShortDayDate } from '../../utils/dateUtils';
 import type { RefundRequest } from '../../types/booking';
-import { tr } from '../../i18n';
+import { tr } from '../../i18n/translate';
 
 /**
- * The steps a client sees for their refund request on BookingDetailScreen,
- * read straight off refund_requests.status.
+ * The steps of a refund request, read straight off refund_requests.status:
+ * the client sees them on BookingDetailScreen, the provider in
+ * IssueRefundSheet. Same steps for both; only the wording differs.
  *
  * The wording never promises money: the last step is "Outcome" until there
  * is one, because a request can end in "Not refunded" as well as "Refunded".
@@ -21,6 +22,19 @@ export interface RefundStep {
   state: RefundStepState;
 }
 
+/** Days the provider has to refund or pass a request on before it goes to
+ *  Cerviced by itself (process_refund_request_deadlines). */
+export const REFUND_REPLY_DAYS = 3;
+
+/** What Cerviced aims for once it has a request (Terms §15). */
+export const REFUND_REVIEW_PROMISE = 'We aim to decide within 5 working days.';
+
+/** When a request still with the provider goes to Cerviced. */
+export function refundReplyDeadline(createdAt: string): string | null {
+  const ms = Date.parse(createdAt);
+  return Number.isFinite(ms) ? new Date(ms + REFUND_REPLY_DAYS * 86_400_000).toISOString() : null;
+}
+
 /** Open = still waiting on someone. Only one can be open per booking. */
 export function isRefundRequestOpen(r: Pick<RefundRequest, 'status'>): boolean {
   return r.status === 'with_provider' || r.status === 'under_review';
@@ -35,11 +49,15 @@ function day(iso: string | null): string | null {
   }
 }
 
+export type RefundTimelineAudience = 'client' | 'provider';
+
 export function describeRefundRequestTimeline(
   r: RefundRequest,
   providerName: string | null | undefined,
+  audience: RefundTimelineAudience = 'client',
 ): RefundStep[] {
-  const provider = providerName?.trim() || tr('clientBooking.refundTimeline.yourProvider');
+  const forProvider = audience === 'provider';
+  const provider = providerName?.trim() || 'Your provider';
   const passed = r.status === 'under_review' || !!r.passedToCervicedAt;
 
   const steps: RefundStep[] = [
@@ -47,10 +65,13 @@ export function describeRefundRequestTimeline(
   ];
 
   if (r.status === 'with_provider') {
+    const by = day(refundReplyDeadline(r.createdAt));
     steps.push({
       key: 'provider',
-      title: tr('clientBooking.refundTimeline.withProvider', { provider }),
-      detail: tr('clientBooking.refundTimeline.withProviderDetail', { provider }),
+      title: forProvider ? 'With you' : `With ${provider}`,
+      detail: forProvider
+        ? `Refund it, or pass it to Cerviced to review.${by ? ` If you haven't by ${by}, it goes to Cerviced.` : ''}`
+        : `${provider} has been told. They can refund you, or pass it to Cerviced to review.${by ? ` If they haven't replied by ${by}, it comes to Cerviced.` : ''}`,
       date: null,
       state: 'current',
     });
@@ -58,9 +79,13 @@ export function describeRefundRequestTimeline(
     steps.push({
       key: 'review',
       title: tr('clientBooking.refundTimeline.underReview'),
-      detail: r.status === 'under_review'
-        ? tr('clientBooking.refundTimeline.underReviewDetail', { provider })
-        : null,
+      detail: r.status !== 'under_review' ? null
+        : r.passedAutomatically
+          ? forProvider
+            ? `You didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against your policy and will let you both know. ${REFUND_REVIEW_PROMISE}`
+            : `${provider} didn't reply within ${REFUND_REPLY_DAYS} days, so we're reviewing it against their policy. ${REFUND_REVIEW_PROMISE}`
+        : forProvider ? `You passed it to Cerviced. We'll review it against your policy and let you both know. ${REFUND_REVIEW_PROMISE}`
+        : `${provider} passed it to Cerviced. We'll review it against their policy. ${REFUND_REVIEW_PROMISE}`,
       date: day(r.passedToCervicedAt),
       state: r.status === 'under_review' ? 'current' : 'done',
     });
@@ -70,9 +95,11 @@ export function describeRefundRequestTimeline(
     steps.push({
       key: 'outcome',
       title: tr('clientBooking.refundTimeline.refunded'),
-      detail: r.refundedAmount != null && r.refundedAmount > 0
-        ? tr('clientBooking.refundTimeline.refundedDetailAmount', { amount: `£${r.refundedAmount.toFixed(2)}` })
-        : tr('clientBooking.refundTimeline.refundedDetail'),
+      detail: forProvider
+        ? (r.refundedAmount != null && r.refundedAmount > 0 ? `£${r.refundedAmount.toFixed(2)} went back to the client.` : null)
+        : r.refundedAmount != null && r.refundedAmount > 0
+          ? `£${r.refundedAmount.toFixed(2)} is on its way back to you. Your bank may take a few days to show it.`
+          : 'Your bank may take a few days to show it.',
       date: day(r.resolvedAt),
       state: 'done',
     });

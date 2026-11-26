@@ -20,6 +20,8 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
@@ -30,30 +32,49 @@ import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useFont } from '../../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { hasMapDestination, isMobileBooking } from '../../types/booking';
+import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type BookingCoordinates } from '../../types/booking';
+import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getMyWaitlist, leaveWaitlist, joinWaitlist, updateMyWaitlistDates, type MyWaitlistPlace, getBookingById, declineWaitlistHold, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
+import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+import { isTipWindowOpen } from '../../features/bookings/tipWindow';
+import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard';
+import { WaitlistDatesSheet } from '../../features/bookings/WaitlistDatesSheet';
+import { WaitlistTicket, type WaitlistTicketService } from '../../features/bookings/WaitlistTicket';
+import { useWaitlistHoldActions } from '../../features/bookings/useWaitlistHoldActions';
+import { holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
+import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
+import { useClientActivity } from '../../features/bookings/useClientActivity';
+import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
-import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
+import { dateToYMD, formatLongDate, formatTime12 } from '../../utils/dateUtils';
 import type { GroupedListItem } from '../../features/bookings/presentationTypes';
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { ExternalBookingCard } from '../../features/bookings/ExternalBookingCard';
+import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import { externalBookingStart, splitExternalBookings } from '../../features/bookings/externalBookings';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
-import { bookingStatusWord } from '../../features/bookings/statusPresentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { useAppDialog } from '../../components/AppDialog';
 import { getRescheduleBlock, getStaleRequestBlock, type OpenRequestStatus } from '../../utils/rescheduleBlockedReason';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
-import { tr, useTranslation, type TranslationKey } from '../../i18n';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
+import { useTranslation } from '../../i18n';
+
+const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 // ==================== TYPES ====================
 
@@ -62,7 +83,7 @@ type BookingsListRow =
   | GroupedListItem
   | { kind: 'past-booking'; booking: ConfirmedBooking }
   | { kind: 'waitlist-header' }
-  | { kind: 'waitlist'; entry: WaitlistEntry }
+  | { kind: 'waitlist'; place: MyWaitlistPlace }
   | { kind: 'external-header' }
   | { kind: 'external'; entry: ClientExternalBookingWithProvider };
 
@@ -75,48 +96,6 @@ const IN_PROGRESS_PURPLE = '#7B2FBE';
 
 // ==================== COMPONENTS ====================
 
-// Development-only access to Dev Settings via a triple-tap header action.
-const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: Theme }) => {
-  const tapCountRef = React.useRef(0);
-  const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  if (!__DEV__) return null;
-
-  const handleTap = () => {
-    tapCountRef.current += 1;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      tapCountRef.current = 0;
-    }, 2000);
-
-    if (tapCountRef.current === 3) {
-      logger.log('Opening Dev Settings...');
-      navigation.navigate('DevSettings');
-      tapCountRef.current = 0;
-      if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-  };
-
-  return (
-    <TouchableOpacity
-      onPress={handleTap}
-      style={{
-        width: 34,
-        height: 34,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 4,
-      }}
-      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      activeOpacity={0.6}
-    >
-      <Ionicons name="construct-outline" size={18} color={theme.text} />
-    </TouchableOpacity>
-  );
-};
-
 /**
  * The one line of address text on a booking card.
  *
@@ -125,133 +104,37 @@ const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: T
  * send the client. The client already knows their own address, so the card
  * confirms it has gone to the provider rather than reading it back to them.
  * Non-mobile bookings keep the release-gated provider address (null until
- * the policy unlocks it, hence the fallback).
+ * the policy unlocks it, hence the fallback), and a request reads TBA.
  */
 const bookingLocationLine = (b: ConfirmedBooking): string => {
   if (isMobileBooking(b)) {
     return b.clientAddress?.trim()
-      ? tr('clientBooking.list.addressSent')
-      : tr('clientBooking.list.sendAddress');
+      ? 'Your address has been sent to the mobile provider'
+      : 'Send your address in Messages';
   }
-  return b.address || tr('clientBooking.list.addressTbc');
+  // A request isn't a booking yet, so there's no location until it's accepted.
+  if (b.status === BookingStatus.PENDING) return 'TBA';
+  return b.address || 'Address to be confirmed';
 };
 
-const CATEGORY_TABS: { key: 'all' | 'past'; labelKey: TranslationKey }[] = [
-  { key: 'all',  labelKey: 'clientBooking.list.tab.upcoming' },
-  { key: 'past', labelKey: 'clientBooking.list.tab.past' },
+const CATEGORY_TABS = [
+  { key: 'all' as const,  get label() { return tr('clientBooking.list.tab.upcoming'); } },
+  { key: 'past' as const, get label() { return tr('clientBooking.list.tab.past'); } },
 ];
-
-// Service categories the list groups by. The category value is data (it is
-// matched and filtered on); only its label is translated.
-const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
-  NAILS: 'clientBooking.category.nails',
-  HAIR: 'clientBooking.category.hair',
-  LASHES: 'clientBooking.category.lashes',
-  BROWS: 'clientBooking.category.brows',
-  MUA: 'clientBooking.category.mua',
-  AESTHETICS: 'clientBooking.category.aesthetics',
-  OTHER: 'clientBooking.category.misc',
-};
-const categoryLabel = (cat: string): string => {
-  const key = CATEGORY_LABEL_KEYS[cat.toUpperCase()];
-  return key ? tr(key) : cat.charAt(0) + cat.slice(1).toLowerCase();
-};
-
 
 // How far back the Past Bookings list (and its category filter) looks.
 // Display-only — the underlying booking rows are never touched by this.
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
-
-const WaitlistCard = React.memo(function WaitlistCard({
-  entry,
-  onBook,
-  onLeave,
-}: {
-  entry: WaitlistEntry;
-  onBook: (entry: WaitlistEntry) => void;
-  onLeave: (entry: WaitlistEntry) => void;
-}) {
-  const { theme, palette: P } = useTheme();
-  const { t } = useTranslation();
-  const notified = entry.status === 'notified';
-
-  return (
-    <View style={{ paddingHorizontal: 16 }}>
-      <View style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: P.border,
-        backgroundColor: P.surface,
-        padding: 16,
-        marginBottom: 10,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, color: theme.text, marginBottom: 2 }}>
-              {entry.service_name_snapshot}
-            </Text>
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
-              {entry.provider_name_snapshot}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              <View style={{
-                backgroundColor: notified ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                paddingVertical: 3,
-              }}>
-                <Text style={{
-                  fontFamily: 'BakbakOne-Regular',
-                  fontSize: 10,
-                  letterSpacing: 0.4,
-                  color: notified ? '#34C759' : '#FF9500',
-                }}>
-                  {(notified ? t('clientBooking.waitlist.slotOpened') : t('clientBooking.waitlist.inQueue', { position: entry.position })).toUpperCase()}
-                </Text>
-              </View>
-            </View>
-          </View>
-          {notified ? (
-            <TouchableOpacity
-              style={{
-                backgroundColor: P.accent,
-                borderRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                marginLeft: 12,
-              }}
-              onPress={() => onBook(entry)}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: P.onAccent }}>{t('clientBooking.waitlist.bookNow')}</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          style={{ marginTop: 10, alignSelf: 'flex-start' }}
-          onPress={() => onLeave(entry)}
-          activeOpacity={0.7}
-        >
-          <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
-            {t('clientBooking.waitlist.leave')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-});
+/** Long enough for the Activity Centre's fade-out before another Modal opens. */
 
 // ==================== MAIN COMPONENT ====================
 
 const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { showAlert, DialogHost } = useAppDialog();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   useFont();
   const { theme, isDarkMode, palette: P } = useTheme();
-  const { t, language } = useTranslation();
-  const categoryTabs = useMemo(
-    () => CATEGORY_TABS.map(tab => ({ key: tab.key, label: t(tab.labelKey) })),
-    [t],
-  );
   const modalBottomGap = useSystemBottomInset() + 16;
   // Measured per render, not captured at module load, so the full-screen modal
   // backdrops still cover the window after a rotation or in split-screen.
@@ -261,7 +144,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     [theme, isDarkMode, P, screenWidth, screenHeight],
   );
   const { user } = useAuth();
-  const { addToCart } = useCart();
+  // After a 4–5 star rating, offer Recommend in a slim bar.
+  const recommendAfterRating = useRecommendAfterRating(user?.id ?? null);
+  const { addToCart, items: cartItems, removeFromCart } = useCart();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const {
     upcomingBookings,
@@ -295,7 +181,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [pastCategoryFilter, setPastCategoryFilter] = useState<string | null>(null);
   const [pastFilterOpen, setPastFilterOpen] = useState(false);
   const [pastFilterAnchor, setPastFilterAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const pastFilterButtonRef = useRef<View>(null);
+  const pastFilterButtonRef = useRef<ViewInstance>(null);
 
   const openPastFilterMenu = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -314,13 +200,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     const source = pastCategoryFilter
       ? filteredPastBookings.filter(b => resolveServiceCategory(b.serviceName, b.providerService) === pastCategoryFilter)
       : filteredPastBookings;
-    // filteredPastBookings is sorted oldest-first; history reads most-recent-first.
-    return [...source].reverse();
+    // BookingContext already sorts past bookings most-recent-first.
+    return source;
   }, [filteredPastBookings, pastCategoryFilter]);
 
   const mapRef = useRef<MapView>(null);
   const mainScrollRef = useRef<FlatList<BookingsListRow>>(null);
-  const modalScrollRef = useRef<ScrollView>(null);
+  const modalScrollRef = useRef<ScrollViewInstance>(null);
 
   // Category-pill (Upcoming/Past) entrance — the pill row itself used to
   // just appear at rest; this brings it in line with the fade+slide-up
@@ -346,15 +232,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const [activeFilters, setActiveFilters] = useState<Set<'all' | 'past'>>(new Set());
-  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
-
-  // A time-boxed waitlist hold (waitlist_holds.sql) — deliberately excluded
-  // from todayBookings/upcomingBookings/pastBookings (see client_bookings
-  // view) so it never shows as a phantom confirmed appointment. Fetched
-  // directly by id only when a waitlist_slot_available notification points
-  // at one; see the route-params effect below.
-  const [waitlistHold, setWaitlistHold] = useState<RawBooking | null>(null);
-  const [waitlistHoldBusy, setWaitlistHoldBusy] = useState(false);
+  // The client's waitlist places (get_my_waitlist): held slots, waiting places
+  // with their real place in line, and ones that ended in the last 30 days.
+  // A held slot is an on_hold booking, which client_bookings never returns,
+  // so it's only ever shown from here, never as a phantom appointment.
+  const [waitlistPlaces, setWaitlistPlaces] = useState<MyWaitlistPlace[]>([]);
+  // When the list was last laid out: a card whose hold ran out on screen
+  // moves to "gone" without waiting for the server.
+  const [waitlistNow, setWaitlistNow] = useState(() => Date.now());
+  const [waitlistBusyId, setWaitlistBusyId] = useState<string | null>(null);
+  const [datesSheetPlace, setDatesSheetPlace] = useState<MyWaitlistPlace | null>(null);
+  const [datesError, setDatesError] = useState<string | null>(null);
+  // Opened from a "slot opened" notification after the hold had ended.
+  const [goneNotice, setGoneNotice] = useState<MyWaitlistPlace | null>(null);
+  // The waitlist ticket on screen, by place id so a reload shows its latest
+  // state. A held ticket also shows today's price and length.
+  const [ticketPlaceId, setTicketPlaceId] = useState<string | null>(null);
+  const [ticketService, setTicketService] = useState<WaitlistTicketService | null>(null);
 
   // "Booked elsewhere" entries — the client's own notes of bookings made on a
   // link-only provider's page. Reloaded on focus, since they're added from a
@@ -376,56 +270,192 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     return { upcoming, past: past.filter(entry => externalBookingStart(entry).getTime() >= cutoff) };
   }, [externalBookings]);
 
-  // Load waitlist entries for this user
-  useEffect(() => {
-    if (!user?.id) return;
-    getUserWaitlistEntries(user.id)
-      .then(setWaitlistEntries)
-      .catch(() => {});
-  }, [user?.id]);
-
-  const handleConfirmWaitlistHold = useCallback(async () => {
-    if (!waitlistHold) return;
-    setWaitlistHoldBusy(true);
+  const loadWaitlist = useCallback(async (): Promise<MyWaitlistPlace[]> => {
+    if (!user?.id) return [];
     try {
-      await claimWaitlistHold(waitlistHold.id);
-      setWaitlistHold(null);
-      await reloadBookings();
-    } catch (err: any) {
-      Alert.alert(tr('clientBooking.waitlist.confirmFailedTitle'), toUserMessageAllowingDbGuard(err, tr('clientBooking.waitlist.confirmFailed'), 'BookingsScreen.confirmWaitlistHold'));
-      setWaitlistHold(null);
-    } finally {
-      setWaitlistHoldBusy(false);
+      const places = await getMyWaitlist();
+      setWaitlistPlaces(places);
+      setWaitlistNow(Date.now());
+      return places;
+    } catch (error) {
+      logger.warn('[Bookings] waitlist failed to load', error);
+      return [];
     }
-  }, [waitlistHold, reloadBookings]);
-
-  const handleDeclineWaitlistHold = useCallback(async () => {
-    if (!waitlistHold) return;
-    setWaitlistHoldBusy(true);
-    try {
-      await declineWaitlistHold(waitlistHold.id);
-    } catch {}
-    setWaitlistHold(null);
-    setWaitlistHoldBusy(false);
-  }, [waitlistHold]);
-
-  // Pending intake forms + unread info packs per booking — drives the "!" badge
-  const refreshBookingActionItems = useCallback(() => {
-    if (!user?.id) return;
-    getMyBookingActionItems()
-      .then(setBookingActionItems)
-      .catch(() => {});
   }, [user?.id]);
+  useFocusEffect(useCallback(() => { void loadWaitlist(); }, [loadWaitlist]));
 
-  useEffect(() => {
-    refreshBookingActionItems();
-  }, [refreshBookingActionItems, upcomingBookings.length]);
+  // A held card ran out on screen: show it as gone now, and read the list
+  // again once the every-minute sweep has ended the hold on the server.
+  const waitlistRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (waitlistRefreshTimer.current) clearTimeout(waitlistRefreshTimer.current);
+  }, []);
+  const handleWaitlistHoldEnded = useCallback(() => {
+    setWaitlistNow(Date.now());
+    if (waitlistRefreshTimer.current) clearTimeout(waitlistRefreshTimer.current);
+    waitlistRefreshTimer.current = setTimeout(() => { void loadWaitlist(); }, 65_000);
+  }, [loadWaitlist]);
 
-  // Re-check when returning to this screen (e.g. after filling an intake form)
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', refreshBookingActionItems);
-    return unsubscribe;
-  }, [navigation, refreshBookingActionItems]);
+  // The cart line paying for a hold, if the client already started checkout.
+  // Confirm & pay (to the Cart) and Pass it on, shared with the ticket on the
+  // provider's page that the "slot opened" notification opens.
+  const openCart = useCallback(() => navigation.getParent()?.navigate('Cart' as never), [navigation]);
+  const { confirmAndPay: handleConfirmAndPay, passOnHold: handlePassWaitlist, removeHoldFromCart } = useWaitlistHoldActions({
+    showAlert, showConfirm, setBusyId: setWaitlistBusyId, openCart, reload: loadWaitlist, context: 'BookingsScreen',
+  });
+
+  // A hold whose time ran out before the sweep reached it still counts as
+  // held on the server. Rejoin and Dismiss end it first (decline_waitlist_hold
+  // records it as missed).
+  const endLeftoverHold = useCallback(async (place: MyWaitlistPlace) => {
+    if (place.status === 'notified' && place.offeredBookingId) {
+      await declineWaitlistHold(place.offeredBookingId);
+      removeHoldFromCart(place.offeredBookingId);
+    }
+  }, [removeHoldFromCart]);
+
+  const handleRejoinWaitlist = useCallback(async (place: MyWaitlistPlace) => {
+    if (!user?.id) return;
+    setWaitlistBusyId(place.id);
+    try {
+      await endLeftoverHold(place);
+      // Keep their dates unless the range is already over.
+      const today = dateToYMD(new Date());
+      const [start, end] = place.preferredDates ?? [];
+      const dates = start && (!end || end >= today)
+        ? [start < today ? today : start, ...(end ? [end] : [])]
+        : null;
+      await joinWaitlist({
+        providerId: place.providerId,
+        userId: user.id,
+        serviceId: place.serviceId,
+        serviceNameSnapshot: place.serviceName,
+        providerNameSnapshot: place.providerName,
+        ...(user.name ? { userNameSnapshot: user.name } : {}),
+        ...(dates ? { preferredDates: dates } : {}),
+        ...(place.notes ? { notes: place.notes } : {}),
+      });
+      setGoneNotice(null);
+      await loadWaitlist();
+    } catch (error) {
+      showAlert(tr('clientBooking.waitlist.rejoinFailed'), toUserMessageAllowingDbGuard(error, tr('clientBooking.checkConnection'), 'BookingsScreen.rejoinWaitlist'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [endLeftoverHold, loadWaitlist, showAlert, user?.id, user?.name]);
+
+  const handleDismissWaitlist = useCallback(async (place: MyWaitlistPlace) => {
+    setWaitlistBusyId(place.id);
+    try {
+      await endLeftoverHold(place);
+      await leaveWaitlist(place.id);
+      setWaitlistPlaces(prev => prev.filter(candidate => candidate.id !== place.id));
+    } catch (error) {
+      showAlert(tr('clientBooking.external.removeFailed'), toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.dismissWaitlist'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [endLeftoverHold, showAlert]);
+
+  const handleOpenWaitlistDates = useCallback((place: MyWaitlistPlace) => {
+    setDatesError(null);
+    setDatesSheetPlace(place);
+  }, []);
+
+  const openWaitlistTicket = useCallback((place: MyWaitlistPlace) => {
+    setTicketPlaceId(place.id);
+    setTicketService(null);
+    if (place.status !== 'notified') return;
+    getRebookableService(place.providerId, place.serviceName)
+      .then(live => {
+        if (live) setTicketService({ price: live.price, durationMinutes: live.durationMinutes });
+      })
+      // The ticket shows the slot without its price and end time.
+      .catch((error: unknown) => logger.warn('[Bookings] held service failed to load for the ticket', error));
+  }, []);
+  const closeWaitlistTicket = useCallback(() => setTicketPlaceId(null), []);
+  const ticketPlace = useMemo(
+    () => (ticketPlaceId ? waitlistPlaces.find(place => place.id === ticketPlaceId) ?? null : null),
+    [ticketPlaceId, waitlistPlaces],
+  );
+  // The ticket closes first: the Cart opens over Bookings, and the dialog
+  // host sits outside the ticket's Modal.
+  const handleTicketConfirmAndPay = useCallback((place: MyWaitlistPlace) => {
+    setTicketPlaceId(null);
+    void handleConfirmAndPay(place);
+  }, [handleConfirmAndPay]);
+  const handleTicketPass = useCallback((place: MyWaitlistPlace) => {
+    setTicketPlaceId(null);
+    handlePassWaitlist(place);
+  }, [handlePassWaitlist]);
+
+  const handleSaveWaitlistDates = useCallback(async (place: MyWaitlistPlace, dates: string[] | null) => {
+    setWaitlistBusyId(place.id);
+    setDatesError(null);
+    try {
+      await updateMyWaitlistDates(place.id, dates);
+      setDatesSheetPlace(null);
+      await loadWaitlist();
+    } catch (error) {
+      setDatesError(toUserMessageAllowingDbGuard(error, "Couldn't save your dates. Try again.", 'BookingsScreen.saveWaitlistDates'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [loadWaitlist]);
+
+  // The sheet closes first: the dialog host sits outside its Modal, so a
+  // confirm raised while the sheet is up would never be seen.
+  const handleLeaveFromDatesSheet = useCallback((place: MyWaitlistPlace) => {
+    setDatesSheetPlace(null);
+    setTicketPlaceId(null);
+    showConfirm(
+      tr('clientBooking.waitlist.leaveTitle'),
+      tr('clientBooking.waitlist.leaveBody', { service: place.serviceName, provider: place.providerName }),
+      [
+        { text: tr('clientBooking.waitlist.stay'), style: 'cancel' },
+        {
+          text: tr('clientBooking.waitlist.leaveButton'),
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await leaveWaitlist(place.id);
+                setWaitlistPlaces(prev => prev.filter(candidate => candidate.id !== place.id));
+              } catch (error) {
+                showAlert(tr('clientBooking.waitlist.leaveFailed'), toUserMessageAllowingDbGuard(error, tr('clientBooking.checkConnection'), 'BookingsScreen.leaveWaitlist'));
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [showAlert, showConfirm]);
+
+  const sortedWaitlistPlaces = useMemo(
+    () => sortWaitlistPlaces(waitlistPlaces, waitlistNow),
+    [waitlistPlaces, waitlistNow],
+  );
+  const heldWaitlistPlaces = useMemo(
+    () => sortedWaitlistPlaces.filter(place => waitlistCardState(place, waitlistNow) === 'held'),
+    [sortedWaitlistPlaces, waitlistNow],
+  );
+  const otherWaitlistPlaces = useMemo(
+    () => sortedWaitlistPlaces.filter(place => waitlistCardState(place, waitlistNow) !== 'held'),
+    [sortedWaitlistPlaces, waitlistNow],
+  );
+
+  // Shared with the client Settings card, so both count the same things.
+  const {
+    activity,
+    todoCounts: bookingActionItems,
+    refresh: refreshActivity,
+  } = useClientActivity();
+  const activityNeedsYouCount = activity.needsYou.length;
+
+  const openActivityCentre = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    navigation.navigate('ActivityCentre');
+  }, [navigation]);
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -452,6 +482,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  // Off by default: a review is named unless the client chooses otherwise.
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
   const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
@@ -466,12 +498,42 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [showTipModal, setShowTipModal] = useState(false);
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
-  const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapFocused, setMapFocused] = useState(false);
+  const [canGeocodeOnAndroid, setCanGeocodeOnAndroid] = useState(false);
+  const [addressPins, setAddressPins] = useState<Record<string, { address: string; coordinates: BookingCoordinates }>>({});
+  const attemptedAddressGeocodes = useRef(new Set<string>());
+  const mapBookings = useMemo(() => todayBookings.flatMap(booking => {
+    if (booking.status === BookingStatus.PENDING || !hasDirectionsDestination(booking)) return [];
+    const resolvedPin = addressPins[booking.id];
+    const coordinates = resolvedPin?.address === booking.address
+      ? resolvedPin.coordinates
+      : hasMapDestination(booking) ? booking.coordinates : null;
+    return coordinates ? [{ booking, coordinates }] : [];
+  }), [todayBookings, addressPins]);
 
   // ✅ Track rated bookings and tips
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [tippedBookings, setTippedBookings] = useState<Set<string>>(new Set());
+
+  const bookingIdsForReviewState = useMemo(
+    () => [...new Set([...todayBookings, ...upcomingBookings, ...pastBookings].map(booking => booking.id))],
+    [todayBookings, upcomingBookings, pastBookings],
+  );
+
+  // Keep the list buttons truthful after remounting or coming back from a
+  // booking detail screen. This is one batched read, not a request per card.
+  useEffect(() => {
+    let active = true;
+    getBookingReviewStates(bookingIdsForReviewState)
+      .then(states => {
+        if (!active) return;
+        setRatedBookings(new Set(states.filter(state => state.reviewed).map(state => state.bookingId)));
+        setTippedBookings(new Set(states.filter(state => state.tipped).map(state => state.bookingId)));
+      })
+      .catch(error => logger.warn('[Bookings] review state failed to load', error));
+    return () => { active = false; };
+  }, [bookingIdsForReviewState]);
 
   // ✅ Track highlighted booking (from notification navigation) and recently added bookings
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
@@ -498,22 +560,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const openInMaps = useCallback(async (booking: ConfirmedBooking) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const { coordinates, address } = booking;
-      const label = encodeURIComponent(address);
-      const url = Platform.select({
-        ios: `maps:${coordinates.latitude},${coordinates.longitude}?q=${label}`,
-        android: `geo:${coordinates.latitude},${coordinates.longitude}?q=${label}`,
-      });
-      if (url) {
-        const canOpen = await Linking.canOpenURL(url);
-        if (canOpen) {
-          await Linking.openURL(url);
-        } else {
-          await Linking.openURL(
-            `https://www.google.com/maps/search/?api=1&query=${coordinates.latitude},${coordinates.longitude}`
-          );
-        }
-      }
+      if (!hasDirectionsDestination(booking)) return;
+      await Linking.openURL(directionsUrlFor({
+        fullAddress: booking.address,
+      }));
     } catch {
       Alert.alert(tr('common.error'), tr('clientBooking.list.mapsFailed'));
     }
@@ -526,11 +576,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setContactSheetVisible(true);
     setContactSheetLoading(true);
     try {
-      // Prefer provider id (stable); fall back to name for legacy bookings.
-      const info = booking.providerId
-        ? await getProviderContactById(booking.providerId)
-        : await getProviderContactByDisplayName(booking.providerName);
-      setContactSheetInfo(info);
+      // By booking — see BookingDetailScreen's openContactSheet.
+      setContactSheetInfo(await getBookedClientContact(booking.id));
     } catch {
       setContactSheetInfo({ preferred_contact_methods: ['in_app'], whatsapp_number: null, email: null, phone: null });
     } finally {
@@ -547,7 +594,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (!providerDbId) {
       Alert.alert(
         tr('clientBooking.list.chatUnavailableTitle'),
-        tr('clientBooking.list.chatUnavailable', { provider: booking.providerName }),
+        tr('clientBooking.chatFailed', { name: booking.providerName }),
       );
       return;
     }
@@ -555,6 +602,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       providerId: providerDbId,
       providerDbId,
       providerName: booking.providerName,
+      // Not accepted yet: the same general enquiries chat as Get In Touch.
+      promptMode: booking.status === BookingStatus.PENDING ? 'enquiry' : 'conversation',
     });
   }, [navigation]);
 
@@ -594,15 +643,25 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       ?? (await getProviderIdByDisplayName(booking.providerName).catch(() => null)) ?? undefined;
 
     if (!providerDbId) {
-      setSuccessMessage(tr('clientBooking.rebook.profileNotFound', { provider: booking.providerName }));
+      setSuccessMessage(tr('clientBooking.rebook.profileMissing', { name: booking.providerName }));
       setSuccessIcon('⚠️');
       setShowSuccessModal(true);
       return;
     }
 
-    const live = await getRebookableService(providerDbId, booking.serviceName).catch(() => null);
+    let live: Awaited<ReturnType<typeof getRebookableService>>;
+    try {
+      live = await getRebookableService(providerDbId, booking.serviceName, booking.serviceId);
+    } catch (error) {
+      // A failed lookup isn't a missing service — don't tell the client it's gone.
+      logger.error('[Bookings] rebook lookup failed', error);
+      setSuccessMessage(tr('clientBooking.rebook.checkFailed'));
+      setSuccessIcon('⚠️');
+      setShowSuccessModal(true);
+      return;
+    }
     if (!live) {
-      setSuccessMessage(tr('clientBooking.rebook.serviceGone', { provider: booking.providerName, service: booking.serviceName }));
+      setSuccessMessage(tr('clientBooking.rebook.noLongerOffered', { provider: booking.providerName, service: booking.serviceName }));
       setSuccessIcon('⚠️');
       setShowSuccessModal(true);
       return;
@@ -616,34 +675,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       }, 300);
     } else {
       // No add-ons, add directly to cart
-      const cartItem = {
-        providerName: booking.providerName,
-        providerDisplayName: live.providerDisplayName,
-        providerSlug: live.providerSlug,
-        providerId: providerDbId,
-        // booking.providerImage can be a plain string or an {uri} object
-        // depending on where the booking snapshot came from — Image requires
-        // {uri}, so a raw string here silently renders nothing in the cart.
-        providerImage: typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage,
-        providerService: booking.providerService,
-        service: {
-          id: live.id,
-          name: live.name,
-          price: live.price,
-          duration: booking.duration,
-          description: booking.providerService,
-          addOns: [],
-        },
-        quantity: 1,
-        // Always a new cart instance — the client may already have this
-        // same provider/service in the cart from an earlier "Book Again" or
-        // from the provider profile, and each rebook is its own appointment.
-        forceNewInstance: true,
-      };
-
-      addToCart(cartItem);
+      const { item, notes } = buildRebookCartItem(booking, live, providerDbId, false);
+      addToCart(item);
       setModalVisible(false);
-      setSuccessMessage(tr('clientBooking.rebook.added', { service: booking.serviceName }));
+      setSuccessMessage(
+        notes.length > 0
+          ? tr('clientBooking.rebook.addedWithNotes', { service: live.name, notes: notes.join(' ') })
+          : tr('clientBooking.rebook.added', { service: live.name }),
+      );
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility
@@ -665,43 +704,25 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
     }, 100);
 
-    // Re-resolve the booking's add-ons against the live list by name, so a
-    // rebook carries today's add-on prices and real add-on ids — any add-on
-    // the provider has since removed or deactivated is silently dropped
-    // rather than re-booked from a stale snapshot.
-    const live = rebookContext?.live;
-    const previousAddOnNames = new Set((selectedBooking.addOns ?? []).map(a => a.name));
-    const liveAddOns = finalSelection === 'with' && live
-      ? live.addOns.filter(a => previousAddOnNames.has(a.name))
-      : [];
+    // handleRebook only opens the add-ons question once it has resolved the
+    // live service, so a missing context means the question is stale.
+    if (!rebookContext) return;
+    const { item, notes } = buildRebookCartItem(
+      selectedBooking,
+      rebookContext.live,
+      rebookContext.providerDbId,
+      finalSelection === 'with',
+    );
 
-    const cartItem = {
-      providerName: selectedBooking.providerName,
-      providerDisplayName: live?.providerDisplayName,
-      providerSlug: live?.providerSlug,
-      providerId: rebookContext?.providerDbId ?? selectedBooking.providerId,
-      providerImage: typeof selectedBooking.providerImage === 'string' ? { uri: selectedBooking.providerImage } : selectedBooking.providerImage,
-      providerService: selectedBooking.providerService,
-      service: {
-        id: live?.id ?? selectedBooking.serviceId ?? `rebook_${Date.now()}`,
-        name: live?.name ?? selectedBooking.serviceName,
-        price: live?.price ?? selectedBooking.price,
-        duration: selectedBooking.duration,
-        description: selectedBooking.providerService,
-        addOns: liveAddOns,
-      },
-      quantity: 1,
-      // Always a new cart instance — see handleRebook for why rebooking must
-      // never merge into an existing item's quantity instead of creating a
-      // separately-schedulable appointment.
-      forceNewInstance: true,
-    };
-
-    addToCart(cartItem);
+    addToCart(item);
     setRebookSelection(null);
     setRebookContext(null);
     setModalVisible(false);
-    setSuccessMessage(tr('clientBooking.rebook.added', { service: selectedBooking.serviceName }));
+    setSuccessMessage(
+      notes.length > 0
+        ? tr('clientBooking.rebook.addedWithNotes', { service: rebookContext.live.name, notes: notes.join(' ') })
+        : tr('clientBooking.rebook.added', { service: rebookContext.live.name }),
+    );
     setSuccessIcon('✓');
     setShowSuccessModal(true);
     // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility
@@ -712,7 +733,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleRatingSubmit = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || rating === 0) {
-      Alert.alert(tr('clientBooking.rating.requiredTitle'), tr('clientBooking.rating.required'));
+      Alert.alert(tr('clientBooking.rating.requiredTitle'), tr('clientBooking.rating.requiredShort'));
       return;
     }
     if (!user?.id) {
@@ -727,19 +748,21 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       const providerId = selectedBooking.providerId
         ?? await getProviderIdByDisplayName(selectedBooking.providerName);
 
-      if (providerId) {
-        // Check not already reviewed
-        const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
-        if (!alreadyReviewed) {
-          await submitReview({
-            booking_id: selectedBooking.id,
-            provider_id: providerId,
-            service_id: null,
-            user_id: user.id,
-            rating,
-            ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
-          });
-        }
+      if (!providerId) {
+        throw new Error('Provider record is unavailable');
+      }
+      // Check not already reviewed
+      const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
+      if (!alreadyReviewed) {
+        await submitReview({
+          booking_id: selectedBooking.id,
+          provider_id: providerId,
+          service_id: null,
+          user_id: user.id,
+          rating,
+          is_anonymous: reviewAnonymous,
+          ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
+        });
       }
 
       // Mark as rated in local state
@@ -747,55 +770,63 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setHasRated(true);
       setIsLoading(false);
 
+      const ratedStars = rating;
+      const ratedProviderName = selectedBooking.providerName;
       setTimeout(() => {
         setShowRatingModal(false);
         setRating(0);
         setReviewText('');
+        setReviewAnonymous(false);
+        recommendAfterRating.offer(providerId, ratedProviderName, ratedStars);
         setTimeout(() => {
           mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
         }, 100);
       }, 2000);
-    } catch {
-      Alert.alert(tr('common.error'), tr('clientBooking.rating.failed'));
+    } catch (err) {
+      Alert.alert(tr('clientBooking.detail.ratingNotSavedTitle'), toUserMessageAllowingDbGuard(err, 'Failed to submit rating.', 'BookingsScreen.submitRating'));
       setIsLoading(false);
     }
-  }, [selectedBooking, rating, reviewText, user]);
+  }, [selectedBooking, rating, reviewText, reviewAnonymous, user, recommendAfterRating]);
 
-  // Tips are stored on the booking's review row (reviews.tip_amount), which
-  // requires a review to exist first — setBookingTip returns false rather
-  // than silently dropping the tip when there's nothing to attach it to.
-  // This previously only set local component state (tippedBookings), so the
-  // tip was discarded on unmount and the provider never saw it.
+  // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || tipAmount <= 0) {
-      Alert.alert(tr('clientBooking.tip.invalidTitle'), tr('clientBooking.tip.invalid'));
+      Alert.alert(tr('clientBooking.tip.chooseTitle'), tr('clientBooking.tip.choose'));
       return;
     }
 
     setIsLoading(true);
     try {
-      const attached = await setBookingTip(selectedBooking.id, tipAmount);
-      if (!attached) {
-        setIsLoading(false);
-        Alert.alert(tr('clientBooking.tip.rateFirstTitle'), tr('clientBooking.tip.rateFirst'));
-        return;
+      const sheet = await startBookingTipPayment(selectedBooking.id, Math.round(tipAmount * 100));
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Cerviced', returnURL: 'cerviced://stripe-redirect',
+        customerId: sheet.customerId, customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+        paymentIntentClientSecret: sheet.clientSecret, appearance: buildPaymentSheetAppearance(P, P.text),
+      });
+      if (initError) throw new Error(initError.message || 'Could not open tip payment.');
+      const { error: paymentError } = await presentPaymentSheet();
+      if (paymentError) {
+        if (paymentError.code === 'Canceled') return;
+        throw new Error(paymentError.message || 'Your tip did not go through.');
       }
-
-      setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
+      const tipStatus = await confirmBookingTipPayment(sheet.tipId);
+      if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
       setShowTipModal(false);
-      setSuccessMessage(tr('clientBooking.tip.added', { amount: `£${tipAmount.toFixed(2)}`, provider: selectedBooking.providerName }));
+      setSuccessMessage(tipStatus === 'succeeded'
+        ? `Your £${tipAmount.toFixed(2)} tip has been sent to ${selectedBooking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${selectedBooking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
     } catch (error) {
       logger.error('Failed to save tip:', error);
-      Alert.alert(tr('common.error'), tr('clientBooking.tip.failed'));
+      Alert.alert('Tip not sent', tr('clientBooking.detail.tryAgainMoment'));
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBooking, tipAmount]);
+  }, [selectedBooking, tipAmount, initPaymentSheet, presentPaymentSheet, P]);
 
   const retryLoadBookings = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -850,6 +881,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     const [bookingsResult] = await Promise.allSettled([
       reloadBookings(),
       refreshUserLocation(),
+      refreshActivity(),
     ]);
 
     if (bookingsResult.status === 'rejected') {
@@ -858,13 +890,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
 
     setRefreshing(false);
-  }, [reloadBookings, refreshUserLocation]);
+  }, [reloadBookings, refreshUserLocation, refreshActivity]);
 
   // ==================== HEADER OPTIONS ====================
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      title: isFilterView ? t('clientBooking.list.title.myBookings') : t('clientBooking.list.title.track'),
+      title: isFilterView ? 'My Bookings' : 'Track Appointment',
       headerShadowVisible: false,
       headerTransparent: true,
       headerBlurEffect: isDarkMode ? undefined : 'regular',
@@ -878,10 +910,26 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         color: P.text,
       },
       headerTintColor: P.text,
-      // This component renders no production UI.
-      headerRight: () => <HiddenDevMenuTrigger navigation={navigation} theme={theme} />,
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.activityButton}
+          onPress={openActivityCentre}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={activityNeedsYouCount > 0
+            ? trp('clientBooking.activityA11y', activityNeedsYouCount)
+            : tr('profile.forYou.activity.title')}
+        >
+          <Ionicons name="file-tray-full-outline" size={22} color={P.text} />
+          {activityNeedsYouCount > 0 && (
+            <View style={styles.activityBadge}>
+              <TodoMark size={14} />
+            </View>
+          )}
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, isFilterView, theme, isDarkMode, P, t]);
+  }, [navigation, isFilterView, isDarkMode, P, styles.activityButton, styles.activityBadge, openActivityCentre, activityNeedsYouCount]);
 
   // ==================== EFFECTS ====================
 
@@ -898,18 +946,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [reloadBookingsIfStale]);
 
   useEffect(() => {
-    if (currentBooking?.coordinates && mapRef.current) {
+    const activePin = mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates;
+    if (activePin && mapRef.current) {
       mapRef.current.animateToRegion(
         {
-          latitude: currentBooking.coordinates.latitude,
-          longitude: currentBooking.coordinates.longitude,
+          latitude: activePin.latitude,
+          longitude: activePin.longitude,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         },
         1000
       );
     }
-  }, [currentBooking]);
+  }, [currentBooking?.id, mapBookings]);
 
   // Keep map location current only while this tab is visible. Tab screens
   // remain mounted, so a permanent timer otherwise polls GPS while the
@@ -920,10 +969,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFocusEffect(useCallback(() => {
     let active = true;
     let subscription: Location.LocationSubscription | null = null;
+    setMapFocused(true);
 
     const startLocationUpdates = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (active && Platform.OS === 'android') setCanGeocodeOnAndroid(status === 'granted');
         if (status === 'granted' && active) {
           const applyLocation = (location: Location.LocationObject) => {
             if (!active) return;
@@ -965,9 +1016,42 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     return () => {
       active = false;
+      setMapFocused(false);
       subscription?.remove();
     };
   }, []));
+
+  // Older bookings can expose the released street address while their
+  // coordinate snapshot is null. Resolve only those missing pins while this
+  // screen is visible. Never geocode a masked address or a mobile base.
+  useEffect(() => {
+    if (!mapFocused || isFilterView || allTodayBookingsCompleted ||
+        (Platform.OS === 'android' && !canGeocodeOnAndroid)) return;
+    let cancelled = false;
+    const resolveMissingPins = async () => {
+      for (const booking of todayBookings) {
+        if (cancelled) break;
+        if (booking.status === BookingStatus.PENDING || !hasDirectionsDestination(booking) || hasMapDestination(booking)) continue;
+        const key = `${booking.id}:${booking.address}`;
+        if (attemptedAddressGeocodes.current.has(key)) continue;
+        attemptedAddressGeocodes.current.add(key);
+        try {
+          const [match] = await Location.geocodeAsync(booking.address);
+          if (!cancelled && match && Number.isFinite(match.latitude) && Number.isFinite(match.longitude)) {
+            setAddressPins(previous => ({
+              ...previous,
+              [booking.id]: { address: booking.address, coordinates: { latitude: match.latitude, longitude: match.longitude } },
+            }));
+          }
+        } catch (error) {
+          logger.error('[Bookings] released address geocoding failed:', error);
+        }
+        if (cancelled) attemptedAddressGeocodes.current.delete(key);
+      }
+    };
+    void resolveMissingPins();
+    return () => { cancelled = true; };
+  }, [mapFocused, isFilterView, allTodayBookingsCompleted, canGeocodeOnAndroid, todayBookings]);
 
   // ✅ Reset map to user area when all bookings are completed
   useEffect(() => {
@@ -1064,7 +1148,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 const dbReq = await getActiveRescheduleRequest(booking.id);
                 openRequest = dbReq?.status === 'pending' || dbReq?.status === 'provider_responded' ? dbReq.status : null;
                 if (dbReq?.status === 'provider_responded' && (dbReq.provider_available_slots ?? []).length > 0) {
-                  await providerRespondToReschedule(booking.id, dbReq.provider_available_slots!);
+                  await providerRespondToReschedule(booking.id, dbReq.provider_available_slots!, dbReq);
                 }
               } catch (err) {
                 // Can't tell whether the request is still open, so don't claim it isn't.
@@ -1086,12 +1170,28 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             logger.log('Navigating to Reschedule screen');
             navigation.navigate('Reschedule', { bookingId: booking.id });
           } else if (shouldOpenReview) {
-            // review_request's "Rate Now" — open the rating sheet directly on
-            // this screen rather than pushing BookingDetail. The modal already
-            // lives here and reads selectedBooking, which is set above.
+            // review_request's "Rate Now" and the provider's day-after check-in
+            // — open the rating sheet directly on this screen rather than
+            // pushing BookingDetail. The modal already lives here and reads
+            // selectedBooking, which is set above. A booking that's already
+            // been reviewed opens as itself instead: a second form would only
+            // be thrown away by handleRatingSubmit's own duplicate check.
+            let alreadyReviewed = false;
+            try {
+              alreadyReviewed = await hasReviewedBooking(booking.id);
+            } catch (err) {
+              // Can't tell — show the form; submitting is still guarded.
+              logger.warn('[Bookings] review check failed, opening the form anyway:', err);
+            }
+            if (alreadyReviewed) {
+              logger.log('Booking already reviewed, opening BookingDetail:', booking.id);
+              navigation.navigate('BookingDetail', { bookingId: booking.id });
+              return;
+            }
             logger.log('Opening rating modal for booking:', booking.id);
             setRating(0);
             setReviewText('');
+            setReviewAnonymous(false);
             setShowRatingModal(true);
           } else if (route.params?.openBookingId) {
             logger.log('Navigating to BookingDetail screen');
@@ -1109,19 +1209,36 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // Not in the normal lists — could be a waitlist hold (deliberately
         // excluded from them, see client_bookings view) rather than actually
         // missing. Check directly before falling back to the retry/give-up
-        // path below.
+        // path below. A held slot shows at the top of Bookings; one whose
+        // hold has already ended was deleted, and is recognised by the
+        // waitlist entry that was offered it.
+        const handledFromWaitlist = () => {
+          navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+          if (notifBookingGiveUpRef.current) {
+            clearTimeout(notifBookingGiveUpRef.current.timer);
+            notifBookingGiveUpRef.current = null;
+          }
+        };
         getBookingById(bookingId!)
-          .then(direct => {
-            if (direct?.status === 'on_hold') {
-              setWaitlistHold(direct);
-              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
-              if (notifBookingGiveUpRef.current) {
-                clearTimeout(notifBookingGiveUpRef.current.timer);
-                notifBookingGiveUpRef.current = null;
+          .then(async direct => {
+            if (direct?.status === 'on_hold' && direct.waitlist_entry_id) {
+              handledFromWaitlist();
+              const places = await loadWaitlist();
+              mainScrollRef.current?.scrollToOffset({ offset: 0, animated: true });
+              const held = places.find(place => place.holdBookingId === bookingId);
+              if (held) openWaitlistTicket(held);
+              return;
+            }
+            if (!direct) {
+              const places = await loadWaitlist();
+              const gone = places.find(place => place.offeredBookingId === bookingId && waitlistCardState(place, Date.now()) !== 'held');
+              if (gone) {
+                handledFromWaitlist();
+                setGoneNotice(gone);
               }
             }
           })
-          .catch(() => {});
+          .catch((error: unknown) => logger.warn('[Bookings] could not check a waitlist hold from a notification', error));
 
         logger.warn('⚠️ Booking not found:', bookingId);
         // Bookings may still be loading — allow a few seconds of retries as
@@ -1145,7 +1262,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
-  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert]);
+  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert, loadWaitlist, openWaitlistTicket]);
 
   // ✅ Update selectedBooking ONLY when modal is visible and booking state changes
   // Use ref to track last update to prevent infinite loops
@@ -1213,8 +1330,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ==================== COMPUTED VALUES ====================
 
   const routeCoordinates = useMemo(
-    () => todayBookings.map(b => b.coordinates).filter(Boolean) as { latitude: number; longitude: number }[],
-    [todayBookings]
+    () => mapBookings.map(({ coordinates }) => coordinates),
+    [mapBookings]
   );
 
   const listItems = useMemo((): GroupedListItem[] => {
@@ -1255,12 +1372,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       rows.push({ kind: 'external-header' });
       rows.push(...externalRows.map(entry => ({ kind: 'external' as const, entry })));
     }
-    if (waitlistEntries.length > 0) {
+    // Held slots sit at the top of the screen (they're on a clock); the
+    // places still waiting, and the ones that ended, are listed here.
+    if (otherWaitlistPlaces.length > 0) {
       rows.push({ kind: 'waitlist-header' });
-      rows.push(...waitlistEntries.map(entry => ({ kind: 'waitlist' as const, entry })));
+      rows.push(...otherWaitlistPlaces.map(place => ({ kind: 'waitlist' as const, place })));
     }
     return rows;
-  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries, externalSplit, pastCategoryFilter]);
+  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, otherWaitlistPlaces, externalSplit, pastCategoryFilter]);
 
   // The notification-driven scroll above fires on a timer, after the filter
   // switch has re-rendered this list, so it needs the rows as they are at that
@@ -1273,6 +1392,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
   const hasBookingBeenTipped = useCallback((bookingId: string) => tippedBookings.has(bookingId), [tippedBookings]);
+  // Tipping closes 48 hours after the appointment (the server enforces it too).
+  const isTipClosed = useCallback(
+    (b: ConfirmedBooking) => !hasBookingBeenTipped(b.id) && !isTipWindowOpen(b.bookingDate, b.endTime || b.bookingTime),
+    [hasBookingBeenTipped],
+  );
 
   // Stable renderItem reference so the outer bookings FlatList doesn't hand a
   // brand-new function to every row on every parent re-render.
@@ -1285,7 +1409,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         <View style={styles.serviceCategoryHeader}>
           <View style={styles.serviceCategoryTag}>
             <Text style={styles.serviceCategoryName}>
-              {categoryLabel(serviceType).toUpperCase()}
+              {serviceType.toUpperCase()}
             </Text>
           </View>
         </View>
@@ -1332,17 +1456,20 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     </View>
   ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, styles.pastBookingRowWrap]);
 
-  const handleBookWaitlistEntry = useCallback((entry: WaitlistEntry) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('ProviderProfile', { providerId: entry.provider_id });
-  }, [navigation]);
-
-  const handleLeaveWaitlistEntry = useCallback((entry: WaitlistEntry) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    leaveWaitlist(entry.id).then(() => {
-      setWaitlistEntries(prev => prev.filter(candidate => candidate.id !== entry.id));
-    }).catch(() => {});
-  }, []);
+  const renderWaitlistPlace = useCallback((place: MyWaitlistPlace) => (
+    <WaitlistPlaceCard
+      key={place.id}
+      place={place}
+      nowMs={waitlistNow}
+      busy={waitlistBusyId === place.id}
+      onConfirmAndPay={handleConfirmAndPay}
+      onPass={handlePassWaitlist}
+      onOpen={openWaitlistTicket}
+      onRejoin={handleRejoinWaitlist}
+      onDismiss={handleDismissWaitlist}
+      onHoldEnded={handleWaitlistHoldEnded}
+    />
+  ), [waitlistNow, waitlistBusyId, handleConfirmAndPay, handlePassWaitlist, openWaitlistTicket, handleRejoinWaitlist, handleDismissWaitlist, handleWaitlistHoldEnded]);
 
   const handleExternalBookingPress = useCallback((entry: ClientExternalBookingWithProvider) => {
     navigation.navigate('ExternalBookingDetail', { externalBookingId: entry.id });
@@ -1353,7 +1480,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (item.kind === 'external-header') {
       return (
         <View style={{ paddingHorizontal: 16 }}>
-          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>{t('clientBooking.list.bookedElsewhere').toUpperCase()}</Text>
+          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>BOOKED ELSEWHERE</Text>
         </View>
       );
     }
@@ -1364,18 +1491,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (item.kind === 'waitlist-header') {
       return (
         <View style={{ paddingHorizontal: 16 }}>
-          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>{t('clientBooking.list.onWaitlist').toUpperCase()}</Text>
+          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>WAITING FOR</Text>
         </View>
       );
     }
-    return (
-      <WaitlistCard
-        entry={item.entry}
-        onBook={handleBookWaitlistEntry}
-        onLeave={handleLeaveWaitlistEntry}
-      />
-    );
-  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, handleExternalBookingPress, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
+    return renderWaitlistPlace(item.place);
+  }, [renderWaitlistPlace, handleExternalBookingPress, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
 
   const bookingListKeyExtractor = useCallback((item: BookingsListRow) => {
     if (item.kind === 'category') return `category-${item.serviceType}`;
@@ -1383,7 +1504,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (item.kind === 'waitlist-header') return 'waitlist-header';
     if (item.kind === 'external-header') return 'external-header';
     if (item.kind === 'external') return `external-${item.entry.id}`;
-    return `waitlist-${item.entry.id}`;
+    return `waitlist-${item.place.id}`;
   }, []);
 
   // ==================== RENDER ====================
@@ -1455,7 +1576,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               ]}
             >
               <SlidingTabs
-                tabs={categoryTabs}
+                tabs={CATEGORY_TABS}
                 activeKey={activeFilters.has('all') ? 'all' : activeFilters.has('past') ? 'past' : null}
                 onPress={toggleFilter}
                 accentColor={P.accent}
@@ -1470,6 +1591,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 springSpeed={14}
               />
             </Animated.View>
+            {/* A held waitlist slot is on a 10-minute clock, so it sits above
+                everything else until it's paid for, passed on, or gone. */}
+            {heldWaitlistPlaces.length > 0 && (
+              <View style={styles.heldSection}>
+                <Text style={[styles.bookingsTitle, styles.heldTitle]}>HELD FOR YOU</Text>
+                {heldWaitlistPlaces.map(renderWaitlistPlace)}
+              </View>
+            )}
             {/* Tracking View */}
             {!isFilterView && (
               <>
@@ -1478,8 +1607,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     ref={mapRef}
                     style={styles.map}
                     initialRegion={{
-                      latitude: currentBooking?.coordinates?.latitude ?? userLocation?.latitude ?? 51.5074,
-                      longitude: currentBooking?.coordinates?.longitude ?? userLocation?.longitude ?? -0.1278,
+                      latitude: mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates.latitude ?? userLocation?.latitude ?? 51.5074,
+                      longitude: mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates.longitude ?? userLocation?.longitude ?? -0.1278,
                       latitudeDelta: 0.15,
                       longitudeDelta: 0.15,
                     }}
@@ -1494,13 +1623,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     {todayBookings.length > 0 && !allTodayBookingsCompleted ? (
                       <>
-                        {todayBookings.filter(hasMapDestination).map(booking => (
+                        {mapBookings.map(({ booking, coordinates }) => (
                           <Marker
                             key={booking.id}
-                            coordinate={booking.coordinates}
+                            coordinate={coordinates}
                             title={booking.serviceName}
                             description={booking.providerName}
-                            onPress={() => focusMapOnLocation(booking.coordinates)}
+                            onPress={() => focusMapOnLocation(coordinates)}
                             tracksViewChanges
                           >
                             {/* collapsable={false} — Android's view-flattening
@@ -1546,11 +1675,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     ) : (
                       <Marker
                         coordinate={{ latitude: userLocation?.latitude ?? 51.5074, longitude: userLocation?.longitude ?? -0.1278 }}
-                        title={t('clientBooking.list.map.noAppointments')}
+                        title={tr('clientBooking.list.map.noAppointments')}
                         tracksViewChanges
                       >
                         <View collapsable={false} style={styles.serviceMarker}>
-                          <Text style={styles.serviceLabel}>{t('clientBooking.list.map.yourArea').toUpperCase()}</Text>
+                          <Text style={styles.serviceLabel}>YOUR AREA</Text>
                         </View>
                       </Marker>
                     )}
@@ -1563,7 +1692,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       <View style={styles.upcomingSection}>
                         <BlurView intensity={25} tint={isDarkMode ? 'dark' : 'light'} style={styles.sectionLabel}>
                           <Text style={styles.congratsLabelText}>
-                            {t('clientBooking.list.allCompleted').toUpperCase()}
+                            🎉 CONGRATULATIONS! ALL BOOKINGS COMPLETED 🎉
                           </Text>
                         </BlurView>
                         <FlatList
@@ -1585,7 +1714,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {formatBookingDate(booking.bookingDate)} • {booking.bookingTime}
                                     </Text>
                                     <Text style={styles.appointmentProvider}>
-                                      {booking.providerName} - {bookingStatusWord(booking.status)}
+                                      {booking.providerName} - {booking.status.replace('_', ' ')}
                                     </Text>
                                     <Text style={styles.appointmentAddress}>
                                       {bookingLocationLine(booking)}
@@ -1609,34 +1738,34 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       disabled={hasBookingBeenRated(booking.id)}
                                     >
                                       <Text style={styles.buttonText}>
-                                        {hasBookingBeenRated(booking.id) ? t('clientBooking.list.rated') : t('clientBooking.list.rate')}
+                                        {hasBookingBeenRated(booking.id) ? tr('clientBooking.list.rated') : tr('clientBooking.list.rate')}
                                       </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       style={[
                                         styles.tipButton,
-                                        hasBookingBeenTipped(booking.id) && styles.buttonDisabled
+                                        (hasBookingBeenTipped(booking.id) || isTipClosed(booking)) && styles.buttonDisabled
                                       ]}
                                       onPress={() => {
                                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                         if (hasBookingBeenTipped(booking.id)) {
-                                          Alert.alert(tr('clientBooking.tip.alreadyTitle'), tr('clientBooking.tip.already'));
+                                          Alert.alert('Already tipped', "You've already tipped for this visit.");
                                           return;
                                         }
                                         setSelectedBooking(booking);
                                         setShowTipModal(true);
                                       }}
-                                      disabled={hasBookingBeenTipped(booking.id)}
+                                      disabled={hasBookingBeenTipped(booking.id) || isTipClosed(booking)}
                                     >
                                       <Text style={styles.buttonText}>
-                                        {hasBookingBeenTipped(booking.id) ? t('clientBooking.list.tipped') : t('clientBooking.list.tip')}
+                                        {hasBookingBeenTipped(booking.id) ? tr('clientBooking.list.tipped') : isTipClosed(booking) ? 'Tip closed' : 'Tip'}
                                       </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       style={styles.bookAgainButton}
                                       onPress={() => handleRebook(booking)}
                                     >
-                                      <Text style={styles.buttonTextWhite}>{t('clientBooking.list.bookAgain')}</Text>
+                                      <Text style={styles.buttonTextWhite}>{tr('clientBooking.list.bookAgain')}</Text>
                                     </TouchableOpacity>
                                   </View>
                                 </View>
@@ -1667,7 +1796,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                   currentBooking.status === BookingStatus.IN_PROGRESS && { color: IN_PROGRESS_PURPLE },
                                 ]}
                               >
-                                {(currentBooking.status === BookingStatus.IN_PROGRESS ? t('clientBooking.list.inProgress') : t('clientBooking.list.upcoming')).toUpperCase()}
+                                {currentBooking.status === BookingStatus.IN_PROGRESS ? 'IN PROGRESS' : 'UPCOMING'}
                               </Text>
                             </BlurView>
                             <TouchableOpacity
@@ -1685,7 +1814,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {formatBookingDate(currentBooking.bookingDate)} • {currentBooking.bookingTime}
                                     </Text>
                                     <Text style={styles.appointmentProvider}>
-                                      {currentBooking.providerName} - {bookingStatusWord(currentBooking.status)}
+                                      {currentBooking.providerName} - {currentBooking.status.replace('_', ' ')}
                                     </Text>
                                     <Text style={styles.appointmentAddress}>
                                       {bookingLocationLine(currentBooking)}
@@ -1712,45 +1841,45 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           disabled={hasBookingBeenRated(currentBooking.id)}
                                         >
                                           <Text style={styles.buttonText}>
-                                            {hasBookingBeenRated(currentBooking.id) ? t('clientBooking.list.rated') : t('clientBooking.list.rate')}
+                                            {hasBookingBeenRated(currentBooking.id) ? tr('clientBooking.list.rated') : tr('clientBooking.list.rate')}
                                           </Text>
                                         </TouchableOpacity>
                                         {/* ✅ TIP BUTTON - CHECK IF ALREADY TIPPED */}
                                         <TouchableOpacity
                                           style={[
                                             styles.tipButton,
-                                            hasBookingBeenTipped(currentBooking.id) && styles.buttonDisabled
+                                            (hasBookingBeenTipped(currentBooking.id) || isTipClosed(currentBooking)) && styles.buttonDisabled
                                           ]}
                                           onPress={() => {
                                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                             if (hasBookingBeenTipped(currentBooking.id)) {
-                                              Alert.alert(tr('clientBooking.tip.alreadyTitle'), tr('clientBooking.tip.already'));
+                                              Alert.alert('Already tipped', "You've already tipped for this visit.");
                                               return;
                                             }
                                             setSelectedBooking(currentBooking);
                                             setShowTipModal(true);
                                           }}
-                                          disabled={hasBookingBeenTipped(currentBooking.id)}
+                                          disabled={hasBookingBeenTipped(currentBooking.id) || isTipClosed(currentBooking)}
                                         >
                                           <Text style={styles.buttonText}>
-                                            {hasBookingBeenTipped(currentBooking.id) ? t('clientBooking.list.tipped') : t('clientBooking.list.tip')}
+                                            {hasBookingBeenTipped(currentBooking.id) ? tr('clientBooking.list.tipped') : isTipClosed(currentBooking) ? 'Tip closed' : 'Tip'}
                                           </Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                           style={styles.bookAgainButton}
                                           onPress={() => handleRebook(currentBooking)}
                                         >
-                                          <Text style={styles.buttonTextWhite}>{t('clientBooking.list.bookAgain')}</Text>
+                                          <Text style={styles.buttonTextWhite}>{tr('clientBooking.list.bookAgain')}</Text>
                                         </TouchableOpacity>
                                       </>
                                     ) : (
                                       <>
-                                        {hasMapDestination(currentBooking) && (
+                                        {currentBooking.status !== BookingStatus.PENDING && hasDirectionsDestination(currentBooking) && (
                                           <TouchableOpacity
                                             style={styles.directionsButton}
                                             onPress={() => openInMaps(currentBooking)}
                                           >
-                                            <Text style={styles.buttonText}>{t('clientBooking.list.directions')}</Text>
+                                            <Text style={styles.buttonText}>{tr('clientBooking.list.directions')}</Text>
                                           </TouchableOpacity>
                                         )}
                                         {isMessagingAvailable(currentBooking.bookingDate) && (
@@ -1758,7 +1887,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             style={styles.messageButton}
                                             onPress={() => openContactSheet(currentBooking)}
                                           >
-                                            <Text style={styles.buttonText}>{t('clientBooking.list.contact')}</Text>
+                                            <Text style={styles.buttonText}>{tr('clientBooking.list.contact')}</Text>
                                           </TouchableOpacity>
                                         )}
                                       </>
@@ -1772,7 +1901,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                         {nextBookings.length > 0 && (
                           <View style={styles.nextSection}>
                             <BlurView intensity={25} tint={isDarkMode ? 'dark' : 'light'} style={styles.sectionLabel}>
-                              <Text style={styles.nextLabelText}>{t('clientBooking.list.next').toUpperCase()}</Text>
+                              <Text style={styles.nextLabelText}>NEXT</Text>
                             </BlurView>
                             <FlatList
                               data={nextBookings}
@@ -1819,52 +1948,52 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                               disabled={hasBookingBeenRated(booking.id)}
                                             >
                                               <Text style={styles.buttonText}>
-                                                {hasBookingBeenRated(booking.id) ? t('clientBooking.list.rated') : t('clientBooking.list.rate')}
+                                                {hasBookingBeenRated(booking.id) ? tr('clientBooking.list.rated') : tr('clientBooking.list.rate')}
                                               </Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                               style={[
                                                 styles.tipButton,
-                                                hasBookingBeenTipped(booking.id) && styles.buttonDisabled
+                                                (hasBookingBeenTipped(booking.id) || isTipClosed(booking)) && styles.buttonDisabled
                                               ]}
                                               onPress={() => {
                                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                                 if (hasBookingBeenTipped(booking.id)) {
-                                                  Alert.alert(tr('clientBooking.tip.alreadyTitle'), tr('clientBooking.tip.already'));
+                                                  Alert.alert('Already tipped', "You've already tipped for this visit.");
                                                   return;
                                                 }
                                                 setSelectedBooking(booking);
                                                 setShowTipModal(true);
                                               }}
-                                              disabled={hasBookingBeenTipped(booking.id)}
+                                              disabled={hasBookingBeenTipped(booking.id) || isTipClosed(booking)}
                                             >
                                               <Text style={styles.buttonText}>
-                                                {hasBookingBeenTipped(booking.id) ? t('clientBooking.list.tipped') : t('clientBooking.list.tip')}
+                                                {hasBookingBeenTipped(booking.id) ? tr('clientBooking.list.tipped') : isTipClosed(booking) ? 'Tip closed' : 'Tip'}
                                               </Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                               style={styles.bookAgainButton}
                                               onPress={() => handleRebook(booking)}
                                             >
-                                              <Text style={styles.buttonTextWhite}>{t('clientBooking.list.bookAgain')}</Text>
+                                              <Text style={styles.buttonTextWhite}>{tr('clientBooking.list.bookAgain')}</Text>
                                             </TouchableOpacity>
                                           </>
                                         ) : (
                                           <>
-                                            {hasMapDestination(booking) && (
+                                            {booking.status !== BookingStatus.PENDING && hasDirectionsDestination(booking) && (
                                               <TouchableOpacity
                                                 style={styles.directionsButton}
                                                 onPress={() => openInMaps(booking)}
                                               >
-                                                <Text style={styles.buttonText}>{t('clientBooking.list.directions')}</Text>
+                                                <Text style={styles.buttonText}>{tr('clientBooking.list.directions')}</Text>
                                               </TouchableOpacity>
                                             )}
                                             {isMessagingAvailable(booking.bookingDate) && (
                                               <TouchableOpacity
                                                 style={styles.messageButton}
-                                                onPress={() => openContactSheet(booking)}
+                                                onPress={() => (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking))}
                                               >
-                                                <Text style={styles.buttonText}>{t('clientBooking.list.contact')}</Text>
+                                                <Text style={styles.buttonText}>{tr('clientBooking.list.contact')}</Text>
                                               </TouchableOpacity>
                                             )}
                                           </>
@@ -1887,9 +2016,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </>
                 ) : (
                   <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateText}>{t('clientBooking.list.emptyToday')}</Text>
+                    <Text style={styles.emptyStateText}>{tr('clientBooking.list.emptyToday')}</Text>
                     <Text style={styles.emptyStateSubtext}>
-                      {t('clientBooking.list.emptyTodayHint')}
+                      {tr('clientBooking.list.emptyTodayHint')}
                     </Text>
                   </View>
                 )}
@@ -1906,7 +2035,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   }}
                   style={styles.backToTrackingButton}
                 >
-                  <Text style={styles.backToTrackingText}>{t('clientBooking.list.backToTracking')}</Text>
+                  <Text style={styles.backToTrackingText}>{tr('clientBooking.list.backToTracking')}</Text>
                 </TouchableOpacity>
                 {activeFilters.has('past') && pastCategories.length > 0 && (
                   <View style={styles.pastFilterSection}>
@@ -1918,7 +2047,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     >
                       <Ionicons name="filter-outline" size={14} color={P.text} />
                       <Text style={[styles.pastFilterButtonText, { color: P.text }]} numberOfLines={1}>
-                        {pastCategoryFilter ? categoryLabel(pastCategoryFilter) : t('clientBooking.list.allCategories')}
+                        {pastCategoryFilter ? pastCategoryFilter.charAt(0) + pastCategoryFilter.slice(1).toLowerCase() : tr('beautyProfile.allCategories')}
                       </Text>
                       <Ionicons name={pastFilterOpen ? 'chevron-up' : 'chevron-down'} size={14} color={P.sub} />
                     </TouchableOpacity>
@@ -1949,7 +2078,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           }}
                         >
                           <Text style={[styles.pastFilterOptionText, { color: !pastCategoryFilter ? P.accent : P.text, fontWeight: !pastCategoryFilter ? '700' : '500' }]}>
-                            {t('common.all')}
+                            {tr('common.all')}
                           </Text>
                           {!pastCategoryFilter && <Ionicons name="checkmark" size={16} color={P.accent} />}
                         </TouchableOpacity>
@@ -1967,7 +2096,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                               }}
                             >
                               <Text style={[styles.pastFilterOptionText, { color: isActive ? P.accent : P.text, fontWeight: isActive ? '700' : '500' }]}>
-                                {categoryLabel(cat)}
+                                {cat.charAt(0) + cat.slice(1).toLowerCase()}
                               </Text>
                               {isActive && <Ionicons name="checkmark" size={16} color={P.accent} />}
                             </TouchableOpacity>
@@ -1993,13 +2122,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     paddingVertical: 12,
                   }}>
                     <Text style={{ color: '#D32F2F', fontSize: 13, fontWeight: '500', flex: 1 }}>
-                      {retrying ? t('clientBooking.list.reloading') : bookingsError}
+                      {retrying ? tr('clientBooking.list.reloading') : bookingsError}
                     </Text>
                     {retrying ? (
                       <ActivityIndicator size="small" color="#D32F2F" style={{ marginLeft: 12 }} />
                     ) : (
                       <TouchableOpacity onPress={retryLoadBookings}>
-                        <Text style={{ color: '#D32F2F', fontSize: 13, fontWeight: 'bold', marginLeft: 12 }}>{t('common.retry')}</Text>
+                        <Text style={{ color: '#D32F2F', fontSize: 13, fontWeight: 'bold', marginLeft: 12 }}>{tr('common.retry')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -2010,10 +2139,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>
                       {activeFilters.has('past')
-                        ? (pastCategoryFilter
-                            ? t('clientBooking.list.emptyCategory', { category: language === 'en' ? categoryLabel(pastCategoryFilter).toLowerCase() : categoryLabel(pastCategoryFilter) })
-                            : t('clientBooking.list.emptyPast'))
-                        : t('clientBooking.list.emptyUpcoming')}
+                        ? (pastCategoryFilter ? `No ${pastCategoryFilter.toLowerCase()} bookings` : 'No past bookings')
+                        : tr('clientBooking.list.emptyUpcoming')}
                     </Text>
                   </View>
                 ) : null}
@@ -2023,13 +2150,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         />
 
+
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
             <Pressable style={[csSt.sheet, { backgroundColor: P.card, paddingBottom: Math.max(40, modalBottomGap) }]} onPress={e => e.stopPropagation()}>
               <View style={[csSt.handle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
-              <Text style={[csSt.title, { color: P.text }]}>{t('clientBooking.contact.title', { provider: contactSheetBooking?.providerName ?? '' })}</Text>
-              <Text style={[csSt.subtitle, { color: '#7E6667' }]}>{t('clientBooking.contact.subtitle')}</Text>
+              <Text style={[csSt.title, { color: P.text }]}>{tr('clientBooking.list.contact')} {contactSheetBooking?.providerName}</Text>
+              <Text style={[csSt.subtitle, { color: '#7E6667' }]}>{tr('clientBooking.contact.subtitle')}</Text>
               {contactSheetLoading ? <ActivityIndicator color={P.accent} style={{ marginVertical: 24 }} /> : (
                 <View style={csSt.options}>
                   <TouchableOpacity
@@ -2039,8 +2167,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     <View style={[csSt.optionIcon, { backgroundColor: '#5B1E32' }]}><Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" /></View>
                     <View style={csSt.optionText}>
-                      <Text style={[csSt.optionLabel, { color: P.text }]}>{t('clientBooking.contact.inApp')}</Text>
-                      <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{t('clientBooking.contact.inAppDesc')}</Text>
+                      <Text style={[csSt.optionLabel, { color: P.text }]}>{tr('clientBooking.contact.inApp')}</Text>
+                      <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{tr('clientBooking.contact.inAppDesc')}</Text>
                     </View>
                     <Text style={[csSt.optionChevron, { color: P.sub }]}>›</Text>
                   </TouchableOpacity>
@@ -2052,7 +2180,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}><Ionicons name="mail-outline" size={20} color="#fff" /></View>
                       <View style={csSt.optionText}>
-                        <Text style={[csSt.optionLabel, { color: P.text }]}>{t('clientBooking.contact.email')}</Text>
+                        <Text style={[csSt.optionLabel, { color: P.text }]}>{tr('clientBooking.contact.email')}</Text>
                         <Text style={[csSt.optionDesc, { color: '#7E6667' }]} numberOfLines={1}>{contactSheetInfo.email}</Text>
                       </View>
                       <Text style={[csSt.optionChevron, { color: P.sub }]}>›</Text>
@@ -2080,7 +2208,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}><Ionicons name="call-outline" size={20} color="#fff" /></View>
                       <View style={csSt.optionText}>
-                        <Text style={[csSt.optionLabel, { color: P.text }]}>{t('clientBooking.contact.phone')}</Text>
+                        <Text style={[csSt.optionLabel, { color: P.text }]}>{tr('clientBooking.contact.phone')}</Text>
                         <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{contactSheetInfo.phone}</Text>
                       </View>
                       <Text style={[csSt.optionChevron, { color: P.sub }]}>›</Text>
@@ -2103,9 +2231,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
-              <Text style={[popSt.sheetTitle, { color: P.text }]}>{t('clientBooking.rebook.includeAddOnsTitle')}</Text>
+              <Text style={[popSt.sheetTitle, { color: P.text }]}>{tr('clientBooking.rebook.includeAddOnsTitle')}</Text>
               <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                {t('clientBooking.rebook.includeAddOns')}
+                {tr('clientBooking.rebook.includeAddOns')}
               </Text>
               {selectedBooking?.addOns?.map((a, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
@@ -2115,10 +2243,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               ))}
               <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => confirmRebook('without')} activeOpacity={0.7}>
-                  <Text style={{ color: P.text }}>{t('clientBooking.rebook.withoutAddOns')}</Text>
+                  <Text style={{ color: P.text }}>{tr('clientBooking.rebook.withoutAddOns')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.accent }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
-                  <Text style={{ color: P.onAccent, fontWeight: '600' }}>{t('clientBooking.rebook.withAddOns')}</Text>
+                  <Text style={{ color: P.onAccent, fontWeight: '600' }}>{tr('clientBooking.rebook.withAddOns')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2135,72 +2263,104 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>{successIcon}</Text>
-              <Text style={[popSt.sheetTitle, { color: P.text }]}>{successIcon === '✓' ? t('clientBooking.notice.success') : t('clientBooking.notice.notice')}</Text>
+              <Text style={[popSt.sheetTitle, { color: P.text }]}>{successIcon === '✓' ? tr('clientBooking.notice.success') : tr('clientBooking.notice.notice')}</Text>
               <Text style={[popSt.sheetSub, { color: P.sub }]}>{successMessage}</Text>
               <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.accent }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }} activeOpacity={0.7}>
-                  <Text style={{ color: P.onAccent, fontWeight: '600', textAlign: 'center' }}>{t('common.gotIt')}</Text>
+                  <Text style={{ color: P.onAccent, fontWeight: '600', textAlign: 'center' }}>{tr('common.gotIt')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
 
-        {/* ─── Waitlist Hold Modal — a time-boxed slot reserved via
-            invite_next_waitlist_entry() (waitlist_holds.sql). Fetched
-            directly by id (see the route-params effect above) since it's
-            deliberately excluded from the normal bookings lists. ─── */}
-        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
+        {/* ─── A "slot opened" notification tapped after the hold ended. The
+            held row was deleted when its 15 minutes ran out, so this is
+            recognised by the waitlist entry it was offered to. ─── */}
+        <Modal visible={!!goneNotice} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setGoneNotice(null)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
-              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⏳</Text>
-              <Text style={[popSt.sheetTitle, { color: P.text }]}>{t('clientBooking.waitlist.holdTitle')}</Text>
-              {waitlistHold && (
+              <View style={[styles.goneIcon, { backgroundColor: P.accentDim }]}>
+                <Ionicons name="time-outline" size={26} color={P.accentText} />
+              </View>
+              <Text style={[popSt.sheetTitle, { color: P.text }]}>{tr('clientBooking.waitlist.goneTitle')}</Text>
+              {goneNotice && (
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  {t('clientBooking.waitlist.holdWith', { service: waitlistHold.service_name_snapshot, provider: waitlistHold.provider_name_snapshot })}{'\n'}
-                  {t('clientBooking.sheet.dateAtTime', { date: formatLongDate(waitlistHold.booking_date), time: formatTime12(waitlistHold.booking_time) })}
-                  {'\n\n'}{t('clientBooking.waitlist.holdBody')}
+                  {offeredSlotLabel(goneNotice.offeredDate, goneNotice.offeredTime) ?? 'The slot'} with {goneNotice.providerName}
+                  {' '}{holdEndLabel(goneNotice.offerExpiresAt) ? tr('clientBooking.waitlist.heldUntil', { time: holdEndLabel(goneNotice.offerExpiresAt) ?? '' }) : tr('clientBooking.waitlist.heldRanOut')}
+                  {"\n\n"}{tr('clientBooking.waitlist.goneBody')}
                 </Text>
               )}
-              <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
+              <View style={{ gap: 10, marginTop: 16 }}>
                 <TouchableOpacity
-                  style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
-                  onPress={handleDeclineWaitlistHold}
-                  disabled={waitlistHoldBusy}
-                  activeOpacity={0.7}
+                  style={[popSt.sheetBtn, { backgroundColor: P.accent, flex: 0 }]}
+                  onPress={() => { if (goneNotice) void handleRejoinWaitlist(goneNotice); }}
+                  disabled={!!goneNotice && waitlistBusyId === goneNotice.id}
+                  activeOpacity={0.8}
                 >
-                  <Text style={{ color: P.text, fontWeight: '600', textAlign: 'center' }}>{t('clientBooking.waitlist.notThisTime')}</Text>
+                  {goneNotice && waitlistBusyId === goneNotice.id
+                    ? <ActivityIndicator color={P.onAccent} size="small" />
+                    : <Text style={{ color: P.onAccent, fontWeight: '700', textAlign: 'center' }}>{tr('clientBooking.waitlist.rejoin')}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[popSt.sheetBtn, { backgroundColor: P.accent }]}
-                  onPress={handleConfirmWaitlistHold}
-                  disabled={waitlistHoldBusy}
+                  style={[popSt.sheetBtn, { backgroundColor: P.accentDim, flex: 0 }]}
+                  onPress={() => {
+                    const providerId = goneNotice?.providerId;
+                    setGoneNotice(null);
+                    if (providerId) navigation.navigate('ProviderProfile', { providerId });
+                  }}
                   activeOpacity={0.7}
                 >
-                  {waitlistHoldBusy ? (
-                    <ActivityIndicator color={P.onAccent} size="small" />
-                  ) : (
-                    <Text style={{ color: P.onAccent, fontWeight: '600', textAlign: 'center' }}>{t('clientBooking.waitlist.confirmSlot')}</Text>
-                  )}
+                  <Text style={{ color: P.accentText, fontWeight: '700', textAlign: 'center' }}>
+                    {goneNotice?.providerName ? tr('clientBooking.waitlist.seeOtherTimes', { name: goneNotice.providerName }) : tr('clientBooking.waitlist.seeTheirOtherTimes')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setGoneNotice(null)} activeOpacity={0.6} style={{ paddingVertical: 6 }}>
+                  <Text style={{ color: P.sub, fontWeight: '600', textAlign: 'center' }}>{tr('common.close')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
+
+        {/* ─── A waitlist place's ticket: its place in line, or a held slot's
+            countdown with Confirm & pay. Change dates opens on top of it, so
+            the dates sheet is rendered inside the ticket's Modal. ─── */}
+        <WaitlistTicket
+          place={ticketPlace}
+          nowMs={waitlistNow}
+          busy={!!ticketPlace && waitlistBusyId === ticketPlace.id}
+          service={ticketService}
+          onClose={closeWaitlistTicket}
+          onConfirmAndPay={handleTicketConfirmAndPay}
+          onPass={handleTicketPass}
+          onChangeDates={handleOpenWaitlistDates}
+          onLeave={handleLeaveFromDatesSheet}
+          onHoldEnded={handleWaitlistHoldEnded}
+        >
+          <WaitlistDatesSheet
+            place={datesSheetPlace}
+            busy={!!datesSheetPlace && waitlistBusyId === datesSheetPlace.id}
+            error={datesError}
+            onClose={() => setDatesSheetPlace(null)}
+            onSave={(place, dates) => { void handleSaveWaitlistDates(place, dates); }}
+            onLeave={handleLeaveFromDatesSheet}
+          />
+        </WaitlistTicket>
 
         {/* ─── Rating Modal — the "Rate" button on the Today map view set
             showRatingModal/rating/reviewText but nothing rendered a modal, so
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 {!hasRated ? (
                   <>
-                    <Text style={[popSt.sheetTitle, { color: P.text }]}>{t('clientBooking.rating.title')}</Text>
+                    <Text style={[popSt.sheetTitle, { color: P.text }]}>{tr('clientBooking.rating.title')}</Text>
                     <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                      {t('clientBooking.rating.question', { provider: selectedBooking?.providerName ?? '' })}
+                      {tr('clientBooking.rating.howWas', { name: selectedBooking?.providerName ?? '' })}
                     </Text>
                     <View style={styles.starContainer}>
                       {[1, 2, 3, 4, 5].map(s => (
@@ -2212,41 +2372,46 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     <View style={styles.reviewInputContainer}>
                       <TextInput
                         style={styles.reviewInput}
-                        multiline numberOfLines={3} placeholder={t('clientBooking.rating.placeholder')}
+                        multiline numberOfLines={3} placeholder={tr('clientBooking.rating.placeholder')}
                         placeholderTextColor={P.sub}
                         value={reviewText} onChangeText={setReviewText} maxLength={500}
                       />
                       <Text style={styles.characterCount}>{reviewText.length}/500</Text>
                     </View>
+                    <AnonymousReviewToggle
+                      value={reviewAnonymous}
+                      onValueChange={setReviewAnonymous}
+                      palette={{ text: P.text, sub: P.sub, accent: P.accent, border: P.border }}
+                      disabled={isLoading}
+                    />
                     <View style={popSt.sheetBtns}>
-                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
-                        <Text style={{ color: P.text }}>{t('common.skip')}</Text>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }} activeOpacity={0.7}>
+                        <Text style={{ color: P.text }}>{tr('common.skip')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : P.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
-                        {isLoading ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={{ color: P.onAccent, fontWeight: '600' }}>{t('common.submit')}</Text>}
+                        {isLoading ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={{ color: P.onAccent, fontWeight: '600' }}>{tr('common.submit')}</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
                 ) : (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>✓</Text>
-                    <Text style={[popSt.sheetTitle, { color: P.text }]}>{t('clientBooking.rating.thanks')}</Text>
-                    <Text style={[popSt.sheetSub, { color: P.sub }]}>{t('clientBooking.rating.thanksBody')}</Text>
+                    <Text style={[popSt.sheetTitle, { color: P.text }]}>{tr('clientBooking.rating.thanks')}</Text>
+                    <Text style={[popSt.sheetSub, { color: P.sub }]}>{tr('clientBooking.rating.thanksBody')}</Text>
                   </>
                 )}
               </View>
           </KeyboardDismissView>
         </Modal>
 
-        {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
-            now actually persists via setBookingTip() instead of only flipping
-            local state. ─── */}
+        {/* ─── Tip Modal — handleTipSubmit takes a real card payment
+            (booking-tip function + Stripe PaymentSheet). ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
-                <Text style={[popSt.sheetTitle, { color: P.text }]}>{t('clientBooking.tip.title')}</Text>
+                <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  {t('clientBooking.tip.subtitle', { provider: selectedBooking?.providerName ?? '' })}
+                  Show your appreciation for {selectedBooking?.providerName}. You can tip for 48 hours after your appointment. Tips can't be refunded.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>
@@ -2257,24 +2422,24 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     ))}
                   </View>
                   <View style={styles.tipCustomContainer}>
-                    <Text style={styles.tipCustomLabel}>{t('clientBooking.tip.custom')}</Text>
+                    <Text style={styles.tipCustomLabel}>{tr('clientBooking.tip.custom')}</Text>
                     <View style={styles.tipInputWrapper}>
                       <Text style={styles.tipCurrencySymbol}>£</Text>
                       <TextInput
                         style={styles.tipInput} keyboardType="decimal-pad" placeholder="0.00"
                         placeholderTextColor={P.sub}
                         value={tipAmount > 0 ? tipAmount.toString() : ''}
-                        onChangeText={text => setTipAmount(isNaN(parseFloat(text)) ? 0 : parseFloat(text))}
+                        onChangeText={t => setTipAmount(isNaN(parseFloat(t)) ? 0 : parseFloat(t))}
                       />
                     </View>
                   </View>
                 </View>
                 <View style={popSt.sheetBtns}>
                   <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
-                    <Text style={{ color: P.text }}>{t('common.skip')}</Text>
+                    <Text style={{ color: P.text }}>{tr('common.skip')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: tipAmount <= 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : P.accent }]} disabled={tipAmount <= 0 || isLoading} onPress={handleTipSubmit} activeOpacity={0.7}>
-                    {isLoading ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={{ color: P.onAccent, fontWeight: '600' }}>{t('clientBooking.tip.send')}</Text>}
+                    {isLoading ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={{ color: P.onAccent, fontWeight: '600' }}>Send tip</Text>}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2283,6 +2448,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
         <DialogHost />
       </SafeAreaView>
+      <RecommendAfterRatingBar {...recommendAfterRating.bar} P={P} bottomOffset={FLOATING_TAB_BAR_CLEARANCE} />
     </ThemedBackground>
   );
 }
@@ -2318,6 +2484,18 @@ const createStyles = (
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 1,
+  },
+  // Top-right Activity Centre button; the "!" sits on its corner.
+  activityButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 1,
   },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -2654,6 +2832,21 @@ const createStyles = (
     color: '#2196F3',
     fontWeight: '800',
   },
+  heldSection: {
+    marginTop: 16,
+  },
+  heldTitle: {
+    marginBottom: 12,
+  },
+  goneIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
   bookingsTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
@@ -2779,14 +2972,14 @@ const createStyles = (
     borderRadius: 25,
     overflow: 'hidden',
   },
-  modalContent: {
+  modalContent: { ...readableDialog,
     borderRadius: 25,
     overflow: 'hidden'
   },
   modalBlur: {
     backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.95)' : '#FFFFFF'
   },
-  modalContainer: {
+  modalContainer: { ...readableDialog,
     maxHeight: '100%'
   },
   modalScrollView: {
@@ -2862,7 +3055,7 @@ const createStyles = (
     alignItems: 'center',
     marginBottom: 12,
   },
-  modalCard: {
+  modalCard: { ...readableDialog,
     backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
     borderRadius: 12,
     padding: 15
@@ -4185,7 +4378,7 @@ intakeFormTodoBadgeText: {
 // isDarkMode-branched overrides, same pattern as popSt below.
 const csSt = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
+  sheet: { ...readableSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20 },
   title:       { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   subtitle:    { fontSize: 13, textAlign: 'center', marginBottom: 20 },

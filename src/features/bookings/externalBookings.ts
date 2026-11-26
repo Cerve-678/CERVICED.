@@ -9,7 +9,7 @@
  */
 import type { ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { toLocalDate } from '../../utils/dateUtils';
-import { tr } from '../../i18n';
+import { tr } from '../../i18n/translate';
 
 /** The entry's start as a local Date. */
 export function externalBookingStart(entry: Pick<ClientExternalBookingWithProvider, 'booking_date' | 'start_time'>): Date {

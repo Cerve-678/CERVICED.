@@ -18,17 +18,24 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { getIntakeFormById, submitIntakeFormAnswers, IntakeForm, IntakeFormQuestion } from '../../services/databaseService';
 import { HomeScreenProps } from '../../navigation/types';
-import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { dueByLabel } from '../../features/intake-forms/formDeadline';
+import { tr } from '../../i18n';
 import { useTranslation } from '../../i18n';
 
 type Props = HomeScreenProps<'ClientIntakeForm'>;
 
 export default function ClientIntakeFormScreen({ route, navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { formId, serviceName } = route.params;
   const { palette: P } = useTheme();
-  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  // A form is a focused task: no bottom nav, whichever tab it was opened from.
+  useHideTabBar();
 
   const [form, setForm]         = useState<IntakeForm | null>(null);
   const [answers, setAnswers]   = useState<Record<string, string>>({});
@@ -47,10 +54,9 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   // straight to the read-only answers view instead of the congrats screen.
   const [justSubmitted, setJustSubmitted] = useState(false);
 
-  // footer's bottom padding clears the floating tab bar when the keyboard is
+  // The footer's bottom padding clears the home indicator when the keyboard is
   // closed, but that same clearance becomes a dead gap between the Submit
-  // button and the keyboard once it's open (same fix as ProviderChatScreen /
-  // ChatComponents.tsx's ChatInput).
+  // button and the keyboard once it's open.
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -93,11 +99,11 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
     // Validate required fields
     const missing = form.questions.filter(q => q.required && !(answers[q.id]?.trim()));
     if (missing.length > 0) {
-      Alert.alert(t('clientBooking.intake.requiredTitle'), t('clientBooking.intake.pleaseAnswer', { question: missing[0]?.label ?? t('clientBooking.intake.theRequiredQuestion') }));
+      Alert.alert(tr('clientBooking.intake.requiredTitle'), tr('clientBooking.intake.pleaseAnswer', { question: missing[0]?.label ?? 'the required question' }));
       return;
     }
     if (form.requiresSignature && !signature.trim()) {
-      Alert.alert(t('clientBooking.intake.signatureRequiredTitle'), t('clientBooking.intake.signatureRequired'));
+      Alert.alert(tr('clientBooking.intake.signatureRequiredTitle'), 'Please type your full name to sign off on this form.');
       return;
     }
 
@@ -108,11 +114,11 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
       setSubmitted(true);
       setJustSubmitted(true);
     } catch {
-      Alert.alert(t('common.error'), t('clientBooking.intake.submitFailed'));
+      Alert.alert(tr('common.error'), tr('clientBooking.intake.submitFailed'));
     } finally {
       setSubmitting(false);
     }
-  }, [form, formId, answers, signature, t]);
+  }, [form, formId, answers, signature]);
 
   if (loading) {
     return (
@@ -126,14 +132,14 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
     return (
       <ThemedBackground style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: P.text, fontSize: 16 }}>
-          {loadError ? t('clientBooking.intake.loadFailed') : t('clientBooking.intake.notFound')}
+          {loadError ? tr('clientBooking.intake.loadFailed') : tr('clientBooking.intake.notFound')}
         </Text>
         {loadError && (
           <TouchableOpacity
             style={[styles.doneBtn, { backgroundColor: P.accent, marginTop: 16 }]}
             onPress={() => setRetryNonce(value => value + 1)}
           >
-            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>{t('common.tryAgain')}</Text>
+            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>{tr('common.tryAgain')}</Text>
           </TouchableOpacity>
         )}
       </ThemedBackground>
@@ -151,7 +157,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: P.text }]}>{t('clientBooking.intake.headerTitle')}</Text>
+          <Text style={[styles.headerTitle, { color: P.text }]}>{tr('clientBooking.intake.headerTitle')}</Text>
           <View style={{ width: 36 }} />
         </View>
       </SafeAreaView>
@@ -160,23 +166,23 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
         /* ── Just-submitted success state — shown once, right after the client taps Submit ── */
         <View style={styles.successState}>
           <Text style={styles.successIcon}>✓</Text>
-          <Text style={[styles.successTitle, { color: P.text }]}>{t('clientBooking.intake.doneTitle')}</Text>
+          <Text style={[styles.successTitle, { color: P.text }]}>{tr('clientBooking.intake.doneTitle')}</Text>
           <Text style={[styles.successSub, { color: P.sub }]}>
-            {t('clientBooking.intake.doneBody')}
+            {tr('clientBooking.intake.doneBody')}
           </Text>
           <TouchableOpacity
             style={[styles.doneBtn, { backgroundColor: P.accent }]}
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
           >
-            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>{t('clientBooking.intake.backToBooking')}</Text>
+            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>{tr('clientBooking.intake.backToBooking')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.content, { paddingBottom: 120 }]}
+            contentContainerStyle={[styles.content, { paddingBottom: submitted ? 24 + insets.bottom : 24 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -185,7 +191,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             {submitted && (
               <View style={[styles.completedBanner, { backgroundColor: '#34C75920', borderColor: '#34C75955' }]}>
                 <Ionicons name="checkmark-circle" size={18} color="#34C759" />
-                <Text style={styles.completedBannerText}>{t('clientBooking.intake.completedBanner')}</Text>
+                <Text style={styles.completedBannerText}>{tr('clientBooking.intake.completedBanner')}</Text>
               </View>
             )}
 
@@ -193,13 +199,18 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             <View style={[styles.introCard, { backgroundColor: P.accent + '14', borderColor: P.accent + '35' }]}>
               {!!serviceName && (
                 <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1, color: P.accentText, marginBottom: 6 }}>
-                  {t('clientBooking.intake.forService', { service: serviceName.toUpperCase() })}
+                  FOR: {serviceName.toUpperCase()}
                 </Text>
               )}
               <Text style={[styles.introTitle, { color: P.text }]}>{form.title}</Text>
               <Text style={[styles.introSub, { color: P.sub }]}>
-                {t('clientBooking.intake.intro')}
+                {tr('clientBooking.intake.intro')}
               </Text>
+              {!submitted && !!dueByLabel(form.dueAt) && (
+                <Text style={[styles.introSub, { color: P.text, fontWeight: '700', marginTop: 6 }]}>
+                  Please fill in by {dueByLabel(form.dueAt)}
+                </Text>
+              )}
             </View>
 
             {/* Questions */}
@@ -222,10 +233,10 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                   <Text style={[styles.qNumber, { color: P.sub }]}>{form.questions.length + 1}.</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.qLabel, { color: P.text }]}>
-                      {t('clientBooking.intake.signatureLabel')} <Text style={{ color: '#FF3B30' }}>*</Text>
+                      Full name as signature <Text style={{ color: '#FF3B30' }}>*</Text>
                     </Text>
                     <Text style={[{ fontSize: 12, color: P.sub, marginTop: 2 }]}>
-                      {t('clientBooking.intake.signatureConfirm')}
+                      By typing your name you confirm you have read and understood this form
                     </Text>
                   </View>
                 </View>
@@ -234,7 +245,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                   value={signature}
                   onChangeText={setSignature}
                   editable={!submitted}
-                  placeholder={t('clientBooking.intake.signaturePlaceholder')}
+                  placeholder={tr('clientBooking.intake.signaturePlaceholder')}
                   placeholderTextColor={P.sub}
                   autoCapitalize="words"
                 />
@@ -244,7 +255,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
 
           {/* Submit button — hidden once completed, since there's nothing left to submit */}
           {!submitted && (
-            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : FLOATING_TAB_BAR_CLEARANCE }]}>
+            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 12) }]}>
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: P.accent }]}
                 onPress={handleSubmit}
@@ -253,7 +264,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
               >
                 {submitting
                   ? <ActivityIndicator color={P.onAccent} size="small" />
-                  : <Text style={[styles.submitBtnText, { color: P.onAccent }]}>{t('clientBooking.intake.submit')}</Text>
+                  : <Text style={[styles.submitBtnText, { color: P.onAccent }]}>{tr('clientBooking.intake.submit')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -276,10 +287,8 @@ function QuestionInput({
   P:        AppTheme;
   readOnly?: boolean;
 }) {
-  const { t } = useTranslation();
-  // Stored answers stay English ('Yes' / 'No' / 'Acknowledged') — the provider
-  // reads them — so only what's drawn is translated.
-  const optionLabel = (opt: 'Yes' | 'No') => (opt === 'Yes' ? t('common.yes') : t('common.no'));
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
     <View style={[styles.qCard, { backgroundColor: P.card, borderColor: P.border }]}>
       <View style={styles.qLabelRow}>
@@ -296,7 +305,7 @@ function QuestionInput({
           value={value}
           onChangeText={onChange}
           editable={!readOnly}
-          placeholder={t('clientBooking.intake.answerPlaceholder')}
+          placeholder={tr('clientBooking.intake.answerPlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           textAlignVertical="top"
@@ -327,7 +336,7 @@ function QuestionInput({
                 styles.yesnoText,
                 { color: value === opt ? (opt === 'Yes' ? '#34C759' : '#FF3B30') : P.sub },
               ]}>
-                {optionLabel(opt)}
+                {opt}
               </Text>
             </TouchableOpacity>
           ))}
@@ -365,7 +374,7 @@ function QuestionInput({
       {question.type === 'policy' && (
         <>
           <View style={[styles.policyBody, { backgroundColor: P.bg, borderColor: P.border }]}>
-            <Text style={{ color: P.text, fontSize: 13, lineHeight: 20 }}>{question.body || t('clientBooking.intake.noPolicyText')}</Text>
+            <Text style={{ color: P.text, fontSize: 13, lineHeight: 20 }}>{question.body || 'No policy text provided.'}</Text>
           </View>
           <TouchableOpacity
             style={[
@@ -382,7 +391,7 @@ function QuestionInput({
             disabled={readOnly}
           >
             <Text style={[styles.yesnoText, { color: value === 'Acknowledged' ? '#34C759' : P.sub }]}>
-              {value === 'Acknowledged' ? t('clientBooking.intake.acknowledged') : t('clientBooking.intake.acknowledge')}
+              {value === 'Acknowledged' ? '✓ Acknowledged' : 'I acknowledge this policy'}
             </Text>
           </TouchableOpacity>
         </>
@@ -463,12 +472,9 @@ const styles = StyleSheet.create({
   },
   doneBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
+  // Sits below the ScrollView rather than floating over it, so the last
+  // question always scrolls fully clear of the Submit button.
   footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    // Bottom padding clears the floating pill tab bar when the keyboard is
-    // closed (see the keyboardVisible swap at the call site) — it used to be
-    // a flat 36, which is roughly home-indicator clearance only, so the pill
-    // sat right on top of the Submit button.
     paddingHorizontal: 16, paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },

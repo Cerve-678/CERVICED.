@@ -28,22 +28,46 @@ describe('client detail screen performance and safety contracts', () => {
     expect(todoLoader).toContain('useFocusEffect(useCallback(() =>');
     expect(todoLoader).toContain('Promise.allSettled([');
     expect(todoLoader).toContain('if (!active) return;');
-    expect(todoLoader).toContain('setBookingIntakeForm(null)');
+    expect(todoLoader).toContain('setBookingIntakeForms([])');
     expect(source).toContain('setTodoRetryNonce(value => value + 1)');
     expect(source).not.toContain("navigation.addListener('focus'");
   });
 
-  it('reserves the client booking-detail To Do area while tasks load', () => {
+  it('shows no To Do loader, because most bookings have nothing to do', () => {
     const source = read('screens', 'client', 'BookingDetailScreen.tsx');
 
-    // The To Do area is hidden for past bookings (nothing left to act on),
-    // so the skeleton is gated on !isPast as well as !todoLoaded.
-    expect(source).toContain('{!isPast && !todoLoaded && (');
-    expect(source).toContain("accessibilityLabel={t('clientBooking.detail.todo.loadingA11y')}");
-    expect(source).toContain('st.todoLoadingCard');
-    expect(source.indexOf('{!isPast && !todoLoaded && (')).toBeLessThan(
-      source.indexOf('{!isPast && todoLoaded && todoLoadError && ('),
-    );
+    expect(source).not.toContain('{!isPast && !todoLoaded && (');
+    expect(source).not.toContain('Loading appointment tasks');
+    expect(source).toContain('{!isPast && todoLoaded && (bookingIntakeForms.length > 0 || bookingInfoPacks.length > 0) && (');
+  });
+
+  it('opens the receipt without a position animation', () => {
+    const source = read('screens', 'client', 'BookingDetailScreen.tsx');
+
+    expect(source).toContain('.catch(() => {}); setShowReceipt(v => !v);');
+  });
+
+  it('says TBA for the location of a requested booking, on the detail and the list', () => {
+    const detail = read('screens', 'client', 'BookingDetailScreen.tsx');
+    const list = read('screens', 'client', 'BookingsScreen.tsx');
+
+    // Mobile comes first: there the client's own address is still theirs to see.
+    const mobileBranch = detail.indexOf("{isMobile ? tr('clientBooking.detail.yourAddress') : tr('clientBooking.detail.location')}");
+    const tba = detail.indexOf('>TBA</Text>');
+    expect(mobileBranch).toBeGreaterThan(-1);
+    expect(tba).toBeGreaterThan(mobileBranch);
+    expect(tba).toBeLessThan(detail.indexOf("{addrCountdown ? tr('clientBooking.detail.availableIn'"));
+    expect(detail).toContain('!isMobile && !isPending && !!booking.howToGetThere');
+    expect(list).toContain("if (b.status === BookingStatus.PENDING) return 'TBA';");
+  });
+
+  it('opens Reschedule without re-waiting for the policy, and shows dates as they are found', () => {
+    const detail = read('screens', 'client', 'BookingDetailScreen.tsx');
+    const screen = read('screens', 'client', 'RescheduleScreen.tsx');
+
+    expect(detail).toContain("navigation.navigate('Reschedule', { bookingId: booking.id, knownPolicy: policy ?? undefined })");
+    expect(screen).toContain('const [policyLoaded, setPolicyLoaded] = useState(!!knownPolicy);');
+    expect(screen).toContain('if (openDates.length > 0) onDates([...openDates]);');
   });
 
   it('uses the users row as the single beauty-profile source of truth', () => {
@@ -53,7 +77,7 @@ describe('client detail screen performance and safety contracts', () => {
     expect(source).toContain('updateUserBeautyProfile(userId');
     expect(source).not.toContain("from '../../lib/supabase'");
     expect(source).not.toContain('supabase.auth.updateUser');
-    expect(source).toContain("We couldn't load your beauty profile.");
+    expect(source).toContain("t('beautyProfile.loadFailed')");
     expect(source).toContain('const loadRequestRef = useRef(0)');
     expect(source).toContain('activeUserIdRef.current !== userId');
     expect(source).toContain('setSaved(EMPTY_BEAUTY_DATA)');
@@ -67,7 +91,7 @@ describe('client detail screen performance and safety contracts', () => {
 
     expect(source).toContain('setLoadError(true)');
     expect(source).toContain('setRetryNonce(value => value + 1)');
-    expect(source).toContain("t('clientBooking.intake.loadFailed')");
+    expect(source).toContain("tr('clientBooking.intake.loadFailed')");
   });
 
   it('probes reschedule dates in bounded batches with an early exit', () => {
@@ -123,7 +147,7 @@ describe('client detail screen performance and safety contracts', () => {
 
     // Without this the notice check reads 0 hours while the fetch is in
     // flight, renders the picker, then swaps it for "Too Close to Reschedule".
-    expect(source).toContain('const [policyLoaded, setPolicyLoaded] = useState(false);');
+    expect(source).toContain('const [policyLoaded, setPolicyLoaded] = useState(!!knownPolicy);');
     expect(source).toContain('if (!policyLoaded && !hasProviderResponse)');
 
     // The gate must sit ahead of the block it exists to stop flashing.
@@ -137,8 +161,8 @@ describe('client detail screen performance and safety contracts', () => {
 
     // The ⋯ menu opens the refund/complaint sheet, which files a support
     // ticket (fileBookingSupportRequest) and never moves money itself.
-    expect(source).toContain("accessibilityLabel={t('clientBooking.detail.moreOptionsA11y')}");
-    expect(source).toContain("t('clientBooking.detail.requestRefund')");
+    expect(source).toContain("accessibilityLabel={tr('clientBooking.detail.moreOptionsA11y')}");
+    expect(source).toContain("tr('clientBooking.detail.requestRefund')");
     expect(source).toContain('fileBookingSupportRequest(');
     expect(source).not.toContain('refundProviderBooking(');
   });

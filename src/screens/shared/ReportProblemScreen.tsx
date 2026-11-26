@@ -4,13 +4,13 @@ import {
   Alert,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Constants from 'expo-constants';
@@ -72,7 +72,7 @@ export default function ReportProblemScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
@@ -107,7 +107,7 @@ export default function ReportProblemScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); setCategory(cat); }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.chipText, { color: chipActive(cat) ? '#fff' : P.sub }]}>
+                <Text style={[styles.chipText, { color: chipActive(cat) ? P.onAccent : P.sub }]}>
                   {cat}
                 </Text>
               </TouchableOpacity>
@@ -143,8 +143,8 @@ export default function ReportProblemScreen({ navigation }: any) {
             activeOpacity={0.8}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={[styles.submitText, { color: '#fff' }]}>SEND REPORT</Text>
+              ? <ActivityIndicator color={P.onAccent} />
+              : <Text style={[styles.submitText, { color: P.onAccent }]}>SEND REPORT</Text>
             }
           </TouchableOpacity>
         </ScrollView>

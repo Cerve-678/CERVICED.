@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../providers/ProviderLogoCircle';
 import * as Haptics from 'expo-haptics';
 import { BookingStatus } from '../../contexts/BookingContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatBookingDate } from './presentation';
+import { isDeclinedRequest } from './statusPresentation';
 import { useTranslation } from '../../i18n';
 import type { BookingCardProps } from './presentationTypes';
 
@@ -51,9 +53,10 @@ export const BookingListRow = React.memo<BookingCardProps>(
       if (booking.isPendingReschedule) {
         return rescheduleAvailable ? t('clientBooking.card.badge.available').toUpperCase() : t('clientBooking.card.badge.pending').toUpperCase();
       }
-      if (booking.status === BookingStatus.PENDING) return t('clientBooking.card.badge.awaitingConfirmation').toUpperCase();
-      if (booking.status === BookingStatus.CANCELLED) return t('clientBooking.card.badge.cancelled').toUpperCase();
-      if (booking.status === BookingStatus.NO_SHOW) return t('clientBooking.card.badge.noShow').toUpperCase();
+      if (booking.status === BookingStatus.PENDING) return 'AWAITING CONFIRMATION';
+      if (isDeclinedRequest(booking)) return 'DECLINED';
+      if (booking.status === BookingStatus.CANCELLED) return 'CANCELLED';
+      if (booking.status === BookingStatus.NO_SHOW) return 'NO SHOW';
       return '';
     }, [booking, rescheduleAvailable, t]);
 
@@ -75,12 +78,19 @@ export const BookingListRow = React.memo<BookingCardProps>(
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }, [booking, onPress]);
 
+    const logoUri: string | undefined = typeof booking.providerImage === 'string'
+      ? booking.providerImage
+      : booking.providerImage?.uri;
+
     return (
       <Pressable onPress={handlePress}>
         <Animated.View style={[styles.row, { borderColor: highlightBorderColor, backgroundColor: highlightBackgroundColor }]}>
           <View style={styles.imageWrapper}>
-            {booking.providerImage ? (
-              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.logo} contentFit="cover" transition={0} />
+            {logoUri ? (
+              // Square, the same 1:1 shape as the circle, so the circle's framing fits.
+              <ProviderLogoCircle providerId={booking.providerId} uri={logoUri} style={styles.logo} />
+            ) : booking.providerImage ? (
+              <Image source={booking.providerImage} style={styles.logo} contentFit="cover" transition={0} />
             ) : (
               <View style={[styles.logo, styles.fallbackLogo, { backgroundColor: P.accent }]}>
                 <Text style={[styles.fallbackLogoText, { color: P.onAccent }]}>

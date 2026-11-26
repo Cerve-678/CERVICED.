@@ -49,7 +49,7 @@ const PERIODS: { key: LinkOnlyPeriod; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
-/** The four counters sit in one row (design Concept B, chosen 2026-10-19). */
+/** Compact, evenly sized tiles; the final nudge tile wraps naturally on phones. */
 const TILE_COLUMNS = 4;
 
 export default function LinkOnlyAnalyticsScreen() {
@@ -110,6 +110,7 @@ export default function LinkOnlyAnalyticsScreen() {
     { label: 'In Search',      value: totals.searchAppearances, icon: 'search',         color: CHART.teal },
     { label: 'Instagram taps', value: totals.instagramTaps,     icon: 'logo-instagram', color: CHART.pink },
     { label: 'Saves',          value: saves ?? 0,               icon: 'bookmark',       color: accent },
+    { label: 'Join nudges',    value: totals.joinNudges,        icon: 'megaphone',      color: CHART.amber },
   ], [totals, saves, accent]);
 
   return (

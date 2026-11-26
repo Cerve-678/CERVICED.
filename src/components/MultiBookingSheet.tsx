@@ -32,6 +32,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from './SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardDismissView } from './KeyboardDismissView';
@@ -58,7 +59,9 @@ import * as Haptics from 'expo-haptics';
 import type { BookingSheetService } from './BookingSheet';
 import { StepProgress } from './BookingSheet';
 import { AddOnPickerModal } from './AddOnPickerModal';
+import { durationWithAddOns, type ChosenAddOn } from '../features/bookings/addOnTime';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { readableSheet } from '../constants/readableWidth';
 import { localeForLanguage, tr, useTranslation } from '../i18n';
 
 /** Mirrors the single-service sheet's three shared steps. Add-ons are no
@@ -72,7 +75,7 @@ type MultiBookingStep = 'when' | 'pay' | 'confirm';
 export interface MultiBookingSheetResult {
   items: {
     service: BookingSheetService;
-    selectedAddOns: { id: string | number; name: string; price: number }[];
+    selectedAddOns: ChosenAddOn[];
     date: string;
     time: string;
     /** True if this service was pulled into "Schedule Separately" — stays a
@@ -117,7 +120,7 @@ interface MultiBookingSheetProps {
   onSubmit: (result: MultiBookingSheetResult) => void;
 }
 
-type SelectedAddOn = { id: string | number; name: string; price: number };
+type SelectedAddOn = ChosenAddOn;
 type ChainStatus = 'idle' | 'loading' | 'found' | 'not-found';
 
 // Same guard as BookingSheet.tsx — dbId is the real services.id UUID for a
@@ -195,6 +198,13 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   );
 
   const [addOnsByService, setAddOnsByService] = useState<Record<string, SelectedAddOn[]>>({});
+  // Each service's real appointment length: its own duration plus the extra
+  // time of the add-ons picked for it. Used for every slot lookup below, so
+  // chained times leave room for the add-ons.
+  const lengthOf = useCallback(
+    (service: BookingSheetService) => durationWithAddOns(service.duration, addOnsByService[serviceKeyOf(service)]),
+    [addOnsByService],
+  );
   // Which service's add-ons are being edited via the popup right now — null
   // when it's closed. Holding the service itself (not just its key) so the
   // popup has a name/add-on list to render without a second lookup.
@@ -261,7 +271,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     typeof bookingPolicies?.['emergencyBookingPolicy'] === 'string'
       ? (bookingPolicies['emergencyBookingPolicy'] as string).trim()
       : '';
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   // Reset local state each time the sheet OPENS — keyed on `isVisible` alone.
   // Unlike BookingSheet, `services` is set once by the caller right before
@@ -361,7 +371,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     setGroupChainStatus('loading');
     AvailabilityService.findAllBackToBackSlots(
       providerIdentifier,
-      groupServices.map(s => ({ serviceId: s.dbId || String(s.id), duration: s.duration })),
+      groupServices.map(s => ({ serviceId: s.dbId || String(s.id), duration: lengthOf(s) })),
       groupDate,
     )
       .then(result => {
@@ -378,7 +388,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [groupDate, groupServices, providerIdentifier]);
+  }, [groupDate, groupServices, providerIdentifier, lengthOf]);
 
   // The chain for the time the client actually picked. Falls back to the
   // earliest only when no time is chosen yet, so the summary has something to
@@ -399,7 +409,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       try {
         const chains = await AvailabilityService.findAllBackToBackSlots(
           providerIdentifier,
-          groupServices.map(s => ({ serviceId: s.dbId || String(s.id), duration: s.duration })),
+          groupServices.map(s => ({ serviceId: s.dbId || String(s.id), duration: lengthOf(s) })),
           date,
         );
         return chains ? chains.map(chain => chain[0]!.time) : [];
@@ -408,7 +418,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         return [];
       }
     },
-    [groupServices, providerIdentifier]
+    [groupServices, providerIdentifier, lengthOf]
   );
 
   // Auto-resolve the earliest slot for each newly-separated service — same
@@ -421,7 +431,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       if (separateResolvedRef.current.has(key)) return;
       separateResolvedRef.current.add(key);
       setResolvingSeparate(prev => ({ ...prev, [key]: true }));
-      AvailabilityService.resolveNextAvailableSlot(providerIdentifier, service.duration, uuidOf(service))
+      AvailabilityService.resolveNextAvailableSlot(providerIdentifier, lengthOf(service), uuidOf(service))
         .then(slot => {
           if (slot) {
             setSeparateDates(prev => ({ ...prev, [key]: slot.date }));
@@ -431,6 +441,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         .catch(error => logger.error('Error auto-resolving separate service slot:', error))
         .finally(() => setResolvingSeparate(prev => ({ ...prev, [key]: false })));
     });
+    // lengthOf is read for each newly-separated service's first lookup only;
+    // a later add-on change is caught by the calendar's own fit check.
   }, [separateServicesList, providerIdentifier]);
 
   // Fetch this one provider's deposit policy once — shared across every
@@ -742,7 +754,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.serviceName, { color: tokens.text }]}>{service.name}</Text>
                           <Text style={[styles.serviceMeta, { color: tokens.sub }]}>
-                            {isSeparate ? t('clientBooking.multi.durationSeparate', { duration: service.duration }) : service.duration}
+                            {lengthOf(service)}{isSeparate ? ` • ${tr('clientBooking.multi.separately')}` : ''}
                           </Text>
                         </View>
                         <Text style={[styles.servicePrice, { color: adaptiveAccentColor }]}>£{service.price}</Text>
@@ -845,7 +857,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       allowRequests={EMERGENCY_BOOKINGS_ENABLED}
                       providerLabel={providerDisplayName}
                       providerName={providerIdentifier}
-                      serviceDuration={service.duration}
+                      serviceDuration={lengthOf(service)}
                       accentColor={adaptiveAccentColor}
                       textColor={tokens.text}
                       subColor={tokens.sub}
@@ -933,6 +945,10 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   <Text style={[styles.depositRemainingText, { color: tokens.sub }]}>
                     {t('clientBooking.sheet.remainingPayAtAppointment', { amount: `£${BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)}` })}
                   </Text>
+                )}
+                {/* The provider's own "Note to clients" from Payments, in their words. */}
+                {!!depositPolicy?.depositNote && (
+                  <Text style={[styles.depositNoteText, { color: tokens.sub }]}>{depositPolicy.depositNote}</Text>
                 )}
               </View>
               </>
@@ -1314,7 +1330,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  sheet: { ...readableSheet, flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -1362,7 +1378,7 @@ const styles = StyleSheet.create({
   providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
   termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  termsSheet: { ...readableSheet, height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
@@ -1397,6 +1413,7 @@ const styles = StyleSheet.create({
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
+  depositNoteText: { fontSize: 13, lineHeight: 18, marginTop: 8 },
   summaryGroupBlock: { marginBottom: 4 },
   summaryGroupBlockBanded: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 },
   summaryGroupHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },

@@ -1,5 +1,6 @@
 import type { BookingInfoPack } from '../../services/databaseService';
-import { getLanguage, translatePlural } from '../../i18n';
+import { getLanguage } from '../../i18n/languageStore';
+import { translatePlural } from '../../i18n/translate';
 
 const INFO_PACK_POPUP_MAX_CHARS = 240;
 

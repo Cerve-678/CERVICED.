@@ -42,6 +42,22 @@ const CATEGORIES = [
   'Other',
 ];
 
+// A report about one message, review or person (App Store guideline 1.2).
+// Its category is fixed here rather than chosen in the form, and what was
+// reported is looked up server-side, so the email shows the real content and
+// a report can only be made about something the reporter can actually see.
+const REPORT_CATEGORY = 'Reported content';
+type ReportKind = 'message' | 'review' | 'conversation';
+const REPORT_KINDS: ReportKind[] = ['message', 'review', 'conversation'];
+const MAX_REPORTED_EXCERPT = 1500;
+
+interface ResolvedReport {
+  kind: ReportKind;
+  id: string;
+  reportedUserId: string | null;
+  rows: Array<[string, string]>;
+}
+
 const MAX_DESCRIPTION = 4000;
 const MAX_CONTEXT = 120;
 
@@ -89,7 +105,11 @@ async function notifyProviderOfRefundRequest(
     if (linkError) throw linkError;
     if (!linked?.provider_id) return false;
 
-    const [{ data: booking, error: bookingError }, { data: provider, error: providerError }] = await Promise.all([
+    const [
+      { data: booking, error: bookingError },
+      { data: provider, error: providerError },
+      { data: payout, error: payoutError },
+    ] = await Promise.all([
       supabase
         .from('bookings')
         .select('customer_name, service_name_snapshot, booking_date, booking_time')
@@ -100,9 +120,16 @@ async function notifyProviderOfRefundRequest(
         .select('user_id')
         .eq('id', linked.provider_id)
         .single(),
+      // release-payouts holds this back while the request is open.
+      supabase
+        .from('provider_payouts')
+        .select('status, payout_amount')
+        .eq('booking_id', linked.booking_id)
+        .maybeSingle(),
     ]);
     if (bookingError) throw bookingError;
     if (providerError) throw providerError;
+    if (payoutError) throw payoutError;
 
     // The provider's LOGIN address, same as every other provider email: the
     // business address is unvalidated (see email-is-server-owned).
@@ -121,6 +148,7 @@ async function notifyProviderOfRefundRequest(
       date: formatLongDate(booking.booking_date),
       time: formatTime12(booking.booking_time),
       reason: linked.reason,
+      heldPence: payout?.status === 'held' ? Number(payout.payout_amount) : null,
     });
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -133,6 +161,101 @@ async function notifyProviderOfRefundRequest(
     console.error(`[support] refund request ${refundRequestId}: provider not emailed:`, e);
     return false;
   }
+}
+
+/** The client and the provider's account in a conversation, or null. */
+async function conversationPeople(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<{ clientId: string; providerUserId: string; businessName: string | null } | null> {
+  const { data, error } = await supabase
+    .from('provider_conversations')
+    .select('user_id, providers!inner(user_id, display_name)')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const provider = Array.isArray(data.providers) ? data.providers[0] : data.providers;
+  if (!provider?.user_id) return null;
+  return { clientId: data.user_id, providerUserId: provider.user_id, businessName: provider.display_name ?? null };
+}
+
+/**
+ * Looks up what is being reported and checks the reporter can see it: a
+ * message or conversation they are part of, or a review that is shown to
+ * them. Returns null when it doesn't exist or they can't see it, so the
+ * caller answers the same way in both cases.
+ */
+async function resolveReport(
+  supabase: SupabaseClient,
+  reporterId: string,
+  kind: ReportKind,
+  id: string,
+): Promise<ResolvedReport | null> {
+  if (kind === 'message') {
+    const { data: message, error } = await supabase
+      .from('provider_messages')
+      .select('id, conversation_id, sender_id, content, created_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!message) return null;
+    const people = await conversationPeople(supabase, message.conversation_id);
+    if (!people || (reporterId !== people.clientId && reporterId !== people.providerUserId)) return null;
+    if (message.sender_id === reporterId) return null;
+    return {
+      kind,
+      id,
+      reportedUserId: message.sender_id,
+      rows: [
+        ['Reported', 'A message'],
+        ['Message', clip(message.content, MAX_REPORTED_EXCERPT)],
+        ['Sent', message.created_at],
+        ['Sent by user ID', message.sender_id],
+        ['Conversation ID', message.conversation_id],
+      ],
+    };
+  }
+
+  if (kind === 'conversation') {
+    const people = await conversationPeople(supabase, id);
+    if (!people || (reporterId !== people.clientId && reporterId !== people.providerUserId)) return null;
+    const reportedIsProvider = reporterId === people.clientId;
+    const reportedUserId = reportedIsProvider ? people.providerUserId : people.clientId;
+    const rows: Array<[string, string]> = [
+      ['Reported', reportedIsProvider ? 'A provider, from a chat' : 'A client, from a chat'],
+      ['Reported user ID', reportedUserId],
+      ['Conversation ID', id],
+    ];
+    if (reportedIsProvider && people.businessName) rows.splice(1, 0, ['Business', people.businessName]);
+    return { kind, id, reportedUserId, rows };
+  }
+
+  const { data: review, error } = await supabase
+    .from('reviews')
+    .select('id, user_id, provider_id, rating, comment, created_at, is_anonymous, providers!inner(user_id, display_name, has_gone_live, is_active)')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!review) return null;
+  const provider = Array.isArray(review.providers) ? review.providers[0] : review.providers;
+  const shownPublicly = !review.is_anonymous && provider?.has_gone_live === true && provider?.is_active === true;
+  const isAboutReporter = provider?.user_id === reporterId;
+  if (!shownPublicly && !isAboutReporter) return null;
+  if (review.user_id === reporterId) return null;
+  return {
+    kind,
+    id,
+    reportedUserId: review.user_id,
+    rows: [
+      ['Reported', 'A review'],
+      ['Review', clip(review.comment, MAX_REPORTED_EXCERPT) || '(no written review)'],
+      ['Rating', String(review.rating)],
+      ['About', provider?.display_name ?? review.provider_id],
+      ['Written by user ID', review.user_id],
+      ['Written', review.created_at],
+    ],
+  };
 }
 
 /** Client-supplied context (platform, app version) — informational only, never trusted. */
@@ -169,8 +292,20 @@ serve(async (req) => {
       ? body.refundRequestId
       : null;
 
-    if (!CATEGORIES.includes(category)) return json({ error: 'Unknown category.' }, 400);
-    if (!description) return json({ error: 'Description is required.' }, 400);
+    const reportKind = REPORT_KINDS.find((k) => k === body?.report?.kind) ?? null;
+    const reportId = typeof body?.report?.id === 'string' && UUID.test(body.report.id) ? body.report.id : null;
+    if (body?.report != null && (!reportKind || !reportId)) return json({ error: 'Unknown report.' }, 400);
+
+    let report: ResolvedReport | null = null;
+    if (reportKind && reportId) {
+      report = await resolveReport(supabase, user.id, reportKind, reportId);
+      if (!report) return json({ error: "We couldn't find that to report. It may have been removed." }, 404);
+    } else {
+      if (!CATEGORIES.includes(category)) return json({ error: 'Unknown category.' }, 400);
+      if (!description) return json({ error: 'Description is required.' }, 400);
+    }
+    const ticketCategory = report ? REPORT_CATEGORY : category;
+    const ticketDescription = report ? (description || '(No note added.)') : description;
 
     // Identity comes from the JWT, not the request body.
     const reporterEmail = user.email ?? '(no email on account)';
@@ -210,7 +345,7 @@ serve(async (req) => {
         : '(app did not report)';
 
     const rows: Array<[string, string]> = [
-      ['Category', category],
+      ['Category', ticketCategory],
       ['From', reporterEmail],
       ['Sent while wearing', wearing],
       ['Account holds', holds],
@@ -252,8 +387,11 @@ serve(async (req) => {
       .from('support_requests')
       .insert({
         user_id: user.id,
-        category,
-        description,
+        category: ticketCategory,
+        description: ticketDescription,
+        reported_kind: report?.kind ?? null,
+        reported_id: report?.id ?? null,
+        reported_user_id: report?.reportedUserId ?? null,
         reporter_email: user.email ?? null,
         reported_as: activeMode === 'provider' || activeMode === 'client' ? activeMode : null,
         account_holds: holds,
@@ -272,6 +410,7 @@ serve(async (req) => {
     const ref = `#${ticket.ticket_number}`;
     rows.unshift(['Ticket', ref]);
     if (refundRequestId) rows.push(['Refund request', refundRequestId]);
+    if (report) rows.splice(1, 0, ...report.rows);
 
     // Runs alongside the support email; independent of it.
     const providerEmailed = refundRequestId
@@ -284,9 +423,9 @@ serve(async (req) => {
     // per the escape-at-the-call-site rule the templates assume.
     const { subject, html } = supportRequestEmail({
       ticketRef: ref,
-      category,
+      category: ticketCategory,
       reporter: `${who} — ${reporterEmail}`,
-      description,
+      description: ticketDescription,
       rows,
     });
 

@@ -9,7 +9,9 @@
       "distribution": "internal",
       "env": {
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "EXPO_PUBLIC_BECCA_AI_ENABLED": "true"
+        "EXPO_PUBLIC_BECCA_AI_ENABLED": "true",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "357077853920-e1229uat1fjmj56vhd3u75v2ink0t0fo.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "357077853920-ql1jouphva11936c33cmp2u2jbgd0bm3.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -18,7 +20,9 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_BECCA_AI_ENABLED": "true",
         "EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED": "true",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Tbe90K13Cu4xGvlqiHRRLc1mNy6b4MyDIhHlOYyIqvYK6UE8gVUeWj9j3ykup5WoLHwIMUbCa2oCEgMKGIDYhb300F1vA30j2"
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Tbe90K13Cu4xGvlqiHRRLc1mNy6b4MyDIhHlOYyIqvYK6UE8gVUeWj9j3ykup5WoLHwIMUbCa2oCEgMKGIDYhb300F1vA30j2",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "357077853920-e1229uat1fjmj56vhd3u75v2ink0t0fo.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "357077853920-ql1jouphva11936c33cmp2u2jbgd0bm3.apps.googleusercontent.com"
       }
     },
     "preview-simulator": {
@@ -29,7 +33,9 @@
         "buildType": "apk"
       },
       "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "357077853920-e1229uat1fjmj56vhd3u75v2ink0t0fo.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "357077853920-ql1jouphva11936c33cmp2u2jbgd0bm3.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -41,7 +47,9 @@
         "SENTRY_PROJECT": "react-native",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED": "true",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Tbe90K13Cu4xGvlqiHRRLc1mNy6b4MyDIhHlOYyIqvYK6UE8gVUeWj9j3ykup5WoLHwIMUbCa2oCEgMKGIDYhb300F1vA30j2"
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Tbe90K13Cu4xGvlqiHRRLc1mNy6b4MyDIhHlOYyIqvYK6UE8gVUeWj9j3ykup5WoLHwIMUbCa2oCEgMKGIDYhb300F1vA30j2",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "357077853920-e1229uat1fjmj56vhd3u75v2ink0t0fo.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "357077853920-ql1jouphva11936c33cmp2u2jbgd0bm3.apps.googleusercontent.com"
       }
     }
   },

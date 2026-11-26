@@ -94,19 +94,27 @@ terms. Do not have multiple agents edit the same feature or migration.
 
 ## Security
 
-- `src/services/databaseService.ts` is the **only** file allowed to import the
-  Supabase client and call `.from()`. Screens/components/other services import
-  functions from there — never call Supabase directly elsewhere.
+- The database layer is the **only** code allowed to import the Supabase
+  client and call `.from()`: the topic files in `src/services/database/`
+  (`bookings.ts`, `providers.ts`, `checkout.ts`, …), re-exported through
+  `src/services/databaseService.ts`. Screens/components/other services import
+  functions from `databaseService` only — never from `database/*` directly,
+  and never call Supabase anywhere else. New queries go in the topic file
+  that owns that table; `src/tests/screenSupabaseBoundaryArchitecture.test.ts`
+  enforces the boundary.
 - Every client-facing provider query **must** filter `has_gone_live = true`
-  (and typically `is_active = true`). The only exception is a provider reading
-  their own record — comment the exception inline when you write one.
+  (and typically `is_active = true`). The exceptions are a provider reading
+  their own record, and the unclaimed directory listings Search shows as
+  "Not on CERVICED yet" (`getDirectoryListings`, scoped by `is_claimed =
+  false`; they can never go live) — comment the exception inline when you
+  write one.
 - Never send a provider's private fields (full street address, anything in
   `provider_private_details`) to a client-facing query or screen. Address
   release is policy-gated server-side (`client_bookings` view) — the app is
   not the enforcement point, the DB is.
 - RLS has no DELETE policy on `bookings`/`notifications` — a client-side
   delete is a silent no-op, not an error. Use a SECURITY DEFINER RPC.
-- Functions in `databaseService.ts` throw on error — never swallow errors or
+- Database-layer functions throw on error — never swallow errors or
   quietly return null/empty on failure. Callers decide how to degrade.
 - All parameters and return types are explicitly typed — no `any` in new
   service code.
@@ -134,7 +142,7 @@ visibly slow:
 
 - **No unbounded list queries.** Every provider/booking/search list query
   should have a `.limit()`. `getProviders`/`searchProviders` default to a
-  200-row cap (`DEFAULT_PROVIDER_QUERY_LIMIT` in `databaseService.ts`) —
+  200-row cap (`DEFAULT_PROVIDER_QUERY_LIMIT` in `database/providers.ts`) —
   match that pattern for new list queries instead of fetching a whole table.
 - **No N+1 loops.** If you're about to `await` a per-row Supabase call inside
   a `for`/`.forEach`/`.map(async ...)` over a list you already have, batch it
@@ -211,7 +219,7 @@ agent — these are the standing rules of thumb for every session.
   cross-cutting call for the user to make, not a drive-by cleanup.
 - **New code goes in the folder that already owns that concern**:
   `src/services/` (Supabase-backed logic — see the Security section above for
-  the `databaseService.ts` boundary), `src/screens/` (one screen each, sorted
+  the database-layer boundary), `src/screens/` (one screen each, sorted
   by ownership into `src/screens/client/`, `src/screens/provider/`, and
   `src/screens/shared/`, with `src/screens/auth/` kept separate for the auth
   flow only — same split under `src/navigation/`: `src/navigation/client/`

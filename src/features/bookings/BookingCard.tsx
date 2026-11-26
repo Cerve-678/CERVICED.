@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { BookingStatus } from '../../contexts/BookingContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatBookingDate } from './presentation';
+import { isDeclinedRequest } from './statusPresentation';
 import { useTranslation } from '../../i18n';
 import type { BookingCardProps } from './presentationTypes';
 
@@ -49,9 +50,10 @@ export const BookingCard = React.memo<BookingCardProps>(
       if (booking.isPendingReschedule) {
         return rescheduleAvailable ? t('clientBooking.card.badge.available').toUpperCase() : t('clientBooking.card.badge.pending').toUpperCase();
       }
-      if (booking.status === BookingStatus.PENDING) return t('clientBooking.card.badge.awaitingConfirmation').toUpperCase();
-      if (booking.status === BookingStatus.CANCELLED) return t('clientBooking.card.badge.cancelled').toUpperCase();
-      if (booking.status === BookingStatus.NO_SHOW) return t('clientBooking.card.badge.noShow').toUpperCase();
+      if (booking.status === BookingStatus.PENDING) return 'AWAITING CONFIRMATION';
+      if (isDeclinedRequest(booking)) return 'DECLINED';
+      if (booking.status === BookingStatus.CANCELLED) return 'CANCELLED';
+      if (booking.status === BookingStatus.NO_SHOW) return 'NO SHOW';
       return '';
     }, [booking, rescheduleAvailable, t]);
 
