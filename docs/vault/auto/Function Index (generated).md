@@ -5,7 +5,7 @@
 
 #generated
 
-**4462 functions** across **718 files**.
+**4463 functions** across **718 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -184,7 +184,7 @@
 - `waitlist.ts` — **buildWaitlistHoldCartItem** · durationLabel · **firstNameOf** · **formatCountdown** · **heldTimeRangeLabel** · **holdEndLabel** · **holdSecondsLeft** · inOrder · **isOutsideHoursRefusal** · **nextWaitingFor** · **offeredSlotLabel** · **placeInLineLabel** · **providerOfferRefusalMessage** · **sortWaitlistPlaces** · **waitlistCardState** · **waitlistDatesLabel**
 - `WaitlistDatesSheet.tsx` — createStyles · openPicker · save · styles · **WaitlistDatesSheet**
 - `WaitlistPlaceCard.tsx` — createStyles · styles
-- `WaitlistTicket.tsx` — createStyles · HoldRing · placeNumber · queueDots · row · styles · tick · ticketCut · **WaitlistTicket**
+- `WaitlistTicket.tsx` — createStyles · HoldRing · placeNumber · queueDots · row · styles · tick · ticketCut · ticketEdge · **WaitlistTicket**
 
 ### `src/features/business-details/` (7)
 - `bookingInstructions.ts` — **selectedBookingInstructions** · **toggleBookingInstruction**
