@@ -24,17 +24,24 @@ export const settings: AreaCatalog<typeof en> = {
 
   'helpCentre.title': 'Hilfe-Center',
   'helpCentre.subtitle': 'Antworten auf häufige Fragen',
-  'helpCentre.section.faqs': 'HÄUFIGE FRAGEN',
+  'helpCentre.section.booking': 'BUCHEN',
+  'helpCentre.section.yourProviders': 'DEINE ANBIETER:INNEN',
+  'helpCentre.section.yourProfile': 'DEIN PROFIL',
+  'helpCentre.section.gettingStarted': 'ERSTE SCHRITTE',
+  'helpCentre.section.bookings': 'BUCHUNGEN',
+  'helpCentre.section.gettingPaid': 'BEZAHLT WERDEN',
+  'helpCentre.section.clients': 'KUNDSCHAFT',
   'helpCentre.faq.book.q': 'Wie buche ich einen Termin?',
   'helpCentre.faq.book.a':
-    'Stöbere im Tab „Entdecken“ nach Anbieter:innen, tippe auf eine:n, wähle dann einen Service und einen freien Termin. Du erhältst eine Bestätigung per Benachrichtigung.',
+    'Öffne die Seite einer Anbieterin / eines Anbieters über Start, Suche oder Entdecken, wähle Service und Uhrzeit und leg es in den Warenkorb. Bezahlt wird an der Kasse, und du kannst bei mehreren gleichzeitig buchen.',
+  'helpCentre.faq.request.q': 'Warum steht bei meiner Buchung „Anfrage gesendet“?',
   'helpCentre.faq.cancel.q': 'Kann ich verschieben oder stornieren?',
   'helpCentre.faq.becca.q': 'Wie funktioniert Becca?',
   'helpCentre.faq.becca.a':
     'Becca ist deine KI-Beauty-Assistentin. Frag sie alles – sie empfiehlt Anbieter:innen, erklärt Services und hilft dir, den passenden Look zu finden.',
   'helpCentre.faq.points.q': 'Wie sammle ich Punkte?',
   'helpCentre.faq.points.a':
-    'Punkte bekommst du für abgeschlossene Buchungen, Bewertungen, Empfehlungen an Freund:innen und deine erste Buchung. Du kannst sie gegen Rabatte einlösen.',
+    'Schließe eine Buchung ab oder gib eine Bewertung ab, plus Boni für deine erste Buchung, deine erste Bewertung und deinen Geburtstag. Dein Stand steht unter Punkte in deinem Profil.',
   'helpCentre.faq.payment.q': 'Sind meine Zahlungsdaten sicher?',
   'helpCentre.action.contact': 'Support kontaktieren',
   'helpCentre.action.report': 'Problem melden',
@@ -199,19 +206,54 @@ export const settings: AreaCatalog<typeof en> = {
   'providerAccount.logoutModal.confirm': 'Ja, abmelden',
   'helpCentre.providerFaq.live.q': 'Wie gehe ich live?',
   'helpCentre.providerFaq.live.a':
-    'Dein Startbildschirm zeigt, was noch fehlt. Sobald alle Schritte erledigt sind, finden dich Kund:innen in der Suche. Wenn du deinen eigenen Buchungslink nutzt, sind die Schritte dein Logo, dein „Über mich“, deine Öffnungszeiten und mindestens ein Portfolio-Foto.',
+    'Dein Startbildschirm zeigt, was noch fehlt. Sobald alle Schritte erledigt sind, findet dich die Kundschaft in der Suche.',
+  'helpCentre.providerFaq.share.q': 'Wie teile ich meine Seite?',
+  'helpCentre.providerFaq.share.a':
+    'Tippe in Mein Profil auf den QR-Code-Button. Druck den Code aus, leg ihn an deinen Stuhl oder kopiere deinen Link zum Teilen.',
+  'helpCentre.providerFaq.branding.q': 'Wie ändere ich das Aussehen meiner Seite?',
+  'helpCentre.providerFaq.branding.a':
+    'Tippe in Mein Profil auf die Palette. Wähle Seitenstil, Farben und Schrift und sieh die Änderungen sofort.',
   'helpCentre.providerFaq.book.q': 'Wie buchen Kund:innen bei mir?',
   'helpCentre.providerFaq.book.a':
-    'Kund:innen wählen auf deinem Profil einen Service und eine Uhrzeit und bezahlen in der App. Neue Buchungen erscheinen auf deinem Startbildschirm und in deinen Benachrichtigungen. Wenn du Buchungen nicht automatisch annimmst, nimm dort jede Anfrage an oder lehne sie ab. Wenn du deinen eigenen Buchungslink nutzt, öffnet der Buchen-Button auf deinem Profil stattdessen deine Buchungsseite. Kund:innen buchen dort, und CERVICED sieht oder verwaltet diese Buchungen nicht.',
+    'Kundschaft wählt auf deiner Seite Service und Uhrzeit und bezahlt in der App. Neue Buchungen erscheinen auf deinem Startbildschirm und in deinen Benachrichtigungen.',
+  'helpCentre.providerFaq.autoConfirm.q': 'Muss ich jede Buchung annehmen?',
+  'helpCentre.providerFaq.autoConfirm.a':
+    'Nur wenn du willst. Schalte Buchungen automatisch bestätigen unter Businessprofil → Automationen & Einstellungen ein. Ist es aus, nimmst du jede Anfrage an oder lehnst sie ab.',
+  'helpCentre.providerFaq.hours.q': 'Wie lege ich meine Zeiten fest?',
+  'helpCentre.providerFaq.hours.a':
+    'Geh zu Businessprofil → Businessdetails → Planung & Verfügbarkeit. Lege Arbeitszeiten, Pausen zwischen Terminen und den Buchungszeitraum fest.',
+  'helpCentre.providerFaq.timeOff.q': 'Wie nehme ich mir frei?',
+  'helpCentre.providerFaq.timeOff.a':
+    'Nutze auf dem Zeiten-Bildschirm Meinen Plan schließen. Bis du wieder öffnest, kann niemand buchen, und du entscheidest, was mit bestehenden Buchungen passiert.',
+  'helpCentre.providerFaq.calendar.q': 'Kann mein Handykalender Zeiten blockieren?',
+  'helpCentre.providerFaq.calendar.a':
+    'Ja. Schalte unter Planung & Verfügbarkeit den Kalender-Sync ein und wähle deine Kalender. Dann kann niemand buchen, wenn du dort belegt bist, und niemand sieht, was eingetragen ist.',
+  'helpCentre.providerFaq.waitlist.q': 'Wie funktioniert die Warteliste?',
+  'helpCentre.providerFaq.waitlist.a':
+    'Schalte unter Automationen & Einstellungen die Warteliste ein. Wird ein Termin frei, bietet Automatisch ihn der nächsten Person an. Ohne Automatisch bietest du ihn selbst unter Buchungen an.',
+  'helpCentre.providerFaq.payouts.q': 'Wann werde ich bezahlt?',
   'helpCentre.providerFaq.saves.q': 'Was passiert, wenn mich jemand speichert?',
   'helpCentre.providerFaq.saves.a':
     'Einmal am Tag bekommst du eine Benachrichtigung, wie viele Leute dich gespeichert haben, aber nie wer. Du kannst sie in deinen Benachrichtigungseinstellungen ausschalten. Deine Statistiken zeigen deine Speicherungen im Zeitverlauf.',
+  'helpCentre.linkFaq.live.a':
+    'Dein Startbildschirm zeigt, was fehlt: Logo, Über mich, Öffnungszeiten und mindestens ein Portfolio-Foto. Danach findet dich die Kundschaft in der Suche.',
+  'helpCentre.linkFaq.book.a':
+    'Der Buchen-Button in deinem Profil öffnet deine eigene Buchungsseite. Dort wird gebucht, und CERVICED sieht oder verwaltet diese Buchungen nicht.',
+  'helpCentre.linkFaq.hours.q': 'Wie lege ich meine Öffnungszeiten fest?',
+  'helpCentre.linkFaq.hours.a':
+    'Öffne Öffnungszeiten in deinem Konto. Die Kundschaft sieht sie in deinem Profil.',
+  'helpCentre.linkFaq.full.q': 'Was würde volles CERVICED bringen?',
+  'helpCentre.linkFaq.full.a':
+    'Öffne Was volles CERVICED bringt in deinem Konto, um zu sehen, was sich ändert, wenn Kundschaft in der App bucht und bezahlt.',
+  'helpCentre.linkFaq.becca.a':
+    'Frag Becca nach deinen Nachrichten, Zeiten oder Benachrichtigungen – sie antwortet oder bringt dich zum richtigen Bildschirm.',
   'helpCentre.providerFaq.messages.q': 'Wie funktionieren Nachrichten?',
   'helpCentre.providerFaq.messages.a':
     'Kund:innen können dir über dein Profil schreiben. Du bekommst eine Benachrichtigung bei neuen Nachrichten und eine Erinnerung, wenn eine Nachricht nach ein paar Stunden noch auf Antwort wartet.',
+  'helpCentre.providerFaq.clientele.q': 'Kann ich das Beauty-Profil von Kundschaft sehen?',
   'helpCentre.providerFaq.becca.q': 'Wie kann Becca meinem Business helfen?',
   'helpCentre.providerFaq.becca.a':
-    'Frag Becca nach deinen Nachrichten, deinen Öffnungszeiten oder deinen Benachrichtigungen – sie antwortet oder bringt dich zum richtigen Bildschirm. Mit CERVICED-Buchungen kann sie dir auch etwas über deinen Tag, deine Woche, deine Kund:innen und deine Bewertungen sagen.',
+    'Frag Becca nach deinem Tag, deiner Woche, deiner Kundschaft, Bewertungen, Nachrichten oder Zeiten – sie antwortet oder bringt dich zum richtigen Bildschirm.',
   'achievements.title': 'Erfolge',
   'achievements.back': 'Zurück',
   'achievements.latest': 'NEUESTE',
@@ -288,4 +330,31 @@ export const settings: AreaCatalog<typeof en> = {
   'achievements.how.live': 'Erreicht, wenn dein Profil live geht.',
   'achievements.how.photos': 'Zählt die Fotos in deinem Portfolio.',
   'achievements.how.monthsOn': 'Zählt ab dem Tag, an dem du CERVICED beigetreten bist.',
+  'helpCentre.faq.waitlist.q': 'Und wenn alles ausgebucht ist?',
+  'helpCentre.faq.waitlist.a':
+    'Tippe auf der Seite auf Auf die Warteliste und wähle passende Daten. Wird ein Platz frei, sagen wir dir Bescheid.',
+  'helpCentre.faq.address.q': 'Wann sehe ich die Adresse?',
+  'helpCentre.faq.address.a':
+    'Sie erscheint in deiner Buchung, sobald sie geteilt wird. Manche teilen sie sofort, andere kurz vor dem Termin.',
+  'helpCentre.faq.messages.q': 'Wie schreibe ich einer Anbieterin / einem Anbieter?',
+  'helpCentre.faq.messages.a':
+    'Tippe auf der Seite auf Kontakt aufnehmen. Deine Chats findest du unter Nachrichten in deinem Profil.',
+  'helpCentre.faq.bell.q': 'Kann ich erfahren, wann jemand frei ist?',
+  'helpCentre.faq.bell.a':
+    'Tippe auf der Seite auf die Glocke. Wir sagen dir, wenn neue Daten freigegeben werden oder wieder Platz ist.',
+  'helpCentre.faq.reviews.q': 'Wie funktionieren Bewertungen?',
+  'helpCentre.faq.reviews.a':
+    'Nach deinem Termin kannst du unter Buchungen eine Bewertung abgeben – auf Wunsch auch anonym.',
+  'helpCentre.faq.tip.q': 'Kann ich Trinkgeld geben?',
+  'helpCentre.faq.notOnCerviced.q': 'Was bedeutet „Noch nicht auf CERVICED“?',
+  'helpCentre.faq.notOnCerviced.a':
+    'Dieses Business ist noch nicht dabei, daher kannst du hier nicht buchen. Tippe auf Anstupsen, um zu zeigen, dass du es gern auf CERVICED hättest.',
+  'helpCentre.faq.beautyProfile.q': 'Was ist mein Beauty-Profil?',
+  'helpCentre.faq.maintenance.q': 'Was sind Pflege-Erinnerungen?',
+  'helpCentre.faq.maintenance.a':
+    'Wir erinnern dich, wann du Nägel, Wimpern oder Brauen wieder buchen solltest. Schalte sie in deinen Benachrichtigungseinstellungen ein.',
+  'helpCentre.providerFaq.deposits.q': 'Kann ich eine Anzahlung nehmen?',
+  'helpCentre.providerFaq.lateFees.q': 'Was ist mit späten Absagen und Nichterscheinen?',
+  'helpCentre.providerFaq.fee.q': 'Zahle ich CERVICED eine Gebühr?',
+  'helpCentre.providerFaq.tips.q': 'Kann mir die Kundschaft Trinkgeld geben?',
 };

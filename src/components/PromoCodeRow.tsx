@@ -6,6 +6,7 @@
 import React, { memo, useCallback, useRef, useState } from 'react';
 import { Animated, View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import type { DbPromotion } from '../types/database';
+import { useTranslation } from '../i18n';
 
 interface PromoCodeRowProps {
   providerKey: string;
@@ -22,6 +23,7 @@ interface PromoCodeRowProps {
 
 export const PromoCodeRow: React.FC<PromoCodeRowProps> = memo(
   function PromoCodeRow({ providerKey, appliedPromo, discount, onApply, onRemove, borderColor, surfaceColor, textColor, subColor, accentColor }) {
+    const { t } = useTranslation();
     const [promoInput, setPromoInput] = useState('');
     const [promoApplying, setPromoApplying] = useState(false);
     const [promoError, setPromoError] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export const PromoCodeRow: React.FC<PromoCodeRowProps> = memo(
             </Text>
             <Text style={styles.appliedDiscount}>−£{discount.toFixed(2)}</Text>
             <TouchableOpacity onPress={() => onRemove(providerKey)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.removeText}>Remove</Text>
+              <Text style={styles.removeText}>{t('common.remove')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -83,7 +85,7 @@ export const PromoCodeRow: React.FC<PromoCodeRowProps> = memo(
                 { borderColor, color: textColor, backgroundColor: surfaceColor },
                 promoError ? styles.inputInvalid : null,
               ]}
-              placeholder="Promo code for this provider"
+              placeholder={t('cart.promo.placeholder')}
               placeholderTextColor={subColor}
               value={promoInput}
               onChangeText={t => { setPromoInput(t); setPromoError(null); }}
@@ -98,7 +100,7 @@ export const PromoCodeRow: React.FC<PromoCodeRowProps> = memo(
             >
               {promoApplying
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={[styles.applyText, { color: promoInput.trim() ? '#fff' : subColor }]}>Apply</Text>}
+                : <Text style={[styles.applyText, { color: promoInput.trim() ? '#fff' : subColor }]}>{t('common.apply')}</Text>}
             </TouchableOpacity>
           </Animated.View>
         )}

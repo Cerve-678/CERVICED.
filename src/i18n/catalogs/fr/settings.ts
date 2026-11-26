@@ -24,18 +24,25 @@ export const settings: AreaCatalog<typeof en> = {
 
   'helpCentre.title': "Centre d'aide",
   'helpCentre.subtitle': 'Réponses aux questions fréquentes',
-  'helpCentre.section.faqs': 'QUESTIONS FRÉQUENTES',
+  'helpCentre.section.booking': 'RÉSERVER',
+  'helpCentre.section.yourProviders': 'VOS PROFESSIONNELS',
+  'helpCentre.section.yourProfile': 'VOTRE PROFIL',
+  'helpCentre.section.gettingStarted': 'PREMIERS PAS',
+  'helpCentre.section.bookings': 'RÉSERVATIONS',
+  'helpCentre.section.gettingPaid': 'ÊTRE PAYÉ',
+  'helpCentre.section.clients': 'CLIENTS',
 
   'helpCentre.faq.book.q': 'Comment réserver un rendez-vous ?',
   'helpCentre.faq.book.a':
-    "Parcourez les professionnels dans l'onglet Explorer, appuyez sur un professionnel, puis sélectionnez un service et un créneau disponible. Vous recevrez une notification de confirmation.",
+    'Ouvrez la page d’un professionnel depuis Accueil, Rechercher ou Explorer, choisissez une prestation et un horaire, et ajoutez-la au panier. Vous payez au moment du paiement, et pouvez réserver avec plusieurs professionnels à la fois.',
+  'helpCentre.faq.request.q': 'Pourquoi ma réservation indique-t-elle Demande envoyée ?',
   'helpCentre.faq.cancel.q': 'Puis-je reporter ou annuler ?',
   'helpCentre.faq.becca.q': 'Comment fonctionne Becca ?',
   'helpCentre.faq.becca.a':
     "Becca est votre assistante beauté dotée d'une IA. Posez-lui n'importe quelle question : elle peut recommander des professionnels, expliquer des services et vous aider à trouver le bon look.",
   'helpCentre.faq.points.q': 'Comment gagner des points ?',
   'helpCentre.faq.points.a':
-    'Vous gagnez des points en effectuant des réservations, en laissant des avis, en parrainant des amis et lors de votre première réservation. Les points peuvent être échangés contre des réductions.',
+    'Terminez une réservation ou laissez un avis, avec des bonus pour votre première réservation, votre premier avis et votre anniversaire. Votre solde est dans Points, sur votre Profil.',
   'helpCentre.faq.payment.q': 'Mes informations de paiement sont-elles sécurisées ?',
 
   'helpCentre.action.contact': 'Contacter le support',
@@ -203,19 +210,55 @@ export const settings: AreaCatalog<typeof en> = {
   'providerAccount.linkOnly.notifications.sub': 'Messages et enregistrements',
   'helpCentre.providerFaq.live.q': 'Comment publier mon profil ?',
   'helpCentre.providerFaq.live.a':
-    "Votre écran d'accueil indique ce qu'il reste à faire. Une fois toutes les étapes terminées, les clients peuvent vous trouver dans Rechercher. Si vous utilisez votre propre lien de réservation, les étapes sont votre logo, votre rubrique À propos, vos horaires d'ouverture et au moins une photo de portfolio.",
+    'Votre écran d’accueil indique ce qu’il reste à faire. Une fois toutes les étapes terminées, les clients peuvent vous trouver dans Rechercher.',
+  'helpCentre.providerFaq.share.q': 'Comment partager ma page ?',
+  'helpCentre.providerFaq.share.a':
+    'Touchez le bouton QR code dans Mon profil. Imprimez-le ou gardez-le près de votre fauteuil, ou copiez votre lien pour le partager partout.',
+  'helpCentre.providerFaq.branding.q': 'Comment changer l’apparence de ma page ?',
+  'helpCentre.providerFaq.branding.a':
+    'Touchez le bouton palette dans Mon profil. Choisissez un style de page, des couleurs et une police, et voyez votre page changer en direct.',
   'helpCentre.providerFaq.book.q': 'Comment les clients réservent-ils avec moi ?',
   'helpCentre.providerFaq.book.a':
-    "Les clients choisissent une prestation et un créneau sur votre profil, puis paient dans l'app. Les nouvelles réservations apparaissent sur votre écran d'accueil et dans vos notifications. Si vous n'acceptez pas les réservations automatiquement, acceptez ou refusez chaque demande à cet endroit. Si vous utilisez votre propre lien de réservation, le bouton Réserver de votre profil ouvre votre site de réservation. Les clients réservent là-bas, et CERVICED ne voit ni ne gère ces réservations.",
+    'Les clients choisissent une prestation et un créneau sur votre page et paient dans l’app. Les nouvelles réservations apparaissent sur votre écran d’accueil et dans vos notifications.',
+  'helpCentre.providerFaq.autoConfirm.q': 'Dois-je accepter chaque réservation ?',
+  'helpCentre.providerFaq.autoConfirm.a':
+    'Seulement si vous le souhaitez. Activez Confirmer automatiquement dans Profil de l’activité → Automatisations et préférences. Sinon, vous acceptez ou refusez chaque demande.',
+  'helpCentre.providerFaq.hours.q': 'Comment définir mes horaires ?',
+  'helpCentre.providerFaq.hours.a':
+    'Allez dans Profil de l’activité → Détails de l’activité → Planning et disponibilités. Définissez vos horaires, les pauses entre rendez-vous et jusqu’où les clients peuvent réserver.',
+  'helpCentre.providerFaq.timeOff.q': 'Comment prendre des congés ?',
+  'helpCentre.providerFaq.timeOff.a':
+    'Utilisez Fermer mon planning sur l’écran des horaires. Les clients ne peuvent pas réserver avant la réouverture, et vous choisissez quoi faire des réservations existantes.',
+  'helpCentre.providerFaq.calendar.q':
+    'Le calendrier de mon téléphone peut-il bloquer des créneaux ?',
+  'helpCentre.providerFaq.calendar.a':
+    'Oui. Activez la synchronisation dans Planning et disponibilités et choisissez vos calendriers. Les clients ne peuvent pas réserver quand vous y êtes occupé, et ne voient jamais l’événement.',
+  'helpCentre.providerFaq.waitlist.q': 'Comment fonctionne la liste d’attente ?',
+  'helpCentre.providerFaq.waitlist.a':
+    'Activez la liste d’attente dans Automatisations et préférences. Quand un créneau se libère, Auto le propose à la personne suivante. Sans Auto, vous le proposez vous-même depuis Réservations.',
+  'helpCentre.providerFaq.payouts.q': 'Quand suis-je payé ?',
   'helpCentre.providerFaq.saves.q': "Que se passe-t-il quand quelqu'un m'enregistre ?",
   'helpCentre.providerFaq.saves.a':
     'Une fois par jour, vous recevez une notification indiquant combien de personnes vous ont enregistré, jamais qui. Vous pouvez la désactiver dans vos réglages de notifications. Vos statistiques montrent vos enregistrements au fil du temps.',
+  'helpCentre.linkFaq.live.a':
+    'Votre écran d’accueil indique ce qu’il reste : votre logo, À propos, vos horaires et au moins une photo de portfolio. Ensuite, les clients peuvent vous trouver dans Rechercher.',
+  'helpCentre.linkFaq.book.a':
+    'Le bouton Réserver de votre profil ouvre votre propre site de réservation. Les clients réservent là-bas, et CERVICED ne voit ni ne gère ces réservations.',
+  'helpCentre.linkFaq.hours.q': 'Comment définir mes horaires d’ouverture ?',
+  'helpCentre.linkFaq.hours.a':
+    'Ouvrez Horaires d’ouverture dans votre Compte. Les clients les voient sur votre profil.',
+  'helpCentre.linkFaq.full.q': 'Qu’apporterait CERVICED complet ?',
+  'helpCentre.linkFaq.full.a':
+    'Ouvrez Ce que CERVICED complet ajoute dans votre Compte pour voir ce qui change quand les clients réservent et paient dans l’app.',
+  'helpCentre.linkFaq.becca.a':
+    'Posez à Becca des questions sur vos messages, vos horaires ou vos notifications : elle répond ou vous emmène au bon écran.',
   'helpCentre.providerFaq.messages.q': 'Comment fonctionnent les messages ?',
   'helpCentre.providerFaq.messages.a':
     'Les clients peuvent vous écrire depuis votre profil. Vous recevez une notification pour chaque nouveau message, et un rappel si un message attend toujours une réponse après quelques heures.',
+  'helpCentre.providerFaq.clientele.q': 'Puis-je voir le profil beauté d’un client ?',
   'helpCentre.providerFaq.becca.q': 'Comment Becca peut-elle aider mon activité ?',
   'helpCentre.providerFaq.becca.a':
-    'Posez à Becca des questions sur vos messages, vos horaires ou vos notifications : elle vous répond ou vous emmène au bon écran. Avec les réservations CERVICED, elle peut aussi vous parler de votre journée, de votre semaine, de vos clients et de vos avis.',
+    'Posez à Becca des questions sur votre journée, votre semaine, vos clients, vos avis, vos messages ou vos horaires : elle répond ou vous emmène au bon écran.',
   'achievements.title': 'Succès',
   'achievements.back': 'Retour',
   'achievements.latest': 'DERNIER',
@@ -292,4 +335,31 @@ export const settings: AreaCatalog<typeof en> = {
   'achievements.how.live': 'Obtenu quand votre profil est mis en ligne.',
   'achievements.how.photos': 'Compte les photos de votre portfolio.',
   'achievements.how.monthsOn': 'Compte à partir du jour où vous avez rejoint CERVICED.',
+  'helpCentre.faq.waitlist.q': 'Et s’il est complet ?',
+  'helpCentre.faq.waitlist.a':
+    'Touchez Rejoindre la liste d’attente sur sa page et choisissez les dates qui vous conviennent. Si une place se libère, nous vous préviendrons.',
+  'helpCentre.faq.address.q': 'Quand verrai-je l’adresse du professionnel ?',
+  'helpCentre.faq.address.a':
+    'Elle apparaît sur votre réservation dès que le professionnel la partage. Certains la partagent tout de suite, d’autres plus près du jour J.',
+  'helpCentre.faq.messages.q': 'Comment écrire à un professionnel ?',
+  'helpCentre.faq.messages.a':
+    'Touchez Prendre contact sur sa page. Vos discussions sont dans Messages, sur votre Profil.',
+  'helpCentre.faq.bell.q': 'Puis-je être prévenu quand un professionnel a de la place ?',
+  'helpCentre.faq.bell.a':
+    'Touchez la cloche sur sa page. Nous vous préviendrons quand il ouvre de nouvelles dates ou a de nouveau de la place.',
+  'helpCentre.faq.reviews.q': 'Comment fonctionnent les avis ?',
+  'helpCentre.faq.reviews.a':
+    'Une fois votre rendez-vous terminé, laissez un avis depuis Réservations. Vous pouvez le publier anonymement si vous préférez.',
+  'helpCentre.faq.tip.q': 'Puis-je laisser un pourboire ?',
+  'helpCentre.faq.notOnCerviced.q': 'Que signifie « Pas encore sur CERVICED » ?',
+  'helpCentre.faq.notOnCerviced.a':
+    'Cette activité n’a pas encore rejoint l’app, vous ne pouvez donc pas réserver ici. Touchez Relancer pour montrer que vous aimeriez la voir sur CERVICED.',
+  'helpCentre.faq.beautyProfile.q': 'Qu’est-ce que mon profil beauté ?',
+  'helpCentre.faq.maintenance.q': 'Que sont les rappels d’entretien ?',
+  'helpCentre.faq.maintenance.a':
+    'Nous vous rappellerons quand reprendre rendez-vous pour vos ongles, cils ou sourcils. Activez-les dans vos réglages de notifications.',
+  'helpCentre.providerFaq.deposits.q': 'Puis-je demander un acompte ?',
+  'helpCentre.providerFaq.lateFees.q': 'Et les annulations tardives et absences ?',
+  'helpCentre.providerFaq.fee.q': 'Dois-je payer des frais à CERVICED ?',
+  'helpCentre.providerFaq.tips.q': 'Les clients peuvent-ils me donner un pourboire ?',
 };
