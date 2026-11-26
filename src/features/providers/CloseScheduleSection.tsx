@@ -53,6 +53,7 @@ import {
 import { readableSheet } from '../../constants/readableWidth';
 import { tr } from '../../i18n';
 import { useTranslation } from '../../i18n';
+import { getLanguage } from '../../i18n/languageStore';
 
 type Palette = {
   bg: string;
@@ -202,10 +203,10 @@ export default function CloseScheduleSection({
       lastClosure.set(providerId, row);
       setClosure(row);
       setSheetVisible(false);
-      showToast('Your schedule is closed.', 'success');
+      showToast(tr('discover.page.yourScheduleIsClosed2'), 'success');
     } catch (err) {
       logger.error('[Schedule] close failed:', err);
-      showToast("Couldn't close your schedule. Please try again.", 'error');
+      showToast(tr('discover.page.couldnTCloseYourSchedulePlease'), 'error');
     } finally {
       setBusy(false);
     }
@@ -217,10 +218,10 @@ export default function CloseScheduleSection({
       await reopenMySchedule();
       lastClosure.set(providerId, null);
       setClosure(null);
-      showToast('Your schedule is open again.', 'success');
+      showToast(tr('discover.page.yourScheduleIsOpenAgain'), 'success');
     } catch (err) {
       logger.error('[Schedule] reopen failed:', err);
-      showToast("Couldn't reopen your schedule. Please try again.", 'error');
+      showToast(tr('discover.page.couldnTReopenYourSchedulePlease'), 'error');
     } finally {
       setBusy(false);
     }
@@ -249,7 +250,7 @@ export default function CloseScheduleSection({
   // Same size as the banner, so the screen doesn't jump when the check returns.
   if (!loaded) {
     return (
-      <View style={[st.banner, { backgroundColor: P.card, borderColor: P.border }]} accessibilityLabel="Checking your schedule">
+      <View style={[st.banner, { backgroundColor: P.card, borderColor: P.border }]} accessibilityLabel={tr('discover.page.checkingYourSchedule')}>
         <View style={st.bannerText}>
           <View style={[st.skeletonTitle, { backgroundColor: P.border }]} />
           <View style={[st.skeletonLine, { backgroundColor: P.border }]} />
@@ -264,12 +265,12 @@ export default function CloseScheduleSection({
       <View style={[st.banner, { backgroundColor: P.card, borderColor: P.border }]}>
         <View style={st.bannerText}>
           <Text style={[st.bannerTitle, { color: P.text }]}>
-            {isClosed ? 'Your schedule is closed' : 'Taking a break?'}
+            {isClosed ? tr('discover.page.yourScheduleIsClosed') : tr('discover.page.takingABreak')}
           </Text>
           <Text style={[st.bannerSub, { color: P.sub }]}>
             {isClosed
-              ? `${closure?.autoClosed ? 'You filled up, so it closed by itself. ' : ''}Clients see "Not taking bookings${toldClients ? `: ${toldClients.toLowerCase()}` : ''}". ${reopensLabel(closure)}`
-              : 'Close your schedule to stop new bookings. Clients just see "Not taking bookings".'}
+              ? `${closure?.autoClosed ? `${tr('discover.page.autoClosed')} ` : ''}${toldClients ? tr('discover.page.clientsSeeReason', { reason: toldClients.toLowerCase() }) : tr('discover.page.clientsSee')} ${reopensLabel(closure)}`
+              : tr('discover.page.closeYourScheduleToStopNew')}
           </Text>
         </View>
         <TouchableOpacity
@@ -283,7 +284,7 @@ export default function CloseScheduleSection({
             <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
           ) : (
             <Text style={[st.bannerBtnText, { color: isClosed ? (isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740') : P.text }]}>
-              {isClosed ? 'Reopen' : tr('common.close')}
+              {isClosed ? tr('discover.page.reopen') : tr('common.close')}
             </Text>
           )}
         </TouchableOpacity>
@@ -300,13 +301,13 @@ export default function CloseScheduleSection({
         <View style={st.overlay}>
           <View style={[st.sheet, { backgroundColor: P.bg, paddingBottom: insets.bottom + 16 }]}>
             <View style={st.sheetHeader}>
-              <Text style={[st.sheetTitle, { color: P.text }]}>Close my schedule</Text>
+              <Text style={[st.sheetTitle, { color: P.text }]}>{tr('discover.page.closeMySchedule')}</Text>
               <TouchableOpacity
                 style={[st.iconBtn, { backgroundColor: P.surface }]}
                 onPress={() => setSheetVisible(false)}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Don't close"
+                accessibilityLabel={tr('discover.page.donTClose')}
               >
                 <Ionicons name="close" size={20} color={P.sub} />
               </TouchableOpacity>
@@ -338,11 +339,11 @@ export default function CloseScheduleSection({
               {reason ? (
                 <View style={[st.switchRow, { backgroundColor: P.card, borderColor: P.border }]}>
                   <View style={st.switchText}>
-                    <Text style={[st.optionText, { color: P.text }]}>Tell clients why</Text>
+                    <Text style={[st.optionText, { color: P.text }]}>{tr('discover.page.tellClientsWhy')}</Text>
                     <Text style={[st.hint, { color: P.sub }]}>
                       {tellClients
-                        ? `Clients see "Not taking bookings: ${closureReasonForClient(reason)?.toLowerCase()}".`
-                        : 'Clients just see "Not taking bookings".'}
+                        ? tr('discover.page.clientsSeeReason', { reason: closureReasonForClient(reason)?.toLowerCase() ?? '' })
+                        : tr('discover.page.clientsJustSeeNotTakingBookings')}
                     </Text>
                   </View>
                   <Switch value={tellClients} onValueChange={setTellClients} trackColor={{ true: P.accent }} />
@@ -359,8 +360,8 @@ export default function CloseScheduleSection({
               >
                 <Text style={[st.optionText, { color: P.text }]}>
                   {releaseDay != null
-                    ? `On my next release day (the ${ordinalSuffix(releaseDay)})`
-                    : 'When I reopen it'}
+                    ? tr('discover.page.onNextRelease', { day: (getLanguage() === 'en' ? ordinalSuffix(releaseDay) : String(releaseDay)) })
+                    : tr('discover.page.whenIReopenIt')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -371,7 +372,7 @@ export default function CloseScheduleSection({
                 accessibilityState={{ selected: !!reopenDate }}
               >
                 <Text style={[st.optionText, { color: P.text }]}>
-                  {reopenDate ? `On ${formatShortDayDate(reopenDate)}` : 'On a date I choose'}
+                  {reopenDate ? tr('discover.page.onDate', { date: formatShortDayDate(reopenDate) }) : tr('discover.page.onADateIChoose')}
                 </Text>
               </TouchableOpacity>
               {datePickerVisible && (
@@ -385,13 +386,13 @@ export default function CloseScheduleSection({
                   minimumDate={tomorrow()}
                 />
               )}
-              <Text style={[st.hint, { color: P.sub }]}>You can reopen any time.</Text>
+              <Text style={[st.hint, { color: P.sub }]}>{tr('discover.page.youCanReopenAnyTime')}</Text>
 
               <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>YOUR UPCOMING BOOKINGS</Text>
               {upcomingFailed ? (
                 <View style={[st.booking, { backgroundColor: P.card, borderColor: P.border }]}>
                   <Text style={[st.bookingDetail, { color: P.sub }]}>
-                    We couldn't load your upcoming bookings, so you can't close yet.
+                    {tr('discover.page.weCouldnTLoadYourUpcoming')}
                   </Text>
                   <TouchableOpacity
                     style={[st.actionBtn, st.retryBtn, { backgroundColor: P.surface }]}
@@ -405,11 +406,11 @@ export default function CloseScheduleSection({
               ) : upcoming === null ? (
                 <ActivityIndicator style={st.loading} color={P.accent} />
               ) : upcoming.length === 0 ? (
-                <Text style={[st.hint, { color: P.sub }]}>You have no upcoming bookings.</Text>
+                <Text style={[st.hint, { color: P.sub }]}>{tr('discover.page.youHaveNoUpcomingBookings')}</Text>
               ) : (
                 <>
                   <Text style={[st.hint, st.hintBelow, { color: P.sub }]}>
-                    These stay booked unless you change them. Answer each one before you close: can you still do it?
+                    {tr('discover.page.theseStayBookedUnlessYouChange')}
                   </Text>
                   {upcoming.map((b) => {
                     const kept = keptIds.has(b.id);
@@ -421,9 +422,9 @@ export default function CloseScheduleSection({
                           {b.serviceName} · {formatShortDayDate(b.date)}{time ? ` · ${time}` : ''}
                         </Text>
                         {b.moving ? (
-                          <Text style={[st.keptText, { color: P.accent }]}>Being moved</Text>
+                          <Text style={[st.keptText, { color: P.accent }]}>{tr('discover.page.beingMoved')}</Text>
                         ) : kept ? (
-                          <Text style={[st.keptText, { color: P.accent }]}>You'll still do this one</Text>
+                          <Text style={[st.keptText, { color: P.accent }]}>{tr('discover.page.youLlStillDoThisOne')}</Text>
                         ) : (
                           <View style={st.bookingActions}>
                             <TouchableOpacity
@@ -432,7 +433,7 @@ export default function CloseScheduleSection({
                               activeOpacity={0.8}
                               accessibilityRole="button"
                             >
-                              <Text style={[st.actionText, { color: P.text }]}>I can do it</Text>
+                              <Text style={[st.actionText, { color: P.text }]}>{tr('discover.page.iCanDoIt')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[st.actionBtn, { backgroundColor: P.surface }]}
@@ -440,7 +441,7 @@ export default function CloseScheduleSection({
                               activeOpacity={0.8}
                               accessibilityRole="button"
                             >
-                              <Text style={[st.actionText, { color: P.text }]}>Move</Text>
+                              <Text style={[st.actionText, { color: P.text }]}>{tr('discover.page.move')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[st.actionBtn, { backgroundColor: P.surface }]}
@@ -461,7 +462,7 @@ export default function CloseScheduleSection({
 
             {upcoming !== null && unanswered > 0 ? (
               <Text style={[st.hint, st.blockedHint, { color: P.sub }]}>
-                {`Answer ${unanswered === 1 ? 'the booking' : `all ${unanswered} bookings`} above to close your schedule.`}
+                {unanswered === 1 ? tr('discover.page.answerOne') : tr('discover.page.answerAll', { count: unanswered })}
               </Text>
             ) : null}
             <TouchableOpacity
@@ -475,7 +476,7 @@ export default function CloseScheduleSection({
               {busy ? (
                 <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
               ) : (
-                <Text style={[st.closeBtnText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>Close my schedule</Text>
+                <Text style={[st.closeBtnText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{tr('discover.page.closeMySchedule')}</Text>
               )}
             </TouchableOpacity>
           </View>

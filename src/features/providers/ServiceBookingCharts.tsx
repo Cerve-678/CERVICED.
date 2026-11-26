@@ -6,6 +6,8 @@ import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-nati
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { chartTicks, type ServiceBookingSummary } from './serviceBookingSummary';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Palette = { text: string; sub: string; sep: string; card: string; accent: string };
 
@@ -22,11 +24,13 @@ const AXIS_WIDTH = 22;
 const POINT_INSET = 8;
 
 function MostBookedCard({ ranked, palette: P }: { ranked: ServiceBookingSummary['ranked']; palette: Palette }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const max = Math.max(...ranked.map(r => r.count), 1);
   return (
     <View style={[st.card, { backgroundColor: P.card, borderColor: P.sep }]}>
-      <Text style={[st.title, { color: P.text }]}>Most booked</Text>
-      <Text style={[st.sub, { color: P.sub }]}>Last 90 days and booked ahead</Text>
+      <Text style={[st.title, { color: P.text }]}>{tr('discover.page.mostBooked')}</Text>
+      <Text style={[st.sub, { color: P.sub }]}>{tr('discover.page.last90DaysAndBookedAhead')}</Text>
       {ranked.map(row => (
         <View
           key={row.name}
@@ -48,6 +52,8 @@ function MostBookedCard({ ranked, palette: P }: { ranked: ServiceBookingSummary[
 }
 
 function TrendCard({ months, trend, palette: P }: Pick<ServiceBookingSummary, 'months' | 'trend'> & { palette: Palette }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [width, setWidth] = useState(0);
   // A tap picks the month the key below reads out. Starts on the current one.
   const [selected, setSelected] = useState(months.length - 1);
@@ -65,8 +71,8 @@ function TrendCard({ months, trend, palette: P }: Pick<ServiceBookingSummary, 'm
 
   return (
     <View style={[st.card, { backgroundColor: P.card, borderColor: P.sep }]}>
-      <Text style={[st.title, { color: P.text }]}>Your top services over time</Text>
-      <Text style={[st.sub, { color: P.sub }]}>Bookings a month. Tap a month to see it.</Text>
+      <Text style={[st.title, { color: P.text }]}>{tr('discover.page.yourTopServicesOverTime')}</Text>
+      <Text style={[st.sub, { color: P.sub }]}>{tr('discover.page.bookingsAMonthTapAMonth')}</Text>
 
       <View style={st.plot} onLayout={onLayout} accessible accessibilityLabel={summary}>
         {width > 0 && (
@@ -118,7 +124,7 @@ function TrendCard({ months, trend, palette: P }: Pick<ServiceBookingSummary, 'm
               style={st.tapZone}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); setSelected(i); }}
               accessibilityRole="button"
-              accessibilityLabel={`Show ${m.label}`}
+              accessibilityLabel={tr('discover.search.showResults', { results: m.label })}
               accessibilityState={{ selected: selected === i }}
             />
           ))}

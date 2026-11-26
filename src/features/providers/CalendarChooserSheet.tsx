@@ -7,6 +7,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacit
 import type { DeviceCalendar } from '../../services/deviceCalendarService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface ChooserPalette {
   bg: string;
@@ -33,17 +35,19 @@ export function CalendarChooserSheet({
   saveLabel: string;
   disconnectLabel: string;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={[styles.sheet, { backgroundColor: P.bg, paddingBottom: bottomInset + 20 }]} onPress={e => e.stopPropagation()}>
           <View style={[styles.grabber, { backgroundColor: P.border }]} />
-          <Text style={[styles.sheetTitle, { color: P.text }]}>Which calendars?</Text>
+          <Text style={[styles.sheetTitle, { color: P.text }]}>{tr('discover.page.whichCalendars')}</Text>
           <Text style={[styles.body, { color: P.sub }]}>{body}</Text>
           <ScrollView style={styles.sheetList}>
             {calendars.length === 0 ? (
-              <Text style={[styles.body, { color: P.sub }]}>No calendars found on this phone.</Text>
+              <Text style={[styles.body, { color: P.sub }]}>{tr('discover.page.noCalendarsFoundOnThisPhone')}</Text>
             ) : calendars.map(calendar => (
               <View key={calendar.id} style={styles.calendarRow}>
                 <View style={[styles.dot, { backgroundColor: calendar.color }]} />

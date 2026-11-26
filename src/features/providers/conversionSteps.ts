@@ -6,6 +6,7 @@
 // "moved": bookings are turned on, the link comes down, and the go-live gate
 // re-runs on the full checklist.
 import { buildGoLiveSteps, type GoLiveStatus } from './goLiveStatus';
+import { tr } from '../../i18n/translate';
 
 export interface ConversionStep {
   /** The row in the checklist. */
@@ -20,15 +21,15 @@ export interface ConversionStep {
  *  they came off Search. */
 export function buildConversionSteps(isLive: boolean | null): ConversionStep[] {
   return [
-    { label: 'Turning on bookings in CERVICED', lead: 'Turning on CERVICED bookings.' },
-    { label: 'Taking down your own booking link', lead: 'Taking down your booking link.' },
-    { label: 'Unlocking your full member tools', lead: 'Unlocking your full tools.' },
-    { label: 'Keeping your logo, About, hours and portfolio', lead: "Keeping everything you've built." },
-    { label: 'Keeping your messages, followers and saves', lead: 'Keeping your clients close.' },
+    { label: tr('discover.page.turningOnBookingsInCerviced'), lead: 'Turning on CERVICED bookings.' },
+    { label: tr('discover.page.takingDownYourOwnBookingLink'), lead: 'Taking down your booking link.' },
+    { label: tr('discover.page.unlockingYourFullMemberTools'), lead: 'Unlocking your full tools.' },
+    { label: tr('discover.page.keepingYourLogoAboutHoursAnd'), lead: "Keeping everything you've built." },
+    { label: tr('discover.page.keepingYourMessagesFollowersAndSaves'), lead: 'Keeping your clients close.' },
     isLive
-      ? { label: 'Keeping you on Search', lead: 'Keeping you on Search.' }
-      : { label: "Taking you off Search until you're live", lead: 'Pausing Search until you go live.' },
-    { label: "Checking what's left before you go live", lead: "Checking what's left to go live." },
+      ? { label: tr('discover.page.keepingYouOnSearch'), lead: 'Keeping you on Search.' }
+      : { label: tr('discover.page.takingYouOffSearchUntilYou'), lead: 'Pausing Search until you go live.' },
+    { label: tr('discover.page.checkingWhatSLeftBeforeYou'), lead: "Checking what's left to go live." },
   ];
 }
 

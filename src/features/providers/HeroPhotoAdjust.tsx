@@ -61,14 +61,16 @@ export function HeroPhotoAdjustRow({
   subColor: string;
   borderColor: string;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [open, setOpen] = useState<number | null>(null);
   if (photos.length === 0) return null;
   const editing = open !== null ? photos[open] : undefined;
 
   return (
     <View style={row.wrap}>
-      <Text style={[row.title, { color: textColor }]}>Adjust how they sit</Text>
-      <Text style={[row.sub, { color: subColor }]}>Tap a photo to move it or zoom in.</Text>
+      <Text style={[row.title, { color: textColor }]}>{tr('discover.page.adjustHowTheySit')}</Text>
+      <Text style={[row.sub, { color: subColor }]}>{tr('discover.page.tapAPhotoToMoveIt')}</Text>
       <View style={row.thumbs}>
         {photos.map((item, index) => {
           const aspect = heroPhotoSlotAspect(hero, index, photos.length);
@@ -84,7 +86,7 @@ export function HeroPhotoAdjustRow({
                 setOpen(index);
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Adjust photo ${index + 1} of ${photos.length}${moved ? ', adjusted' : ''}`}
+              accessibilityLabel={tr(moved ? 'discover.page.adjustPhotoMovedA11y' : 'discover.page.adjustPhotoA11y', { n: index + 1, total: photos.length })}
               style={row.thumbCol}
             >
               <View style={[row.thumb, { width, borderColor: moved ? accent : borderColor }]}>
@@ -102,7 +104,7 @@ export function HeroPhotoAdjustRow({
         item={editing ?? null}
         frame={editing ? frames[editing.id] ?? null : null}
         slotAspect={open !== null ? heroPhotoSlotAspect(hero, open, photos.length) : 1}
-        progressLabel={photos.length > 1 && open !== null ? `${open + 1} of ${photos.length}` : null}
+        progressLabel={photos.length > 1 && open !== null ? tr('discover.page.nOf', { n: open + 1, total: photos.length }) : null}
         accent={accent}
         onCancel={() => setOpen(null)}
         onDone={frame => {
@@ -256,7 +258,7 @@ function HeroPhotoAdjustSheet({
             <View
               {...responder.panHandlers}
               style={[sheet.slot, { width: box.width, height: box.height }]}
-              accessibilityLabel="Your photo. Drag to move it, pinch to zoom."
+              accessibilityLabel={tr('discover.page.yourPhotoDragToMoveIt')}
             >
               <FramedPhoto uri={item.image_url} aspectRatio={storedRatio ?? loadedRatio} frame={frame} />
             </View>
@@ -269,7 +271,7 @@ function HeroPhotoAdjustSheet({
             onPress={() => zoomBy(-ZOOM_STEP)}
             disabled={frame.zoom <= 1}
             accessibilityRole="button"
-            accessibilityLabel="Zoom out"
+            accessibilityLabel={tr('discover.page.zoomOut')}
           >
             <Ionicons name="remove" size={20} color={frame.zoom <= 1 ? 'rgba(255,255,255,0.3)' : '#FFFFFF'} />
           </TouchableOpacity>
@@ -289,12 +291,12 @@ function HeroPhotoAdjustSheet({
             onPress={() => zoomBy(ZOOM_STEP)}
             disabled={frame.zoom >= MAX_HERO_PHOTO_ZOOM}
             accessibilityRole="button"
-            accessibilityLabel="Zoom in"
+            accessibilityLabel={tr('discover.page.zoomIn')}
           >
             <Ionicons name="add" size={20} color={frame.zoom >= MAX_HERO_PHOTO_ZOOM ? 'rgba(255,255,255,0.3)' : '#FFFFFF'} />
           </TouchableOpacity>
         </View>
-        <Text style={sheet.hint}>Drag to move the photo. Pinch to zoom in.</Text>
+        <Text style={sheet.hint}>{tr('discover.page.dragToMoveThePhotoPinch')}</Text>
       </View>
     </Modal>
   );

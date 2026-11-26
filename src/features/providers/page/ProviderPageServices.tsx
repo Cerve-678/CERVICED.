@@ -432,7 +432,7 @@ export function ProviderPageServices({
         />
       ) : (
         <Text style={[styles.emptyServiceTypeText, { color: SV.sub }]}>
-          Services for {selectedServiceType} are coming soon.
+          {tr('discover.page.comingSoon', { type: selectedServiceType })}
         </Text>
       )}
 
@@ -792,7 +792,7 @@ export function ProviderPageServices({
                           minimumFontScale={0.8}
                         >
                           {!takingBookings
-                              ? "Not taking\nbookings"
+                              ? tr('discover.page.notTakingTwoLines')
                               : fullyBooked
                               ? "Fully Booked"
                               // Boutique says "Add to basket"; it still opens the booking sheet.
@@ -825,9 +825,9 @@ export function ProviderPageServices({
                           }}
                           activeOpacity={0.8}
                           accessibilityRole="button"
-                          accessibilityLabel="A slot is held for you. Open it to confirm and pay."
+                          accessibilityLabel={tr('discover.page.aSlotIsHeldForYou')}
                         >
-                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
+                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>{tr('discover.page.heldForYou')}</Text>
                           <Ionicons name="chevron-forward" size={11} color="#fff" />
                         </TouchableOpacity>
                       );
@@ -844,7 +844,7 @@ export function ProviderPageServices({
                           }}
                           activeOpacity={0.7}
                           accessibilityRole="button"
-                          accessibilityLabel={`${placeInLineLabel(wEntry.placeInLine)} for ${service.name}. Open your waitlist ticket.`}
+                          accessibilityLabel={tr('discover.page.waitlistTicketA11y', { place: placeInLineLabel(wEntry.placeInLine), service: service.name })}
                         >
                           <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
                             {placeInLineLabel(wEntry.placeInLine)}
@@ -902,7 +902,7 @@ export function ProviderPageServices({
                           ]}
                           numberOfLines={1}
                         >
-                          Join waitlist
+                          {tr('discover.page.joinWaitlist')}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -922,7 +922,7 @@ export function ProviderPageServices({
             <Text
               style={[styles.showAllServicesText, { color: adaptiveAccentColor }]}
             >
-              {`Show all ${showAll.count} services`}
+              {tr('discover.page.showAllServices', { count: showAll.count })}
             </Text>
             <Ionicons name="chevron-forward" size={16} color={adaptiveAccentColor} />
           </TouchableOpacity>

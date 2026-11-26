@@ -23,7 +23,7 @@ import { BUSINESS_TYPE_LABEL } from './profilePresentation';
 import type { ProviderProfileData } from './profileTypes';
 import { productsGroup, workWithGroups, type ChipGroup } from './workWith';
 import type { PageStyle } from '../../constants/pageStyles';
-import { tr } from '../../i18n';
+import { tr } from '../../i18n/translate';
 
 // Client-facing wording for providers.team_size.
 const TEAM_SIZE_LABELS: Record<string, string> = {
@@ -51,13 +51,13 @@ export function additionalInfoGroups(
       const label = type === 'OTHER' ? provider.customServiceType || 'Service' : type;
       return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
     }))];
-    if (chips.length > 0) groups.push({ label: 'Category', chips });
+    if (chips.length > 0) groups.push({ label: tr('discover.page.category'), chips });
   }
   // Salon, studio, home-based or mobile. Classic already shows it as the
   // icon in the line under the name; most page styles' heroes have no such
   // line, so there it is said here in words (owner, 2026-11-15).
   if (provider.businessType && pageStyle.key !== 'classic') {
-    groups.push({ label: 'Business type', chips: [BUSINESS_TYPE_LABEL[provider.businessType]] });
+    groups.push({ label: tr('discover.page.businessType'), chips: [BUSINESS_TYPE_LABEL[provider.businessType]] });
   }
   // Who they work with (clients, skin tones, hair types) from About You's
   // "I Work With" — here, not in the About/Policy card, which is the bio.

@@ -93,10 +93,10 @@ const PLACEHOLDER_PORTFOLIO: DbPortfolioItem[] = [0.8, 1.1, 1, 0.75, 1.2, 0.9].m
 
 /** The policy headings an empty profile shows: the titles, no values. */
 const PREVIEW_POLICY_ROWS: PolicyDisplayRow[] = [
-  { icon: "card-outline", label: "Deposit", value: "" },
-  { icon: "time-outline", label: "Cancellation", value: "" },
-  { icon: "alarm-outline", label: "Late arrival", value: "" },
-  { icon: "calendar-outline", label: "Reschedule", value: "" },
+  { icon: "card-outline", get label() { return tr('discover.page.deposit'); }, value: "" },
+  { icon: "time-outline", get label() { return tr('discover.page.cancellation'); }, value: "" },
+  { icon: "alarm-outline", get label() { return tr('discover.page.lateArrival'); }, value: "" },
+  { icon: "calendar-outline", get label() { return tr('discover.page.reschedule'); }, value: "" },
 ];
 
 export interface ProfileStylePreviewProps {
@@ -224,7 +224,7 @@ export function ProfileStylePreview({
         onPress={() => editParts.onPress(part)}
         accessibilityRole="button"
         accessibilityState={{ selected: on }}
-        accessibilityLabel={`${label}. Tap to change`}
+        accessibilityLabel={tr('discover.page.tapToChangeA11y', { name: label })}
         style={[
           onHero ? styles.zoneHero : styles.zone,
           { borderColor: editParts.accent, borderStyle: on ? "solid" : "dashed", borderWidth: on ? 2.5 : 1.5 },
@@ -462,7 +462,7 @@ export function ProfileStylePreview({
                 </View>
                 <View style={detailsSitOnCard(pageStyle) ? DETAILS_OWN_LINE : undefined}>
                   <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
-                    <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
+                    <Text style={[styles.slotsText, { color: OP.sub }]}>{tr('discover.page.stayUpdated')}</Text>
                     <Ionicons name="notifications-outline" size={16} color={OP.sub} />
                   </BlurView>
                 </View>
@@ -687,7 +687,7 @@ export function ProfileStylePreview({
               </View>
               {services[index]?.addOns?.length ? (
                 <View style={[styles.addOns, { borderTopColor: OP.border }]}>
-                  <Text style={[styles.addOnsLabel, { color: serviceInk.sub }, bodyFont]}>Add-ons available:</Text>
+                  <Text style={[styles.addOnsLabel, { color: serviceInk.sub }, bodyFont]}>{tr('discover.page.addOnsAvailable')}</Text>
                   {services[index]!.addOns!.map(addOn => (
                     <View key={addOn.key} style={styles.addOnRow}>
                       <Text style={[styles.addOnName, { color: serviceInk.sub }, bodyFont]} numberOfLines={1}>

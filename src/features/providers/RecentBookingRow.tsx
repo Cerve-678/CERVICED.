@@ -9,6 +9,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { BookingWithAddOns } from '../../types/database';
 import { describeRecentBooking } from './recentBookingActivity';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   booking: BookingWithAddOns;
@@ -21,6 +23,8 @@ interface Props {
 }
 
 export function RecentBookingRow({ booking, onPress, textColor, subTextColor, borderColor, isLast }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const row = describeRecentBooking(booking);
   return (
     <TouchableOpacity
@@ -31,7 +35,7 @@ export function RecentBookingRow({ booking, onPress, textColor, subTextColor, bo
       }}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={`${row.service}. ${row.detail}. ${row.booked}. ${row.price}. ${row.status}. Opens the booking.`}
+      accessibilityLabel={`${row.service}. ${row.detail}. ${row.booked}. ${row.price}. ${row.status}. ${tr('discover.page.opensBooking')}`}
     >
       <View style={[st.dot, { backgroundColor: row.statusColor }]} />
       <View style={st.body}>

@@ -132,7 +132,7 @@ export function MoodboardHero({
               disabled={!photo || !onOpenPhoto}
               onPress={() => onOpenPhoto?.(index)}
               accessibilityRole={photo && onOpenPhoto ? "imagebutton" : undefined}
-              accessibilityLabel={photo ? `${name} work photo ${index + 1}` : undefined}
+              accessibilityLabel={photo ? tr('discover.page.workPhotoN', { name, n: index + 1 }) : undefined}
               accessibilityElementsHidden={!photo}
               importantForAccessibility={photo ? "auto" : "no-hide-descendants"}
               activeOpacity={0.88}

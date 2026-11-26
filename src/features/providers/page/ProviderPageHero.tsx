@@ -172,7 +172,7 @@ export function ProviderPageHero({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onOpenLogo();
             }}
-            accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+            accessibilityLabel={tr('discover.page.logoA11y', { name: provider.displayName })}
             badge={recommendHeart ? <RecommendBadge {...recommendHeart} theme={recommendBadgeTheme} /> : null}
           />
         )}
@@ -348,7 +348,7 @@ export function ProviderPageHero({
                           onPress={onOpenLinkOnlyBooking}
                           activeOpacity={0.85}
                           accessibilityRole="button"
-                          accessibilityLabel={`Book with ${provider.displayName} on their booking page`}
+                          accessibilityLabel={tr('discover.profile.linkOnlyBookA11y', { name: provider.displayName })}
                         >
                           <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>BOOK</Text>
                           <Ionicons name="open-outline" size={15} color={OP.text} />
@@ -441,7 +441,7 @@ export function ProviderPageHero({
                         });
                       }}
                       activeOpacity={0.8}
-                      accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                      accessibilityLabel={tr('discover.profile.openInstagramA11y', { handle: provider.instagram })}
                       accessibilityRole="button"
                     >
                       <BlurView

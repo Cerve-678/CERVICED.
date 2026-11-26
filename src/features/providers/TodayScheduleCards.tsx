@@ -32,6 +32,8 @@ import {
   type ScheduleTodo,
   type TodaySchedule,
 } from './todaySchedule';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Schedule = TodaySchedule<BookingWithAddOns>;
 type Slot = ScheduleSlot<BookingWithAddOns>;
@@ -121,6 +123,8 @@ export const TodaySummaryCard = React.memo(function TodaySummaryCard({
   onOpenBooking: (booking: BookingWithAddOns) => void;
   onOpenDay: (ymd: string) => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { phase, today, tomorrow, todos, doneCount, bookedValue } = schedule;
   // Cream on a dark accent, ink on a pale one, so any theme stays readable.
   const ink = isDarkColor(palette.accent) ? '#FFF8F2' : '#26201E';
@@ -175,7 +179,7 @@ export const TodaySummaryCard = React.memo(function TodaySummaryCard({
             onPress={() => { tap(); onOpenDay(schedule.todayYmd); }}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel="Open today in your calendar"
+            accessibilityLabel={tr('discover.page.openTodayInYourCalendar')}
           >
             <Text style={[styles.headerLinkText, { color: ink }]}>FULL DAY</Text>
             <Ionicons name="chevron-forward" size={13} color={ink} />
@@ -239,7 +243,7 @@ export const TodaySummaryCard = React.memo(function TodaySummaryCard({
         ) : null}
 
         {hidden > 0 ? (
-          <Text style={[styles.more, { color: soft }]}>+{hidden} more · see the full day</Text>
+          <Text style={[styles.more, { color: soft }]}>{tr('discover.page.moreSeeDay', { count: hidden })}</Text>
         ) : null}
       </View>
     </View>
@@ -257,6 +261,8 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
   palette: TodayCardsPalette;
   onOpenBooking: (booking: BookingWithAddOns) => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { phase, upcoming: slots, todos, todayYmd, tomorrowYmd } = schedule;
 
   const leadInk = isDarkColor(palette.accent) ? '#FFF8F2' : '#26201E';
@@ -290,7 +296,7 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
         <View>
           <Text style={[styles.cardsTitle, { color: palette.text }]}>COMING UP</Text>
           <Text style={[styles.cardsDate, { color: palette.sub }]}>
-            {total === 1 ? 'Your next booking' : `Your next ${total} bookings`}
+            {total === 1 ? tr('discover.page.yourNextBooking') : tr('discover.page.yourNextN', { count: total })}
           </Text>
         </View>
       </View>
