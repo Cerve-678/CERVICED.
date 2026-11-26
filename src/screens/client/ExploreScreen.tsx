@@ -913,7 +913,10 @@ const ExploreScreen = memo(() => {
         setFavouriteItems(
           mergeSavedExploreCards(savedPortfolioIds, localSavedCards, hydratedCards),
         );
-      } catch {
+      } catch (error) {
+        // Logged, because a silent failure here once read as "Can't show
+        // these looks right now" in every collection, with no trace why.
+        logger.warn('Failed to load saved looks for Favourites:', error);
         // Retain current-session saves when the background hydration fails.
         // An empty state would falsely imply that a heart did not work.
         if (!cancelled) setFavouriteItems(keptCards);
