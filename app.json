@@ -56,7 +56,7 @@
       "bundler": "metro",
       "output": "single",
       "name": "CERVICED",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png"
     },
     "plugins": [
       "expo-video",
