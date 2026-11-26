@@ -1,7 +1,6 @@
 // src/services/bookingService.ts
 import { CartItem } from '../contexts/CartContext';
 import {
-  AppointmentData,
   ConfirmedBooking,
   PaymentStatus,
   BookingCoordinates,
@@ -13,9 +12,7 @@ import {
 import type { BookingWithAddOns, DbBookingRescheduleRequest, DbBookingVenue } from '../types/database';
 import type { ProviderLocationData } from './databaseService';
 import { getMyBookings } from './databaseService';
-import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate, formatDurationMinutes } from '../utils/dateUtils';
-import { calculatePlatformFeePence, splitPlatformFeePence, toPence } from '../features/cart/platformFee';
 
 
 export interface DepositPolicy {
@@ -41,165 +38,6 @@ export interface PaymentInfo {
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit
 
 export class BookingService {
-  /**
-   * Validate all bookings have required scheduling info
-   */
-  static validateBookings(
-    cartItems: CartItem[],
-    bookings: Record<string, ServiceBookingData>
-  ): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
-    cartItems.forEach(item => {
-      const booking = bookings[item.id];
-
-      if (!booking?.selectedDate) {
-        errors.push(`${item.serviceName} needs a date`);
-      }
-
-      if (!booking?.selectedTime) {
-        errors.push(`${item.serviceName} needs a time`);
-      }
-
-      // Validate date format
-      if (booking?.selectedDate) {
-        const date = new Date(booking.selectedDate);
-        if (isNaN(date.getTime())) {
-          errors.push(`Invalid date for ${item.serviceName}`);
-        }
-      }
-
-      // Validate time format (HH:mm)
-      if (booking?.selectedTime) {
-        const time = booking.selectedTime;
-        const is24Hour = /^\d{1,2}:\d{2}$/.test(time);
-        const is12Hour = /^\d{1,2}:\d{2}\s?(AM|PM|am|pm)$/i.test(time);
-
-        if (!is24Hour && !is12Hour) {
-          errors.push(`Invalid time format for ${item.serviceName}`);
-        }
-      }
-    });
-
-    return {
-      valid: errors.length === 0,
-      errors,
-    };
-  }
-
-  /**
-   * Create appointment data from cart items and bookings
-   * Uses real provider locations from PROVIDER_LOCATIONS
-   * INCLUDES DEPOSIT CALCULATION
-   *
-   * PAYMENT LOGIC FOR MULTIPLE BOOKINGS:
-   * 1. Each item has its own subtotal (base price + add-ons)
-   * 2. Each item is charged either that subtotal or its deposit
-   * 3. One platform fee is calculated on the total charged, then shared across
-   *    every item by what it's charged (splitPlatformFeePence), the same split
-   *    apply_checkout_platform_fee makes
-   * 4. All items are paid in ONE checkout transaction
-   */
-  static createAppointmentData(
-    items: CartItem[],
-    bookings: Record<string, ServiceBookingData>,
-    customerInfo: { name: string; email: string; phone: string },
-    providerLocations: Record<string, ProviderLocationData> = {}
-  ): AppointmentData[] {
-    logger.log('Creating appointment data for', items.length, 'items');
-
-    // What the card is charged for each item, before the fee. A provider's
-    // deposit remains exactly the provider-set amount; the fee sits on top.
-    const priced = items.map(item => {
-      const booking = bookings[item.id];
-      if (!booking) {
-        logger.error('Missing booking for:', item.serviceName);
-        throw new Error(`Missing booking data for ${item.serviceName}`);
-      }
-      const basePrice = Number(item.price) || 0;
-      const addOnsTotal = (item.addOns || []).reduce((sum: number, addOn: any) => {
-        return sum + (Number(addOn.price) || 0);
-      }, 0);
-      const itemSubtotal = basePrice + addOnsTotal;
-      const policy: DepositPolicy | number = booking.depositPolicy ?? DEPOSIT_PERCENTAGE;
-      const depositAmount = booking.isDepositOnly ? this.calculateDeposit(itemSubtotal, policy) : 0;
-      const charged = booking.isDepositOnly ? depositAmount : itemSubtotal;
-      return { item, booking, basePrice, addOnsTotal, itemSubtotal, depositAmount, charged };
-    });
-
-    // Whole pence throughout, so the fee and its shares round like the server.
-    const chargedPence = priced.map(p => toPence(p.charged));
-    const totalServiceChargePence = calculatePlatformFeePence(chargedPence.reduce((sum, p) => sum + p, 0));
-    const sharesPence = splitPlatformFeePence(totalServiceChargePence, chargedPence);
-
-    logger.log('Cart totals:', {
-      chargedPence,
-      totalServiceChargePence,
-      itemCount: items.length
-    });
-
-    return priced.map(({ item, booking, basePrice, addOnsTotal, itemSubtotal, depositAmount, charged }, index) => {
-      logger.log('Processing:', item.serviceName);
-
-      // This item's share of the fee, by what it's charged.
-      const itemServiceCharge = (sharesPence[index] ?? 0) / 100;
-
-      const paymentType: 'full' | 'deposit' = booking.isDepositOnly ? 'deposit' : 'full';
-      const amountPaid = Math.round((charged + itemServiceCharge) * 100) / 100;
-      const remainingBalance = booking.isDepositOnly
-        ? Math.round((itemSubtotal - depositAmount) * 100) / 100
-        : 0;
-      const totalWithServiceCharge = itemSubtotal + itemServiceCharge;
-
-      logger.log(`Payment calculation for ${item.serviceName}:`, {
-        basePrice,
-        addOnsTotal,
-        itemSubtotal,
-        itemServiceCharge,
-        totalWithServiceCharge,
-        paymentType,
-        amountPaid,
-        depositAmount,
-        remainingBalance
-      });
-
-      // Get provider location from DB data (passed in) or fall back gracefully
-      const fullProviderName = item.providerDisplayName ?? item.providerName;
-      const providerLocation = providerLocations[fullProviderName] ?? providerLocations[item.providerName];
-
-      const address = providerLocation?.address ?? ADDRESS_PENDING_PLACEHOLDER;
-      const coordinates = providerLocation?.coordinates ?? null;
-      const phone = providerLocation?.phone ?? PHONE_PENDING_PLACEHOLDER;
-
-      const appointmentData: AppointmentData = {
-        cartItemId: item.id,
-        date: booking.selectedDate,
-        time: booking.selectedTime,
-        address,
-        coordinates,
-        phone,
-        notes: booking.notes || '',
-        customerName: customerInfo.name,
-        customerEmail: customerInfo.email,
-        customerPhone: customerInfo.phone,
-        paymentType,
-        amountPaid,
-        depositAmount,
-        remainingBalance,
-        serviceCharge: itemServiceCharge,
-      };
-
-      logger.log('Created appointment data:', {
-        service: item.serviceName,
-        paymentType: appointmentData.paymentType,
-        amountPaid: appointmentData.amountPaid,
-        serviceCharge: appointmentData.serviceCharge
-      });
-
-      return appointmentData;
-    });
-  }
-
   /**
    * Calculate deposit amount.
    * Accepts either a legacy percentage number (default 20) or a DepositPolicy object.

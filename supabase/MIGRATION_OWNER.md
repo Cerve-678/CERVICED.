@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-ac (chore/remove-mock-card-form) — 20261126120000_checkout_only_through_payment, written, NOT applied (waiting for the user's OK)
 ```
 
 ### Applied 2026-11-26 (home-based only, and the client is told to message the provider)

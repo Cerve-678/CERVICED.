@@ -27,8 +27,8 @@ payment still need end-to-end verification using the sequence below.
 
 ## Configuration to verify before device testing
 
-The local app has `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` and a test publishable
-key. Secret values were not read or changed. Confirm the Edge Function
+The local app has a test publishable key (every build uses Stripe checkout;
+there is no on/off switch since 26 November). Secret values were not read or changed. Confirm the Edge Function
 `STRIPE_SECRET_KEY` belongs to the same Stripe test account/sandbox. The app checks
 the returned PaymentIntent mode against its publishable key.
 

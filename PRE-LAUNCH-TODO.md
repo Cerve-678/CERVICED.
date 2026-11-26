@@ -14,12 +14,12 @@ by checkout batch → finalize_checkout`, with server-owned availability, prices
 deposit policy and platform fees. Direct client booking/add-on writes were
 revoked as part of that cutover.
 
-Stripe is deliberately **off** in app code until launch preparation:
-`EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` is required in the native release
-environment. While it is off, the old mock checkout cannot create live bookings
-because its direct writes are intentionally blocked.
+Stripe checkout is the only checkout in every build: the on/off switch
+(`EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED`), the practice card form and the
+hold/claim RPCs it used were removed on 26 November (migration
+`20261126120000_checkout_only_through_payment`).
 
-**Before launch:** enable the flag in the release environment, build a native
+**Before launch:** build a native
 iOS/Android app, and complete a Stripe test payment end to end: reserve slot,
 authorise payment, finalise booking, capture payment, verify client/provider
 notifications and the PDF receipt. Verify cancellation releases an abandoned
@@ -1171,8 +1171,8 @@ Inert until all of these happen, in order:
    `accept_checkout_fees`, which step 1 drops, so its fee checkouts fail.
 3. Then a migration dropping `users.stripe_customer_id` and its two guard
    triggers/functions (unused after step 2; never before it).
-4. `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` (§1). Until then Payment Methods
-   shows the old explainer and checkout doesn't use saved cards.
+4. Done 26 November: the switch is gone, so Payment Methods always shows
+   saved cards (§1).
 
 Before turning it on:
 

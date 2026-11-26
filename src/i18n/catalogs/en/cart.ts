@@ -15,7 +15,6 @@ export const cart = {
   "cart.servicesCount.other": "{count} services",
   "cart.nameList": "{rest} and {last}",
   "cart.errorTitle": "Cart Error",
-  "cart.error.bookingNotCompleted": "We couldn't complete this booking. Please try again.",
   "cart.providerProfileFailed": "We couldn't open that provider's profile.",
   "cart.bookingsNavFailed": "Unable to open bookings",
   // Booking summary sheet
@@ -26,17 +25,10 @@ export const cart = {
   "cart.summary.confirmPay": "Confirm & Pay",
   "cart.summary.customer": "CUSTOMER",
   "cart.summary.appointments": "APPOINTMENTS",
-  // Payment sheets (mock form kept for testing, and Stripe)
-  "cart.mockPay.title": "Complete Payment",
-  "cart.mockPay.orderSummary": "Order Summary",
-  "cart.mockPay.depositSuffix": " (Deposit)",
-  "cart.mockPay.paymentMethod": "Payment Method",
-  "cart.mockPay.creditDebitCard": "Credit/Debit Card",
-  "cart.mockPay.cardDetails": "Card Details",
-  "cart.mockPay.cardNumber": "Card Number",
-  "cart.mockPay.expiry": "MM/YY",
-  "cart.mockPay.cvc": "CVC",
-  "cart.mockPay.cardholderName": "Cardholder Name",
+  // Payment sheet
+  "cart.payment.title": "Complete Payment",
+  "cart.payment.orderSummary": "Order Summary",
+  "cart.payment.depositSuffix": " (Deposit)",
   "cart.pay.amount": "Pay {amount}",
   "cart.pay.expired": "Checkout has expired. Please review your booking and try again.",
   "cart.pay.paypalUnavailable": "PayPal isn't available for this booking. Please pay by card.",
@@ -162,9 +154,6 @@ export const cart = {
   "cart.paymentError.sessionExpired": "Your session has expired. Please sign in again.",
   // Payment methods (PaymentMethodsScreen)
   "cart.methods.title": "Payment Methods",
-  "cart.methods.paySecurely": "Pay securely when you book",
-  "cart.methods.secureCheckout": "Secure checkout",
-  "cart.methods.explainer": "Choose your services and appointment time, then pay at checkout by card, Apple Pay or Google Pay where your device supports it, or PayPal. Bookings with a late arrival or no-show fee are paid by card, since the fee may be charged to it after the appointment.",
   "cart.methods.stripeNote": "Stripe holds your card details. Cerviced only sees the card type, last four digits and expiry date, and never stores your PayPal details.",
   "cart.methods.setupFailed": "Could not open card setup.",
   "cart.methods.saveFailedShort": "Could not save that card.",
@@ -248,14 +237,11 @@ export const cart = {
   'cart.checkout.ownBusinessTitle': "You can't book yourself",
   'cart.checkout.ownBusiness':
     'Your cart has a service from your own business. Remove it to check out.',
-  'cart.checkout.waitlistCardOnly':
-    'A waitlist slot can only be paid for by card in this version of the app.',
 } as const;
 
 /** Keys in this area HELD IN ENGLISH in every language (legal, refund,
  *  cancellation, payment, age and health-safety copy). See ../../translate.ts. */
 export const cartHeld: readonly (keyof typeof cart)[] = [
-  'cart.methods.explainer',
   'cart.methods.stripeNote',
   'cart.methods.paypalSub',
 ];

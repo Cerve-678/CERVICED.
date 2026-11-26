@@ -16,7 +16,7 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const total = subtotal + serviceCharge;
   const paymentType = booking.paymentType || 'full';
   // What actually left the client's card at checkout. For a deposit booking
-  // this is deposit + platform fee (see BookingService.createAppointmentData),
+  // this is deposit + platform fee (prepare_checkout prices both),
   // which is why it must NOT be the number shown next to a "Deposit" label.
   const amountPaidAtCheckout = booking.amountPaid || 0;
   const depositAmount = booking.depositAmount || 0;

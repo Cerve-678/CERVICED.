@@ -167,7 +167,6 @@ export {
   getMyAnnouncementFollowers,
   queueScheduledAnnouncement,
   cancelScheduledAnnouncement,
-  getServiceIdsByNames,
   getRebookableService,
   getServiceSafetyFlags,
   getServiceDurationsByIds,
@@ -223,7 +222,6 @@ export {
   getMyLatestCompletedBooking,
   getProviderIdByDisplayName,
   isSlotTaken,
-  getSlotsTaken,
   getProviderBookings,
   subscribeToProviderBookingChanges,
   subscribeToProviderBookingDetailChanges,
@@ -256,11 +254,7 @@ export type {
   ClientExternalBookingWithProvider,
 } from "./database/bookings";
 export {
-  holdCartBookingSlots,
-  claimCartBookingSlots,
-  releaseCartBookingSlots,
   updateBookingStatus,
-  updateBookingGroupInfo,
   cancelOwnBooking,
   markProviderNoShow,
   disputeNoShow,
@@ -271,9 +265,6 @@ export {
   getProviderDepositPoliciesByDisplayNames,
 } from "./database/checkout";
 export type {
-  CartHoldItem,
-  CartClaimItem,
-  CartClaimResult,
   ProviderDepositPolicy,
   ProviderCheckoutMetadataQuery,
 } from "./database/checkout";
@@ -319,9 +310,7 @@ export {
   getLiveServiceDescriptions,
   updateProviderMaxBookingsPerDay,
   getProviderBookingCapSettings,
-  getProviderBookingCapSettingsForProviders,
   countProviderBookingsOnDate,
-  countProviderBookingsOnDates,
   deleteNotification,
 } from "./database/notifications";
 export type {
@@ -412,7 +401,6 @@ export {
   providerInitiateGroupReschedule,
   confirmGroupReschedule,
   declineGroupRescheduleOffer,
-  insertBookingUserNotification,
   getProviderReschedulePolicyByDisplayName,
   getProviderReschedulePolicyById,
   getProviderBookingPoliciesById,
@@ -484,7 +472,6 @@ export {
   getMyBookedClientContact,
   setMyBookedClientContact,
   getProviderLocationsByDisplayNames,
-  getProviderLocationsByIds,
   getMobileProviderDisplayNames,
   getLiveProviderIds,
   getConsultationRequiredProviderIds,

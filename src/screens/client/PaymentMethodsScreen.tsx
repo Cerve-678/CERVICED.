@@ -95,27 +95,9 @@ export default function PaymentMethodsScreen({ navigation }: any) {
 
         {/* Saved cards only exist on the real Stripe checkout path; while
             it's switched off, checkout can't use them, so don't offer them. */}
-        {env.stripePaymentsEnabled ? <SavedCardsSection /> : <CheckoutExplainer />}
+        <SavedCardsSection />
       </ScrollView>
     </ThemedBackground>
-  );
-}
-
-function CheckoutExplainer() {
-  const { palette: P } = useTheme();
-  const { t } = useTranslation();
-  return (
-    <>
-      <Text style={[styles.subtitle, { color: P.sub }]}>{t('cart.methods.paySecurely')}</Text>
-      <View style={[styles.explainer, { backgroundColor: P.accentDim }]}>
-        <Icon name="payment" size={40} color={P.accentText} />
-        <Text style={[styles.explainerTitle, { color: P.text }]}>{t('cart.methods.secureCheckout')}</Text>
-        <Text style={[styles.explainerSub, { color: P.sub }]}>
-          {t('cart.methods.explainer')}
-        </Text>
-      </View>
-      <StripeNote />
-    </>
   );
 }
 

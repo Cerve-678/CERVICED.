@@ -26,9 +26,8 @@ export function getCartAddOnsSummary(item: Pick<CartItem, 'addOns'>) {
 /** ProviderDepositPolicy (as fetched into CartScreen's providerDepositPolicies)
  *  → the {type, amount} shape BookingService.calculateDeposit expects.
  *  undefined when nothing was fetched for this provider — callers decide their
- *  own fallback (BookingService.createAppointmentData already defaults to
- *  DEPOSIT_PERCENTAGE when a booking's depositPolicy is omitted entirely, so
- *  leaving it unset here is what lets that fallback apply cleanly). */
+ *  own fallback (BookingService.calculateDeposit defaults to
+ *  DEPOSIT_PERCENTAGE). */
 export function toDepositPolicy(policy: ProviderDepositPolicy | undefined): DepositPolicy | undefined {
   return policy ? { type: policy.depositType, amount: policy.depositAmount } : undefined;
 }
