@@ -15,6 +15,8 @@ import { copyText } from "../utils/clipboard";
 import { providerWebPageUrl } from "../utils/providerProfileLink";
 import { isDarkColor } from '../constants/providerThemes';
 import { readableSheet } from '../constants/readableWidth';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 type Props = {
   visible: boolean;
@@ -49,6 +51,8 @@ export function ProviderProfileQrSheet({
   borderColor,
   onClose,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const pageUrl = providerWebPageUrl(providerSlug);
   // Printed under the code, so a screenshot or print of the card still says
   // where it goes and can be typed in. The bare domain redirects to www.
@@ -102,19 +106,19 @@ export function ProviderProfileQrSheet({
             <Ionicons name="qr-code-outline" size={23} color={accentColor} />
           </View>
           <Text style={[styles.title, { color: textColor }]} numberOfLines={1}>
-            {viewer === "visitor" ? "Share this page" : "Your profile QR"}
+            {viewer === "visitor" ? tr('shared.newc.shareThisPage') : tr('shared.newc.yourProfileQr')}
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
             {viewer === "visitor"
-              ? `Scan this with a phone camera to open ${providerName}'s page.`
+              ? tr('shared.newc2.qrScanName', { name: providerName })
               : isLive
-                ? `Anyone can scan this with their phone camera to open your page.`
+                ? tr('shared.newc2.qrScanYours')
                 : "This code starts working once your profile is live."}
           </Text>
           <View
             style={styles.qrFrame}
             accessible
-            accessibilityLabel={`QR code for ${providerName}'s CERVICED profile, ${printedLink}`}
+            accessibilityLabel={tr('shared.newc2.qrA11y', { name: providerName, link: printedLink })}
           >
             <QRCode
               value={pageUrl}
@@ -129,7 +133,7 @@ export function ProviderProfileQrSheet({
           </View>
           {viewer === "owner" ? (
             <Text style={[styles.hint, { color: subtextColor }]}>
-              Keep it by your chair, on a card, or at your front desk.
+              {tr('shared.newc.keepItByYourChairOn')}
             </Text>
           ) : null}
           <TouchableOpacity
@@ -137,7 +141,7 @@ export function ProviderProfileQrSheet({
             onPress={() => void copyLink()}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={copied ? "Link copied" : "Copy link"}
+            accessibilityLabel={copied ? tr('shared.newc.linkCopied') : tr('shared.newc.copyLink')}
           >
             <Ionicons name={copied ? "checkmark" : "copy-outline"} size={17} color={accentColor} />
             <Text style={[styles.linkActionText, { color: accentColor }]}>{copied ? "COPIED" : "COPY LINK"}</Text>
@@ -155,7 +159,7 @@ export function ProviderProfileQrSheet({
             onPress={onClose}
             activeOpacity={0.7}
           >
-            <Text style={[styles.closeText, { color: textColor }]}>Done</Text>
+            <Text style={[styles.closeText, { color: textColor }]}>{tr('common.done')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

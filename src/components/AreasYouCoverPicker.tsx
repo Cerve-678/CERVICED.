@@ -10,6 +10,8 @@ import {
   coveredAreaLabel,
   suggestedCoverTown,
 } from '../utils/providerCity';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 type Palette = { text: string; sub: string; surface: string; border: string };
 
@@ -48,6 +50,8 @@ export default function AreasYouCoverPicker({
   accentColor,
   palette: t,
 }: AreasYouCoverPickerProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [note, setNote] = useState<Note>(null);
   const suggestion = suggestedCoverTown(basedIn, value);
   const full = value.length >= MAX_COVERED_AREAS;
@@ -90,7 +94,7 @@ export default function AreasYouCoverPicker({
                 onPress={() => remove(place)}
                 activeOpacity={0.5}
                 accessibilityRole="button"
-                accessibilityLabel={`Remove ${label}`}
+                accessibilityLabel={tr('shared.newc2.removeName', { name: label })}
               >
                 <Ionicons
                   name={label === place ? 'location-outline' : 'map-outline'}
@@ -107,13 +111,13 @@ export default function AreasYouCoverPicker({
         <View style={[styles.empty, { borderColor: t.border, backgroundColor: t.surface }]}>
           <Ionicons name="navigate-circle-outline" size={20} color={accentColor} />
           <Text style={[styles.emptyText, { color: t.sub }]}>
-            No places yet. Add the towns or areas you'll travel to.
+            {tr('shared.newc.noPlacesYetAddTheTowns')}
           </Text>
         </View>
       )}
 
       {suggestion && !full && value.length === 0 ? (
-        <Text style={[styles.hint, { color: t.sub }]}>Suggested from where you're based:</Text>
+        <Text style={[styles.hint, { color: t.sub }]}>{tr('shared.newc.suggestedFromWhereYouReBased')}</Text>
       ) : null}
 
       <View style={styles.actions}>
@@ -123,7 +127,7 @@ export default function AreasYouCoverPicker({
             onPress={addSuggestion}
             activeOpacity={0.5}
             accessibilityRole="button"
-            accessibilityLabel={`Add all of ${suggestion}`}
+            accessibilityLabel={tr('shared.newc2.addAllOf', { place: suggestion })}
           >
             <Ionicons name="sparkles-outline" size={14} color={accentColor} />
             <Text style={[styles.dashedPillText, { color: t.text }]}>All of {suggestion}</Text>
@@ -136,7 +140,7 @@ export default function AreasYouCoverPicker({
           variant="cover"
           picked={value}
           accentColor={accentColor}
-          subtitle="Pick a whole town or one area in it. Add as many as you travel to."
+          subtitle={tr('shared.newc.pickAWholeTownOrOne')}
           renderTrigger={open => (
             <TouchableOpacity
               style={[styles.dashedPill, { borderColor: accentColor }, full && styles.disabled]}
@@ -151,10 +155,10 @@ export default function AreasYouCoverPicker({
               }}
               activeOpacity={0.5}
               accessibilityRole="button"
-              accessibilityLabel="Add an area you cover"
+              accessibilityLabel={tr('shared.newc.addAnAreaYouCover')}
             >
               <Ionicons name="add" size={15} color={accentColor} />
-              <Text style={[styles.dashedPillText, { color: t.text }]}>Add area</Text>
+              <Text style={[styles.dashedPillText, { color: t.text }]}>{tr('shared.newc.addArea')}</Text>
             </TouchableOpacity>
           )}
         />

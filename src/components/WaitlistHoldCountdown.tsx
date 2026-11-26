@@ -2,6 +2,8 @@ import React, { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type TextStyle } from 'react-native';
 import { WAITLIST_HOLD_MINUTES } from '../constants/waitlist';
 import { formatCountdown, holdSecondsLeft } from '../features/bookings/waitlist';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const HOLD_SECONDS = WAITLIST_HOLD_MINUTES * 60;
 
@@ -30,6 +32,8 @@ export const WaitlistHoldCountdown = memo(function WaitlistHoldCountdown({
   showTime?: boolean;
   onEnd?: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [left, setLeft] = useState(() => holdSecondsLeft(expiresAt, Date.now()));
   const endedRef = useRef(false);
   const onEndRef = useRef(onEnd);
@@ -56,7 +60,7 @@ export const WaitlistHoldCountdown = memo(function WaitlistHoldCountdown({
       {showTime && (
         <Text
           style={[styles.time, { color }, textStyle]}
-          accessibilityLabel={`${Math.ceil(left / 60)} minutes left`}
+          accessibilityLabel={tr('shared.newc2.minutesLeft', { minutes: Math.ceil(left / 60) })}
         >
           {formatCountdown(left)}
         </Text>

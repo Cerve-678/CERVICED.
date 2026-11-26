@@ -5,6 +5,7 @@ import { reportContent } from '../../services/databaseService';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { toUserMessage } from '../../utils/userFacingError';
 import { reportDeviceContext } from './reportContext';
+import { tr } from '../../i18n/translate';
 
 /**
  * Report one review to support (App Store guideline 1.2). Uses the system
@@ -21,20 +22,20 @@ export function useReportReview(activeMode: string) {
         ...reportDeviceContext(),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert('Thanks for telling us', `We'll look into it. Your reference is #${ticketNumber}.`);
+      Alert.alert(tr('shared.newc.thanksForTellingUs'), tr('shared.newc2.refRef', { ref: ticketNumber }));
     } catch (err) {
       Alert.alert(
-        "Couldn't send your report",
-        `${toUserMessage(err, 'Please try again in a moment.', 'useReportReview')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+        tr('shared.reportProblem.failed.title'),
+        tr('shared.reportProblem.failed.body', { reason: toUserMessage(err, 'Please try again in a moment.', 'useReportReview'), email: SUPPORT_EMAIL }),
       );
     }
   }, [activeMode]);
 
   return useCallback((reviewId: string) => {
     Haptics.selectionAsync().catch(() => {});
-    Alert.alert('Report this review?', "We'll look at it. The person who wrote it won't know you reported it.", [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Report', style: 'destructive', onPress: () => { void sendReport(reviewId); } },
+    Alert.alert(tr('shared.newc.reportThisReview'), tr('shared.newc.weLlLookAtItThe'), [
+      { text: tr('common.cancel'), style: 'cancel' },
+      { text: tr('shared.newc.report'), style: 'destructive', onPress: () => { void sendReport(reviewId); } },
     ]);
   }, [sendReport]);
 }

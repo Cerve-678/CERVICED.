@@ -80,6 +80,8 @@ import {
 import type { AppTheme } from '../../constants/theme';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import type { ProfileScreenProps } from '../../navigation/types';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const FACE = 42;
 /** Invite rows shown at first, and added per "Show more". */
@@ -127,6 +129,8 @@ function Face({ name, avatarUrl, P }: { name: string; avatarUrl: string | null; 
 }
 
 export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const { palette: P } = useTheme();
@@ -286,8 +290,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         hapticSuccess();
         showToast(
           status === 'pending'
-            ? `Request sent to ${firstName(person.name)}`
-            : `You're following ${firstName(person.name)}`,
+            ? tr('shared.newc2.requestSent', { name: firstName(person.name) })
+            : tr('shared.newc2.nowFollowing', { name: firstName(person.name) }),
           'success',
         );
       }),
@@ -298,8 +302,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     (personId: string, name: string, pending: boolean) => {
       const first = firstName(name);
       showConfirm(
-        pending ? `Cancel your request to ${first}?` : `Unfollow ${first}?`,
-        pending ? undefined : `You'll stop seeing where ${first} goes.`,
+        pending ? tr('shared.newc2.cancelRequestQ', { name: first }) : tr('shared.newc2.unfollowQ', { name: first }),
+        pending ? undefined : tr('shared.newc2.stopSeeing', { name: first }),
         [
           {
             text: pending ? 'Cancel request' : 'Unfollow',
@@ -312,7 +316,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                 afterFollowChange();
               }),
           },
-          { text: 'Keep', style: 'cancel' },
+          { text: tr('maintenance.menu.keep'), style: 'cancel' },
         ],
       );
     },
@@ -338,13 +342,13 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       const first = firstName(entry.name);
       const open = settings ? !settings.isPrivate : false;
       showConfirm(
-        `Remove ${first}?`,
+        tr('shared.newc2.removeQ', { name: first }),
         open
-          ? `${first} won't be told. Your account is open, so they could follow you again. Block them to stop that.`
-          : `${first} won't be told. They'll stop seeing where you go.`,
+          ? tr('shared.newc2.removeOpen', { name: first })
+          : tr('shared.newc2.removePrivate', { name: first }),
         [
           {
-            text: 'Remove',
+            text: tr('common.remove'),
             style: 'destructive',
             onPress: () =>
               void runForRow(entry.userId, "Couldn't remove", '[circle] remove follower', async () => {
@@ -354,7 +358,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                 afterFollowChange();
               }),
           },
-          { text: 'Keep', style: 'cancel' },
+          { text: tr('maintenance.menu.keep'), style: 'cancel' },
         ],
       );
     },
@@ -365,11 +369,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     (personId: string, name: string) => {
       const first = firstName(name);
       showConfirm(
-        `Block ${first}?`,
-        `You'll stop following each other, and ${first} won't be able to find you or follow you. They won't be told. You can unblock them at the bottom of Your circle.`,
+        tr('shared.newc2.blockQ', { name: first }),
+        tr('shared.newc2.blockBody', { name: first }),
         [
           {
-            text: 'Block',
+            text: tr('shared.newc.block'),
             style: 'destructive',
             onPress: () =>
               void runForRow(personId, "Couldn't block", '[circle] block person', async () => {
@@ -382,10 +386,10 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                   userId: personId, name, avatarUrl: null, status: 'blocked', since: new Date().toISOString(),
                 }));
                 afterFollowChange();
-                showToast(`${first} is blocked`, 'info');
+                showToast(tr('shared.newc2.isBlocked', { name: first }), 'info');
               }),
           },
-          { text: 'Cancel', style: 'cancel' },
+          { text: tr('common.cancel'), style: 'cancel' },
         ],
       );
     },
@@ -396,11 +400,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     (entry: PersonListEntry) => {
       const first = firstName(entry.name);
       showConfirm(
-        `Unblock ${first}?`,
-        `${first} will be able to find you and ask to follow you again. You won't follow each other unless one of you asks again.`,
+        tr('shared.newc2.unblockQ', { name: first }),
+        tr('shared.newc2.unblockBody', { name: first }),
         [
           {
-            text: 'Unblock',
+            text: tr('shared.newc.unblock'),
             onPress: () =>
               void runForRow(entry.userId, "Couldn't unblock", '[circle] unblock person', async () => {
                 await unblockPerson(entry.userId);
@@ -408,7 +412,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                 afterFollowChange();
               }),
           },
-          { text: 'Keep blocked', style: 'cancel' },
+          { text: tr('shared.newc.keepBlocked'), style: 'cancel' },
         ],
       );
     },
@@ -439,7 +443,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         // Going open lets everyone waiting in, so the lists have moved.
         if (patch.isPrivate === false) void loadLists();
       } catch (err) {
-        showAlert("Couldn't save that", toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', '[circle] update sharing'));
+        showAlert(tr('shared.newc.couldnTSaveThat'), toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', '[circle] update sharing'));
       } finally {
         setSavingSetting(false);
       }
@@ -456,11 +460,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         return;
       }
       showConfirm(
-        'Show where I go?',
-        "From now on, people you accept as followers will see your face on providers you book or recommend, and how many times you've been. Your account stays private.",
+        tr('shared.newc.showWhereIGo2'),
+        tr('shared.newc.fromNowOnPeopleYouAccept'),
         [
-          { text: 'Turn on', onPress: () => void saveSetting({ showWhereIGo: true }) },
-          { text: 'Not now', style: 'cancel' },
+          { text: tr('maintenance.turnOn'), onPress: () => void saveSetting({ showWhereIGo: true }) },
+          { text: tr('common.notNow'), style: 'cancel' },
         ],
       );
     },
@@ -474,11 +478,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         return;
       }
       showConfirm(
-        'Make your account open?',
-        "Anyone can follow you without asking, and every follower sees where you go. Anyone waiting for you to accept will be let in.",
+        tr('shared.newc.makeYourAccountOpen'),
+        tr('shared.newc.anyoneCanFollowYouWithoutAsking'),
         [
-          { text: 'Make it open', onPress: () => void saveSetting({ isPrivate: false }) },
-          { text: 'Keep it private', style: 'cancel' },
+          { text: tr('shared.newc.makeItOpen'), onPress: () => void saveSetting({ isPrivate: false }) },
+          { text: tr('shared.newc.keepItPrivate'), style: 'cancel' },
         ],
       );
     },
@@ -512,7 +516,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       if (userIdRef.current !== forUser) return;
       setContactsError(
         isContactsLimitError(err)
-          ? "You've checked a lot of contacts today. Please try again tomorrow."
+          ? tr('shared.newc.youVeCheckedALotOf')
           : toUserMessageAllowingDbGuard(err, "Couldn't check your contacts just now. Please try again.", '[circle] contacts'),
       );
       setContactsState('error');
@@ -530,14 +534,14 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         out.push({
           key: 'contacts',
           title: 'CONTACTS',
-          data: [{ kind: 'note', key: 's-empty', text: `None of your contacts match "${trimmedQuery}".` }],
+          data: [{ kind: 'note', key: 's-empty', text: tr('shared.newc2.noContactMatch', { query: trimmedQuery }) }],
         });
         return out;
       }
       if (matches.length > 0) {
         out.push({
           key: 'contacts',
-          title: `ON CERVICED · ${matches.length}`,
+          title: tr('shared.newc2.onCerviced', { count: matches.length }),
           data: matches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person })),
         });
       }
@@ -545,32 +549,32 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         const shown = invites.slice(0, invitesShown);
         const data: Row[] = shown.map((contact) => ({ kind: 'invite', key: `i-${contact.key}`, contact }));
         if (invites.length > shown.length) data.push({ kind: 'moreInvites', key: 'i-more', left: invites.length - shown.length });
-        out.push({ key: 'invites', title: `INVITE · ${invites.length}`, data });
+        out.push({ key: 'invites', title: tr('shared.newc2.invite', { count: invites.length }), data });
       }
       return out;
     }
     if (requests.length > 0) {
       out.push({
         key: 'requests',
-        title: `REQUESTS · ${requests.length}`,
+        title: tr('shared.newc2.requests', { count: requests.length }),
         data: requests.map((entry) => ({ kind: 'request', key: `q-${entry.userId}`, entry })),
       });
     }
     if (contactsState === 'done') {
       out.push({
         key: 'contacts',
-        title: `ON CERVICED · ${contactMatches.length}`,
+        title: tr('shared.newc2.onCerviced', { count: contactMatches.length }),
         data:
           contactMatches.length > 0
             ? contactMatches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person }))
-            : [{ kind: 'note', key: 'c-empty', text: 'None of your contacts are on CERVICED yet.' }],
+            : [{ kind: 'note', key: 'c-empty', text: tr('shared.newc.noneOfYourContactsAreOn') }],
       });
       if (contactInvites.length > 0) {
         const shown = contactInvites.slice(0, invitesShown);
         const left = contactInvites.length - shown.length;
         const data: Row[] = shown.map((contact) => ({ kind: 'invite', key: `i-${contact.key}`, contact }));
         if (left > 0) data.push({ kind: 'moreInvites', key: 'i-more', left });
-        out.push({ key: 'invites', title: `INVITE · ${contactInvites.length}`, data });
+        out.push({ key: 'invites', title: tr('shared.newc2.invite', { count: contactInvites.length }), data });
       }
     } else if (contactsState !== 'dismissed') {
       out.push({ key: 'contacts', title: 'CONTACTS', data: [{ kind: 'contacts', key: 'contacts' }] });
@@ -580,31 +584,31 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       out.push({
         key: 'lists-error',
         title: 'FOLLOWING',
-        data: [{ kind: 'retry', key: 'lists-error', text: "Couldn't load who you follow." }],
+        data: [{ kind: 'retry', key: 'lists-error', text: tr('shared.newc.couldnTLoadWhoYouFollow') }],
       });
       return out;
     }
     if (listsState === 'loading') return out;
     out.push({
       key: 'following',
-      title: `FOLLOWING · ${following.length}`,
+      title: tr('shared.newc2.following', { count: following.length }),
       data:
         following.length > 0
           ? following.map((entry) => ({ kind: 'following', key: `g-${entry.userId}`, entry }))
-          : [{ kind: 'note', key: 'g-empty', text: 'Find people you know from your contacts.' }],
+          : [{ kind: 'note', key: 'g-empty', text: tr('shared.newc.findPeopleYouKnowFromYour') }],
     });
     out.push({
       key: 'followers',
-      title: `FOLLOWERS · ${followers.length}`,
+      title: tr('shared.newc2.followers', { count: followers.length }),
       data:
         followers.length > 0
           ? followers.map((entry) => ({ kind: 'follower', key: `f-${entry.userId}`, entry }))
-          : [{ kind: 'note', key: 'f-empty', text: 'Nobody follows you yet.' }],
+          : [{ kind: 'note', key: 'f-empty', text: tr('shared.newc.nobodyFollowsYouYet') }],
     });
     if (blocked.length > 0) {
       out.push({
         key: 'blocked',
-        title: `BLOCKED · ${blocked.length}`,
+        title: tr('shared.newc2.blocked', { count: blocked.length }),
         data: blocked.map((entry) => ({ kind: 'blocked', key: `b-${entry.userId}`, entry })),
       });
     }
@@ -621,7 +625,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       activeOpacity={0.5}
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityLabel={`Block ${name}`}
+      accessibilityLabel={tr('shared.newc2.blockName', { name })}
     >
       <Ionicons name="ellipsis-horizontal" size={18} color={P.sub} />
     </TouchableOpacity>
@@ -659,8 +663,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         <View style={[ui.card, styles.sharingCard, { backgroundColor: P.card, borderColor: P.border }]}>
           {settingsError ? (
             <View style={styles.sharingRetry}>
-              <Text style={[ui.body, { color: P.sub, flex: 1 }]}>Couldn't load your sharing settings.</Text>
-              <GhostButton small label="Try again" onPress={() => void loadSettings()} P={P} />
+              <Text style={[ui.body, { color: P.sub, flex: 1 }]}>{tr('shared.newc.couldnTLoadYourSharingSettings')}</Text>
+              <GhostButton small label={tr('common.tryAgain')} onPress={() => void loadSettings()} P={P} />
             </View>
           ) : (
             <ActivityIndicator color={P.sub} />
@@ -671,11 +675,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     return (
       <View style={[ui.card, styles.sharingCard, { backgroundColor: P.card, borderColor: P.border }]}>
         <SwitchRow
-          title="Show where I go"
+          title={tr('shared.newc.showWhereIGo')}
           sub={
             settings.showWhereIGo
-              ? 'Your followers see your face on providers you go to or recommend. Never what you had done.'
-              : 'Nobody sees where you go.'
+              ? tr('shared.newc.yourFollowersSeeYourFaceOn')
+              : tr('shared.newc.nobodySeesWhereYouGo')
           }
           value={settings.showWhereIGo}
           onChange={onShowWhereIGoChange}
@@ -684,11 +688,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         />
         <View style={[styles.divider, { backgroundColor: P.sep }]} />
         <SwitchRow
-          title="Private account"
+          title={tr('shared.newc.privateAccount')}
           sub={
             settings.isPrivate
-              ? 'People ask to follow you, and you choose who.'
-              : 'Anyone can follow you.'
+              ? tr('shared.newc.peopleAskToFollowYouAnd')
+              : tr('shared.newc.anyoneCanFollowYou')
           }
           value={settings.isPrivate}
           onChange={onPrivateChange}
@@ -697,8 +701,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         />
         <View style={[styles.divider, { backgroundColor: P.sep }]} />
         <SwitchRow
-          title="Findable by phone number"
-          sub="People who have your number can find you."
+          title={tr('shared.newc.findableByPhoneNumber')}
+          sub={tr('shared.newc.peopleWhoHaveYourNumberCan')}
           value={settings.findableByPhone}
           onChange={(v) => void saveSetting({ findableByPhone: v })}
           disabled={savingSetting || settings.isMinor}
@@ -720,7 +724,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       return (
         <View style={[styles.contactsCard, { backgroundColor: P.accent }]}>
           <ActivityIndicator color={P.onAccent} />
-          <Text style={[ui.body, { color: P.onAccent, textAlign: 'center' }]}>Checking your contacts…</Text>
+          <Text style={[ui.body, { color: P.onAccent, textAlign: 'center' }]}>{tr('shared.newc.checkingYourContacts')}</Text>
         </View>
       );
     }
@@ -728,11 +732,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       return (
         <View style={[ui.card, styles.contactsOff, { backgroundColor: P.card, borderColor: P.border }]}>
           <Text style={[ui.body, { color: P.text }]}>
-            CERVICED can't see your contacts, so it can't show you who's here. You can let it in Settings.
+            {tr('shared.newc.cervicedCanTSeeYourContacts')}
           </Text>
           <View style={styles.pair}>
-            <GhostButton small label="Open Settings" onPress={() => { void Linking.openSettings(); }} P={P} />
-            <GhostButton small label="Not now" onPress={() => setContactsState('dismissed')} P={P} />
+            <GhostButton small label={tr('shared.newc.openSettings')} onPress={() => { void Linking.openSettings(); }} P={P} />
+            <GhostButton small label={tr('common.notNow')} onPress={() => setContactsState('dismissed')} P={P} />
           </View>
         </View>
       );
@@ -740,9 +744,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     return (
       <View style={[styles.contactsCard, { backgroundColor: P.accent }]}>
         <Text style={[styles.contactsKick, { color: P.onAccent }]}>CONTACTS</Text>
-        <Text style={[styles.contactsTitle, { color: P.onAccent }]}>See who you know here</Text>
+        <Text style={[styles.contactsTitle, { color: P.onAccent }]}>{tr('shared.newc.seeWhoYouKnowHere')}</Text>
         <Text style={[ui.body, { color: P.onAccent, opacity: 0.9 }]}>
-          See who's already here, and invite the rest. Your address book is never saved.
+          {tr('shared.newc.seeWhoSAlreadyHereAnd')}
         </Text>
         {contactsState === 'error' && contactsError ? (
           <Text style={[ui.body, { color: P.onAccent }]}>{contactsError}</Text>
@@ -785,10 +789,10 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           null,
           <GhostButton
             small
-            label="Invite"
+            label={tr('shared.newc.invite')}
             onPress={() => { void inviteContact(item.contact).catch((err: unknown) => logger.warn('[circle] invite failed', err)); }}
             P={P}
-            accessibilityLabel={`Invite ${item.contact.name}`}
+            accessibilityLabel={tr('shared.newc2.inviteName', { name: item.contact.name })}
           />,
         );
       case 'moreInvites':
@@ -810,7 +814,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
             <Text style={[ui.body, { color: P.sub, flex: 1 }]}>{item.text}</Text>
             <GhostButton
               small
-              label="Try again"
+              label={tr('common.tryAgain')}
               onPress={() => { setListsState('loading'); void loadLists(); }}
               P={P}
             />
@@ -852,8 +856,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           e.avatarUrl,
           'Wants to follow you',
           <View style={styles.pair}>
-            <PrimaryButton small label="Accept" onPress={() => void respond(e, true)} P={P} accessibilityLabel={`Accept ${e.name}`} />
-            <GhostButton small label="Decline" onPress={() => void respond(e, false)} P={P} accessibilityLabel={`Decline ${e.name}`} />
+            <PrimaryButton small label={tr('shared.newc.accept')} onPress={() => void respond(e, true)} P={P} accessibilityLabel={tr('shared.newc2.acceptName', { name: e.name })} />
+            <GhostButton small label={tr('shared.newc.decline')} onPress={() => void respond(e, false)} P={P} accessibilityLabel={tr('shared.newc2.declineName', { name: e.name })} />
           </View>,
           true,
         );
@@ -869,7 +873,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           <>
             <GhostButton
               small
-              label={pending ? 'Requested' : 'Following'}
+              label={pending ? tr('shared.newc.requested') : tr('shared.newc.following')}
               onPress={() => confirmUnfollow(e.userId, e.name, pending)}
               P={P}
               accessibilityLabel={`${pending ? 'Requested' : 'Following'} ${e.name}. Double tap to change.`}
@@ -883,7 +887,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         // They follow me, so the same rule as a contact row: Follow back until I do.
         const action = personAction({ myStatus: myStatusById.get(e.userId) ?? null, followsMe: 'accepted' });
         const remove = (
-          <GhostButton small label="Remove" onPress={() => confirmRemoveFollower(e)} P={P} accessibilityLabel={`Remove ${e.name}`} />
+          <GhostButton small label={tr('common.remove')} onPress={() => confirmRemoveFollower(e)} P={P} accessibilityLabel={tr('shared.newc2.removeName', { name: e.name })} />
         );
         if (action === 'followBack') {
           return personRow(
@@ -898,7 +902,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                   label={PERSON_ACTION_LABEL.followBack}
                   onPress={() => void follow({ userId: e.userId, name: e.name, avatarUrl: e.avatarUrl, myStatus: null, followsMe: 'accepted' })}
                   P={P}
-                  accessibilityLabel={`Follow back ${e.name}`}
+                  accessibilityLabel={tr('shared.newc2.followBack', { name: e.name })}
                 />
                 {remove}
               </View>
@@ -925,7 +929,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           e.name,
           e.avatarUrl,
           null,
-          <GhostButton small label="Unblock" onPress={() => confirmUnblock(e)} P={P} accessibilityLabel={`Unblock ${e.name}`} />,
+          <GhostButton small label={tr('shared.newc.unblock')} onPress={() => confirmUnblock(e)} P={P} accessibilityLabel={tr('shared.newc2.unblockName', { name: e.name })} />,
         );
       }
     }
@@ -939,20 +943,20 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search your contacts"
+            placeholder={tr('shared.newc.searchYourContacts')}
             placeholderTextColor={P.sub}
             style={[styles.searchInput, { color: P.text }]}
             autoCapitalize="words"
             autoCorrect={false}
             returnKeyType="search"
             clearButtonMode="while-editing"
-            accessibilityLabel="Search your contacts"
+            accessibilityLabel={tr('shared.newc.searchYourContacts')}
           />
         </View>
       ) : null}
       {searching ? null : (
         <Text style={[ui.body, { color: P.sub }]}>
-          Faces of people you follow show on the providers they recommend or have booked.
+          {tr('shared.newc.facesOfPeopleYouFollowShow')}
         </Text>
       )}
     </View>
