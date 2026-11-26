@@ -20,6 +20,8 @@ import {
   type CustomSection, type FaqItem, type OwnSectionKind, type TextSectionKind,
 } from '../providers/ownSections';
 import { Card, MinusButton, useBusinessPalette } from './BusinessDetailsKit';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 /** The sections as edited: text stays as typed (trimmed only on save), so
  *  the cursor doesn't jump. */
@@ -90,6 +92,8 @@ export function OwnSectionsCard({ draft, onChange }: {
   draft: OwnDraft;
   onChange: (update: (prev: OwnDraft) => OwnDraft) => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const C = useBusinessPalette();
   // Added this visit but nothing typed yet: still shown, so it can be written.
   const [added, setAdded] = useState<Partial<Record<OwnSectionKind, boolean>>>({});
@@ -127,7 +131,7 @@ export function OwnSectionsCard({ draft, onChange }: {
   };
 
   return (
-    <Card title="Your Sections" sub="Your own sections, each shown on your profile under Additional Information. Add only what you need.">
+    <Card title={tr('providerBusiness.newp.yourSections')} sub={tr('providerBusiness.newp.yourOwnSectionsEachShownOn')}>
       {entries.map(({ kind, customIndex }, position) => customIndex !== undefined ? (
         <View
           key={`custom-${customIndex}`}
@@ -138,22 +142,22 @@ export function OwnSectionsCard({ draft, onChange }: {
               style={[st.box, st.nameBox, { backgroundColor: C.surface, borderColor: C.border, color: C.text }]}
               value={draft.custom[customIndex]!.title}
               onChangeText={v => setCustom(customIndex, 'title', v)}
-              placeholder="Name it, e.g. Parking"
+              placeholder={tr('providerBusiness.newp.nameItEGParking')}
               placeholderTextColor={C.sub}
               maxLength={OWN_SECTION_LIMITS.customTitle}
               returnKeyType="done"
-              accessibilityLabel={`Custom section ${customIndex + 1} name`}
+              accessibilityLabel={tr('providerBusiness.newp2.customNameA11y', { n: customIndex + 1 })}
             />
             <MinusButton
-              label={`Remove ${draft.custom[customIndex]!.title.trim() || `custom section ${customIndex + 1}`}`}
+              label={tr('providerProfile.ui.removeA11y', { name: draft.custom[customIndex]!.title.trim() || `custom section ${customIndex + 1}` })}
               onPress={() => onChange(prev => ({ ...prev, custom: prev.custom.filter((_, i) => i !== customIndex) }))}
             />
           </View>
           <GrowingBox
-            label={`${draft.custom[customIndex]!.title.trim() || `Custom section ${customIndex + 1}`} text`}
+            label={tr('providerBusiness.newp2.sectionText', { name: draft.custom[customIndex]!.title.trim() || tr('providerBusiness.newp2.customSection', { n: customIndex + 1 }) })}
             value={draft.custom[customIndex]!.body}
             onChange={v => setCustom(customIndex, 'body', v)}
-            placeholder="What clients should know"
+            placeholder={tr('providerBusiness.newp.whatClientsShouldKnow')}
             maxLength={OWN_SECTION_LIMITS.text}
           />
         </View>
@@ -161,10 +165,10 @@ export function OwnSectionsCard({ draft, onChange }: {
         <View key={kind} style={[st.section, position > 0 && { borderTopColor: C.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
           <View style={st.head}>
             <Text style={[st.title, { color: C.text }]}>{OWN_SECTION_LABELS[kind]}</Text>
-            <MinusButton label={`Remove ${OWN_SECTION_LABELS[kind]}`} onPress={() => remove(kind)} />
+            <MinusButton label={tr('providerProfile.ui.removeA11y', { name: OWN_SECTION_LABELS[kind] })} onPress={() => remove(kind)} />
           </View>
           {ATTRIBUTED_SECTION_KINDS.includes(kind) && (
-            <Text style={[st.note, { color: C.sub }]}>Shows "Written by" with your name on your profile.</Text>
+            <Text style={[st.note, { color: C.sub }]}>{tr('providerBusiness.newp2.writtenBy')}</Text>
           )}
 
           {kind === 'faq' ? (
@@ -175,26 +179,26 @@ export function OwnSectionsCard({ draft, onChange }: {
                     <Text style={[st.qaLabel, { color: C.sub }]}>QUESTION {index + 1}</Text>
                     {draft.faq.length > 1 && (
                       <MinusButton
-                        label={`Remove question ${index + 1}`}
+                        label={tr('providerBusiness.newp2.removeQuestion', { n: index + 1 })}
                         onPress={() => onChange(prev => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))}
                       />
                     )}
                   </View>
                   <GrowingBox
-                    label={`Question ${index + 1}`}
+                    label={tr('providerBusiness.newp2.questionN', { n: index + 1 })}
                     value={item.question}
                     onChange={v => setFaq(index, 'question', v)}
-                    placeholder={index === 0 ? 'e.g. Do you do children\'s hair?' : 'The question'}
+                    placeholder={index === 0 ? tr('providerBusiness.newp.eGDoYouDoChildren') : tr('providerBusiness.newp.theQuestion')}
                     maxLength={OWN_SECTION_LIMITS.question}
                     minHeight={48}
                     count={false}
                   />
                   <View style={{ height: 8 }} />
                   <GrowingBox
-                    label={`Answer ${index + 1}`}
+                    label={tr('providerBusiness.newp2.answerN', { n: index + 1 })}
                     value={item.answer}
                     onChange={v => setFaq(index, 'answer', v)}
-                    placeholder={index === 0 ? 'e.g. Yes, from age 8 with a parent there.' : 'Your answer'}
+                    placeholder={index === 0 ? tr('providerBusiness.newp.eGYesFromAge8') : tr('providerBusiness.newp.yourAnswer')}
                     maxLength={OWN_SECTION_LIMITS.answer}
                     minHeight={72}
                   />
@@ -207,7 +211,7 @@ export function OwnSectionsCard({ draft, onChange }: {
                   accessibilityRole="button"
                   style={st.addQuestion}
                 >
-                  <Text style={[st.addText, { color: C.accentText }]}>+ Add a question</Text>
+                  <Text style={[st.addText, { color: C.accentText }]}>{tr('providerBusiness.newp.addAQuestion')}</Text>
                 </TouchableOpacity>
               )}
             </>
@@ -232,7 +236,7 @@ export function OwnSectionsCard({ draft, onChange }: {
               onPress={() => add(kind)}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={`Add ${OWN_SECTION_LABELS[kind]}`}
+              accessibilityLabel={tr('providerBusiness.newp2.addName', { name: OWN_SECTION_LABELS[kind] })}
             >
               <Text style={[st.addText, { color: C.accentText }]}>+ {OWN_SECTION_LABELS[kind]}</Text>
             </TouchableOpacity>

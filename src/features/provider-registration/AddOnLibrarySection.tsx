@@ -14,6 +14,8 @@ import { formatAddOnExtraTime } from '../bookings/addOnTime';
 import { describeAddOnRule, MAX_ADD_ONS, type AddOnCategories, type AddOnLibraryItem, type AddOnServiceRef } from './addOnLibrary';
 import { ADD_ON_FONTS, formatAddOnPrice, tapLight, tapMedium, tapSelect, type AddOnPalette } from './addOnUi';
 import { AddOnGuide } from './AddOnGuide';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props<S extends AddOnServiceRef> {
   /** undefined = the list didn't load; editing is hidden so a save can't
@@ -29,6 +31,8 @@ interface Props<S extends AddOnServiceRef> {
 }
 
 export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, categories, palette, onEdit, onNew, inTab = false }: Props<S>) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const empty = !library || library.length === 0;
   // null = the provider hasn't touched it, so it follows whether the list is
   // empty: open with no add-ons, closed once they have some.
@@ -40,7 +44,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
       <View style={styles.wrap}>
         <Text style={[styles.kicker, { color: palette.sub }]}>YOUR ADD-ONS</Text>
         <Text style={[styles.note, { color: palette.sub }]}>
-          Your add-ons didn't load, so they can't be changed right now. Saving keeps them as they are. Close this page and open it again to edit them.
+          {tr('providerBusiness.newp.yourAddOnsDidnTLoad')}
         </Text>
       </View>
     );
@@ -65,7 +69,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
           style={styles.guideToggle}
         >
           <Ionicons name="information-circle-outline" size={15} color={palette.accent} />
-          <Text style={[styles.guideToggleText, { color: palette.accent }]}>How add-ons work</Text>
+          <Text style={[styles.guideToggleText, { color: palette.accent }]}>{tr('providerBusiness.newp.howAddOnsWork')}</Text>
           <Ionicons name={guideOpen ? 'chevron-up' : 'chevron-down'} size={13} color={palette.accent} />
         </TouchableOpacity>
       </View>
@@ -74,7 +78,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
         <AddOnGuide palette={palette} />
       ) : (
         <Text style={[styles.note, { color: palette.sub }]}>
-          Extras clients can add to a service when they book. One price everywhere.
+          {tr('providerBusiness.newp.extrasClientsCanAddToA')}
         </Text>
       )}
 
@@ -98,7 +102,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
                   </View>
                   <View style={styles.chips}>
                     {!item.isActive && (
-                      <Text style={[styles.chip, { color: palette.sub, backgroundColor: withAlpha(palette.sub, 0.14) }]}>Paused</Text>
+                      <Text style={[styles.chip, { color: palette.sub, backgroundColor: withAlpha(palette.sub, 0.14) }]}>{tr('providerBusiness.newp.paused')}</Text>
                     )}
                     {time ? (
                       <Text style={[styles.chip, styles.timeChip, { color: palette.sub, borderColor: palette.border }]}>{time}</Text>
@@ -116,7 +120,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
       )}
 
       {full ? (
-        <Text style={[styles.note, { color: palette.sub }]}>You've reached {MAX_ADD_ONS} add-ons, the most you can have.</Text>
+        <Text style={[styles.note, { color: palette.sub }]}>{tr('providerBusiness.newp2.maxAddOns', { count: MAX_ADD_ONS })}</Text>
       ) : empty ? (
         <TouchableOpacity
           activeOpacity={0.85}
@@ -124,7 +128,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
           accessibilityRole="button"
           style={[styles.firstButton, { backgroundColor: palette.accent }]}
         >
-          <Text style={[styles.firstText, { color: palette.onAccent }]}>Make your first add-on</Text>
+          <Text style={[styles.firstText, { color: palette.onAccent }]}>{tr('providerBusiness.newp.makeYourFirstAddOn')}</Text>
         </TouchableOpacity>
       ) : inTab ? (
         <TouchableOpacity
@@ -133,7 +137,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
           accessibilityRole="button"
           style={[styles.moreButton, { borderColor: palette.accent }]}
         >
-          <Text style={[styles.moreText, { color: palette.accent }]}>+ Add another add-on</Text>
+          <Text style={[styles.moreText, { color: palette.accent }]}>{tr('providerBusiness.newp.addAnotherAddOn')}</Text>
         </TouchableOpacity>
       ) : null}
     </View>

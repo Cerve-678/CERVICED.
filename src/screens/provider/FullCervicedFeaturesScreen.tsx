@@ -30,6 +30,8 @@ import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
 import { FULL_MEMBER_FREE_LINE } from '../../constants/fullMembership';
 import { PAYOUT_INTERVALS, payoutIntervalLabel } from '../../constants/payoutSchedule';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -41,36 +43,36 @@ const PAYOUT_CHOICES = PAYOUT_INTERVALS.map(payoutIntervalLabel);
 // In-app chat and Becca are NOT listed: link-only pros already have both.
 const SECTIONS: { title: string; features: Feature[] }[] = [
   {
-    title: 'Your diary fills itself',
+    get title() { return tr('providerBusiness.newp.yourDiaryFillsItself'); },
     features: [
-      { icon: 'notifications-outline', title: 'Followers hear when you\'re free', body: 'When you\'ve been fully booked and space opens up, everyone who rang your bell gets told.' },
-      { icon: 'refresh-outline', title: 'Clients reminded to rebook you', body: 'After each visit we remind them when they\'re due, with a Rebook button straight back to you.' },
-      { icon: 'people-outline', title: 'Cancellations refill', body: 'Turn your waitlist on and a cancelled slot goes to it first.' },
-      { icon: 'megaphone-outline', title: 'Announcements', body: 'Message all your clients, or just repeat, new or lapsed ones, straight away or scheduled for later.' },
-      { icon: 'pricetag-outline', title: 'Promotions', body: 'Run a flash sale, a loyalty reward or a new-client offer, and tell your clients and followers about it.' },
+      { icon: 'notifications-outline', get title() { return tr('providerBusiness.newp.followersHearWhenYouReFree'); }, get body() { return tr('providerBusiness.newp.whenYouVeBeenFullyBooked'); } },
+      { icon: 'refresh-outline', get title() { return tr('providerBusiness.newp.clientsRemindedToRebookYou'); }, get body() { return tr('providerBusiness.newp.afterEachVisitWeRemindThem'); } },
+      { icon: 'people-outline', get title() { return tr('providerBusiness.newp.cancellationsRefill'); }, get body() { return tr('providerBusiness.newp.turnYourWaitlistOnAndA'); } },
+      { icon: 'megaphone-outline', get title() { return tr('providerBusiness.newp.announcements'); }, get body() { return tr('providerBusiness.newp.messageAllYourClientsOrJust'); } },
+      { icon: 'pricetag-outline', get title() { return tr('providerBusiness.promotions.title'); }, get body() { return tr('providerBusiness.newp.runAFlashSaleALoyalty'); } },
     ],
   },
   {
-    title: 'More clients find you',
+    get title() { return tr('providerBusiness.newp.moreClientsFindYou'); },
     features: [
-      { icon: 'search-outline', title: 'Every Search filter', body: 'Price, availability, rating and hair type, not just category, speciality and area.' },
-      { icon: 'flash-outline', title: 'Available this week', body: 'Show up on clients\' Home when you have space.' },
+      { icon: 'search-outline', get title() { return tr('providerBusiness.newp.everySearchFilter'); }, get body() { return tr('providerBusiness.newp.priceAvailabilityRatingAndHairType'); } },
+      { icon: 'flash-outline', get title() { return tr('providerBusiness.newp.availableThisWeek'); }, get body() { return tr('providerBusiness.newp.showUpOnClientsHomeWhen'); } },
     ],
   },
   {
-    title: 'Look after every client',
+    get title() { return tr('providerBusiness.newp.lookAfterEveryClient'); },
     features: [
-      { icon: 'sparkles-outline', title: 'Know them before they arrive', body: 'Their hair, skin and preferences for that treatment, with allergies and medical notes flagged.' },
-      { icon: 'document-text-outline', title: 'Info packs', body: 'Prep and aftercare notes for a service, waiting on the client\'s booking.' },
-      { icon: 'alarm-outline', title: 'Reminders', body: 'Clients get a reminder the day before their appointment.' },
+      { icon: 'sparkles-outline', get title() { return tr('providerBusiness.newp.knowThemBeforeTheyArrive'); }, get body() { return tr('providerBusiness.newp.theirHairSkinAndPreferencesFor'); } },
+      { icon: 'document-text-outline', get title() { return tr('providerProfile.myProfile.quick.infoPacks'); }, get body() { return tr('providerBusiness.newp.prepAndAftercareNotesForA'); } },
+      { icon: 'alarm-outline', get title() { return tr('providerBusiness.newp.reminders'); }, get body() { return tr('providerBusiness.newp.clientsGetAReminderTheDay'); } },
     ],
   },
   {
-    title: 'Your brand and your numbers',
+    get title() { return tr('providerBusiness.newp.yourBrandAndYourNumbers'); },
     features: [
-      { icon: 'color-palette-outline', title: 'All of Branding', body: 'Every colour set, font and hero finish, or build your own colours.' },
-      { icon: 'ribbon-outline', title: 'Achievements', body: 'Seals for milestones like your first booking, five-star reviews and fully booked months.' },
-      { icon: 'stats-chart-outline', title: 'Full analytics', body: 'Earnings over time, your top services, completions and no-shows, and ratings by service.' },
+      { icon: 'color-palette-outline', get title() { return tr('providerBusiness.newp.allOfBranding'); }, get body() { return tr('providerBusiness.newp.everyColourSetFontAndHero'); } },
+      { icon: 'ribbon-outline', get title() { return tr('providerBusiness.newp.achievements'); }, get body() { return tr('providerBusiness.newp.sealsForMilestonesLikeYourFirst'); } },
+      { icon: 'stats-chart-outline', get title() { return tr('providerBusiness.newp.fullAnalytics'); }, get body() { return tr('providerBusiness.newp.earningsOverTimeYourTopServices'); } },
     ],
   },
 ];
@@ -89,6 +91,8 @@ const OF_COURSE = [
 ];
 
 export default function FullCervicedFeaturesScreen() {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { theme, palette: P } = useTheme();
@@ -108,7 +112,7 @@ export default function FullCervicedFeaturesScreen() {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={tr('common.back')}
         >
           <Text style={styles.backArrow}>{'←'}</Text>
         </TouchableOpacity>
@@ -171,7 +175,7 @@ export default function FullCervicedFeaturesScreen() {
           activeOpacity={0.85}
           accessibilityRole="button"
         >
-          <Text style={styles.primaryText}>Become a full member</Text>
+          <Text style={styles.primaryText}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
         </TouchableOpacity>
         <Text style={styles.footnote}>{FULL_MEMBER_FREE_LINE}.</Text>
       </ScrollView>

@@ -30,6 +30,8 @@ import {
   tapWarn,
   type AddOnPalette,
 } from './addOnUi';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   library: AddOnLibraryItem[] | undefined;
@@ -63,6 +65,8 @@ export function ServiceAddOnsField({
   inputStyle,
   onInputFocus,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [extraMinutes, setExtraMinutes] = useState(0);
@@ -75,7 +79,7 @@ export function ServiceAddOnsField({
   if (!library) {
     return (
       <Text style={[styles.note, { color: palette.sub }]}>
-        Your add-ons didn't load, so they can't be changed right now. Saving keeps them as they are.
+        {tr('providerBusiness.newp.yourAddOnsDidnTLoad2')}
       </Text>
     );
   }
@@ -114,7 +118,7 @@ export function ServiceAddOnsField({
     const duplicate = all.find(a => a.name.trim().toLowerCase() === item.name.toLowerCase());
     if (duplicate) {
       tapWarn();
-      setError(`You already have "${duplicate.name}". Tick it above, or give this one a different name.`);
+      setError(tr('providerBusiness.newp2.duplicate', { name: duplicate.name }));
       return;
     }
     tapMedium();
@@ -157,13 +161,13 @@ export function ServiceAddOnsField({
                   <View style={styles.rowText}>
                     <Text style={[styles.name, { color: palette.text }, !item.isActive && styles.paused]} numberOfLines={1}>{item.name}</Text>
                     <Text style={[styles.sub, { color: palette.sub }]} numberOfLines={1}>
-                      {isPending ? 'New · saved with this service' : ruleNote(item, categoryName)}
+                      {isPending ? tr('providerBusiness.newp.newSavedWithThisService') : ruleNote(item, categoryName)}
                     </Text>
                   </View>
                   <Text style={[styles.meta, { color: palette.text }]}>{addOnMetaLine(item.price, item.extraMinutes)}</Text>
                 </TouchableOpacity>
                 {isPending && (
-                  <TouchableOpacity onPress={() => removePending(item.key)} accessibilityRole="button" accessibilityLabel={`Remove ${item.name}`} style={styles.remove}>
+                  <TouchableOpacity onPress={() => removePending(item.key)} accessibilityRole="button" accessibilityLabel={tr('providerProfile.ui.removeA11y', { name: item.name })} style={styles.remove}>
                     <Text style={[styles.removeText, { color: palette.sub }]}>×</Text>
                   </TouchableOpacity>
                 )}
@@ -174,7 +178,7 @@ export function ServiceAddOnsField({
       )}
       {all.length > 0 && (
         <Text style={[styles.note, { color: palette.sub }]}>
-          Prices, extra time and where else an add-on goes are changed under Your add-ons on the services page.
+          {tr('providerBusiness.newp.pricesExtraTimeAndWhereElse')}
         </Text>
       )}
 
@@ -183,7 +187,7 @@ export function ServiceAddOnsField({
         <TextInput
           value={name}
           onChangeText={text => { setName(text); setError(null); }}
-          placeholder="Add-on name"
+          placeholder={tr('providerBusiness.newp.addOnName')}
           placeholderTextColor={palette.sub}
           maxLength={80}
           onFocus={onInputFocus}
@@ -209,16 +213,16 @@ export function ServiceAddOnsField({
             >
               <View style={styles.rowText}>
                 <Text style={[styles.name, { color: palette.text }]} numberOfLines={1}>{item.name} · {addOnMetaLine(item.price, item.extraMinutes)}</Text>
-                <Text style={[styles.sub, { color: palette.sub }]} numberOfLines={1}>You already have this one</Text>
+                <Text style={[styles.sub, { color: palette.sub }]} numberOfLines={1}>{tr('providerBusiness.newp.youAlreadyHaveThisOne')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => reuseExisting(item)}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={`Use ${item.name} on this service`}
+                accessibilityLabel={tr('providerBusiness.newp2.useOnService', { name: item.name })}
                 style={[styles.use, { borderColor: palette.accent }]}
               >
-                <Text style={[styles.useText, { color: palette.accent }]}>Use</Text>
+                <Text style={[styles.useText, { color: palette.accent }]}>{tr('providerBusiness.newp2.use')}</Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -229,16 +233,16 @@ export function ServiceAddOnsField({
         <>
           <Text style={[styles.kicker, { color: palette.sub }]}>EXTRA TIME</Text>
           <Text style={[styles.note, { color: palette.sub }]}>
-            Makes the appointment longer when a client picks it. They'll only see times when you're free for the whole thing.
+            {tr('providerBusiness.newp.makesTheAppointmentLongerWhenA')}
           </Text>
           <ExtraTimeChips value={extraMinutes} onChange={setExtraMinutes} palette={palette} />
           <Text style={[styles.kicker, { color: palette.sub }]}>OFFER IT ON</Text>
           <View style={styles.chips}>
-            <AddOnChip label="Just this service" active={where === 'services'} onPress={() => setWhere('services')} palette={palette} />
+            <AddOnChip label={tr('providerBusiness.newp.justThisService')} active={where === 'services'} onPress={() => setWhere('services')} palette={palette} />
             {!!categoryName && (
-              <AddOnChip label={`All ${categoryName}`} active={where === 'categories'} onPress={() => setWhere('categories')} palette={palette} />
+              <AddOnChip label={tr('providerBusiness.newp2.allOf', { name: categoryName })} active={where === 'categories'} onPress={() => setWhere('categories')} palette={palette} />
             )}
-            <AddOnChip label="Every service" active={where === 'all'} onPress={() => setWhere('all')} palette={palette} />
+            <AddOnChip label={tr('providerBusiness.newp.everyService')} active={where === 'all'} onPress={() => setWhere('all')} palette={palette} />
           </View>
         </>
       )}
@@ -250,7 +254,7 @@ export function ServiceAddOnsField({
         accessibilityRole="button"
         style={[styles.add, { borderColor: palette.accent, backgroundColor: withAlpha(palette.accent, 0.06) }]}
       >
-        <Text style={[styles.addText, { color: palette.accent }]}>+ Add to this service</Text>
+        <Text style={[styles.addText, { color: palette.accent }]}>{tr('providerBusiness.newp.addToThisService')}</Text>
       </TouchableOpacity>
     </View>
   );
