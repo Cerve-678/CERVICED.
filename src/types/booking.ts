@@ -380,6 +380,9 @@ export interface ConfirmedBooking {
   noShowDisputeReason?: string | undefined;
   /** £ refunded so far (Stripe path), across every refund on this booking. */
   refundedAmount?: number | undefined;
+  /** £ the provider's promo code took off the service. `price` is already
+   *  the discounted price; this is shown as its own receipt line. */
+  promoDiscount?: number | undefined;
   /** £ the provider kept under their cancellation policy, set by the server
    *  when a client's late cancellation was settled. */
   policyRetainedAmount?: number | undefined;

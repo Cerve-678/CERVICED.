@@ -10,6 +10,10 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const servicePrice = booking.price || 0;
+  // A promo code's discount is already taken off price; the receipt lists the
+  // service at its full price with the discount as its own line.
+  const promoDiscount = Math.max(0, booking.promoDiscount ?? 0);
+  const listPrice = servicePrice + promoDiscount;
   const addOnsTotal = booking.addOns?.reduce((sum, addOn) => sum + (addOn.price || 0), 0) || 0;
   const subtotal = servicePrice + addOnsTotal;
   const serviceCharge = booking.serviceCharge ?? 0;
@@ -53,6 +57,8 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
 
   return {
     servicePrice,
+    promoDiscount,
+    listPrice,
     addOnsTotal,
     subtotal,
     serviceCharge,

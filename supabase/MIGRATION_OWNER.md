@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-ac (fix/receipt-shows-promo-discount) — 20261126130000_client_bookings_promo_discount, written + dry-run, NOT applied (waiting for the user's OK)
 ```
 
 ### Applied 2026-11-26 (a client booking can only be made by paying for it)

@@ -266,8 +266,13 @@ that, putting it right means taking money back from Jo (section 2.8).
    codes before Confirm & Pay. A checkout that comes to £0 after a code is
    refused (Stripe can't take £0); the provider can add that booking
    themselves. Promotions can't be saved below 0% or above 100%, or with a
-   negative amount. Receipts don't show the discount as its own line yet
-   (`bookings.promo_discount` holds it). *Live since 13 November. Until
+   negative amount. Receipts (the client's booking screen and PDF, the
+   provider's invoice and the confirmation email) list the service at its
+   full price and the code as its own "Promo discount" line, with the total
+   unchanged. That needs `client_bookings.promo_discount` (migration
+   `20261126130000_client_bookings_promo_discount`), a new app build for the
+   screen and PDF, and `send-booking-confirmation` deployed for the email.
+   *Live since 13 November. Until
    migration
    `20261113100000_promo_code_charged_at_checkout` the code never reached the
    server, so the card was charged full price while the cart showed the

@@ -871,6 +871,9 @@ export interface BookingConfirmationParams {
   location: string;
   reference: string;
   basePrice: number;
+  /** £ a promo code took off. basePrice is already after it; the email lists
+   *  the service at its full price and the discount as its own line. */
+  promoDiscount?: number;
   addOns: Array<{ name: string; price: number }>;
   serviceCharge: number;
   depositAmount: number;
@@ -936,10 +939,10 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const label = (text: string, colour = P.sub) =>
     `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
 
-  const line = (name: string, amount: number, muted: boolean) => `
+  const line = (name: string, amount: number, muted: boolean, minus = false) => `
               <tr>
                 <td style="font-family:${BODY};font-size:15px;font-weight:${muted ? 600 : 700};color:${muted ? P.sub : P.text};padding:8px 0;">${esc(name)}</td>
-                <td align="right" style="font-family:${BODY};font-size:15px;font-weight:700;color:${muted ? P.sub : P.text};padding:8px 0;white-space:nowrap;">${gbp(amount)}</td>
+                <td align="right" style="font-family:${BODY};font-size:15px;font-weight:700;color:${muted ? P.sub : P.text};padding:8px 0;white-space:nowrap;">${minus ? '−' : ''}${gbp(amount)}</td>
               </tr>`;
 
   const payRow = (name: string, amount: number, strong: boolean) => `
@@ -948,9 +951,11 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
                 <td align="right" style="font-family:${BODY};font-size:14.5px;font-weight:700;color:${strong ? P.accent : P.text};padding-top:9px;white-space:nowrap;">${gbp(amount)}</td>
               </tr>`;
 
+  const promoDiscount = Math.max(0, params.promoDiscount ?? 0);
   const lines =
-    line(params.service, params.basePrice, false) +
+    line(params.service, params.basePrice + promoDiscount, false) +
     params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
+    (promoDiscount > 0 ? line('Promo discount', promoDiscount, true, true) : '') +
     (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
 
   // The deposit, once paid, listed under Total with the payment — same as the
