@@ -3397,8 +3397,9 @@ const styles = StyleSheet.create({
   // ── Receipt 3D scene ──
   receiptScene: {
     marginBottom: 20,
-    // A shadow on this rectangular wrapper fills the side notches on both
-    // platforms, even though the receipt itself is cut away there.
+    // No shadow here on purpose: a shadow follows the card's straight edge,
+    // so it runs across each side notch and makes it look filled in rather
+    // than cut out of the receipt.
   },
 
   // Depth layer base
@@ -3412,9 +3413,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   receiptDepth1: {
-    // Keep the sheet behind the card farther in than the 11px notches, so
-    // those openings show the screen rather than the paper underneath.
-    transform: [{ translateY: 7 }, { scaleX: 0.9 }],
+    transform: [{ translateY: 7 }, { scaleX: 0.95 }],
     opacity: 0.85,
   },
 
