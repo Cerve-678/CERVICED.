@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const readProviderScreen = (name: string): string =>
   fs.readFileSync(
@@ -84,10 +85,7 @@ describe('provider screen performance contracts', () => {
       path.join(__dirname, '..', 'features', 'providers', 'ServiceEditorSheet.tsx'),
       'utf8',
     );
-    const db = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const db = readDatabaseLayer();
 
     // The editor only offers visibility when editing. A new service always
     // starts on the menu, so its draft must not carry an isActive at all.

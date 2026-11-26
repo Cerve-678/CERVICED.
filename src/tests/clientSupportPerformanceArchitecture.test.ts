@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (...parts: string[]): string =>
   fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
 
 describe('client support screen performance contracts', () => {
-  const database = read('services', 'databaseService.ts');
+  const database = readDatabaseLayer();
 
   it('keeps realtime access out of notification and conversation screens', () => {
     for (const screen of [
@@ -80,7 +81,8 @@ describe('client support screen performance contracts', () => {
     expect(source).toContain('const renderProviderCard: ListRenderItem<Provider> = useCallback');
     expect(source).toContain('data={filteredProviders}');
     expect(source).toContain('renderItem={renderProviderCard}');
-    expect(source).toContain('numColumns={2}');
+    expect(source).toContain('numColumns={gridColumns}');
+    expect(source).toContain('masonryColumnsForWidth(windowWidth)');
     expect(source).toContain('initialNumToRender={6}');
     expect(source).toContain('maxToRenderPerBatch={6}');
     expect(source).not.toContain('{filteredProviders.map(');
@@ -101,10 +103,10 @@ describe('client support screen performance contracts', () => {
   });
 
   it('flushes a pending notification preference when leaving the screen', () => {
-    const source = read('screens', 'client', 'NotificationsSettingsScreen.tsx');
+    const source = read('components', 'NotificationPreferencesView.tsx');
 
-    expect(source).toContain('const pendingPrefs = useRef<NotificationPreferences | null>(null)');
+    expect(source).toContain('const pendingPrefs = useRef<T | null>(null)');
     expect(source).toContain('if (saveTimer.current) clearTimeout(saveTimer.current)');
-    expect(source).toContain('saveNotificationPreferences(pendingPrefs.current)');
+    expect(source).toContain('save(pendingPrefs.current)');
   });
 });

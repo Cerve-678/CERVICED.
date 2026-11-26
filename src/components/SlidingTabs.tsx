@@ -16,6 +16,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 
 export interface SlidingTabItem<K extends string = string> {
   key: K;
@@ -100,7 +101,7 @@ export default function SlidingTabs<K extends string = string>({
   springBounciness = 6,
   springSpeed = 18,
 }: SlidingTabsProps<K>) {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const layouts = useRef<Record<string, { x: number; width: number }>>({});
   const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorW = useRef(new Animated.Value(0)).current;

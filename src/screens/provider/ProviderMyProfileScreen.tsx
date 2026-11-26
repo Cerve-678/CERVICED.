@@ -18,7 +18,8 @@
  * (ProviderScheduleScreen), Policies (PoliciesScreen, in the Business Details
  * hub) and Branding (BrandingScreen).
  *
- * Deliberately NOT analytics. No revenue, no charts, no trends — that's
+ * Two graphs show which services clients book, because that reports back on the
+ * catalogue managed here. Revenue and the full detail are still
  * ProviderAnalyticsScreen's job.
  *
  * Status comes from the shared features/providers/goLiveStatus module, which
@@ -35,15 +36,15 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  useWindowDimensions,
   ActivityIndicator,
   Alert,
   Animated,
-  InteractionManager,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  type ViewInstance,
+  useWindowDimensions,
 } from 'react-native';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
 // reason NotificationsScreen uses it: react-native's runs its own touch
 // responder, so a swipe that hasn't crossed the pan threshold yet can still
@@ -52,14 +53,14 @@ import { TouchableOpacity as GestureTouchableOpacity } from 'react-native-gestur
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
+import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
+import { LogoCircle } from '../../components/FramedLogo';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useTranslation, tr, localeForLanguage } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   getCachedProviderData,
@@ -72,9 +73,11 @@ import {
   addPortfolioItem,
   createMyService,
   deletePortfolioItem,
-  getMyBookmarkCount,
+  refreshCachedProviderProfile,
+  getMyProviderSaverCount,
   getMyProviderProfile,
-  getMyTopServices,
+  getMyServiceBookingRows,
+  getProviderRecentBookings,
   getMyServiceCatalogue,
   getProviderPortfolio,
   getMyProviderTermsText,
@@ -82,36 +85,69 @@ import {
   setMyServiceActive,
   updateMyService,
   type MyServiceDraft,
+  getMyUnseenFullyBooked,
+  markFullyBookedSeen,
+  type UnseenFullyBooked,
 } from '../../services/databaseService';
+import FullyBookedCertificate from '../../components/FullyBookedCertificate';
 import type { DbPortfolioItem, DbService } from '../../types/database';
 import type { ProviderServicesStackParamList } from '../../navigation/types';
-import { resolveProviderTheme, withAlpha, isDarkColor, blend } from '../../constants/providerThemes';
+import { parseThemeKey, resolveProviderTheme, withAlpha, isDarkColor, blend, NEUTRAL_CARD, SHEET_BG } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
+import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
+import { bookingCardsLead } from '../../features/providers/todaySchedule';
+import {
+  TodayBookingCards,
+  TodaySummaryCard,
+  type TodayCardsPalette,
+} from '../../features/providers/TodayScheduleCards';
+import type { BookingWithAddOns } from '../../types/database';
+import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { CoachMarkTour, type CoachMarkStep } from '../../components/CoachMarkTour';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
+import { myProfileTourSteps, type MyProfileTourKey } from '../../features/providers/myProfileTour';
 import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
+import ServiceBookingCharts from '../../features/providers/ServiceBookingCharts';
+import { SERVICE_BOOKING_LOOKBACK_DAYS, summariseServiceBookings, type ServiceBookingSummary } from '../../features/providers/serviceBookingSummary';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 import { formatDurationMinutes } from '../../utils/dateUtils';
+import { toReleaseDay, toReleaseTime, type BookingHorizonSettings } from '../../utils/bookingHorizon';
+import { describeReleaseQuickView } from '../../features/providers/releaseQuickView';
+import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows';
+import { RecentBookingRow } from '../../features/providers/RecentBookingRow';
+import { RECENT_ACTIVITY_PREVIEW } from '../../features/providers/recentBookingActivity';
+import { useCalendarViewPreference } from '../../features/provider-bookings/calendarViewPreference';
+import type { PackFormKind } from '../../features/info-packs/PackFormHint';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   toEditorValue,
   type ServiceEditorPalette,
   type ServiceEditorValue,
 } from '../../features/providers/ServiceEditorSheet';
+import { descriptionProblem, hasNoTags, type DescriptionProblem } from '../../features/providers/serviceTags';
 import {
   fetchGoLiveStatus,
+  deriveAutomationsSet,
   buildGoLiveSteps,
   buildGoLiveHeadline,
+  goLiveCardLeads,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
 import { splitPortfolioByKind } from '../../features/providers/venuePhotos';
-import { ALL_SERVICE_TYPE_OPTS, optionText } from '../../features/business-details/options';
+import { mapProviderReviews, type ProviderReviewItem } from '../../features/providers/reviewPresentation';
+import { useReportReview } from '../../features/safety/useReportReview';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 
 // Hero → content transition, inherited from the client-facing profile.
@@ -140,7 +176,7 @@ const RING_CIRC = 2 * Math.PI * RING_RADIUS;
  *  three destinations are registered on this navigator, so each tap pushes
  *  with this screen underneath rather than bouncing to another tab's root and
  *  leaving its back button with nothing to return to. */
-const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackParamList> = {
+const GO_LIVE_STEP_SCREENS: Record<Exclude<GoLiveStepKey, 'ownerDetails'>, keyof ProviderServicesStackParamList> = {
   profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
@@ -157,6 +193,7 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackPar
   // Record's exhaustiveness and is never actually navigated to.
   terms: 'EditProfile',
   portfolio: 'ProviderServicesMain',
+  automations: 'Automations',
 };
 
 /** Attention colours. Only the two "something's outstanding" tones are fixed:
@@ -173,32 +210,21 @@ const TONE_COLOR = {
  *  catalogue itself. Everything service-related lives under 'services'. */
 type ProfileTab = 'dashboard' | 'services';
 
-const PROFILE_TABS: { key: ProfileTab; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: 'dashboard', labelKey: 'providerProfile.myProfile.tab.dashboard', icon: 'grid-outline' },
-  { key: 'services', labelKey: 'providerProfile.myProfile.tab.services', icon: 'pricetags-outline' },
+const PROFILE_TABS: { key: ProfileTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'dashboard', get label() { return tr('providerProfile.myProfile.tab.dashboard'); }, icon: 'grid-outline' },
+  { key: 'services', get label() { return tr('providerProfile.myProfile.tab.services'); }, icon: 'pricetags-outline' },
 ];
 
-const MAX_POLICY_ROWS = 4;
 const MAX_REVIEW_PREVIEWS = 2;
+// The Deposits & rules tile lists this many rules (deposit first, as
+// buildPolicyDisplayRows orders them), then "+N more". The full list is one
+// tap away in Policies.
+const MAX_POLICY_PREVIEWS = 3;
 const MAX_PORTFOLIO_TILES = 9;
 // Enough to fill the rail's first view; the rest load with the lower cards.
 const PORTFOLIO_FIRST_TILES = 3;
 // The longest the lower cards wait on the first wave before loading anyway.
 const LOWER_SECTIONS_MAX_WAIT_MS = 1500;
-
-/** True when there's anything worth showing about the booking policy — either
- *  descriptive booking_policies or the enforced cancellation window. */
-function hasPolicyInfo(providerData: ProviderRegistrationData): boolean {
-  const bp = providerData.bookingPolicies;
-  return (
-    providerData.cancellationNoticeHours > 0 ||
-    (!!bp &&
-      ((!!bp.depositRequired && !!bp.depositAmount) ||
-        (!!bp.cancelNotice && bp.cancelNotice !== 'none') ||
-        !!(bp.rescheduleNotice || bp.maxReschedules) ||
-        (!!bp.noShowAction && bp.noShowAction !== 'none')))
-  );
-}
 
 interface DashPalette {
   text: string;
@@ -297,53 +323,92 @@ const DashEmpty = React.memo(function DashEmpty({
 });
 
 /**
- * The profile has several independent reads behind it.  A centred spinner made
- * that work look like an empty route (and, on a slow connection, like a
- * broken one).  Keep the silhouette of the real page on screen immediately;
- * the lower dashboard cards arrive first and the header follows upwards.
+ * Shown on the first open on this device; after that the cached profile paints
+ * straight away. It borrows the real page's layout styles so nothing jumps when
+ * the data lands. The provider's theme is unknown here, so the top stays on the
+ * app's background and only the sheet, always pale on the real page, is fixed.
  */
-function ProviderProfileLoadingShell({ accent }: { accent: string }) {
-  const { t } = useTranslation();
-  const lowerOpacity = useRef(new Animated.Value(0)).current;
-  const middleOpacity = useRef(new Animated.Value(0)).current;
-  const heroOpacity = useRef(new Animated.Value(0)).current;
+function ProviderProfileLoadingShell({ isDarkMode }: { isDarkMode: boolean }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const reveal = (value: Animated.Value) =>
-      Animated.timing(value, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      });
-    const animation = Animated.sequence([
-      reveal(lowerOpacity),
-      reveal(middleOpacity),
-      reveal(heroOpacity),
-    ]);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ]),
+    );
     animation.start();
     return () => animation.stop();
-  }, [heroOpacity, lowerOpacity, middleOpacity]);
+  }, [pulse]);
+
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+  const heroBone = { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(126,102,103,0.18)' };
+  const sheetBone = { backgroundColor: 'rgba(126,102,103,0.14)' };
+  const tileWidth = { width: halfWidth(screenWidth) };
 
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.profileLoadingShell} accessibilityLabel={t('providerProfile.myProfile.loadingA11y')}>
-          <Animated.View style={[styles.profileLoadingHero, { opacity: heroOpacity }]}>
-            <View style={[styles.profileLoadingHeroMark, { backgroundColor: accent }]} />
-          </Animated.View>
-          <Animated.View style={[styles.profileLoadingCard, { opacity: middleOpacity }]}>
-            <View style={styles.profileLoadingTitle} />
-            <View style={styles.profileLoadingLine} />
-            <View style={styles.profileLoadingLineShort} />
-          </Animated.View>
-          <Animated.View style={[styles.profileLoadingBottom, { opacity: lowerOpacity }]}>
-            <View style={styles.profileLoadingSectionLabel} />
-            <View style={styles.profileLoadingTileRow}>
-              <View style={styles.profileLoadingTile} />
-              <View style={styles.profileLoadingTile} />
+        <View
+          style={styles.profileLoadingShell}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={tr('providerProfile.myProfile.loadingA11y')}
+        >
+          <Animated.View style={[styles.profileHeader, { opacity }]}>
+            <View style={styles.identityRow}>
+              <View style={styles.identityText}>
+                <View style={[styles.profileLoadingName, heroBone]} />
+                <View style={[styles.profileLoadingHandle, heroBone]} />
+              </View>
+              <View style={[styles.avatar, styles.profileLoadingAvatar, heroBone]} />
             </View>
-            <View style={styles.profileLoadingWideTile} />
+            <View style={styles.statRow}>
+              {['services', 'photos', 'reviews'].map(stat => (
+                <View key={stat} style={styles.stat}>
+                  <View style={[styles.profileLoadingStatValue, heroBone]} />
+                  <View style={[styles.profileLoadingStatLabel, heroBone]} />
+                </View>
+              ))}
+            </View>
+            <View style={styles.actionRow}>
+              <View style={[styles.primaryAction, heroBone]} />
+              {['schedule', 'branding', 'qr'].map(action => (
+                <View key={action} style={[styles.circleAction, styles.profileLoadingCircle, heroBone]} />
+              ))}
+            </View>
           </Animated.View>
+
+          <View style={[styles.contentSheet, { backgroundColor: SHEET_BG }]}>
+            <View style={[styles.contentSheetClip, { minHeight: screenHeight, backgroundColor: SHEET_BG }]}>
+              <Animated.View style={{ opacity }}>
+                <View style={[styles.tabBar, styles.profileLoadingTabBar, sheetBone]}>
+                  <View style={styles.profileLoadingTabSelected} />
+                  <View style={styles.profileLoadingTab} />
+                </View>
+
+                <View style={[styles.profileLoadingLabel, sheetBone]} />
+                <View style={[styles.dashCard, styles.profileLoadingCard]}>
+                  <View style={[styles.profileLoadingCardTitle, sheetBone]} />
+                  <View style={[styles.profileLoadingLine, sheetBone]} />
+                  <View style={[styles.profileLoadingLineShort, sheetBone]} />
+                </View>
+
+                <View style={[styles.profileLoadingLabel, sheetBone]} />
+                <View style={styles.halfRow}>
+                  <View style={[styles.tintCard, styles.profileLoadingTile, sheetBone, tileWidth]} />
+                  <View style={[styles.tintColumn, tileWidth]}>
+                    <View style={[styles.tintCardShort, styles.profileLoadingTile, sheetBone]} />
+                    <View style={[styles.tintCardShort, styles.profileLoadingTile, sheetBone]} />
+                  </View>
+                </View>
+              </Animated.View>
+            </View>
+          </View>
         </View>
       </SafeAreaView>
     </ThemedBackground>
@@ -353,7 +418,7 @@ function ProviderProfileLoadingShell({ accent }: { accent: string }) {
 const formatServicePrice = (service: DbService): string =>
   `£${service.price}${service.price_max ? `–£${service.price_max}` : ''}`;
 
-type SwipeableHandle = React.ElementRef<typeof Swipeable>;
+type SwipeableHandle = SwipeableMethods;
 
 /** Lets the screen keep one row swiped open at a time across every category,
  *  the way Mail does, without each card knowing about the others. */
@@ -383,7 +448,8 @@ const ServiceRow = React.memo(function ServiceRow({
   onToggleActive: (service: DbService) => void;
   swipe: RowSwipeRegistry;
 }) {
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const hidden = !service.is_active;
   const price = formatServicePrice(service);
   const duration = formatDurationMinutes(service.duration_minutes);
@@ -407,11 +473,11 @@ const ServiceRow = React.memo(function ServiceRow({
         onEdit(service);
       }}
       accessibilityRole="button"
-      accessibilityLabel={[service.name, price, duration, hidden ? t('providerProfile.myProfile.row.hiddenA11y') : '']
+      accessibilityLabel={[service.name, price, duration, hidden ? 'hidden from clients' : '']
         .filter(Boolean)
         .join(', ')}
-      accessibilityHint={t('providerProfile.myProfile.row.opensEditor')}
-      accessibilityActions={hidden ? undefined : [{ name: 'hide', label: t('providerProfile.myProfile.row.hideAction') }]}
+      accessibilityHint={tr('providerProfile.myProfile.row.opensEditor')}
+      accessibilityActions={hidden ? undefined : [{ name: 'hide', label: tr('providerProfile.myProfile.row.hideAction') }]}
       onAccessibilityAction={() => onToggleActive(service)}
     >
       <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
@@ -432,7 +498,7 @@ const ServiceRow = React.memo(function ServiceRow({
         ) : null}
         {service.patch_test_required ? (
           <View style={[styles.serviceRowTag, { backgroundColor: withAlpha(palette.sub, 0.12) }]}>
-            <Text style={[styles.serviceRowTagText, { color: palette.sub }]}>{t('providerProfile.myProfile.row.patchTest')}</Text>
+            <Text style={[styles.serviceRowTagText, { color: palette.sub }]}>PATCH TEST</Text>
           </View>
         ) : null}
         {hidden ? (
@@ -448,10 +514,10 @@ const ServiceRow = React.memo(function ServiceRow({
                 onToggleActive(service);
               }}
               accessibilityRole="button"
-              accessibilityLabel={t('providerProfile.myProfile.row.showA11y', { service: service.name })}
+              accessibilityLabel={tr('providerProfile.myProfile.row.showA11y', { service: service.name })}
             >
               <Text style={[styles.serviceRowShowText, { color: palette.accent }]}>
-                {t('providerProfile.myProfile.row.show')}
+                {tr('providerProfile.myProfile.row.show')}
               </Text>
             </GestureTouchableOpacity>
           )
@@ -475,10 +541,10 @@ const ServiceRow = React.memo(function ServiceRow({
             onToggleActive(service);
           }}
           accessibilityRole="button"
-          accessibilityLabel={t('providerProfile.myProfile.row.hideA11y', { service: service.name })}
+          accessibilityLabel={tr('providerProfile.myProfile.row.hideA11y', { service: service.name })}
         >
           <Ionicons name="eye-off-outline" size={17} color={palette.card} />
-          <Text style={[styles.serviceRowHideText, { color: palette.card }]}>{t('providerProfile.myProfile.row.hide')}</Text>
+          <Text style={[styles.serviceRowHideText, { color: palette.card }]}>{tr('providerProfile.myProfile.row.hide')}</Text>
         </TouchableOpacity>
       )}
       overshootRight={false}
@@ -513,7 +579,8 @@ const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
   onToggleActive: (service: DbService) => void;
   swipe: RowSwipeRegistry;
 }) {
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const live = useMemo(() => items.filter(service => service.is_active), [items]);
   const hidden = useMemo(() => items.filter(service => !service.is_active), [items]);
   const [showHidden, setShowHidden] = useState(live.length === 0);
@@ -544,7 +611,7 @@ const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
             {name}
           </Text>
           <Text style={[styles.menuCardCount, { color: palette.sub }]}>
-            {live.length === 0 ? t('providerProfile.myProfile.menu.empty') : t('providerProfile.myProfile.menu.count', { count: live.length })}
+            {live.length === 0 ? tr('providerProfile.myProfile.menu.empty') : tr('providerProfile.myProfile.menu.count', { count: live.length })}
           </Text>
         </View>
 
@@ -560,11 +627,11 @@ const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
             }}
             accessibilityRole="button"
             accessibilityState={{ expanded: showHidden }}
-            accessibilityLabel={t('providerProfile.myProfile.menu.hidden', { count: hidden.length })}
+            accessibilityLabel={tr('providerProfile.myProfile.menu.hidden', { count: hidden.length })}
           >
             <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
             <Text style={[styles.menuCardFoldText, { color: palette.sub }]}>
-              {t('providerProfile.myProfile.menu.hidden', { count: hidden.length })}
+              {hidden.length} {tr('providerProfile.myProfile.row.hiddenA11y')}
             </Text>
             <Ionicons
               name={showHidden ? 'chevron-down' : 'chevron-forward'}
@@ -581,14 +648,134 @@ const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
           activeOpacity={0.5}
           onPress={() => onAdd(name)}
           accessibilityRole="button"
-          accessibilityLabel={t('providerProfile.myProfile.menu.addA11y', { category: name })}
+          accessibilityLabel={tr('providerProfile.myProfile.menu.addA11y', { category: name })}
         >
           <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
           <Ionicons name="add" size={16} color={palette.accent} />
           <Text style={[styles.menuCardAddText, { color: palette.accent }]} numberOfLines={1}>
-            {t('providerProfile.myProfile.menu.add', { category: name })}
+            {tr('providerProfile.ui.addTo', { name })}
           </Text>
         </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+/** Shown before this many rows of the findability card fold away. */
+const FINDABILITY_ROWS_SHOWN = 4;
+
+const DESCRIPTION_PROBLEM_LABEL: Record<Exclude<DescriptionProblem, null>, string> = {
+  'missing': 'No description',
+  'too-short': 'Short description',
+  'repeats-name': 'Description repeats the name',
+  'looks-like-typing': 'Description looks like stray typing',
+};
+
+/** What stops clients finding a live service, as the short phrases the card
+ *  lists under its name. Empty = nothing to fix. */
+function findabilityGaps(service: DbService): string[] {
+  const gaps: string[] = [];
+  if (hasNoTags({
+    styleTags: service.tags,
+    techniqueTags: service.technique_tags,
+    outcomeTags: service.outcome_tags,
+    occasionTags: service.occasion_tags,
+    trendNames: service.trend_names,
+  })) gaps.push('No tags');
+  const problem = descriptionProblem(service.description, service.name);
+  if (problem) gaps.push(DESCRIPTION_PROBLEM_LABEL[problem]);
+  if (!service.audience) gaps.push('Who it’s for');
+  return gaps;
+}
+
+/** "Help clients find your services": the live services Search can barely
+ *  see, each one tap from the editor, which suggests the fix (tags read from
+ *  the name, pre-ticked; a template description to use). Nothing is changed
+ *  for the provider — they accept each one by saving. Gone once every live
+ *  service has tags, a real description and a who's-it-for. */
+const FindabilityCard = React.memo(function FindabilityCard({
+  services,
+  palette,
+  onEdit,
+}: {
+  services: DbService[];
+  palette: DashPalette;
+  onEdit: (service: DbService) => void;
+}) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const needing = useMemo(
+    () => services
+      .filter(service => service.is_active)
+      .map(service => ({ service, gaps: findabilityGaps(service) }))
+      .filter(row => row.gaps.length > 0),
+    [services],
+  );
+  const [showAll, setShowAll] = useState(false);
+  if (needing.length === 0) return null;
+  const shown = showAll ? needing : needing.slice(0, FINDABILITY_ROWS_SHOWN);
+  const folded = needing.length - shown.length;
+
+  return (
+    <View style={styles.dashCardShadow}>
+      <View style={[styles.menuCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        <LinearGradient
+          colors={palette.highlight}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardHighlight}
+        />
+        <View style={styles.menuCardHeader}>
+          <Text style={[styles.menuCardTitle, { color: palette.text }]}>{tr('providerProfile.ui.helpClientsFindYourServices')}</Text>
+          <Text style={[styles.menuCardCount, { color: palette.sub }]}>
+            {needing.length === 1
+              ? tr('providerProfile.ui.n1ServiceIsHardToFind')
+              : tr('providerProfile.ui.hardToFind', { count: needing.length })}
+          </Text>
+        </View>
+
+        {shown.map(({ service, gaps }) => (
+          <TouchableOpacity
+            key={service.id}
+            style={styles.serviceRow}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onEdit(service);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${service.name}: ${gaps.join(', ')}`}
+            accessibilityHint={tr('providerProfile.ui.opensTheEditorWithSuggestions')}
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <View style={styles.serviceRowLine}>
+              <Text style={[styles.serviceRowName, { color: palette.text }]}>{service.name}</Text>
+              <Ionicons name="chevron-forward" size={15} color={palette.sub} />
+            </View>
+            <View style={styles.serviceRowMeta}>
+              <Text style={[styles.serviceRowMetaText, { color: palette.sub }]}>{gaps.join(' · ')}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {folded > 0 || showAll ? (
+          <TouchableOpacity
+            style={styles.menuCardFold}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setShowAll(open => !open);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showAll }}
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <Text style={[styles.menuCardFoldText, { color: palette.sub }]}>
+              {showAll ? tr('providerProfile.ui.showFewer') : tr('providerProfile.ui.nMore', { count: folded })}
+            </Text>
+            <Ionicons name={showAll ? 'chevron-down' : 'chevron-forward'} size={15} color={palette.sub} />
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -599,14 +786,16 @@ interface Props {
 }
 
 export default function ProviderMyProfileScreen({ navigation }: Props) {
-  const { theme } = useTheme();
-  const { t, tp } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const { theme, isDarkMode } = useTheme();
   // Measured per render, not captured at module load: the paired tiles and the
   // quick-action row both divide the screen width between them.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [providerSlug, setProviderSlug] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
   // The catalogue loads after the top of the page, so the hero's Services
   // count reads "—" until it lands rather than claiming 0 and then jumping.
@@ -621,11 +810,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // renders these, and workPhotos is already fetched here for the grid
   // below — reusing it avoids a duplicate portfolio_items query).
   const [termsSet, setTermsSet] = useState(false);
-  const [reviews, setReviews] = useState<
-    { id: string; name: string; rating: number; comment: string; date: string }[]
-  >([]);
+  const [automationsSet, setAutomationsSet] = useState(false);
+  const [reviews, setReviews] = useState<ProviderReviewItem[]>([]);
+  const reportReview = useReportReview('provider');
   const [isLoading, setIsLoading] = useState(true);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
+  // How far ahead clients can book, for the release-date quick view. Re-read
+  // with the profile on every focus, so a change in Scheduling shows on return.
+  const [bookingHorizon, setBookingHorizon] = useState<BookingHorizonSettings | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   // null means "not answered yet" — a failed read must never render as an
   // all-false checklist telling a live provider they've done nothing.
@@ -640,7 +832,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [bookmarkCount, setBookmarkCount] = useState<number | null>(null);
   // What clients actually book, busiest first — the one thing on this screen
   // that reports back on the catalogue rather than describing it.
-  const [topServices, setTopServices] = useState<{ name: string; count: number }[] | null>(null);
+  const [serviceBookings, setServiceBookings] = useState<ServiceBookingSummary | null>(null);
+  // The latest bookings by when they were made, for Recent activity above
+  // Manage. Empty until loaded, and the card isn't drawn while it's empty.
+  const [recentBookings, setRecentBookings] = useState<BookingWithAddOns[]>([]);
 
   // Editor state. editingId is the row being changed, or null for a new
   // service in editingCategory.
@@ -651,6 +846,34 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [profileQrVisible, setProfileQrVisible] = useState(false);
+  // Shown once per fill: marked seen as it closes, so a refocus doesn't bring it back.
+  const [certificate, setCertificate] = useState<UnseenFullyBooked | null>(null);
+  // Closed on this device. Covers the mark-seen call failing or still being in
+  // flight when the screen refocuses, so it can't pop up a second time.
+  const closedCertificates = useRef(new Set<string>());
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getMyUnseenFullyBooked()
+        .then((row) => {
+          if (active && row && !closedCertificates.current.has(row.fillId)) setCertificate(row);
+        })
+        .catch((err) => logger.warn('[MyProfile] fully booked certificate check failed:', err));
+      return () => { active = false; };
+    }, []),
+  );
+
+  const closeCertificate = useCallback((then?: () => void) => {
+    const shown = certificate;
+    setCertificate(null);
+    if (shown) {
+      closedCertificates.current.add(shown.fillId);
+      markFullyBookedSeen(shown.fillId).catch((err) => logger.error('[MyProfile] marking certificate seen failed:', err));
+    }
+    then?.();
+  }, [certificate]);
 
   // Which half of the sheet is showing. Not navigation state: both halves read
   // the same already-loaded data, so switching must not refetch or reset the
@@ -671,7 +894,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     useCallback(() => {
       let active = true;
       let lowerSectionsStarted = false;
-      let lowerSectionsTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null = null;
+      let lowerSectionsTask: ReturnType<typeof setTimeout> | null = null;
       let lowerSectionsTimer: ReturnType<typeof setTimeout> | null = null;
 
       // Returning providers can render their saved profile before the live
@@ -719,9 +942,16 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           // address. Nothing on this screen shows those, and that read was
           // what kept the whole page on its loading shell.
           setProviderData(providerRowToRegistrationData(profile));
+          setBookingHorizon({
+            booking_window_days: profile.booking_window_days,
+            schedule_release_day: toReleaseDay(profile.automation_settings?.scheduleReleaseDay),
+            schedule_release_time: toReleaseTime(profile.automation_settings?.scheduleReleaseTime),
+          });
           setIsLoading(false);
           setProviderId(profile.id);
+          setProviderSlug(profile.slug);
           setReviewCount(profile.review_count ?? 0);
+          setAutomationsSet(deriveAutomationsSet(profile));
 
           // First wave: what's on screen when the page opens. The go-live
           // reads and the terms flag are here because together with the
@@ -742,7 +972,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 logger.error('[MyServices] terms status load failed:', err);
               }),
 
-            getMyBookmarkCount()
+            getMyProviderSaverCount()
               .then(count => {
                 if (active) setBookmarkCount(count);
               })
@@ -750,32 +980,32 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 logger.error('[MyServices] bookmark count load failed:', err);
               }),
 
-            getMyTopServices(90, 1)
-              .then(result => {
-                if (active) setTopServices(result);
+            getProviderRecentBookings(profile.id, RECENT_ACTIVITY_PREVIEW)
+              .then(rows => {
+                if (active) setRecentBookings(rows);
               })
               .catch(err => {
-                logger.error('[MyServices] top services load failed:', err);
+                logger.error('[MyServices] recent bookings load failed:', err);
+              }),
+
+            getMyServiceBookingRows(SERVICE_BOOKING_LOOKBACK_DAYS)
+              .then(rows => {
+                if (active) setServiceBookings(summariseServiceBookings(rows));
+              })
+              .catch(err => {
+                logger.error('[MyServices] service bookings load failed:', err);
               }),
 
             getProviderReviews(profile.id, { limit: 20 })
               .then(dbReviews => {
                 if (!active) return;
-                setReviews(
-                  dbReviews.map(r => ({
-                    id: r.id,
-                    name: r.user?.name ?? tr('providerProfile.myProfile.anonymous'),
-                    rating: r.rating,
-                    comment: r.comment ?? '',
-                    date: new Date(r.created_at).toLocaleDateString(localeForLanguage(), {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    }),
-                  })),
-                );
+                // Same mapper as the client's view of this profile, so an
+                // anonymous review reads "Anonymous" here too.
+                setReviews(mapProviderReviews(dbReviews));
               })
-              .catch(() => {}),
+              .catch(err => {
+                logger.error('[MyServices] reviews load failed:', err);
+              }),
 
             // Passed the profile we already hold, so this costs the three
             // status reads and not a fourth lookup of the same row.
@@ -798,7 +1028,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             if (!active || lowerSectionsStarted) return;
             lowerSectionsStarted = true;
             if (lowerSectionsTimer) clearTimeout(lowerSectionsTimer);
-            lowerSectionsTask = InteractionManager.runAfterInteractions(() => {
+            // A tick for the first wave to render before this lower-priority work.
+            lowerSectionsTask = setTimeout(() => {
               if (!active) return;
               setLowerSectionsReady(true);
 
@@ -835,7 +1066,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 .catch(error => {
                   logger.warn('[MyServices] saved profile refresh failed:', error);
                 });
-            });
+            }, 0);
           };
           lowerSectionsTimer = setTimeout(startLowerSections, LOWER_SECTIONS_MAX_WAIT_MS);
           void Promise.allSettled(firstWave).then(startLowerSections);
@@ -849,7 +1080,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       return () => {
         active = false;
         if (lowerSectionsTimer) clearTimeout(lowerSectionsTimer);
-        lowerSectionsTask?.cancel();
+        if (lowerSectionsTask) clearTimeout(lowerSectionsTask);
       };
     }, [user?.id]),
   );
@@ -858,11 +1089,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     if (!providerData) return '';
     return providerData.providerService === 'OTHER'
       ? providerData.customServiceType
-      : optionText(
-          ALL_SERVICE_TYPE_OPTS.find(o => o.value === providerData.providerService)?.label ?? providerData.providerService,
-          t,
-        );
-  }, [providerData, t]);
+      : providerData.providerService;
+  }, [providerData]);
 
   /** Services grouped for display, plus the real breakdown of what's in the
    *  catalogue. Live and hidden are counted separately: a provider with eight
@@ -899,17 +1127,25 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     return buildPolicyDisplayRows(
       providerData.bookingPolicies,
       providerData.cancellationNoticeHours,
+      { linkOnly: myBookingMode === 'external', showNoDeposit: true },
     );
-  }, [providerData]);
+  }, [providerData, myBookingMode]);
 
-  /** goLive plus the two Profile-Health-only fields it never fetches itself
+  /** goLive plus the Profile-Health-only fields it never fetches itself
    *  (see GoLiveStatus's portfolioSet/termsSet doc comment) — merged here
    *  rather than inside fetchGoLiveStatus so that fetch stays free of a
    *  portfolio_items query ProviderHomeScreen would never use, reusing the
    *  workPhotos this screen already loads for its own grid instead. */
   const goLiveWithHealth = useMemo<GoLiveStatus | null>(
-    () => goLive ? { ...goLive, portfolioSet: workPhotos.length > 0, termsSet } : null,
-    [goLive, workPhotos, termsSet],
+    () => goLive
+      ? {
+          ...goLive,
+          portfolioSet: workPhotos.length > 0,
+          termsSet,
+          automationsSet: myBookingMode === 'external' ? undefined : automationsSet,
+        }
+      : null,
+    [goLive, workPhotos, termsSet, automationsSet, myBookingMode],
   );
 
   /** What the ring reads — every step counts, portfolio/T&Cs and the
@@ -926,16 +1162,16 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       ? '—'
       : goLive.isLive
         ? ratio === 1
-          ? t('providerProfile.myProfile.ring.excellent')
-          : t('providerProfile.myProfile.ring.live')
+          ? 'Excellent'
+          : 'Live'
         : steps.some(step => step.required && !step.done)
-          ? t('providerProfile.myProfile.ring.setup')
-          : t('providerProfile.myProfile.ring.almost');
+          ? 'Setup'
+          : 'Almost';
     return { done, total, ratio, percent: Math.round(ratio * 100), word };
-  }, [goLive, goLiveWithHealth, t]);
+  }, [goLive, goLiveWithHealth]);
 
   const showSteps = stepsOpen ?? !(goLive?.isLive ?? false);
-  const topService = topServices?.[0] ?? null;
+  const topService = serviceBookings?.ranked[0] ?? null;
   const averageRating = providerData?.rating ?? 0;
   // Falls back to the rows in hand only while the count hasn't arrived, so an
   // in-flight load never briefly claims "0 reviews" under a visible one.
@@ -951,6 +1187,16 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Payments');
   }, [navigation]);
 
+  const [calendarView, setCalendarView] = useCalendarViewPreference(user?.id);
+  const releaseQuickView = useMemo(
+    () => (bookingHorizon ? describeReleaseQuickView(bookingHorizon) : undefined),
+    [bookingHorizon],
+  );
+  // Where the release day is set (and also in Edit Profile).
+  const handleOpenRelease = useCallback(() => {
+    navigation.navigate('Scheduling');
+  }, [navigation]);
+
   const handleEditSchedule = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('ProviderSchedule');
@@ -959,6 +1205,127 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const handleEditBranding = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Branding');
+  }, [navigation]);
+
+  // Keep a fresh copy of the profile as clients see it ready while My Profile
+  // is open, so the logo tap below opens it with the profile already drawn.
+  // Refreshed on every focus, so coming back from Edit Profile
+  // picks the edit up. Not before go-live: clients can't see it yet.
+  const isLiveForPreview = goLive?.isLive !== false;
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerSlug || !isLiveForPreview) return;
+      refreshCachedProviderProfile(providerSlug).catch((error: unknown) => {
+        logger.warn('Could not warm own profile for the logo preview:', error);
+      });
+    }, [providerSlug, isLiveForPreview]),
+  );
+
+  // Tapping the logo shows the profile exactly as clients see it. Clients
+  // can't open it at all before go-live, so say that rather than open a
+  // "Provider not found" page. Unknown status (load failed) still opens it,
+  // same as the QR sheet.
+  const handleOpenClientView = useCallback(() => {
+    if (!providerSlug) return;
+    Haptics.selectionAsync().catch(() => {});
+    if (goLive?.isLive === false) {
+      Alert.alert(
+        tr('providerProfile.home.notLive'),
+        tr('providerProfile.ui.clientsWillSeeYourProfileOnce'),
+      );
+      return;
+    }
+    navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
+  }, [navigation, providerSlug, goLive?.isLive]);
+
+  // ── First-visit spotlight tour ─────────────────────────────────────────
+  // Rings what's at the top of My Profile when it opens. A target that isn't
+  // drawn, or is off screen (the go-live card once it has moved down the
+  // page), is skipped by CoachMarkTour itself. My Profile stays mounted as a
+  // tab and the tour is a full-screen Modal, so it waits for focus, the same
+  // as Home's tour.
+  const isFocused = useIsFocused();
+  const [showTour, setShowTour] = useState(false);
+  const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+  const tourCheckedRef = useRef(false);
+  const tourTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tourLogoRef = useRef<ViewInstance>(null);
+  const tourEditRef = useRef<ViewInstance>(null);
+  const tourShortcutsRef = useRef<ViewInstance>(null);
+  const tourTabsRef = useRef<ViewInstance>(null);
+  const tourStatusRef = useRef<ViewInstance>(null);
+  const tourIsLive = goLive?.isLive === true;
+  const tourHasQr = !!providerId;
+  const tourSteps = useMemo<CoachMarkStep[]>(() => {
+    const refs: Record<MyProfileTourKey, React.RefObject<ViewInstance | null>> = {
+      logo: tourLogoRef,
+      edit: tourEditRef,
+      shortcuts: tourShortcutsRef,
+      tabs: tourTabsRef,
+      status: tourStatusRef,
+    };
+    return myProfileTourSteps({ isLive: tourIsLive, hasQrButton: tourHasQr }).map(step => ({
+      ...step,
+      target: { ref: refs[step.key] },
+    }));
+  }, [tourIsLive, tourHasQr]);
+  const profileReady = !!providerData && !isLoading;
+  useEffect(() => {
+    // Only once the page itself is drawn: before that there is nothing to
+    // ring, and the loading shell would be what got spotlighted.
+    if (tourCheckedRef.current || !user?.id || !profileReady) return;
+    tourCheckedRef.current = true;
+    const userId = user.id;
+    void (async () => {
+      const decision = await resolveTourForUser(TOUR_KEYS.PROVIDER_MY_PROFILE, tourSteps, userId);
+      if (!decision.show) return;
+      setTourStepKeys(decision.steps.map(step => step.key));
+      // Recorded on show, not on finish — see tourService.
+      void recordTourSeen(TOUR_KEYS.PROVIDER_MY_PROFILE, userId, decision.stampVersion);
+      // Lets the header and the go-live card finish laying out first.
+      tourTimerRef.current = setTimeout(() => setShowTour(true), 700);
+    })();
+  }, [user?.id, profileReady, tourSteps]);
+  useEffect(() => () => {
+    if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
+  }, []);
+  const visibleTourSteps = useMemo(
+    () => (tourStepKeys ? tourSteps.filter(step => tourStepKeys.includes(step.key)) : []),
+    [tourSteps, tourStepKeys],
+  );
+  const finishTour = useCallback(() => setShowTour(false), []);
+
+  // Today's two cards. They haptick on their own presses, so these only
+  // navigate.
+  const todaySchedule = useTodaySchedule(providerId);
+
+  // Also Recent activity's rows, which hold the same raw rows.
+  const handleOpenBooking = useCallback(
+    (booking: BookingWithAddOns) => {
+      // The cards hold raw rows; the detail screen reads a ConfirmedBooking, and
+      // shows no client or service on anything else.
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking: mapDbBookingToConfirmed(booking) });
+    },
+    [navigation],
+  );
+
+  // The day itself lives on the Home tab's calendar, the same jump Add
+  // Booking makes after saving.
+  const handleOpenTodayDay = useCallback(
+    (ymd: string) => {
+      navigation.getParent()?.navigate('ProviderHome', {
+        screen: 'ProviderHomeMain',
+        params: { jumpToDate: ymd },
+      });
+    },
+    [navigation],
+  );
+
+  // See all is booking history's History tab, whose filter starts on All —
+  // not a separate recent-activity list.
+  const handleOpenRecentActivity = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    navigation.navigate('BookingHistory', { initialTab: 'history' });
   }, [navigation]);
 
   const handleOpenAnalytics = useCallback(() => {
@@ -989,36 +1356,36 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     () => [
       {
         key: 'business-info',
-        label: t('providerProfile.myProfile.quick.businessInfo'),
+        label: tr('providerProfile.myProfile.quick.businessInfo'),
         icon: 'business-outline',
         onPress: () => navigation.navigate('BusinessInfo'),
       },
       {
         key: 'payments',
-        label: t('providerProfile.myProfile.quick.payments'),
+        label: tr('providerProfile.myProfile.quick.payments'),
         icon: 'card-outline',
         onPress: () => navigation.navigate('Payments'),
       },
       {
         key: 'schedule',
-        label: t('providerProfile.myProfile.quick.schedule'),
+        label: tr('providerProfile.myProfile.quick.schedule'),
         icon: 'calendar-outline',
         onPress: () => navigation.navigate('Scheduling'),
       },
       {
         key: 'packs',
-        label: t('providerProfile.myProfile.quick.infoPacks'),
+        label: tr('providerProfile.myProfile.quick.infoPacks'),
         icon: 'documents-outline',
         onPress: () => navigation.navigate('InfoPacks'),
       },
       {
         key: 'clientele',
-        label: t('providerProfile.myProfile.quick.clientele'),
+        label: tr('providerProfile.services.clientele'),
         icon: 'people-outline',
         onPress: () => navigation.navigate('Clientele'),
       },
     ],
-    [navigation, t],
+    [navigation],
   );
 
   // ── Service editing ─────────────────────────────────────────────────────
@@ -1041,7 +1408,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const closeEditor = useCallback(() => setEditorOpen(false), []);
 
   const handleSaveService = useCallback(
-    async (draft: MyServiceDraft) => {
+    async (draft: MyServiceDraft, then?: PackFormKind) => {
       if (!providerId) return;
       setSaving(true);
       try {
@@ -1054,18 +1421,20 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
         setEditorOpen(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        // From the editor's Info Pack / Form tip: saved, now open it.
+        if (then) navigation.navigate(then === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm');
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         Alert.alert(
           tr('providerProfile.portfolio.saveFailedTitle'),
-          toUserMessage(e, tr('providerProfile.portfolio.removeFailed'), 'MyServices.saveService'),
+          toUserMessage(e, "That didn't save. Please try again.", 'MyServices.saveService'),
         );
       } finally {
         setSaving(false);
       }
     },
-    [providerId, editingId, editingCategory],
+    [providerId, editingId, editingCategory, navigation],
   );
 
   const handleToggleActive = useCallback(async (service: DbService) => {
@@ -1084,7 +1453,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert(
         tr('providerProfile.myProfile.updateFailedTitle'),
-        toUserMessage(e, tr('providerProfile.portfolio.removeFailed'), 'MyServices.toggleService'),
+        toUserMessage(e, "That didn't save. Please try again.", 'MyServices.toggleService'),
       );
     } finally {
       setTogglingId(null);
@@ -1149,7 +1518,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           logger.error('[MyServices] portfolio upload failed:', e);
           Alert.alert(
             tr('providerProfile.portfolio.uploadFailedTitle'),
-            toUserMessage(e, tr('providerProfile.portfolio.uploadFailed'), 'MyServices.addPhotos'),
+            toUserMessage(e, 'Could not upload one of those photos.', 'MyServices.addPhotos'),
           );
         }
       }),
@@ -1163,6 +1532,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const handleGoLiveStep = useCallback(
     (key: GoLiveStepKey) => {
       Haptics.selectionAsync().catch(() => {});
+      if (key === 'ownerDetails') {
+        navigation.navigate('AccountHolderDetails', { addDetailsForCurrentUser: true });
+        return;
+      }
       if (key === 'portfolio') { void handleAddPhotos(); return; }
       navigation.navigate(GO_LIVE_STEP_SCREENS[key]);
     },
@@ -1173,7 +1546,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     Alert.alert(tr('providerProfile.portfolio.removeTitle'), tr('providerProfile.portfolio.removeBody'), [
       { text: tr('common.cancel'), style: 'cancel' },
       {
-        text: tr('providerProfile.portfolio.remove'),
+        text: tr('common.remove'),
         style: 'destructive',
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -1185,7 +1558,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             logger.error('[MyServices] portfolio delete failed:', e);
             Alert.alert(
               tr('providerProfile.portfolio.removeFailedTitle'),
-              toUserMessage(e, tr('providerProfile.portfolio.removeFailed'), 'MyServices.removePhoto'),
+              toUserMessage(e, "That didn't save. Please try again.", 'MyServices.removePhoto'),
             );
           }
         },
@@ -1251,6 +1624,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     ],
   );
 
+  const todayPalette = useMemo<TodayCardsPalette>(
+    () => ({ card: cardSolid, text: PP.text, sub: PP.sub, border: PP.border, accent: accentColor }),
+    [cardSolid, PP.text, PP.sub, PP.border, accentColor],
+  );
+
   const editorPalette = useMemo<ServiceEditorPalette>(
     () => ({
       bg: PP.bg,
@@ -1308,7 +1686,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   );
 
 
-  if (isLoading && !providerData) return <ProviderProfileLoadingShell accent={theme.accent} />;
+  if (isLoading && !providerData) return <ProviderProfileLoadingShell isDarkMode={isDarkMode} />;
 
   if (!providerData) {
     return (
@@ -1321,15 +1699,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               color={theme.text + '30'}
               style={{ marginBottom: 16 }}
             />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>{t('providerProfile.myProfile.empty.title')}</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>{tr('providerProfile.myProfile.empty.title')}</Text>
             <Text style={[styles.emptySubtitle, { color: theme.text + '66' }]}>
-              {t('providerProfile.myProfile.empty.body')}
+              {tr('providerProfile.myProfile.empty.body')}
             </Text>
             <TouchableOpacity
               style={[styles.setupButton, { backgroundColor: '#007AFF' }]}
               onPress={handleEditProfile}
             >
-              <Text style={styles.setupButtonText}>{t('providerProfile.myProfile.empty.cta')}</Text>
+              <Text style={styles.setupButtonText}>{tr('providerProfile.myProfile.empty.cta')}</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -1345,9 +1723,28 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       ? TONE_COLOR[headline.tone]
       : accentColor;
 
-  /* The go-live card. It leads the dashboard while anything is still
-     outstanding and drops to the bottom once the profile is finished —
-     at that point it's a receipt, not an instruction. */
+  /* The go-live card. It leads the dashboard until setup is 80% done and
+     clients can book, then drops to the bottom: at that point it's a
+     receipt, not an instruction. While the profile is still loading it
+     stays on top, where it always used to be. */
+  const statusLeads = goLiveCardLeads(setup.percent, goLive?.isLive ?? false);
+  const todaySummaryCard = todaySchedule ? (
+    <TodaySummaryCard
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenBooking}
+      onOpenDay={handleOpenTodayDay}
+    />
+  ) : null;
+  const todayBookingCards = todaySchedule ? (
+    <TodayBookingCards
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenBooking}
+    />
+  ) : null;
+  const cardsOnTop = todaySchedule ? bookingCardsLead(todaySchedule) : false;
+
   const statusSection = (
     <>
       {/* ── Status hero ────────────────────────────────────────
@@ -1356,7 +1753,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           steps stay one tap away rather than always occupying the
           top of the screen for a provider who's already live. */}
       {headline && goLiveWithHealth ? (
-        <View style={styles.dashCardShadow}>
+        <View ref={tourStatusRef} collapsable={false} style={styles.dashCardShadow}>
           <BlurView
             intensity={cardBlurIntensity}
             tint={cardBlurTint}
@@ -1370,7 +1767,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             />
             <View style={styles.statusHeader}>
               <View style={[styles.statusDot, { backgroundColor: toneColor }]} />
-              <Text style={[styles.dashEyebrow, { color: PP.sub }]}>{t('providerProfile.myProfile.status.eyebrow')}</Text>
+              <Text style={[styles.dashEyebrow, { color: PP.sub }]}>{tr('providerProfile.myProfile.status.eyebrow')}</Text>
             </View>
 
             <View style={styles.statusBody}>
@@ -1411,8 +1808,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 <Text style={[styles.statusDetail, { color: PP.sub }]} numberOfLines={4}>
                   {headline.detail ??
                     (goLiveWithHealth.isLive
-                      ? t('providerProfile.myProfile.status.liveDetail')
-                      : t('providerProfile.myProfile.status.notLiveDetail'))}
+                      ? 'Clients can find you in search and book your services.'
+                      : 'Finish the steps below and your profile publishes itself.')}
                 </Text>
                 <TouchableOpacity
                   style={[styles.inkPill, { backgroundColor: inkBg }]}
@@ -1422,7 +1819,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   accessibilityState={{ expanded: showSteps }}
                 >
                   <Text style={[styles.inkPillText, { color: inkText }]}>
-                    {showSteps ? t('providerProfile.myProfile.status.hideDetails') : t('providerProfile.myProfile.status.viewDetails')}
+                    {showSteps ? tr('providerProfile.myProfile.status.hideDetails') : tr('providerProfile.myProfile.status.viewDetails')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1435,10 +1832,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     gates on. */}
                 <View style={styles.stepListHeader}>
                   <Text style={[styles.dashEyebrow, { color: PP.sub }]}>
-                    {tp('providerProfile.myProfile.status.setupSteps', setup.total)}
+                    SETUP · {setup.total} STEPS
                   </Text>
                   <Text style={[styles.stepCount, { color: PP.sub }]}>
-                    {t('providerProfile.myProfile.status.completed', { done: setup.done, total: setup.total })}
+                    {tr('providerProfile.ui.completed')} {setup.done}/{setup.total}
                   </Text>
                 </View>
                 <View style={[styles.progressTrack, { backgroundColor: withAlpha(toneColor, 0.16) }]}>
@@ -1483,7 +1880,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         already marks it finished. */}
                     {step.blocking && !step.done && (
                       <View style={[styles.requiredTag, { borderColor: withAlpha(toneColor, 0.4) }]}>
-                        <Text style={[styles.requiredTagText, { color: toneColor }]}>{t('providerProfile.myProfile.status.required')}</Text>
+                        <Text style={[styles.requiredTagText, { color: toneColor }]}>{tr('providerProfile.myProfile.status.required')}</Text>
                       </View>
                     )}
                     {step.done ? null : (
@@ -1516,10 +1913,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           />
         </>
       ) : (
-        <LinearGradient
+        <ProfileHeroBackdrop
           colors={providerData.hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          finish={parseThemeKey(providerData.profileTheme).finish}
           style={styles.heroImage}
         />
       )}
@@ -1543,7 +1939,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     style={[styles.displayName, { color: heroText }, heroIsDark && styles.heroTextShadow]}
                     numberOfLines={2}
                   >
-                    {providerData.providerName || t('providerProfile.myProfile.businessNamePlaceholder')}
+                    {providerData.providerName || 'Your Business Name'}
                   </Text>
                   {providerData.isVerified && (
                     <Ionicons
@@ -1559,7 +1955,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   numberOfLines={1}
                 >
                   {[
-                    (serviceType || t('providerProfile.myProfile.serviceFallback')).toLowerCase(),
+                    (serviceType || 'SERVICE').toLowerCase(),
                     providerData.location ? providerData.location.toLowerCase() : null,
                   ]
                     .filter(Boolean)
@@ -1567,25 +1963,29 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              {providerData.logo ? (
-                <Image
-                  source={{ uri: providerData.logo }}
-                  style={styles.avatar}
-                  resizeMode="cover"
-                  fadeDuration={0}
-                />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
-                  <Text style={styles.avatarInitials}>
-                    {providerData.providerName
-                      .split(' ')
-                      .map(w => w[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity
+                ref={tourLogoRef}
+                onPress={handleOpenClientView}
+                disabled={!providerSlug}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={tr('providerProfile.ui.seeYourProfileAsClientsSee')}
+              >
+                {providerData.logo ? (
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
+                    <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                      {providerData.providerName
+                        .split(' ')
+                        .map(w => w[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Counts live here rather than in a sentence under the Services
@@ -1594,12 +1994,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               {[
                 {
                   value: servicesLoaded ? String(catalogue.liveCount) : '—',
-                  label: catalogue.liveCount === 1 ? t('providerProfile.myProfile.stat.service') : t('providerProfile.myProfile.stat.services'),
+                  label: catalogue.liveCount === 1 ? 'Service' : 'Services',
                 },
-                { value: String(workPhotos.length), label: workPhotos.length === 1 ? t('providerProfile.myProfile.stat.photo') : t('providerProfile.myProfile.stat.photos') },
+                { value: String(workPhotos.length), label: workPhotos.length === 1 ? 'Photo' : 'Photos' },
                 {
                   value: totalReviews > 0 ? String(averageRating) : '—',
-                  label: totalReviews === 1 ? t('providerProfile.myProfile.stat.review') : t('providerProfile.myProfile.stat.reviews'),
+                  label: totalReviews === 1 ? 'Review' : 'Reviews',
                 },
               ].map(stat => (
                 <View key={stat.label} style={styles.stat}>
@@ -1625,6 +2025,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               {/* Ink pill, like every CTA in the reference — and it has to
                   invert over a dark hero photo to stay the loud one. */}
               <TouchableOpacity
+                ref={tourEditRef}
                 style={[styles.primaryAction, { backgroundColor: heroIsDark ? '#FFFFFF' : '#101010' }]}
                 onPress={handleEditProfile}
                 activeOpacity={0.85}
@@ -1632,15 +2033,18 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 <Text
                   style={[styles.primaryActionText, { color: heroIsDark ? '#101010' : '#FFFFFF' }]}
                 >
-                  {t('providerProfile.myProfile.editProfileCta')}
+                  {tr('providerProfile.myProfile.editProfileCta')}
                 </Text>
               </TouchableOpacity>
+              {/* Grouped only so the tour can ring all three at once; same
+                  gap as the row, so nothing moves. */}
+              <View ref={tourShortcutsRef} collapsable={false} style={styles.circleGroup}>
               <TouchableOpacity
                 style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
                 onPress={handleEditSchedule}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={t('providerProfile.myProfile.editScheduleA11y')}
+                accessibilityLabel={tr('providerProfile.myProfile.editScheduleA11y')}
               >
                 <Ionicons name="calendar-outline" size={19} color={PP.text} />
               </TouchableOpacity>
@@ -1649,10 +2053,22 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 onPress={handleEditBranding}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={t('providerProfile.myProfile.editBrandingA11y')}
+                accessibilityLabel={tr('providerProfile.myProfile.editBrandingA11y')}
               >
                 <Ionicons name="color-palette-outline" size={19} color={PP.text} />
               </TouchableOpacity>
+              {providerId ? (
+                <TouchableOpacity
+                  style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setProfileQrVisible(true); }}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={tr('providerProfile.ui.showYourProfileQrCode')}
+                >
+                  <Ionicons name="qr-code-outline" size={19} color={PP.text} />
+                </TouchableOpacity>
+              ) : null}
+              </View>
             </View>
           </View>
 
@@ -1663,6 +2079,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   tab rather than one scroll that buries the services under
                   status cards. */}
               <View
+                ref={tourTabsRef}
+                collapsable={false}
                 style={[
                   styles.tabBar,
                   { backgroundColor: withAlpha(PP.card, PP.isDark ? 0.6 : 0.75), borderColor: PP.border },
@@ -1678,7 +2096,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       activeOpacity={0.75}
                       accessibilityRole="tab"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={t(item.labelKey)}
+                      accessibilityLabel={item.label}
                     >
                       <Ionicons
                         name={item.icon}
@@ -1686,7 +2104,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         color={selected ? '#FFFFFF' : PP.sub}
                       />
                       <Text style={[styles.tabLabel, { color: selected ? '#FFFFFF' : PP.sub }]}>
-                        {t(item.labelKey)}
+                        {item.label}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1695,24 +2113,32 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {tab === 'dashboard' ? (
                 <>
-                  {setup.percent === 100 ? null : statusSection}
+                  {statusLeads ? statusSection : null}
+
+                  {/* ── Today ──────────────────────────────────────────────────
+                      Two cards around the rest of the dashboard: the summary
+                      leads until 2pm and again once the last client is done,
+                      the booking cards lead in between, and on a free day
+                      with bookings coming up. Whichever isn't on top sits
+                      under Your work. */}
+                  {cardsOnTop ? todayBookingCards : todaySummaryCard}
 
                   {/* ── What clients say ───────────────────────────────────── */}
-                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{t('providerProfile.myProfile.reviews.section')}</Text>
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{tr('providerProfile.myProfile.reviews.section')}</Text>
 
                   {/* No onPress: there's no review-management screen to send them
                       to, and a card that looks tappable but isn't is worse than
                       one that plainly isn't. */}
                   <DashCard
                     palette={dashPalette}
-                    eyebrow={t('providerProfile.myProfile.reviews.eyebrow')}
-                    title={tp('providerProfile.myProfile.reviews.count', totalReviews)}
+                    eyebrow="REVIEWS"
+                    title={totalReviews === 1 ? tr('providerProfile.ui.n1Review') : tr('providerProfile.ui.nReviews', { count: totalReviews })}
                     value={totalReviews > 0 ? `★ ${averageRating}` : undefined}
                   >
                     {totalReviews === 0 ? (
                       <DashEmpty
                         palette={dashPalette}
-                        text={t('providerProfile.myProfile.reviews.empty')}
+                        text={tr('providerProfile.myProfile.reviews.empty')}
                       />
                     ) : (
                       <View style={styles.dashBody}>
@@ -1742,11 +2168,20 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                                 {review.comment}
                               </Text>
                             ) : null}
+                            <TouchableOpacity
+                              onPress={() => reportReview(String(review.id))}
+                              activeOpacity={0.6}
+                              style={styles.reviewReportBtn}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              accessibilityLabel={tr('providerProfile.ui.reportReviewA11y', { name: review.name || tr('providerProfile.ui.aClient') })}
+                            >
+                              <Text style={[styles.reviewReportText, { color: PP.sub }]}>{tr('providerProfile.ui.report')}</Text>
+                            </TouchableOpacity>
                           </View>
                         ))}
                         {totalReviews > MAX_REVIEW_PREVIEWS ? (
                           <Text style={[styles.dashMore, { color: PP.sub }]}>
-                            {t('providerProfile.myProfile.more', { count: totalReviews - MAX_REVIEW_PREVIEWS })}
+                            +{totalReviews - MAX_REVIEW_PREVIEWS} more
                           </Text>
                         ) : null}
                       </View>
@@ -1754,7 +2189,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   </DashCard>
 
                   {/* ── Deposits & rules ──────────────────────────────────── */}
-                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{t('providerProfile.myProfile.policies.section')}</Text>
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{tr('providerProfile.ui.depositsRules')}</Text>
 
                   {/* Paired tinted tiles, the mode-select pair from the
                       reference. Portrait rather than letterboxed: the policies
@@ -1766,24 +2201,24 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       onPress={handleEditPolicies}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={t('providerProfile.myProfile.policies.editA11y')}
+                      accessibilityLabel={tr('providerProfile.myProfile.policies.editA11y')}
                     >
                       <View style={styles.tintHead}>
                         <Ionicons name="shield-checkmark-outline" size={14} color={accentColor} />
-                        <Text style={[styles.tintEyebrow, { color: PP.sub }]}>{t('providerProfile.myProfile.policies.eyebrow')}</Text>
+                        <Text style={[styles.tintEyebrow, { color: PP.sub }]}>{tr('providerProfile.myProfile.policies.eyebrow')}</Text>
                       </View>
 
                       <Text style={[styles.tintTitle, { color: PP.text }]} numberOfLines={1}>
-                        {hasPolicyInfo(providerData) ? t('providerProfile.myProfile.policies.title') : t('providerProfile.myProfile.policies.none')}
+                        {policyRows.length > 0 ? tr('providerProfile.myProfile.policies.section') : tr('providerProfile.myProfile.policies.none')}
                       </Text>
 
                       {policyRows.length === 0 ? (
                         <Text style={[styles.halfSub, { color: PP.sub }]} numberOfLines={4}>
-                          {t('providerProfile.myProfile.policies.noneSub')}
+                          {tr('providerProfile.myProfile.policies.noneSub')}
                         </Text>
                       ) : (
                         <View style={styles.policyList}>
-                          {policyRows.slice(0, MAX_POLICY_ROWS - 1).map(row => (
+                          {policyRows.slice(0, MAX_POLICY_PREVIEWS).map(row => (
                             <View key={row.label} style={styles.policyItem}>
                               <Ionicons name={row.icon} size={13} color={accentColor} />
                               <View style={styles.policyItemText}>
@@ -1796,6 +2231,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                               </View>
                             </View>
                           ))}
+                          {policyRows.length > MAX_POLICY_PREVIEWS ? (
+                            <Text style={[styles.policyMore, { color: PP.sub }]}>
+                              +{policyRows.length - MAX_POLICY_PREVIEWS} more
+                            </Text>
+                          ) : null}
                         </View>
                       )}
                     </TouchableOpacity>
@@ -1810,18 +2250,18 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         onPress={handleOpenAnalytics}
                         activeOpacity={0.8}
                         accessibilityRole="button"
-                        accessibilityLabel={t('providerProfile.myProfile.openAnalyticsA11y')}
+                        accessibilityLabel={tr('providerProfile.myProfile.openAnalyticsA11y')}
                       >
                         <View style={styles.tintHead}>
                           <Ionicons name="bookmark-outline" size={13} color={accentColor} />
-                          <Text style={[styles.tintEyebrow, { color: PP.sub }]}>{t('providerProfile.myProfile.savedBy')}</Text>
+                          <Text style={[styles.tintEyebrow, { color: PP.sub }]}>{tr('providerProfile.myProfile.savedBy')}</Text>
                         </View>
                         <View style={styles.shortBody}>
                           <Text style={[styles.shortValue, { color: PP.text }]}>
                             {bookmarkCount === null ? '—' : bookmarkCount}
                           </Text>
                           <Text style={[styles.shortSub, { color: PP.sub }]} numberOfLines={2}>
-                            {bookmarkCount === 1 ? t('providerProfile.myProfile.clientSingle') : t('providerProfile.myProfile.clientSeveral')}
+                            {bookmarkCount === 1 ? tr('providerProfile.myProfile.clientSingle') : tr('providerProfile.myProfile.clientSeveral')}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1831,29 +2271,32 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         onPress={handleOpenAnalytics}
                         activeOpacity={0.8}
                         accessibilityRole="button"
-                        accessibilityLabel={t('providerProfile.myProfile.openAnalyticsA11y')}
+                        accessibilityLabel={tr('providerProfile.myProfile.openAnalyticsA11y')}
                       >
                         <View style={styles.tintHead}>
                           <Ionicons name="flame-outline" size={13} color={accentColor} />
-                          <Text style={[styles.tintEyebrow, { color: PP.sub }]}>{t('providerProfile.myProfile.mostBooked')}</Text>
+                          <Text style={[styles.tintEyebrow, { color: PP.sub }]}>{tr('providerProfile.myProfile.mostBooked')}</Text>
                         </View>
                         {/* 90 days, and only confirmed or completed — an empty
                             state here means nobody booked, not that the tile
                             failed to load. */}
                         <Text style={[styles.shortTitle, { color: PP.text }]} numberOfLines={2}>
-                          {topServices === null ? '—' : (topService?.name ?? t('providerProfile.myProfile.noBookingsYet'))}
+                          {serviceBookings === null ? '—' : (topService?.name ?? 'No bookings yet')}
                         </Text>
                         {topService ? (
                           <Text style={[styles.shortSub, { color: PP.sub }]} numberOfLines={1}>
-                            {t('providerProfile.myProfile.in90Days', { count: topService.count })}
+                            {tr('providerProfile.ui.in90Days', { count: topService.count })}
                           </Text>
                         ) : null}
                       </TouchableOpacity>
                     </View>
                   </View>
 
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS BOOK</Text>
+                  <ServiceBookingCharts summary={serviceBookings} palette={dashPalette} />
+
                   {/* ── Portfolio ──────────────────────────────────────────── */}
-                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{t('providerProfile.myProfile.work.section')}</Text>
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{tr('providerProfile.myProfile.work.section')}</Text>
 
                   <View style={styles.dashCardShadow}>
                     <BlurView
@@ -1869,14 +2312,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       />
                       <View style={styles.dashHeader}>
                         <View style={styles.dashHeaderText}>
-                          <Text style={[styles.dashEyebrow, { color: PP.sub }]}>{t('providerProfile.myProfile.work.eyebrow')}</Text>
+                          <Text style={[styles.dashEyebrow, { color: PP.sub }]}>{tr('providerProfile.myProfile.work.eyebrow')}</Text>
                           <Text style={[styles.dashBigValue, { color: PP.text }]}>
-                            {tp('providerProfile.myProfile.work.count', workPhotos.length)}
+                            {workPhotos.length === 1 ? tr('providerProfile.ui.n1Photo') : tr('providerProfile.ui.nPhotos', { count: workPhotos.length })}
                           </Text>
                           <Text style={[styles.dashBigSub, { color: PP.sub }]}>
                             {workPhotos.length === 0
-                              ? t('providerProfile.myProfile.work.empty')
-                              : t('providerProfile.myProfile.work.sub')}
+                              ? tr('providerProfile.myProfile.work.empty')
+                              : tr('providerProfile.myProfile.work.sub')}
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -1888,14 +2331,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           disabled={photoUploading}
                           activeOpacity={0.7}
                           accessibilityRole="button"
-                          accessibilityLabel={t('providerProfile.myProfile.work.addA11y')}
+                          accessibilityLabel={tr('providerProfile.goLive.step.portfolio')}
                         >
                           {photoUploading ? (
                             <ActivityIndicator size="small" color={accentColor} />
                           ) : (
                             <>
                               <Ionicons name="add" size={15} color={accentColor} />
-                              <Text style={[styles.addChipText, { color: accentColor }]}>{t('providerProfile.portfolio.add')}</Text>
+                              <Text style={[styles.addChipText, { color: accentColor }]}>{tr('common.add')}</Text>
                             </>
                           )}
                         </TouchableOpacity>
@@ -1937,7 +2380,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                               }}
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                               accessibilityRole="button"
-                              accessibilityLabel={t('providerProfile.myProfile.work.removeA11y')}
+                              accessibilityLabel={tr('providerProfile.myProfile.work.removeA11y')}
                             >
                               <Ionicons name="close" size={13} color="#FFFFFF" />
                             </TouchableOpacity>
@@ -1955,11 +2398,56 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </BlurView>
                   </View>
 
+                  {/* ── Today, the other card ──────────────────────────────── */}
+                  {cardsOnTop ? todaySummaryCard : todayBookingCards}
+
+                  {/* ── Recent activity ────────────────────────────────────── */}
+                  {recentBookings.length > 0 ? (
+                    <>
+                      <View style={styles.rowHeader}>
+                        <Text style={[styles.sectionLabel, { color: PP.sub }]}>RECENT ACTIVITY</Text>
+                        <TouchableOpacity
+                          onPress={handleOpenRecentActivity}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={tr('providerProfile.ui.seeAllRecentBookings')}
+                        >
+                          <Text style={[styles.rowHeaderLink, { color: accentColor }]}>{tr('common.seeAll')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.dashCardShadow}>
+                        <BlurView
+                          intensity={cardBlurIntensity}
+                          tint={cardBlurTint}
+                          style={[styles.dashCard, styles.recentCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                        >
+                          <LinearGradient
+                            colors={cardHighlightColors}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.cardHighlight}
+                          />
+                          {recentBookings.map((booking, i) => (
+                            <RecentBookingRow
+                              key={booking.id}
+                              booking={booking}
+                              onPress={handleOpenBooking}
+                              textColor={PP.text}
+                              subTextColor={PP.sub}
+                              borderColor={PP.border}
+                              isLast={i === recentBookings.length - 1}
+                            />
+                          ))}
+                        </BlurView>
+                      </View>
+                    </>
+                  ) : null}
+
                   {/* ── Manage ─────────────────────────────────────────────── */}
                   <View style={styles.rowHeader}>
-                    <Text style={[styles.sectionLabel, { color: PP.sub }]}>{t('providerProfile.myProfile.manage')}</Text>
+                    <Text style={[styles.sectionLabel, { color: PP.sub }]}>{tr('providerProfile.myProfile.manage')}</Text>
                     <TouchableOpacity onPress={handleEditProfile} activeOpacity={0.7}>
-                      <Text style={[styles.rowHeaderLink, { color: accentColor }]}>{t('providerProfile.myProfile.editProfile')}</Text>
+                      <Text style={[styles.rowHeaderLink, { color: accentColor }]}>{tr('providerProfile.myProfile.editProfile')}</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -2005,8 +2493,35 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </BlurView>
                   </View>
 
+                  <View style={styles.dashCardShadow}>
+                    <BlurView
+                      intensity={cardBlurIntensity}
+                      tint={cardBlurTint}
+                      style={[styles.dashCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                    >
+                      <LinearGradient
+                        colors={cardHighlightColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.cardHighlight}
+                      />
+                      <ManageScheduleRows
+                        release={releaseQuickView}
+                        onOpenRelease={handleOpenRelease}
+                        calendarView={calendarView}
+                        onChangeCalendarView={setCalendarView}
+                        textColor={PP.text}
+                        subTextColor={PP.sub}
+                        accentColor={accentColor}
+                        onAccentColor={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'}
+                        chipBg={tintSoft}
+                        borderColor={PP.border}
+                      />
+                    </BlurView>
+                  </View>
+
                   {/* ── How you take bookings ──────────────────────────────── */}
-                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{t('providerProfile.myProfile.howYouTakeBookings')}</Text>
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>{tr('providerProfile.myProfile.howYouTakeBookings')}</Text>
 
                   <View style={styles.availabilityWrap}>
                     <AvailabilityCard
@@ -2027,7 +2542,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       on focus, which the top of the page shouldn't wait on. */}
                   {STRIPE_CONNECT_PAYOUTS_ENABLED && lowerSectionsReady && (
                     <>
-                      <Text style={[styles.sectionLabel, { color: PP.sub }]}>{t('providerProfile.myProfile.payouts')}</Text>
+                      <Text style={[styles.sectionLabel, { color: PP.sub }]}>{tr('providerProfile.myProfile.payouts')}</Text>
                       <View style={styles.availabilityWrap}>
                         <ProviderPayoutSummaryCard
                           cardBg={cardBg}
@@ -2043,6 +2558,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
+                  {statusLeads ? null : statusSection}
                 </>
               ) : (
                 <>
@@ -2060,31 +2576,33 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           end={{ x: 0, y: 1 }}
                           style={styles.cardHighlight}
                         />
-                        <Text style={[styles.dashTitle, { color: PP.text }]}>{t('providerProfile.myProfile.noServices')}</Text>
+                        <Text style={[styles.dashTitle, { color: PP.text }]}>{tr('providerProfile.myProfile.noServices')}</Text>
                         {/* Categories are created with the rest of the profile, so
                             the very first one still starts there — there's nothing
                             for an "add a service" button here to add it to yet. */}
                         <DashEmpty
                           palette={dashPalette}
-                          text={t('providerProfile.myProfile.noServicesSub')}
+                          text={tr('providerProfile.myProfile.noServicesSub')}
                         />
                         <TouchableOpacity
                           style={[styles.primaryButton, { backgroundColor: accentColor }]}
                           onPress={handleEditProfile}
                           activeOpacity={0.85}
                         >
-                          <Text style={styles.primaryButtonText}>{t('providerProfile.myProfile.setUpServices')}</Text>
+                          <Text style={[styles.primaryButtonText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{tr('providerProfile.myProfile.setUpServices')}</Text>
                         </TouchableOpacity>
                       </BlurView>
                     </View>
                   ) : (
-                    /* A price list per category rather than a grid of tiles.
+                    <>
+                    <FindabilityCard services={services} palette={dashPalette} onEdit={openEditService} />
+                    {/* A price list per category rather than a grid of tiles.
                        It reads down like a salon's price board, fits far more
                        of the catalogue on screen, and folds hidden services
                        away instead of fading them in among the live ones.
                        Each card only gets togglingId when the row being
-                       toggled is its own, so the other cards' memo holds. */
-                    catalogue.groups.map(group => (
+                       toggled is its own, so the other cards' memo holds. */}
+                    {catalogue.groups.map(group => (
                       <ServiceCategoryCard
                         key={group.name}
                         name={group.name}
@@ -2096,25 +2614,60 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         onToggleActive={handleToggleActive}
                         swipe={rowSwipe}
                       />
-                    ))
+                    ))}
+                    </>
                   )}
-
-                  {setup.percent === 100 ? statusSection : null}
                 </>
               )}
             </View>
           </View>
         </ScrollView>
+        {providerSlug ? (
+          <ProviderProfileQrSheet
+            visible={profileQrVisible}
+            providerSlug={providerSlug}
+            providerName={providerData.providerName || 'your business'}
+            isLive={goLive?.isLive !== false}
+            accentColor={accentColor}
+            backgroundColor={PP.card}
+            textColor={PP.text}
+            subtextColor={PP.sub}
+            borderColor={PP.border}
+            onClose={() => setProfileQrVisible(false)}
+          />
+        ) : null}
+        {/* Waits behind the Fully Booked certificate rather than stacking a
+            second full-screen Modal on top of it. */}
+        <CoachMarkTour
+          visible={showTour && isFocused && !certificate}
+          steps={visibleTourSteps}
+          onFinish={finishTour}
+        />
+        {certificate ? (
+          <FullyBookedCertificate
+            visible
+            providerName={providerData.providerName || 'Your business'}
+            throughDate={certificate.throughDate}
+            filledAt={certificate.filledAt}
+            isDarkMode={isDarkMode}
+            onDone={() => closeCertificate()}
+            onManageSchedule={() => closeCertificate(() => navigation.navigate('ProviderSchedule'))}
+          />
+        ) : null}
       </SafeAreaView>
 
       <ServiceEditorSheet
         visible={editorOpen}
         initial={editorInitial}
         categoryName={editingCategory}
+        fallbackKind={providerData?.providerService ?? null}
         isNew={editingId == null}
         saving={saving}
         palette={editorPalette}
         onSave={handleSaveService}
+        // Info Packs and Forms go with CERVICED bookings, which link-only
+        // providers don't take.
+        {...(myBookingMode === 'external' ? {} : { onSaveAndOpen: handleSaveService })}
         onClose={closeEditor}
       />
     </View>
@@ -2148,76 +2701,85 @@ const styles = StyleSheet.create({
   },
   profileLoadingShell: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-  },
-  profileLoadingHero: {
-    height: 260,
-    borderRadius: 24,
-    backgroundColor: 'rgba(126,102,103,0.16)',
     overflow: 'hidden',
   },
-  profileLoadingHeroMark: {
-    position: 'absolute',
-    right: 24,
-    bottom: 24,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    opacity: 0.28,
+  // Each bone sits inside the same line box as the text it stands in for, so
+  // the header is the same height before and after the data arrives.
+  profileLoadingName: {
+    width: '72%',
+    height: 24,
+    marginVertical: 4,
+    borderRadius: 8,
+  },
+  profileLoadingHandle: {
+    width: '48%',
+    height: 11,
+    marginTop: 9,
+    borderRadius: 6,
+  },
+  profileLoadingAvatar: {
+    borderWidth: 0,
+  },
+  profileLoadingStatValue: {
+    width: 34,
+    height: 20,
+    marginTop: 2,
+    marginBottom: 3,
+    borderRadius: 6,
+  },
+  profileLoadingStatLabel: {
+    width: 54,
+    height: 10,
+    marginTop: 4,
+    marginBottom: 2,
+    borderRadius: 5,
+  },
+  profileLoadingCircle: {
+    borderWidth: 0,
+  },
+  profileLoadingTabBar: {
+    borderWidth: 0,
+  },
+  profileLoadingTabSelected: {
+    flex: 1,
+    height: 35,
+    borderRadius: 18,
+    backgroundColor: NEUTRAL_CARD,
+  },
+  profileLoadingTab: {
+    flex: 1,
+    height: 35,
+  },
+  profileLoadingLabel: {
+    width: 112,
+    height: 10,
+    marginTop: 8,
+    marginBottom: 12,
+    borderRadius: 5,
   },
   profileLoadingCard: {
-    marginTop: -40,
-    marginHorizontal: 12,
-    padding: 22,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    marginBottom: 14,
+    borderWidth: 0,
+    backgroundColor: NEUTRAL_CARD,
   },
-  profileLoadingTitle: {
-    height: 24,
-    width: '58%',
-    borderRadius: 8,
-    backgroundColor: 'rgba(126,102,103,0.20)',
+  profileLoadingCardTitle: {
+    width: '46%',
+    height: 18,
+    borderRadius: 7,
   },
   profileLoadingLine: {
-    height: 13,
+    height: 12,
     marginTop: 16,
-    borderRadius: 7,
-    backgroundColor: 'rgba(126,102,103,0.14)',
+    borderRadius: 6,
   },
   profileLoadingLineShort: {
-    height: 13,
     width: '66%',
+    height: 12,
     marginTop: 9,
-    borderRadius: 7,
-    backgroundColor: 'rgba(126,102,103,0.14)',
-  },
-  profileLoadingBottom: {
-    marginHorizontal: 12,
-    marginTop: 20,
-  },
-  profileLoadingSectionLabel: {
-    width: 92,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(126,102,103,0.14)',
-  },
-  profileLoadingTileRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    borderRadius: 6,
   },
   profileLoadingTile: {
-    flex: 1,
-    height: 112,
-    borderRadius: 18,
-    backgroundColor: 'rgba(126,102,103,0.12)',
-  },
-  profileLoadingWideTile: {
-    height: 84,
-    marginTop: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(126,102,103,0.12)',
+    borderWidth: 0,
   },
   emptyTitle: {
     fontSize: 22,
@@ -2253,7 +2815,7 @@ const styles = StyleSheet.create({
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   identityText: {
     flex: 1,
@@ -2285,12 +2847,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginTop: 4,
   },
-  // Demoted to a top-right chip, the size of the reference's bell/avatar
-  // pair, so the name owns the width instead of splitting it.
+  // Keep the business logo prominent without crowding the name on small screens.
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     borderWidth: 2,
     borderColor: 'rgba(255, 253, 251, 0.9)',
   },
@@ -2301,7 +2862,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
+    fontSize: 26,
   },
   statRow: {
     flexDirection: 'row',
@@ -2341,6 +2902,11 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 0.4,
+  },
+  circleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   circleAction: {
     width: 48,
@@ -2438,6 +3004,10 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  // The rows carry their own vertical padding.
+  recentCard: {
+    paddingVertical: 6,
   },
   halfRow: {
     flexDirection: 'row',
@@ -2886,8 +3456,9 @@ const styles = StyleSheet.create({
 
   // Paired tinted tiles. Fixed height so the two agree on a baseline even when
   // one carries swatches and the other doesn't.
+  // Grows with the rules so none get cut off; the tiles beside it stretch to match.
   tintCard: {
-    height: 214,
+    minHeight: 214,
     padding: 16,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
@@ -2920,6 +3491,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 7,
   },
+  policyMore: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
   policyItemText: {
     flex: 1,
   },
@@ -2942,7 +3519,8 @@ const styles = StyleSheet.create({
     gap: HALF_GAP,
   },
   tintCardShort: {
-    height: (214 - HALF_GAP) / 2,
+    flex: 1,
+    minHeight: (214 - HALF_GAP) / 2,
     padding: 14,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
@@ -3002,6 +3580,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 10,
   },
+  reviewReportBtn: { alignSelf: 'flex-start', marginTop: 6 },
+  reviewReportText: { fontSize: 11, textDecorationLine: 'underline' },
   reviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',

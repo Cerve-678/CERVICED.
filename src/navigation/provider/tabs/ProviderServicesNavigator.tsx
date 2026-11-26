@@ -1,10 +1,12 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderMyProfileScreen from '../../../screens/provider/ProviderMyProfileScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
+import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
@@ -13,9 +15,11 @@ import SchedulingScreen from '../../../screens/provider/SchedulingScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
+import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
+import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
+import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import { ProviderServicesStackParamList } from '../../types';
 
 const ProviderServicesStack = createNativeStackNavigator<ProviderServicesStackParamList>();
@@ -31,6 +35,26 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="ProviderServicesMain"
         component={ProviderMyProfileScreen}
+        options={{ headerShown: false }}
+      />
+
+      {/* Tapping the logo on My Profile opens the client-facing preview with
+          a brief fade, while retaining the full-screen swipe to close. */}
+      <ProviderServicesStack.Screen
+        name="MyPublicProfile"
+        component={ProviderProfileScreen as React.ComponentType<any>}
+        options={{
+          headerShown: false,
+          animation: 'fade',
+          animationDuration: 250,
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+        }}
+      />
+
+      <ProviderServicesStack.Screen
+        name="AccountHolderDetails"
+        component={AdminCreateAccountScreen}
         options={{ headerShown: false }}
       />
 
@@ -61,6 +85,13 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="Clientele"
         component={ProviderClienteleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      {/* My Profile → Recent activity → See all opens History → All here,
+          so back returns to My Profile rather than another tab's root. */}
+      <ProviderServicesStack.Screen
+        name="BookingHistory"
+        component={ProviderBookingHistoryScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
       <ProviderServicesStack.Screen
@@ -127,6 +158,13 @@ export default function ProviderServicesNavigator() {
         options={{ headerShown: false, presentation: 'card' }}
       />
 
+      {/* Reached from Profile Health's "Set your automations" step. */}
+      <ProviderServicesStack.Screen
+        name="Automations"
+        component={ProviderAutomationsScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
       {/* Reached from the dashboard's saved-by-clients tile. Third stack to
           register it (Becca and Account have their own) for the same reason as
           Policies above. */}
@@ -136,20 +174,21 @@ export default function ProviderServicesNavigator() {
         options={{ headerShown: false, presentation: 'card' }}
       />
 
+      {/* Reached from the dashboard's Today cards. Registered HERE (as well as
+          on the Home/Becca/Account stacks) for the same reason as
+          ProviderSchedule above. */}
+      <ProviderServicesStack.Screen
+        name="BookingDetail"
+        component={ProviderBookingDetailScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
       <ProviderServicesStack.Screen
         name="AddBooking"
         component={AddBookingScreen}
         options={{ headerShown: false, presentation: 'modal' }}
       />
 
-      <ProviderServicesStack.Screen
-        name="DevSettings"
-        component={DevSettingsScreen}
-        options={{
-          headerShown: false,
-          presentation: 'modal',
-        }}
-      />
     </ProviderServicesStack.Navigator>
   );
 }

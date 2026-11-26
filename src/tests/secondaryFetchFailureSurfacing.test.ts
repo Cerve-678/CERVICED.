@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (...parts: string[]): string =>
   fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
@@ -15,7 +16,7 @@ const read = (...parts: string[]): string =>
  * through to happy-path copy.
  */
 describe('secondary fetch and write failures are surfaced, not swallowed', () => {
-  const database = read('services', 'databaseService.ts');
+  const database = readDatabaseLayer();
 
   describe('conversation lists', () => {
     it('gives the client message list a real error state with a retry', () => {
@@ -43,10 +44,15 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
 
   describe('notification preferences', () => {
     it('makes the service report a failed read instead of returning defaults', () => {
-      const section = database.slice(
-        database.indexOf('export async function getNotificationPreferences'),
-        database.indexOf('/** Count how many users have bookmarked'),
-      );
+      const start = database.indexOf('async function readStoredNotificationPreferences');
+      // The next function after the preference read/write helpers. Anchored on
+      // a function name, and both ends checked, so a renamed or deleted
+      // neighbour fails here instead of silently widening the slice to the end
+      // of the database layer.
+      const end = database.indexOf('export async function getMyServiceBookingRows', start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const section = database.slice(start, end);
 
       // Returning DEFAULT_NOTIF_PREFS on error made "we could not read your
       // settings" indistinguishable from "these are your settings" — and the
@@ -59,12 +65,12 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
     });
 
     it('never renders default toggles as saved preferences after a failed load', () => {
-      const source = read('screens', 'client', 'NotificationsSettingsScreen.tsx');
+      const source = read('components', 'NotificationPreferencesView.tsx');
 
       // Scoped to the preference calls — the bare `.catch(() => {})` on the
       // Haptics calls is a legitimate fire-and-forget, not a swallowed write.
       expect(source).not.toMatch(
-        /(get|save)NotificationPreferences\([^)]*\)[\s\S]{0,200}?\.catch\(\(\) => \{\}\)/,
+        /(loadPrefs|save)\([^)]*\)[\s\S]{0,200}?\.catch\(\(\) => \{\}\)/,
       );
       expect(source).toContain("useState<'loading' | 'ready' | 'error'>('loading')");
       // The toggle rows are gated behind a successful load.
@@ -73,13 +79,13 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
     });
 
     it('never shows the saved footer when the write failed', () => {
-      const source = read('screens', 'client', 'NotificationsSettingsScreen.tsx');
+      const source = read('components', 'NotificationPreferencesView.tsx');
 
       // "Preferences saved automatically." must sit in the else branch of the
       // save-error check, so a failed write can't display it.
       const footer = source.slice(
         source.indexOf('{saveError ? ('),
-        source.indexOf('</>'),
+        source.indexOf('</>', source.indexOf('{saveError ? (')),
       );
       expect(footer).toContain("Your last change hasn't been applied yet.");
       expect(footer).toContain('onPress={retrySave}');
@@ -87,7 +93,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
         footer.indexOf(') : ('),
       );
       // The flush-on-unmount save still has no UI to report to, but must log.
-      expect(source).toContain('saveNotificationPreferences(pendingPrefs.current)');
+      expect(source).toContain('save(pendingPrefs.current)');
       expect(source).toContain('flush-on-unmount save failed');
     });
   });
@@ -103,7 +109,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
       expect(source).not.toContain('dbDeleteNotification(notificationId).catch(() => {})');
 
       expect(source).toContain('await markNotificationRead(notificationId)');
-      expect(source).toContain('await markAllNotificationsRead()');
+      expect(source).toContain('await markAllNotificationsRead(');
       expect(source).toContain('await dbDeleteNotification(notificationId)');
 
       // Rollback: read flag restored, deleted row re-inserted at its position.
@@ -113,10 +119,9 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
     });
 
     it('deletes through the RPC, since notifications has no DELETE policy', () => {
-      const section = database.slice(
-        database.indexOf('export async function deleteNotification'),
-        database.indexOf('// INFO PACKS'),
-      );
+      const start = database.indexOf('export async function deleteNotification');
+      // Just this function: up to its closing brace.
+      const section = database.slice(start, database.indexOf('\n}\n', start) + 2);
 
       // A raw .delete() would match zero rows and resolve successfully, so the
       // screen's rollback would never fire.

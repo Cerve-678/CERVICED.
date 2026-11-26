@@ -6,28 +6,29 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { shouldRevokeAppleSignIn } from '../../services/appleSignInRevocation';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AddressPicker from '../../components/AddressPicker';
 import AreaPicker from '../../components/AreaPicker';
-import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { readableSheet } from '../../constants/readableWidth';
 
 // Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
 // encoded as the picker's maximumDate so the UI can't select an invalid date at all.
@@ -36,7 +37,7 @@ MAX_DOB.setFullYear(MAX_DOB.getFullYear() - 16);
 const MIN_DOB = new Date(1900, 0, 1);
 
 export default function ProfileInfoScreen({ navigation, route }: any) {
-  const { user, updateUser, deleteClientProfile, hatState } = useAuth();
+  const { user, updateUser, deleteClientProfile, hatState, session } = useAuth();
   const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = useSystemBottomInset();
@@ -70,10 +71,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      await Promise.all([
-        updateUser({ name: name.trim(), phone: phone.trim(), clientAddress: clientAddress.trim() || null, clientArea: clientArea.trim() || null }),
-        user?.id ? updateUserDob(user.id, dob ? dateToYMD(dob) : null) : Promise.resolve(),
-      ]);
+      await updateUser({ name: name.trim(), phone: phone.trim(), dob: dob ? dateToYMD(dob) : '', clientAddress: clientAddress.trim() || null, clientArea: clientArea.trim() || null });
     } catch {
       setLoading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -82,14 +80,21 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     }
     setLoading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    // Checkout sends the client here to set an address mid-booking, and
-    // passes the tab it came from. Saving hops straight back to it, where the
-    // cart is still mounted and reopens Confirm Your Details — goBack() would
-    // land on ProfileMain and strand them a tab away from the checkout they
-    // were in the middle of.
+    leave();
+  };
+
+  // Checkout sends the client here to set an address mid-booking, and passes
+  // the tab it came from. Leaving — by saving or by the back arrow — hops
+  // straight back to it, where the cart is still mounted and reopens Confirm
+  // Your Details; goBack() would land on ProfileMain and strand them a tab
+  // away from the checkout they were in the middle of. This screen is then
+  // popped so the Profile tab opens on its own menu next time, not on a stale
+  // copy of this page that still points back at the cart.
+  const leave = () => {
     const returnToTab: string | undefined = route?.params?.returnToTab;
-    if (returnToTab) navigation.getParent()?.navigate(returnToTab);
-    else navigation.goBack();
+    if (!returnToTab) { navigation.goBack(); return; }
+    navigation.getParent()?.navigate(returnToTab);
+    if (navigation.getState().index > 0) navigation.pop();
   };
 
   const handleDeleteAccount = () => {
@@ -101,7 +106,8 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
       'Delete Account',
       isDualRole
         ? 'This removes your client profile, bookings and messages as a customer. Your provider/business account is not affected and you\'ll remain signed in.'
-        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.',
+        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.'
+          + (shouldRevokeAppleSignIn(session?.user) ? '\n\nApple will ask you to confirm, so CERVICED is removed from your Apple ID too.' : ''),
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -127,7 +133,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}
@@ -137,7 +143,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
           {/* Header */}
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); leave(); }}
             activeOpacity={0.7}
           >
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
@@ -334,7 +340,7 @@ const styles = StyleSheet.create({
   dobText: { fontSize: 15 },
   pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
   pickerDoneLabel: { fontSize: 15, fontWeight: '700' },

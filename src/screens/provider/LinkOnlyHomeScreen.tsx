@@ -9,14 +9,19 @@
  *    publishes them on (logo, About, opening hours, a portfolio photo)
  *  - once live, tiles: Book taps this week (→ Analytics), new enquiries
  *    (→ Messages), saves (+ new this week), profile views and "Said they
- *    booked" (clients who answered Yes to "Did you book?"); and one fact
+ *    booked" (clients who answered Yes to "Did you book?"); join nudges
+ *    (clients who tapped Nudge on their profile) over the last 90 days,
+ *    always shown, even at 0, so they know clients can ask; and one fact
  *    from their own numbers from Becca
  *  - their whole week, one line per day, from the phone's calendar (DiaryCard)
  *  - once live, Profile strength: the next missing thing, the rest on a tap
  *  - their Book button's link, with Test it and Change link
  *  - once live, their most-saved photo, if anyone has saved one
  *  - shortcuts: Add work, Hours, Branding
- *  - Becca as a floating button, above the tab bar
+ *  - last, a quiet "Become a full member" card (BecomeFullMemberSheet)
+ *  - Becca as a floating button, above the tab bar, and beside it, once
+ *    clients have nudged them enough (joinNudgeBarCount), a bar that opens the
+ *    same sheet; closing it holds until another batch of nudges arrives
  *
  * No Announcements: the product owner removed them for link-only pros
  * (2026-10-19).
@@ -24,18 +29,20 @@
  * Product rules: docs/vault/Link-Only Providers.md. Design B (chosen
  * 2026-10-19): https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
  */
+import { policyImageUrls } from '../../features/providers/policyImages';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppDialog } from '../../components/AppDialog';
 import {
@@ -48,12 +55,14 @@ import {
   type LinkOnlyDashboardExtras,
   type ProviderEnquirySummary,
 } from '../../services/databaseService';
-import { lastSevenDaysOfBookTaps, type DayBar } from '../../features/providers/linkOnlyAnalytics';
+import { lastSevenDaysOfBookTaps, sumLinkOnlyStats, type DayBar } from '../../features/providers/linkOnlyAnalytics';
 import {
   buildProfileStrength,
   busiestBookTapLine,
   compareWeeks,
   greetingFor,
+  joinNudgeBarCount,
+  JOIN_NUDGE_WINDOW_DAYS,
   remainingStepsLine,
   todayHoursLabel,
   trendLabel,
@@ -62,8 +71,8 @@ import {
 } from '../../features/providers/linkOnlyDashboard';
 import { displayExternalBookingUrl, openExternalBookingPage } from '../../features/providers/externalBookingLink';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
-import { dayName, monthName } from '../../utils/dateUtils';
-import type { DbProvider } from '../../types/database';
+import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV, dateToYMD } from '../../utils/dateUtils';
+import type { DbProvider, DbProviderDailyStat } from '../../types/database';
 import {
   buildLinkOnlyGoLiveSteps,
   fetchLinkOnlyGoLiveStatus,
@@ -71,8 +80,13 @@ import {
   type LinkOnlyGoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
 import { DiaryCard } from '../../features/providers/DiaryCard';
+import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
+import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS } from '../../constants/fullMembership';
+import { joinNudgeBarDismissedKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Nav = NativeStackNavigationProp<ProviderHomeStackParamList, 'LinkOnlyHomeMain'>;
 
@@ -81,9 +95,10 @@ const DOWN = '#B0563C';
 const NOT_LIVE = '#B07A3C';
 
 export default function LinkOnlyHomeScreen() {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const navigation = useNavigation<Nav>();
   const { palette } = useTheme();
-  const { t, tp } = useTranslation();
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
   const P = useMemo(
@@ -114,6 +129,10 @@ export default function LinkOnlyHomeScreen() {
   const [hasRow, setHasRow] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
+  const [statRows, setStatRows] = useState<DbProviderDailyStat[]>([]);
+  // undefined = not read yet, so the nudge bar can't flash before we know.
+  const [nudgeBarDismissedYmd, setNudgeBarDismissedYmd] = useState<string | null | undefined>(undefined);
+  const [showFullMemberSheet, setShowFullMemberSheet] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -137,9 +156,11 @@ export default function LinkOnlyHomeScreen() {
           await Promise.all([
             (async () => {
               try {
-                // Two weeks, so this week can be compared with the last.
-                const [rows, savers] = await Promise.all([getMyProviderDailyStats(14), getMyProviderSaverCount()]);
+                // Long enough for the join-nudge count; the week tiles only
+                // read the last fortnight of it.
+                const [rows, savers] = await Promise.all([getMyProviderDailyStats(JOIN_NUDGE_WINDOW_DAYS), getMyProviderSaverCount()]);
                 if (!active) return;
+                setStatRows(rows);
                 setWeek({ comparison: compareWeeks(rows, today), bars: lastSevenDaysOfBookTaps(rows, today), savers });
                 setWeekFailed(false);
               } catch (error) {
@@ -175,6 +196,17 @@ export default function LinkOnlyHomeScreen() {
                 logger.error('[LinkOnlyHome] dashboard extras load failed', error);
               }
             })(),
+            (async () => {
+              if (!user?.id) return;
+              try {
+                const dismissed = await AsyncStorage.getItem(joinNudgeBarDismissedKey(user.id));
+                if (active) setNudgeBarDismissedYmd(dismissed);
+              } catch (error) {
+                // Unreadable storage just means the bar can show.
+                logger.warn('[LinkOnlyHome] nudge bar dismissal read failed', error);
+                if (active) setNudgeBarDismissedYmd(null);
+              }
+            })(),
           ]);
         } catch (error) {
           logger.error('[LinkOnlyHome] load failed', error);
@@ -182,7 +214,7 @@ export default function LinkOnlyHomeScreen() {
         }
       })();
       return () => { active = false; };
-    }, []),
+    }, [user?.id]),
   );
 
   const steps = status ? buildLinkOnlyGoLiveSteps(status) : [];
@@ -220,7 +252,7 @@ export default function LinkOnlyHomeScreen() {
   const now = new Date();
   const firstName = user?.name?.trim().split(/\s+/)[0] ?? '';
   const hoursLabel = status ? todayHoursLabel(status.hours, now) : null;
-  const dateLine = `${dayName(now.getDay(), 'short')} ${now.getDate()} ${monthName(now.getMonth(), 'short')}${hoursLabel ? ` · ${hoursLabel}` : ''}`;
+  const dateLine = `${DAY_NAMES_ABBREV[now.getDay()]} ${now.getDate()} ${MONTH_NAMES_ABBREV[now.getMonth()]}${hoursLabel ? ` · ${hoursLabel}` : ''}`;
 
   const strength = useMemo(() => {
     if (!status || !profile || specialityCount == null) return null;
@@ -232,8 +264,8 @@ export default function LinkOnlyHomeScreen() {
       specialityCount,
       instagram: profile.instagram,
       policiesSet:
-        buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours).length > 0 ||
-        !!profile.booking_policies?.policyImageUrl,
+        buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours, { linkOnly: true }).length > 0 ||
+        policyImageUrls(profile.booking_policies).length > 0,
       accessibilityNotes: profile.accessibility_notes,
       paymentMethods: profile.preferred_payment_methods,
     });
@@ -268,12 +300,37 @@ export default function LinkOnlyHomeScreen() {
     }
   }, [profile?.external_booking_url, showToast]);
 
+  // statRows covers JOIN_NUDGE_WINDOW_DAYS, so this is the 90-day total.
+  const joinNudgeTotal = useMemo(() => sumLinkOnlyStats(statRows).joinNudges, [statRows]);
+  const joinNudgesThisWeek = week?.comparison.thisWeek.joinNudges ?? 0;
+
+  const nudgeBarCount = useMemo(
+    () => (nudgeBarDismissedYmd === undefined ? null : joinNudgeBarCount(statRows, nudgeBarDismissedYmd)),
+    [statRows, nudgeBarDismissedYmd],
+  );
+
+  const openFullMemberSheet = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    setShowFullMemberSheet(true);
+  }, []);
+
+  const dismissNudgeBar = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    const today = dateToYMD(new Date());
+    setNudgeBarDismissedYmd(today);
+    if (!user?.id) return;
+    AsyncStorage.setItem(joinNudgeBarDismissedKey(user.id), today).catch(error => {
+      // Only means the bar may come back on the next visit.
+      logger.warn('[LinkOnlyHome] nudge bar dismissal save failed', error);
+    });
+  }, [user?.id]);
+
   const latest = enquiries?.latest;
   const enquiryPreview = latest?.message
-    ? `${latest.clientName?.trim().split(/\s+/)[0] ?? t('providerProfile.home.aClient')}: ${latest.message}`
+    ? `${latest.clientName?.trim().split(/\s+/)[0] ?? 'A client'}: ${latest.message}`
     : enquiries
-      ? t('providerProfile.home.allCaughtUp')
-      : t('providerProfile.home.questions');
+      ? 'All caught up'
+      : 'Questions from your profile';
 
   return (
     <ThemedBackground>
@@ -290,20 +347,20 @@ export default function LinkOnlyHomeScreen() {
               {status && (
                 <View style={styles.liveLine}>
                   <View style={[styles.liveDot, { backgroundColor: live ? UP : NOT_LIVE }]} />
-                  <Text style={styles.liveText}>{live ? t('providerProfile.home.live') : t('providerProfile.home.notLive')}</Text>
+                  <Text style={styles.liveText}>{live ? tr('providerProfile.home.live') : tr('providerProfile.home.notLive')}</Text>
                 </View>
               )}
             </View>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Notifications'); }}
               style={styles.iconButton}
-              accessibilityLabel={t('providerProfile.home.notificationsA11y')}
+              accessibilityLabel={tr('providerProfile.home.notificationsA11y')}
               accessibilityRole="button"
             >
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
             </TouchableOpacity>
             {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
+              <LogoCircle uri={logoUrl} framing={profile?.logo_framing} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, styles.avatarEmpty]}>
                 <Text style={styles.avatarText}>{initials}</Text>
@@ -315,19 +372,19 @@ export default function LinkOnlyHomeScreen() {
 
           {loadFailed && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>{t('providerProfile.home.loadFailed')}</Text>
-              <Text style={styles.body}>{t('providerProfile.home.loadFailedBody')}</Text>
+              <Text style={styles.cardTitle}>{tr('providerProfile.home.loadFailed')}</Text>
+              <Text style={styles.body}>{tr('providerProfile.home.loadFailedBody')}</Text>
             </View>
           )}
 
           {hasRow === false && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>{t('providerProfile.home.setupTitle')}</Text>
+              <Text style={styles.cardTitle}>{tr('providerProfile.home.setupTitle')}</Text>
               <Text style={styles.body}>
-                {t('providerProfile.home.setupBody')}
+                {tr('providerProfile.home.setupBody')}
               </Text>
               <TouchableOpacity style={styles.primary} onPress={() => navigation.navigate('EditProfile')} activeOpacity={0.85}>
-                <Text style={styles.primaryText}>{t('providerProfile.home.getStarted')}</Text>
+                <Text style={styles.primaryText}>{tr('providerProfile.home.getStarted')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -335,8 +392,8 @@ export default function LinkOnlyHomeScreen() {
           {status && !live && (
             <View style={styles.card}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>{tp('providerProfile.home.goLiveSteps', steps.length)}</Text>
-                <Text style={styles.count}>{t('providerProfile.home.doneOf', { done: doneCount, total: steps.length })}</Text>
+                <Text style={styles.cardTitle}>{tr('providerProfile.ui.goLiveSteps', { count: steps.length })}</Text>
+                <Text style={styles.count}>{doneCount} of {steps.length}</Text>
               </View>
               <View style={styles.progress}>
                 {steps.map(step => (
@@ -363,7 +420,7 @@ export default function LinkOnlyHomeScreen() {
                   {!step.done && <Ionicons name="chevron-forward" size={16} color={P.sub} />}
                 </TouchableOpacity>
               ))}
-              <Text style={styles.footnote}>{t('providerProfile.home.goLiveFootnote')}</Text>
+              <Text style={styles.footnote}>{tr('providerProfile.home.goLiveFootnote')}</Text>
             </View>
           )}
 
@@ -374,27 +431,27 @@ export default function LinkOnlyHomeScreen() {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('LinkOnlyAnalytics'); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={t('providerProfile.home.tapsA11y')}
+                accessibilityLabel={tr('providerProfile.home.tapsA11y')}
               >
                 <View>
-                  <Text style={styles.eyebrow}>{t('providerProfile.home.tapsTitle')}</Text>
+                  <Text style={styles.eyebrow}>{tr('providerProfile.home.tapsTitle')}</Text>
                   {weekFailed ? (
-                    <Text style={styles.body}>{t('providerProfile.home.numbersFailed')}</Text>
+                    <Text style={styles.body}>{tr('providerProfile.home.numbersFailed')}</Text>
                   ) : !week ? (
                     <ActivityIndicator color={P.accent} style={styles.tileLoader} />
                   ) : (
                     <>
                       <Text style={styles.wideNum}>{week.comparison.thisWeek.bookTaps}</Text>
                       {tapsTrend ? (
-                        <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{t('providerProfile.home.onLastWeek', { trend: tapsTrend.text })}</Text>
+                        <Text style={[styles.trend, !tapsTrend.up && styles.trendDown]}>{tr('providerProfile.ui.onLastWeek', { change: tapsTrend.text })}</Text>
                       ) : (
-                        <Text style={styles.stepHint}>{t('providerProfile.home.tapsSub')}</Text>
+                        <Text style={styles.stepHint}>{tr('providerProfile.home.tapsSub')}</Text>
                       )}
                     </>
                   )}
                 </View>
                 <View style={styles.wideRight}>
-                  <Text style={styles.count}>{t('providerProfile.home.allAnalytics')}</Text>
+                  <Text style={styles.count}>{tr('providerProfile.home.allAnalytics')}</Text>
                   {week && (
                     <View style={styles.bars}>
                       {week.bars.map((bar, index) => (
@@ -420,11 +477,11 @@ export default function LinkOnlyHomeScreen() {
                   onPress={openMessages}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={t('providerProfile.home.enquiriesA11y', { count: enquiries?.unread ?? 0 })}
+                  accessibilityLabel={tr('providerProfile.ui.enquiriesA11y', { count: enquiries?.unread ?? 0 })}
                 >
                   <Ionicons name="chatbubble-outline" size={20} color={P.onAccent} />
                   <Text style={[styles.tileNum, styles.onAccent]}>{enquiries ? enquiries.unread : '–'}</Text>
-                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? t('providerProfile.home.newEnquiry') : t('providerProfile.home.newEnquiries')}</Text>
+                  <Text style={[styles.tileLabel, styles.onAccent]}>{enquiries?.unread === 1 ? tr('providerProfile.home.newEnquiry') : tr('providerProfile.home.newEnquiries')}</Text>
                   <Text style={[styles.tileSub, styles.onAccentSoft]} numberOfLines={1}>{enquiryPreview}</Text>
                 </TouchableOpacity>
                 <StatTile
@@ -432,9 +489,9 @@ export default function LinkOnlyHomeScreen() {
                   P={P}
                   icon="bookmark-outline"
                   value={week?.savers}
-                  label={t('providerProfile.home.savedYou')}
+                  label={tr('providerProfile.home.savedYou')}
                   // A running total, so the week shows as new saves, not a trend.
-                  sub={extras && extras.newSaversWeek > 0 ? t('providerProfile.home.newThisWeek', { count: extras.newSaversWeek }) : t('providerProfile.home.savedYouSub')}
+                  sub={extras && extras.newSaversWeek > 0 ? tr('providerProfile.home.newThisWeek', { count: extras.newSaversWeek }) : tr('providerProfile.home.savedYouSub')}
                   subUp={!!extras && extras.newSaversWeek > 0}
                 />
               </View>
@@ -446,7 +503,7 @@ export default function LinkOnlyHomeScreen() {
                   icon="eye-outline"
                   value={week?.comparison.thisWeek.profileViews}
                   before={week?.comparison.lastWeek.profileViews}
-                  label={t('providerProfile.analytics.tile.views')}
+                  label={tr('providerProfile.analytics.tile.views')}
                 />
                 <StatTile
                   styles={styles}
@@ -454,10 +511,36 @@ export default function LinkOnlyHomeScreen() {
                   icon="checkmark-done-outline"
                   value={extras?.saidBookedWeek}
                   before={extras?.saidBookedLastWeek}
-                  label={t('providerProfile.home.saidBooked')}
-                  sub={t('providerProfile.home.saidBookedSub')}
+                  label={tr('providerProfile.home.saidBooked')}
+                  sub={tr('providerProfile.home.saidBookedSub')}
                 />
               </View>
+
+              <TouchableOpacity
+                style={[styles.tile, styles.nudgeTile]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={tr('providerProfile.ui.nudgesA11y', { count: week ? joinNudgeTotal : 0, days: JOIN_NUDGE_WINDOW_DAYS })}
+              >
+                <View style={styles.tileIcon}><Ionicons name="megaphone-outline" size={20} color={P.accent} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.nudgeTitle}>{tr('providerProfile.ui.clientsAreAskingYouToTake')}</Text>
+                  {weekFailed ? (
+                    <Text style={styles.tileSub}>{tr('providerProfile.ui.couldnTLoadYourNudges')}</Text>
+                  ) : week && joinNudgeTotal > 0 ? (
+                    <Text style={joinNudgesThisWeek > 0 ? styles.trend : styles.tileSub} numberOfLines={1}>
+                      {joinNudgesThisWeek > 0
+                        ? tr('providerProfile.home.newThisWeek', { count: joinNudgesThisWeek })
+                        : tr('providerProfile.ui.lastDays', { days: JOIN_NUDGE_WINDOW_DAYS })}
+                    </Text>
+                  ) : (
+                    <Text style={styles.tileSub} numberOfLines={2}>{tr('providerProfile.ui.theyCanTapNudgeOnYour')}</Text>
+                  )}
+                </View>
+                <Text style={[styles.tileNum, styles.nudgeNum]}>{week ? joinNudgeTotal : '–'}</Text>
+                <Ionicons name="chevron-forward" size={16} color={P.sub} />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -465,7 +548,7 @@ export default function LinkOnlyHomeScreen() {
             <TouchableOpacity style={styles.beccaLine} onPress={openBecca} activeOpacity={0.85} accessibilityRole="button">
               <Ionicons name="sparkles" size={18} color={P.accent} />
               <Text style={[styles.body, styles.beccaText]}>
-                <Text style={styles.beccaName}>{t('providerProfile.home.beccaPrefix')}</Text>
+                <Text style={styles.beccaName}>Becca: </Text>
                 {beccaLine}
               </Text>
               <Ionicons name="chevron-forward" size={16} color={P.sub} />
@@ -477,13 +560,13 @@ export default function LinkOnlyHomeScreen() {
           {live && strength && nextStep && (
             <View style={styles.card}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>{t('providerProfile.home.strength')}</Text>
+                <Text style={styles.cardTitle}>{tr('providerProfile.home.strength')}</Text>
                 <Text style={styles.percent}>{strength.percent}%</Text>
               </View>
-              <View style={styles.track} accessibilityLabel={t('providerProfile.home.strengthA11y', { percent: strength.percent })}>
+              <View style={styles.track} accessibilityLabel={tr('providerProfile.home.strengthA11y', { percent: strength.percent })}>
                 <View style={[styles.fill, { width: `${strength.percent}%` }]} />
               </View>
-              <StrengthRow styles={styles} P={P} item={nextStep} eyebrow={t('providerProfile.home.next')} onPress={() => goToStep(nextStep.key)} />
+              <StrengthRow styles={styles} P={P} item={nextStep} eyebrow="Next" onPress={() => goToStep(nextStep.key)} />
               {showAllSteps && restSteps.map(item => (
                 <StrengthRow key={item.key} styles={styles} P={P} item={item} onPress={() => goToStep(item.key)} />
               ))}
@@ -494,7 +577,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.7}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.count}>{showAllSteps ? t('providerProfile.home.showLess') : restLine}</Text>
+                  <Text style={styles.count}>{showAllSteps ? tr('common.showLess') : restLine}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -505,8 +588,8 @@ export default function LinkOnlyHomeScreen() {
               <View style={styles.linkHead}>
                 <View style={styles.tileIcon}><Ionicons name="link-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{t('providerProfile.home.bookButton')}</Text>
-                  <Text style={styles.stepHint} numberOfLines={1}>{bookingLink ?? t('providerProfile.home.noLink')}</Text>
+                  <Text style={styles.cardTitle}>{tr('providerProfile.home.bookButton')}</Text>
+                  <Text style={styles.stepHint} numberOfLines={1}>{bookingLink ?? 'No booking link yet'}</Text>
                 </View>
               </View>
               <View style={styles.linkButtons}>
@@ -517,7 +600,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.outlineButtonText}>{t('providerProfile.home.testIt')}</Text>
+                  <Text style={styles.outlineButtonText}>{tr('providerProfile.home.testIt')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.softButton}
@@ -525,7 +608,7 @@ export default function LinkOnlyHomeScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.outlineButtonText}>{bookingLink ? t('providerProfile.home.changeLink') : t('providerProfile.home.addLink')}</Text>
+                  <Text style={styles.outlineButtonText}>{bookingLink ? tr('providerProfile.home.changeLink') : tr('providerProfile.home.addLink')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -535,29 +618,56 @@ export default function LinkOnlyHomeScreen() {
             <View style={[styles.card, styles.photoCard]}>
               <Image source={{ uri: extras.topPhoto.imageUrl }} style={styles.topPhoto} contentFit="cover" transition={0} />
               <View style={styles.flex}>
-                <Text style={styles.eyebrow}>{t('providerProfile.home.topPhoto')}</Text>
-                <Text style={styles.cardTitle} numberOfLines={1}>{extras.topPhoto.label ?? t('providerProfile.home.yourWork')}</Text>
+                <Text style={styles.eyebrow}>{tr('providerProfile.home.topPhoto')}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{extras.topPhoto.label ?? 'Your work'}</Text>
                 <Text style={styles.stepHint}>
-                  Saved {extras.topPhoto.saves === 1 ? 'once' : `${extras.topPhoto.saves} times`} in Explore
+                  {extras.topPhoto.saves === 1 ? tr('providerProfile.ui.savedOnce') : tr('providerProfile.ui.savedTimes', { count: extras.topPhoto.saves })}
                 </Text>
                 <TouchableOpacity onPress={() => goToStep('photos')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button">
-                  <Text style={[styles.count, styles.photoLink]}>{t('providerProfile.home.addMoreLikeThis')}</Text>
+                  <Text style={[styles.count, styles.photoLink]}>{tr('providerProfile.home.addMoreLikeThis')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
 
           <View style={styles.shortcuts}>
-            <Shortcut styles={styles} P={P} icon="camera-outline" label={t('providerProfile.home.addWork')} onPress={() => goToStep('portfolio')} />
-            <Shortcut styles={styles} P={P} icon="time-outline" label={t('providerProfile.home.hours')} onPress={() => goToStep('hours')} />
+            <Shortcut styles={styles} P={P} icon="camera-outline" label={tr('providerProfile.home.addWork')} onPress={() => goToStep('portfolio')} />
+            <Shortcut styles={styles} P={P} icon="time-outline" label={tr('providerProfile.home.hours')} onPress={() => goToStep('hours')} />
             <Shortcut
               styles={styles}
               P={P}
               icon="color-palette-outline"
-              label={t('providerProfile.home.branding')}
+              label={tr('providerProfile.home.branding')}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Branding'); }}
             />
           </View>
+
+          {/* Last on Home, on purpose: always there, never in the way. The
+              nudge bar below is the louder version, once clients ask. */}
+          {hasRow && (
+            <View style={styles.card}>
+              <View style={styles.linkHead}>
+                <View style={styles.tileIcon}><Ionicons name="calendar-outline" size={20} color={P.accent} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
+                  <Text style={styles.stepHint}>{tr('providerProfile.ui.keepTheFullPriceOfEvery')}</Text>
+                </View>
+              </View>
+              <View style={styles.offerLine}>
+                <View style={styles.offerChip}><Text style={styles.offerChipText}>{FULL_MEMBER_FREE_MONTHS} MONTHS FREE</Text></View>
+              </View>
+              <TouchableOpacity style={styles.primary} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
+                <Text style={styles.primaryText}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <Text style={styles.seeAll}>{tr('providerProfile.ui.seeTheFullCervicedExperience')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
 
@@ -566,10 +676,30 @@ export default function LinkOnlyHomeScreen() {
         onPress={openBecca}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel={t('providerProfile.home.askBecca')}
+        accessibilityLabel={tr('providerProfile.home.askBecca')}
       >
         <Ionicons name="sparkles" size={24} color={P.onAccent} />
       </TouchableOpacity>
+
+      {nudgeBarCount != null && (
+        <View style={[styles.nudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE + 13 }]}>
+          <TouchableOpacity style={styles.nudgeBarMain} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
+            <Text style={styles.nudgeBarTitle} numberOfLines={1}>{tr('providerProfile.ui.becomeAFullMember')}</Text>
+            <Text style={styles.nudgeBarSub} numberOfLines={1}>{tr('providerProfile.ui.nudgesFromClients', { count: nudgeBarCount })} · {FULL_MEMBER_FREE_LINE}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.nudgeBarClose}
+            onPress={dismissNudgeBar}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={tr('providerProfile.myProfile.row.hide')}
+          >
+            <Ionicons name="close" size={16} color={P.accent} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <BecomeFullMemberSheet visible={showFullMemberSheet} onClose={() => setShowFullMemberSheet(false)} />
 
       <DialogHost />
     </ThemedBackground>
@@ -713,6 +843,9 @@ const createStyles = (P: HomePalette) =>
     tileRow: { flexDirection: 'row', gap: 8 },
     tile: { flex: 1, backgroundColor: P.card, borderRadius: 20, borderWidth: 1, borderColor: P.border, padding: 14, gap: 3 },
     wideTile: { flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 16 },
+    nudgeTile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    nudgeNum: { marginTop: 0 },
+    nudgeTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 18, fontWeight: '700', color: P.text },
     wideRight: { flex: 1, alignItems: 'flex-end', gap: 8 },
     wideNum: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50, color: P.text, marginTop: 2 },
     tileLoader: { marginVertical: 16, alignSelf: 'flex-start' },
@@ -748,5 +881,15 @@ const createStyles = (P: HomePalette) =>
     shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     shortcut: { height: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.card, flexDirection: 'row', alignItems: 'center', gap: 6 },
     shortcutLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: P.text },
+    offerLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    offerChip: { height: 26, paddingHorizontal: 10, borderRadius: 100, backgroundColor: P.accentDim, justifyContent: 'center' },
+    offerChipText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1, color: P.accent },
+    seeAll: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.accent, textAlign: 'center', paddingVertical: 4 },
+    // Sits left of the Becca button, at the same height.
+    nudgeBar: { position: 'absolute', left: 20, right: 86, height: 54, borderRadius: 100, backgroundColor: P.accent, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, shadowColor: '#26201E', shadowOpacity: 0.26, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+    nudgeBarMain: { flex: 1, justifyContent: 'center', height: '100%' },
+    nudgeBarTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.onAccent },
+    nudgeBarSub: { fontSize: 11, color: P.onAccent, opacity: 0.85, marginTop: 1 },
+    nudgeBarClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.onAccent, alignItems: 'center', justifyContent: 'center' },
     becca: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   });

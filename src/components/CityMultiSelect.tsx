@@ -13,8 +13,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { UK_CITIES } from '../constants/ukCities';
-import { getCityAreaData, type CityAreaData } from '../data/cityAreas';
+import { getCityAreaData, searchPlaces, COUNTY_TOWNS, type CityAreaData } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { readableSheet } from '../constants/readableWidth';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -29,10 +30,9 @@ interface CityMultiSelectProps {
 }
 
 /**
- * Searchable multi-select for UK service-coverage cities. A single reusable
- * source for "where do you work" (signup, Step 4) and the client-side Search
- * "City" filter, so the two stay in sync — the same string always means the
- * same thing on both sides.
+ * Searchable multi-select for UK service-coverage cities, used by the
+ * client-side Search "City" filter. (Client sign-up used to ask with it too;
+ * it now asks for one area with AreaPicker, like Account > Your area.)
  *
  * Each entry can be either a whole city ("Manchester") or, for cities with
  * structured data (see src/data/cityAreas.ts — now all of UK_CITIES),
@@ -55,6 +55,19 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
     if (!q) return UK_CITIES;
     return UK_CITIES.filter(city => city.toLowerCase().includes(q));
   }, [query]);
+
+  // Anything typed also finds counties ("Kent") and areas ("Stoke Newington"),
+  // which the flat list of towns above can't show on their own.
+  const placeMatches = useMemo(
+    () => searchPlaces(query).filter(match => match.kind !== 'town'),
+    [query],
+  );
+
+  const addCounty = (county: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    const towns = COUNTY_TOWNS[county] ?? [];
+    onChange([...selected, ...towns.filter(town => !selected.includes(town))]);
+  };
 
   const add = (entry: string) => {
     if (!entry.trim() || selected.includes(entry)) return;
@@ -140,7 +153,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search cities..."
+                placeholder="Search a town, county or area..."
                 placeholderTextColor={t.sub}
                 style={[styles.searchInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -183,6 +196,32 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               keyExtractor={item => item}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.list}
+              ListHeaderComponent={
+                <>
+                  {placeMatches.map(match => {
+                    const entry = match.kind === 'area' ? `${match.name}, ${match.town}` : match.name;
+                    const isSelected = selected.includes(entry);
+                    return (
+                      <View key={`${match.kind}:${entry}`} style={[styles.row, { borderBottomColor: t.border }]}>
+                        <TouchableOpacity
+                          style={styles.rowMain}
+                          onPress={() => {
+                            if (match.kind === 'county') addCounty(match.name);
+                            else if (isSelected) remove(entry);
+                            else add(entry);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.rowText, { color: t.text }]}>
+                            {match.kind === 'county' ? `All of ${match.name}` : entry}
+                          </Text>
+                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={t.accent} />}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </>
+              }
               renderItem={({ item }) => {
                 const isSelected = selected.includes(item);
                 const isExpanded = expandedCity === item;
@@ -290,7 +329,7 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { ...readableSheet, height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 0.5 },

@@ -57,9 +57,12 @@ and actions always remain intact beneath it.
   data-backed.
 - Never expose client capability tools to the provider hat, or vice versa.
 - Keep existing confirmation actions for every mutation.
-- If the AI errors, times out, returns an unknown capability, or selects a
-  capability whose required entity was not resolved, use the deterministic
-  matcher automatically.
+- If the AI errors, times out or returns an unknown capability, use the
+  deterministic matcher automatically.
+- If it selects a capability whose required entity was not resolved, keep
+  the pick at no better than medium confidence: the engine then asks the
+  person for that detail ("Which provider do you mean?") and never runs the
+  capability without it.
 
 These checks are already enforced by `understandWithFallback()` in
 `src/services/becca/engine.ts`.

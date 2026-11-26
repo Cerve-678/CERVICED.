@@ -23,7 +23,7 @@ waitlist hold/expiry, and an interrupted checkout. Hand off database authority,
 provider diary or payment-finalisation problems to the booking lead with the
 exact boundary where the client receives the wrong state.
 
-Do not call Supabase outside databaseService.ts. Do not implement app-side
+Do not call Supabase outside the database layer (databaseService.ts and src/services/database/). Do not implement app-side
 booking status notifications. Re-open the exact current code before reporting
 a finding, add meaningful regression coverage for new logic, and validate the
 screen flow as far as the environment permits.

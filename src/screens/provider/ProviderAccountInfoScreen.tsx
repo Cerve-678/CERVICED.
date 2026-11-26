@@ -3,13 +3,13 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -17,17 +17,18 @@ import { getMyProviderAccountEditorInfo, updateUserContactDetails, updateUserDob
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation, tr } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
+import { shouldRevokeAppleSignIn } from '../../services/appleSignInRevocation';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { toUserMessage } from '../../utils/userFacingError';
 
 const CP_DARK = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
+  accent: '#AF9197', onAccent: '#1A1815', ice: '#FFFFFF', text: '#F0ECE7',
   sub: '#7E6667', border: 'rgba(255,255,255,0.08)',
 };
 const CP_LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#5C4033', ice: '#FFFFFF', text: '#1C1A18',
+  accent: '#5C4033', onAccent: '#FFFFFF', ice: '#FFFFFF', text: '#1C1A18',
   sub: '#8A8680', border: 'rgba(0,0,0,0.08)',
 };
 
@@ -35,7 +36,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { t } = useTranslation();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
-  const { user, updateUser, deleteProviderProfile, hatState } = useAuth();
+  const { user, updateUser, deleteProviderProfile, hatState, session } = useAuth();
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [authEmail, setAuthEmail]   = useState('');
@@ -94,8 +95,9 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     Alert.alert(
       tr('providerProfile.account.delete'),
       isDualRole
-        ? tr('providerProfile.account.deleteDualBody')
-        : tr('providerProfile.account.deleteBody'),
+        ? 'This removes your business profile, services, portfolio and provider bookings. Your client account is not affected and you\'ll remain signed in.'
+        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.'
+          + (shouldRevokeAppleSignIn(session?.user) ? '\n\nApple will ask you to confirm, so CERVICED is removed from your Apple ID too.' : ''),
       [
         { text: tr('common.cancel'), style: 'cancel' },
         {
@@ -134,7 +136,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
 
   return (
     <View style={[styles.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
 
@@ -218,8 +220,8 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               {saving
-                ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={[styles.saveTxt, { color: C.ice }]}>{t('providerProfile.kit.saveChanges')}</Text>
+                ? <ActivityIndicator color={C.onAccent} size="small" />
+                : <Text style={[styles.saveTxt, { color: C.onAccent }]}>{t('providerProfile.kit.saveChanges')}</Text>
               }
             </TouchableOpacity>
 

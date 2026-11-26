@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useStackHidesTabBar } from '../../navigation/tabBarVisibility';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,6 +33,8 @@ import {
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { useChatSafety } from '../../features/safety/useChatSafety';
 
 type Props = NativeStackScreenProps<ProviderHomeStackParamList, 'ProviderConversation'>;
 
@@ -51,7 +55,17 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   // hand-rolled OL/OD copy that could drift from the canonical palette.
   const { palette: OP } = useTheme();
   const { user } = useAuth();
-  const { showToast, DialogHost } = useAppDialog();
+  const { showToast, showConfirm, showAlert, DialogHost } = useAppDialog();
+  const { blockedByMe, openChatMenu, confirmReportMessage, unblock } = useChatSafety({
+    conversationId,
+    otherName: clientName,
+    activeMode: 'provider',
+    dialogs: { showConfirm, showAlert },
+  });
+  const insets = useSafeAreaInsets();
+  // Opened from Settings → Inbox or Home → Quick Access → Inbox there is no tab
+  // bar to clear, only the home indicator.
+  const tabBarHidden = useStackHidesTabBar();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -161,7 +175,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
       logger.error('[ProviderConversation] send message failed:', err);
       // Message never reached the client — put the text back so it isn't lost
       setInputText(text);
-      showToast('Message not sent. Check your connection and try again.', 'error');
+      showToast(toUserMessageAllowingDbGuard(err, 'Message not sent. Check your connection and try again.', 'ProviderConversationScreen.sendMessage'), 'error');
     }
     setSending(false);
   }, [inputText, conversationId, providerUserId, sending, showToast]);
@@ -207,7 +221,11 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           </Text>
         )}
         <View style={[styles.row, isMine ? styles.rowRight : styles.rowLeft]}>
-          <View
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={isMine}
+            onLongPress={() => confirmReportMessage(item.id)}
+            accessibilityHint={isMine ? undefined : 'Press and hold to report this message'}
             style={[
               styles.bubble,
               isMine
@@ -215,14 +233,14 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
                 : [styles.bubbleProvider, { backgroundColor: OP.surface, borderColor: OP.border }],
             ]}
           >
-            <Text style={[styles.bubbleText, { color: isMine ? '#fff' : OP.text }]}>
+            <Text style={[styles.bubbleText, { color: isMine ? OP.onAccent : OP.text }]}>
               {item.content}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     );
-  }, [messages, OP]);
+  }, [messages, OP, confirmReportMessage]);
 
   // The custom header is inside this root; its height is already in the
   // avoiding view's measured y position. Adding it again doubles the gap.
@@ -255,7 +273,14 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             <Ionicons name="chevron-back" size={20} color={OP.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: OP.text }]} numberOfLines={1}>{clientName}</Text>
-          <View style={styles.iconBtn} />
+          <TouchableOpacity
+            onPress={openChatMenu}
+            style={[styles.iconBtn, { backgroundColor: OP.surface }]}
+            activeOpacity={0.7}
+            accessibilityLabel={`Report or block `}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={OP.text} />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
@@ -280,6 +305,21 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           }
         />
 
+        {blockedByMe ? (
+          <View style={[styles.blockedRow, {
+            backgroundColor: OP.bg,
+            borderTopColor: OP.border,
+            paddingBottom: tabBarHidden ? Math.max(insets.bottom, 12) : FLOATING_TAB_BAR_CLEARANCE,
+          }]}>
+            <Text style={[styles.blockedText, { color: OP.sub }]}>
+              You blocked {clientName}. Neither of you can send messages here.
+            </Text>
+            <TouchableOpacity onPress={unblock} activeOpacity={0.75} style={[styles.blockedBtn, { borderColor: OP.border }]}>
+              <Text style={[styles.blockedBtnText, { color: OP.accent }]}>Unblock</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+        <>
         <View style={[styles.quickPromptRow, { borderTopColor: OP.border, backgroundColor: OP.bg }]}>
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -305,7 +345,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         <View style={[styles.inputRow, {
           backgroundColor: OP.bg,
           borderTopColor: OP.border,
-          paddingBottom: keyboardVisible ? 10 : FLOATING_TAB_BAR_CLEARANCE,
+          paddingBottom: keyboardVisible ? 10 : tabBarHidden ? Math.max(insets.bottom, 10) : FLOATING_TAB_BAR_CLEARANCE,
         }]}>
           <TextInput
             style={[styles.input, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}
@@ -324,12 +364,14 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             activeOpacity={0.75}
           >
             {sending ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={OP.onAccent} />
             ) : (
-              <Ionicons name="arrow-up" size={20} color="#fff" />
+              <Ionicons name="arrow-up" size={20} color={OP.onAccent} />
             )}
           </TouchableOpacity>
         </View>
+        </>
+        )}
       </KeyboardDismissView>
       <DialogHost />
     </View>
@@ -337,6 +379,17 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
 }
 
 const styles = StyleSheet.create({
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  blockedText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  blockedBtn: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  blockedBtnText: { fontSize: 13, fontWeight: '600' },
   fill: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
   header: {

@@ -35,6 +35,16 @@ const RNStyleSheet = ReactNative['StyleSheet'] as {
  */
 export const MAX_FONT_SCALE = 1.3;
 
+/**
+ * How far the OS setting may enlarge text on top of the in-app size, so the
+ * two together never pass {@link MAX_FONT_SCALE}. Otherwise Larger in the app
+ * plus a large phone text size stacked to far more than any layout can hold.
+ * A smaller in-app size leaves the OS its full allowance.
+ */
+export function osMultiplierFor(appScale: number): number {
+  return appScale > 1 ? Math.max(1, MAX_FONT_SCALE / appScale) : MAX_FONT_SCALE;
+}
+
 const CLAMPED: ReadonlyArray<'Text' | 'TextInput'> = ['Text', 'TextInput'];
 
 let applied = false;
@@ -101,12 +111,19 @@ export function applyFontScaleClamp(): void {
         });
       }
 
-      const style = composeAppearanceStyle(props['style'], appearance);
+      // `allowFontScaling={false}` means "this glyph is sized to fit a fixed
+      // box" — every vector icon sets it, and so do badge marks like TodoMark.
+      // The OS setting already respects it; the in-app size must too, or icons
+      // outgrow their circles and buttons while the boxes stay put.
+      const style = composeAppearanceStyle(
+        props['style'],
+        props['allowFontScaling'] === false ? { ...appearance, scale: 1 } : appearance,
+      );
       // `maxFontSizeMultiplier` first so a call site's own value still wins via
       // the spread; `style` last so our scaled fontSize / base font wins over
       // props.style where we set it (but only where the call site didn't).
       return React.createElement(original, {
-        maxFontSizeMultiplier: MAX_FONT_SCALE,
+        maxFontSizeMultiplier: osMultiplierFor(appearance.scale),
         ...props,
         style,
       });
@@ -126,6 +143,9 @@ export function applyFontScaleClamp(): void {
     });
   }
 }
+
+// Text metrics that are absolute points and so must grow with the chosen size.
+const SCALED_METRICS = ['fontSize', 'lineHeight', 'letterSpacing'] as const;
 
 // The font-only injection ({fontFamily}) is by far the most common non-default
 // case (any body text with no explicit size). Cache one object per family so we
@@ -152,6 +172,11 @@ function fontOnlyInjection(family: string): { fontFamily: string } {
  *    Text with no explicit size inherits from its parent (nested <Text>), so
  *    forcing a size there would break inheritance — we leave it, and it scales
  *    via whichever ancestor did set a size.
+ *  - lineHeight and letterSpacing: scaled by the same factor wherever they are
+ *    explicit numbers. Both are absolute points, so scaling the size alone
+ *    leaves bigger glyphs squeezed into the old line box (clipped tops,
+ *    overlapping lines) and spacing that looks tighter than designed. The OS
+ *    font setting scales lineHeight the same way.
  */
 export function composeAppearanceStyle(
   callSiteStyle: unknown,
@@ -166,16 +191,21 @@ export function composeAppearanceStyle(
   }
 
   const flat = RNStyleSheet.flatten(callSiteStyle);
-  const rawSize = flat != null ? flat['fontSize'] : undefined;
   const applyFont = family != null && (flat == null || flat['fontFamily'] == null);
-  const applyScale = appearance.scale !== 1 && typeof rawSize === 'number';
+  const scaled: Record<string, number> = {};
+  if (appearance.scale !== 1 && flat != null) {
+    for (const key of SCALED_METRICS) {
+      const raw = flat[key];
+      if (typeof raw === 'number') scaled[key] = raw * appearance.scale;
+    }
+  }
+  const applyScale = Object.keys(scaled).length > 0;
 
   if (!applyFont && !applyScale) return callSiteStyle;
   // Font-only result: reuse the cached object instead of allocating.
   if (applyFont && !applyScale) return [callSiteStyle, fontOnlyInjection(family as string)];
 
-  const injected: Record<string, unknown> = {};
+  const injected: Record<string, unknown> = { ...scaled };
   if (applyFont) injected['fontFamily'] = family;
-  if (applyScale) injected['fontSize'] = (rawSize as number) * appearance.scale;
   return [callSiteStyle, injected];
 }

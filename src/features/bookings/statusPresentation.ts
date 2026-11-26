@@ -1,4 +1,12 @@
 import { BookingStatus } from '../../contexts/BookingContext';
+import type { ConfirmedBooking } from '../../types/booking';
+
+/** A request the provider declined, or that expired unanswered. It ends as
+ *  status 'cancelled' like any other cancellation, so this is what tells the
+ *  client it was never accepted rather than cancelled. */
+export function isDeclinedRequest(booking: Pick<ConfirmedBooking, 'status' | 'declinedAt'>): boolean {
+  return booking.status === BookingStatus.CANCELLED && !!booking.declinedAt;
+}
 
 export const BOOKING_STATUS_COLORS: Record<string, string> = {
   [BookingStatus.PENDING]: '#FF9500',

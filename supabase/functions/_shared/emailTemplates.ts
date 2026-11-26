@@ -71,6 +71,7 @@
 // on — Outlook drops rgba() outright and would leave the element transparent.
 
 import { escapeHtml as esc } from './escapeHtml.ts';
+import type { MoneySummaryLine } from './payoutRetry.ts';
 
 // Every email is light only, whatever the reader's mail app is set to (user,
 // 2026-10-19). The two meta tags in each <head> cover Apple Mail and iOS Mail;
@@ -170,13 +171,15 @@ function letter(
      * receiving it "because you have a CERVICED account", above a support
      * address that is the recipient, is nonsense.
      */
-    audience?: 'user' | 'internal';
+    audience?: 'user' | 'internal' | 'alert';
   },
 ) {
-  const footer = opts.audience === 'internal'
+  const footer = opts.audience === 'internal' || opts.audience === 'alert'
     ? `
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;">Support inbox</p>
-          <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:12px;">Filed from Report a Problem in the CERVICED app. Reply to reach the reporter.</p>`
+          <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:12px;">${opts.audience === 'alert'
+            ? 'Sent automatically when money in CERVICED needs a person.'
+            : 'Filed from Report a Problem in the CERVICED app. Reply to reach the reporter.'}</p>`
     : `
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;">Beauty at your fingertips</p>
           <p style="font-family:${BODY};color:${P.sub};font-size:12px;line-height:1.7;padding-top:14px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a></p>
@@ -306,15 +309,6 @@ function stepsPanel(P: EmailPalette, label: string, items: string[]) {
         </table>`,
     18,
   );
-}
-
-/** The one-time code, sized so it is unmistakably the point of the email. */
-function codePanel(P: EmailPalette, code: string, expiry: string) {
-  return `
-      <div style="background:${P.surface};border-radius:16px;padding:26px 20px;text-align:center;margin-bottom:26px;">
-        <div style="font-family:${DISPLAY};color:${P.accent};font-size:36px;letter-spacing:10px;line-height:1.1;">${code}</div>
-        <div style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:2px;text-transform:uppercase;padding-top:14px;">${expiry}</div>
-      </div>`;
 }
 
 /** Quiet aside marked with an accent rule down its left edge. */
@@ -702,35 +696,150 @@ export function passwordChangedEmail(params: { name: string }) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Supabase Auth codes — signup verification and password reset
+// ---------------------------------------------------------------------------
+// Supabase Auth sends these two, not us, so nothing here runs on our server:
+// scripts/build-auth-email-templates.ts renders them to supabase/templates/*.html
+// and that HTML is pasted into the dashboard, where Supabase fills in the
+// {{ .Token }} and {{ .Email }} placeholders itself.
+//
+// Deliberately NOT the shared letter() shell. They are a quiet white page with
+// the code in six boxes, the same six boxes the app's code screens ask you to
+// fill in. Tinted boxes for signup and solid accent for a reset, so the two are
+// different at a glance.
+//
+// Account-level, and the person may not have a hat yet, so they take the
+// provider palette like passwordChangedEmail.
+
+/** Supabase's placeholders. Not ours to fill in, and never escaped. */
+const AUTH_TOKEN = '{{ .Token }}';
+const AUTH_EMAIL = '{{ .Email }}';
+
+/** Matches `otp_expiry = 3600` in supabase/config.toml. Change both together. */
+const AUTH_CODE_EXPIRY = 'Expires in 1 hour';
+
 /**
- * The one-time code for claiming a scraped business listing. Provider-side, so
- * it takes the provider palette.
+ * One box per digit, cut from the token with Go's `slice`.
  *
- * The code is repeated in the preheader on purpose: on a phone that puts it in
- * the lock-screen notification, which is where it is most useful.
+ * The length check matters: Supabase has no fallback for a template that fails
+ * while rendering, so slicing a shorter token would mean no email at all. Any
+ * other length shows the whole code in one piece instead.
  */
-export function claimVerificationEmail(params: { code: string; businessName?: string }) {
+function digitBoxes(P: EmailPalette, solid: boolean) {
+  const fill = solid ? P.accent : P.surface;
+  const ink = solid ? P.onAccent : P.accent;
+  const box = (digit: string) =>
+    `<td width="15%" height="58" align="center" valign="middle" bgcolor="${fill}" style="background:${fill};border-radius:14px;font-family:${DISPLAY};font-size:24px;line-height:58px;color:${ink};">${digit}</td>`;
+  const boxes = [0, 1, 2, 3, 4, 5]
+    .map((i) => box(`{{ slice .Token ${i} ${i + 1} }}`))
+    .join(`<td width="2%" style="font-size:0;line-height:0;">&nbsp;</td>`);
+  return `
+      {{ if eq (len .Token) 6 }}
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="table-layout:fixed;margin-top:26px;">
+        <tr>${boxes}</tr>
+      </table>
+      {{ else }}
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top:26px;">
+        <tr>${box(AUTH_TOKEN)}</tr>
+      </table>
+      {{ end }}`;
+}
+
+function authCodeEmail(opts: {
+  subject: string;
+  preview: string;
+  kicker: string;
+  title: string;
+  /** HTML. */
+  instruction: string;
+  solidBoxes: boolean;
+  ignoreLabel: string;
+  ignoreText: string;
+  sentBecause: string;
+}) {
   const P = PROVIDER;
-  const who = params.businessName ? ` for ${esc(params.businessName)}` : '';
   return {
-    subject: `Your CERVICED verification code: ${params.code}`,
-    html: letter(P, {
-      preview: `${esc(params.code)} — your CERVICED verification code. Expires in 15 minutes.`,
-      content:
-        eyebrow(P, 'Claim your listing') +
-        headline(P, 'Your verification code') +
-        lede(
-          P,
-          `Someone asked to claim the CERVICED listing${who}. Enter this code in the app to confirm the business is yours:`,
-        ) +
-        codePanel(P, esc(params.code), 'Expires in 15 minutes') +
-        alertPanel(
-          P,
-          "Didn't ask for this?",
-          'You can ignore this email. The listing stays unclaimed, and nobody gets access to it without this code.',
-        ),
-    }),
+    subject: opts.subject,
+    html: `<!DOCTYPE html>
+<html lang="en" style="color-scheme:light only;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <link href="${FONT_LINK}" rel="stylesheet" />
+  <style>
+    @import url('${FONT_LINK}');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    ${LIGHT_ONLY_CSS}
+    body { background-color: ${P.card}; font-family: ${BODY}; }
+    a { color: ${P.accent}; }
+  </style>
+</head>
+<body style="background:${P.card};margin:0;padding:0;font-family:${BODY};">${preheader(opts.preview)}
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:${P.card};">
+    <tr><td align="center" style="padding:32px 24px 40px;">
+      <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:440px;">
+        <tr><td>
+
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td valign="middle"><img src="${BRAND_MARK}" alt="CERVICED" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:9px;" /></td>
+          <td valign="middle" style="padding-left:10px;font-family:${DISPLAY};font-size:14px;letter-spacing:4px;color:${P.accent};">CERVICED</td>
+        </tr>
+      </table>
+
+      <p style="margin:48px 0 0;font-family:${DISPLAY};font-size:11px;letter-spacing:2.4px;text-transform:uppercase;line-height:1.4;color:${P.sub};">${opts.kicker}</p>
+      <h1 style="margin:12px 0 0;font-family:${DISPLAY};font-weight:400;font-size:30px;letter-spacing:0.4px;line-height:1.15;color:${P.text};">${opts.title}</h1>
+      <p style="margin:12px 0 0;font-family:${BODY};font-size:15px;font-weight:600;line-height:1.6;color:${P.sub};">${opts.instruction}</p>
+${digitBoxes(P, opts.solidBoxes)}
+
+      <p style="margin:14px 0 0;font-family:${BODY};font-size:12px;font-weight:600;line-height:1.6;color:${P.sub};">${AUTH_CODE_EXPIRY}. Don't share it with anyone.</p>
+
+      <div style="height:1px;line-height:1px;font-size:0;background:${P.border};margin:32px 0 22px;">&nbsp;</div>
+
+      <p style="margin:0;font-family:${BODY};font-size:13px;font-weight:600;line-height:1.65;color:${P.sub};"><span style="color:${P.text};font-weight:700;">${opts.ignoreLabel}</span> ${opts.ignoreText}</p>
+
+      <p style="margin:40px 0 0;font-family:${BODY};font-size:12px;font-weight:600;line-height:1.7;color:${P.sub};">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a><br />${opts.sentBecause}<br />&copy; CERVICED &middot; cerviced.co</p>
+
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
   };
+}
+
+export function signupCodeEmail() {
+  const P = PROVIDER;
+  return authCodeEmail({
+    subject: `Your CERVICED verification code: ${AUTH_TOKEN}`,
+    preview: `${AUTH_TOKEN} is your CERVICED verification code. ${AUTH_CODE_EXPIRY}.`,
+    kicker: 'Last step',
+    title: "Here's your code",
+    instruction: `Enter it in the CERVICED app to confirm <span style="color:${P.text};font-weight:700;word-break:break-word;">${AUTH_EMAIL}</span>`,
+    solidBoxes: false,
+    ignoreLabel: "Didn't sign up?",
+    ignoreText: "You can ignore this email. This address won't be verified without the code.",
+    sentBecause: 'Sent because this address was entered on CERVICED.',
+  });
+}
+
+export function recoveryCodeEmail() {
+  const P = PROVIDER;
+  return authCodeEmail({
+    subject: `Your CERVICED password reset code: ${AUTH_TOKEN}`,
+    preview: `${AUTH_TOKEN} is your CERVICED password reset code. ${AUTH_CODE_EXPIRY}.`,
+    kicker: 'Forgot password',
+    title: "Here's your reset code",
+    instruction: `Enter it in the CERVICED app, then choose a new password for <span style="color:${P.text};font-weight:700;word-break:break-word;">${AUTH_EMAIL}</span>`,
+    solidBoxes: true,
+    ignoreLabel: "Didn't ask for this?",
+    ignoreText: 'You can ignore this email and your password stays exactly as it is.',
+    sentBecause: 'Sent because a password reset was requested for this address.',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -744,8 +853,8 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
 //
 // Money wording follows the app's calculateBookingPaymentBreakdown: paid state
 // comes from payment_status, never payment_type (a hand-added booking is
-// payment_type 'full' with nothing paid), and a deposit is the provider's own
-// figure, never deposit + platform fee.
+// payment_type 'full' with nothing paid), and the payment box is two figures:
+// Paid (what left the card, platform fee included) and Due at Appointment.
 
 /** The CVD mark alone, transparent, in client plum. */
 const BRAND_MARK_PLUM = `${BRAND_ASSETS}/cerviced-mark-plum.png`;
@@ -768,7 +877,28 @@ export interface BookingConfirmationParams {
   amountPaid: number;
   paymentType: string;
   paymentStatus: string;
+  /** The booking is still a request: the provider reviews every booking (or
+   *  it's out of hours) and hasn't accepted it yet (bookings.status 'pending').
+   *  The email then says "Request sent", not "Booking confirmed", and the
+   *  client gets the confirmed email once it's accepted. */
+  isRequest?: boolean;
+  /** The request is for a time outside the provider's usual rules (an
+   *  emergency request), not because they review every booking. */
+  isOutOfHours?: boolean;
+  /** Where this email is going, for the "Sign in with …" line. */
+  clientEmail?: string;
 }
+
+/** What the CERVICED app gives a client, listed under every booking email the
+ *  way the website's Booked screen lists them. Keep in step with APP_BENEFITS
+ *  in src/web/WebPaymentStep.tsx (the edge functions can't import src/). */
+export const BOOKING_EMAIL_APP_BENEFITS = [
+  'Ask Becca, your beauty assistant, anything',
+  'Save your Beauty Profile so every provider knows your preferences',
+  'Get Maintenance reminders when you’re due to rebook',
+  'Be the first to know when your provider releases new slots',
+  'Find inspiration and new providers on Explore',
+] as const;
 
 export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const P = CLIENT;
@@ -780,13 +910,28 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const addOnsTotal = params.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
   const total = params.basePrice + addOnsTotal + params.serviceCharge;
   const isDeposit = params.paymentType === 'deposit';
-  const isPaidInFull = params.paymentStatus === 'paid_in_full';
-  const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
-  const paidAmount = isUnpaid ? 0 : isDeposit ? params.depositAmount : params.amountPaid;
-  const remaining = Math.max(0, total - (isUnpaid ? 0 : params.amountPaid));
+  // The database value (bookings.payment_status), not the app's
+  // PaymentStatus.PAID_IN_FULL ('paid_in_full'), which only exists after mapping.
+  // An accepted request's hold is taken a moment after the status changes
+  // (settle_request_holds_async), so the confirmed email can be built while
+  // the payment still reads 'authorised'. Taking it is what accepting does.
+  const paymentStatus = !params.isRequest && params.paymentStatus === 'authorised'
+    ? (isDeposit ? 'deposit_paid' : 'fully_paid')
+    : params.paymentStatus;
+  const isPaidInFull = paymentStatus === 'fully_paid';
+  // A request's card is approved and held, not taken ('authorised'), until
+  // the provider accepts it. A free request (a patch test) holds nothing.
+  const isHeld = Boolean(params.isRequest) && params.paymentStatus === 'authorised' && params.amountPaid > 0;
+  const isUnpaid = !isPaidInFull && paymentStatus !== 'deposit_paid';
+  // Paid is what left the card, platform fee included; Due at Appointment is the rest.
+  // Same two figures as the in-app receipt (calculateBookingPaymentBreakdown).
+  const paidAmount = isUnpaid ? 0 : params.amountPaid;
+  const heldAmount = isHeld ? params.amountPaid : 0;
+  const remaining = Math.max(0, total - paidAmount - heldAmount);
 
-  const state = isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
-  const paidLabel = isUnpaid ? 'Total paid' : isDeposit ? 'Deposit paid to provider' : 'Paid today';
+  const state = isHeld
+    ? 'Held, not taken'
+    : isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
 
   const label = (text: string, colour = P.sub) =>
     `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
@@ -808,9 +953,17 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
     params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
     (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
 
-  const payRows =
-    payRow(paidLabel, paidAmount, remaining <= 0) +
-    (remaining > 0 ? payRow('Due to provider at appointment', remaining, true) : '');
+  // The deposit, once paid, listed under Total with the payment — same as the
+  // in-app receipt (calculateBookingPaymentBreakdown's depositPaid). It's part
+  // of the price, so it never goes in the lines above Total.
+  const depositPaid = isDeposit && !isUnpaid ? params.depositAmount : 0;
+
+  const payRows = isHeld
+    ? payRow('Held on your card', heldAmount, remaining <= 0) +
+      (remaining > 0 ? payRow('Due at Appointment', remaining, true) : '')
+    : (depositPaid > 0 ? payRow('Deposit paid', depositPaid, false) : '') +
+      payRow(depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', paidAmount, remaining <= 0) +
+      payRow('Due at Appointment', remaining, remaining > 0);
 
   const e = {
     providerName: esc(params.providerName),
@@ -820,6 +973,26 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
     location: esc(params.location),
     reference: esc(params.reference),
   };
+
+  // The same words as the website's "Request sent" screen.
+  const requestNote = params.isRequest
+    ? (params.isOutOfHours
+        ? `${e.providerName} will accept or decline your out-of-hours request.`
+        : `${e.providerName} reviews every booking and will accept or decline it.`) +
+      (isHeld ? ` ${gbp(heldAmount)} is held on your card, not taken. You’re only charged if it’s accepted.` : '') +
+      ' We’ll email you again when it’s accepted.'
+    : '';
+
+  const para = (text: string) =>
+    `<p style="font-family:${BODY};font-size:14px;font-weight:600;color:${P.sub};line-height:1.6;padding-top:6px;">${text}</p>`;
+
+  const benefitRows = BOOKING_EMAIL_APP_BENEFITS.map(benefit => `
+                  <tr>
+                    <td valign="top" width="20" style="font-family:${BODY};font-size:14px;font-weight:700;color:${P.accent};padding-top:7px;">&#10003;</td>
+                    <td style="font-family:${BODY};font-size:14px;font-weight:600;color:${P.text};line-height:1.5;padding-top:7px;">${esc(benefit)}</td>
+                  </tr>`).join('');
+
+  const signIn = params.clientEmail ? `Sign in with ${esc(params.clientEmail)}` : 'Sign in';
 
   const html = `<!DOCTYPE html>
 <html lang="en" style="color-scheme:light only;">
@@ -846,7 +1019,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
         <tr><td align="center" bgcolor="${tint}" style="background:${tint};border-radius:16px 16px 0 0;padding:42px 26px 32px;border-bottom:4px solid ${P.accent};">
           <img src="${BRAND_MARK_PLUM}" alt="CERVICED" width="96" height="48" style="display:block;width:96px;height:48px;margin:0 auto;border:0;" />
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:12px auto 0;">
-            <tr><td bgcolor="${pillFill}" style="background:${pillFill};border-radius:100px;padding:5px 14px;">${label('Booking confirmed', P.accent)}</td></tr>
+            <tr><td bgcolor="${pillFill}" style="background:${pillFill};border-radius:100px;padding:5px 14px;">${label(params.isRequest ? 'Request sent' : 'Booking confirmed', P.accent)}</td></tr>
           </table>
           <h1 style="font-family:${DISPLAY};font-weight:400;font-size:27px;line-height:1.15;letter-spacing:0.5px;text-transform:uppercase;color:${P.text};padding-top:26px;">${e.service}</h1>
           <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.sub};padding-top:10px;">with <span style="font-family:${PRATA};font-weight:400;font-size:19px;color:${P.text};">${e.providerName}</span></p>
@@ -858,7 +1031,12 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
 
         <tr><td align="center" style="padding:30px 24px 40px;">
           <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:470px;">
-
+${requestNote ? `
+            <!-- A request isn't a booking yet -->
+            <tr><td align="center" style="padding-bottom:22px;">
+              <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.text};line-height:1.6;">${requestNote}</p>
+            </td></tr>
+` : ''}
             <!-- Reference and address -->
             <tr><td style="border-bottom:1px solid ${hair};padding-bottom:16px;">
               <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
@@ -906,6 +1084,19 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
               </table>
             </td></tr>
 
+            <!-- The app: the same box as the website's Booked screen -->
+            <tr><td style="padding-top:30px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border:1px solid ${hair};border-radius:14px;">
+                <tr><td style="padding:18px 20px 20px;">
+                  <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.text};">Manage your booking</p>
+                  ${para(`${signIn} to see this booking, reschedule or cancel it, and message ${e.providerName}. Available on the App Store and Google Play.`)}
+                  <p style="font-family:${BODY};font-size:15px;font-weight:700;color:${P.text};padding-top:16px;">Enjoy the benefits of the CERVICED app</p>
+                  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${benefitRows}
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+
           </table>
         </td></tr>
 
@@ -924,7 +1115,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
 
   return {
     // Plain text — the template escapes only what lands in HTML.
-    subject: `Booking confirmed — ${params.service} with ${params.providerName}`,
+    subject: `${params.isRequest ? 'Request sent' : 'Booking confirmed'} — ${params.service} with ${params.providerName}`,
     html,
   };
 }
@@ -935,14 +1126,185 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
  * that can hold anything (health details included), so it stays behind the
  * app's sign-in rather than sitting in an inbox.
  */
+// ---------------------------------------------------------------------------
+// A request that ended without being accepted
+// ---------------------------------------------------------------------------
+// The provider declined it, or didn't answer in time, which is treated the
+// same: declined (the app labels both "Declined" too). The app tells the
+// client with a notification; a client who booked on the website has only
+// email, and was told "Request sent … we'll email you again".
+
+export function requestNotAcceptedEmail(params: {
+  providerName: string;
+  service: string;
+  date: string;
+  time: string;
+  /** What became of the money: held and now released, taken and being
+   *  refunded (requests from before card holds), or nothing was taken. */
+  money: { kind: 'released' | 'refunded' | 'none'; amount: number };
+}) {
+  const P = CLIENT;
+  const e = {
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+  };
+  const amount = gbp(params.money.amount);
+  const moneyLine =
+    params.money.kind === 'released' && params.money.amount > 0
+      ? `The ${amount} held on your card has been released. Nothing was taken. Your bank may still show the hold for a few days until it drops off.`
+      : params.money.kind === 'refunded' && params.money.amount > 0
+        ? `Your ${amount} is being refunded in full. It can take 5–10 working days to show on your statement.`
+        : '';
+  return {
+    // Plain text, like every subject here.
+    subject: `Request declined — ${params.service} with ${params.providerName}`,
+    html: letter(P, {
+      preview: `${e.providerName} couldn’t accept your request.`,
+      content:
+        eyebrow(P, 'Request declined') +
+        headline(P, 'Your request wasn’t accepted') +
+        lede(P, `${e.providerName} couldn’t accept your request for ${e.service} on ${e.date} at ${e.time}.`) +
+        (moneyLine ? note(P, moneyLine) : '') +
+        lede(P, `You can find another time with ${e.providerName}, or another provider, in the CERVICED app. Available on the App Store and Google Play.`),
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Before the appointment: the address, then the reminder
+// ---------------------------------------------------------------------------
+// The app tells a client both with a notification. A client who booked on the
+// website, or turned notifications off, would otherwise never hear them, so
+// every client gets them by email too (user decision 2026-11-23). Sent by
+// send-booking-update-email when the notification row is written, so the
+// email follows exactly the same rules as the notification.
+
+/** A details row in the panel: a caps label over a bold value. */
+function detailRow(P: EmailPalette, label: string, valueHtml: string, first = false) {
+  return `
+        <p style="font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:2.2px;text-transform:uppercase;line-height:1.4;padding-top:${first ? 0 : 14}px;">${label}</p>
+        <p style="font-family:${BODY};color:${P.text};font-size:15px;font-weight:700;line-height:1.55;padding-top:3px;">${valueHtml}</p>`;
+}
+
+/** Google's universal Maps link: opens the Maps app on a phone that has it,
+ *  the website anywhere else. */
+export function mapsUrl(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+function manageInAppLine(P: EmailPalette, providerName: string) {
+  return `
+      <p style="font-family:${BODY};color:${P.sub};font-size:13px;line-height:1.7;text-align:center;padding-top:24px;">See this booking, reschedule or cancel it, or message ${providerName} in the CERVICED app. Available on the App Store and Google Play.</p>`;
+}
+
+export function addressSharedEmail(params: {
+  providerName: string;
+  service: string;
+  date: string;
+  time: string;
+  address: string;
+  directions?: string | null;
+  /** More than one service in the same group booking: the address covers them all. */
+  groupCount?: number;
+}) {
+  const P = CLIENT;
+  const e = {
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+    address: esc(params.address),
+    directions: esc(params.directions?.trim() ?? ''),
+  };
+  const group = (params.groupCount ?? 1) > 1;
+  return {
+    subject: `The address for your ${params.service} with ${params.providerName}`,
+    html: letter(P, {
+      preview: `Where to go on ${e.date}: ${e.address}`,
+      content:
+        eyebrow(P, 'Address shared') +
+        headline(P, 'Here’s where to go') +
+        lede(
+          P,
+          group
+            ? `${e.providerName} has shared the address for your ${params.groupCount} services, starting with ${e.service} on ${e.date} at ${e.time}.`
+            : `${e.providerName} has shared the address for your ${e.service} on ${e.date} at ${e.time}.`,
+        ) +
+        panel(P, 'Where', detailRow(P, 'Address', e.address, true) + (e.directions ? detailRow(P, 'Directions', e.directions) : '')) +
+        button(P, esc(mapsUrl(params.address)), 'Open in Maps') +
+        manageInAppLine(P, e.providerName),
+    }),
+  };
+}
+
+export function appointmentReminderEmail(params: {
+  providerName: string;
+  service: string;
+  date: string;
+  time: string;
+  /** How far ahead this reminder is: the provider picks 1, 2 or 3 days. */
+  daysAhead: 1 | 2 | 3;
+  /** Where to go once it's shared; a mobile provider comes to the client. */
+  where:
+    | { kind: 'venue'; address: string }
+    | { kind: 'mobile'; address: string | null }
+    | { kind: 'not_yet' };
+  /** What's left to pay at the appointment, if anything. */
+  dueAtAppointment: number;
+  /** The provider's own instructions for this booking, if they wrote any. */
+  instructions?: string | null;
+}) {
+  const P = CLIENT;
+  const e = {
+    providerName: esc(params.providerName),
+    service: esc(params.service),
+    date: esc(params.date),
+    time: esc(params.time),
+  };
+  const when = params.daysAhead === 1 ? 'tomorrow' : `in ${params.daysAhead} days`;
+  const whenTitle = params.daysAhead === 1 ? 'Tomorrow' : `In ${params.daysAhead} days`;
+  const where = params.where;
+  const whereHtml =
+    where.kind === 'venue' ? esc(where.address)
+      : where.kind === 'mobile'
+        ? (where.address ? `${e.providerName} comes to you at ${esc(where.address)}` : `${e.providerName} comes to you`)
+        : 'Shared before your appointment';
+  const instructions = params.instructions?.trim().replace(/\s+/g, ' ');
+  return {
+    subject: `${whenTitle}: ${params.service} with ${params.providerName} at ${params.time}`,
+    html: letter(P, {
+      preview: `${e.service} with ${e.providerName} ${when} at ${e.time}.`,
+      content:
+        eyebrow(P, 'Appointment reminder') +
+        headline(P, `Your appointment is ${when}`) +
+        lede(P, `${e.service} with ${e.providerName} on ${e.date} at ${e.time}.`) +
+        panel(
+          P,
+          'Your booking',
+          detailRow(P, 'When', `${e.date} &middot; ${e.time}`, true) +
+            detailRow(P, 'Where', whereHtml) +
+            (params.dueAtAppointment > 0 ? detailRow(P, 'Due at appointment', gbp(params.dueAtAppointment)) : ''),
+        ) +
+        note(P, instructions ? esc(instructions) : `Please read ${e.providerName}’s policies before your appointment.`) +
+        (where.kind === 'venue' ? button(P, esc(mapsUrl(where.address)), 'Open in Maps') : '') +
+        manageInAppLine(P, e.providerName),
+    }),
+  };
+}
+
 export function refundRequestedProviderEmail(params: {
   clientName: string;
   service: string;
   date: string;
   time: string;
   reason: string;
+  /** The provider's payout for the booking while it's held, in pence. */
+  heldPence?: number | null;
 }) {
   const P = PROVIDER;
+  const held = params.heldPence && params.heldPence > 0 ? `£${(params.heldPence / 100).toFixed(2)}` : null;
   const e = {
     clientName: esc(params.clientName),
     service: esc(params.service),
@@ -964,7 +1326,7 @@ export function refundRequestedProviderEmail(params: {
         headline(P, `${e.clientName} has asked for a refund`) +
         lede(
           P,
-          'Open the booking in the CERVICED app to read their note, then either refund it or pass it to Cerviced to review.',
+          'Open the booking in the CERVICED app to read their note, then either refund it or pass it to Cerviced to review. If you don\'t reply within 3 days, it goes to Cerviced to review.',
         ) +
         panel(
           P,
@@ -976,7 +1338,8 @@ export function refundRequestedProviderEmail(params: {
         ) +
         note(
           P,
-          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy.",
+          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy." +
+            (held ? ` Your ${held} for this booking is on hold until it's settled.` : ''),
         ) +
         button(P, 'cerviced://home', 'Open CERVICED') +
         appHint(P),
@@ -1034,6 +1397,148 @@ export function supportRequestEmail(params: {
         </table>`,
           18,
         ),
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Money alerts — also to US
+// ---------------------------------------------------------------------------
+// A payment to a provider that failed (sent the moment it happens), and the
+// daily summary of everything waiting on a person. Same internal shell as the
+// support report; neither is ever addressed to a user.
+
+function internalRows(P: EmailPalette, rows: Array<[string, string]>) {
+  return rows
+    .map(
+      ([label, value]) => `
+          <tr>
+            <td valign="top" style="padding:7px 14px 7px 0;font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:1.6px;text-transform:uppercase;line-height:1.6;white-space:nowrap;">${esc(label)}</td>
+            <td valign="top" style="padding:7px 0;font-family:${BODY};color:${P.text};font-size:13px;line-height:1.6;word-break:break-word;">${esc(value)}</td>
+          </tr>`,
+    )
+    .join('');
+}
+
+export function payoutFailedSupportEmail(params: {
+  /** 'transfer': our transfer to the provider's Stripe account. 'bank': their
+   *  Stripe balance to their own bank. */
+  kind: 'transfer' | 'bank';
+  provider: string;
+  amount: string;
+  booking: string | null;
+  why: string;
+  /** Tries so far, e.g. "2 of 4". Null for a bank payout (Stripe retries those). */
+  tries: string | null;
+  nextStep: string;
+}) {
+  const P = PROVIDER;
+  const title = params.kind === 'bank' ? "A provider's bank payout failed" : 'A payment to a provider failed';
+  const rows: Array<[string, string]> = [
+    ['Provider', params.provider],
+    ['Amount', params.amount],
+    ...(params.booking ? [['Booking', params.booking] as [string, string]] : []),
+    ['Why', params.why],
+    ...(params.tries ? [['Tries so far', params.tries] as [string, string]] : []),
+  ];
+  return {
+    subject: `${title}: ${params.provider}, ${params.amount}`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${esc(params.provider)}, ${esc(params.amount)}: ${esc(params.why)}`,
+      content:
+        eyebrow(P, params.kind === 'bank' ? 'Bank payout failed' : 'Payment failed') +
+        headline(P, title) +
+        panel(
+          P,
+          "What we know",
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${internalRows(P, rows)}
+        </table>`,
+          18,
+        ) +
+        note(P, `<strong>What happens next:</strong> ${esc(params.nextStep)}`, 0),
+    }),
+  };
+}
+
+/** A bank dispute that needs a person: one the amount couldn't be matched to
+ *  a booking, or money to put right after one closed. Internal only. */
+export function bankDisputeSupportEmail(params: {
+  title: string;
+  amount: string;
+  reason: string;
+  /** One line per booking on the disputed payment. */
+  bookings: string[];
+  nextStep: string;
+}) {
+  const P = PROVIDER;
+  const rows: Array<[string, string]> = [
+    ['Disputed', params.amount],
+    ['Bank reason', params.reason],
+    ...params.bookings.map((line, i) => [i === 0 ? 'Bookings' : '', line] as [string, string]),
+  ];
+  return {
+    subject: `${params.title}: ${params.amount}`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${esc(params.amount)}: ${esc(params.title)}`,
+      content:
+        eyebrow(P, 'Bank dispute') +
+        headline(P, esc(params.title)) +
+        panel(
+          P,
+          'What we know',
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${internalRows(P, rows)}
+        </table>`,
+          18,
+        ) +
+        note(P, `<strong>What to do:</strong> ${esc(params.nextStep)}`, 0),
+    }),
+  };
+}
+
+export function moneySummaryEmail(params: {
+  failed: MoneySummaryLine[];
+  owed: MoneySummaryLine[];
+  refunds: MoneySummaryLine[];
+  unsentRefunds: MoneySummaryLine[];
+}) {
+  const P = PROVIDER;
+  const total = params.failed.length + params.owed.length + params.refunds.length + params.unsentRefunds.length;
+  const section = (label: string, lines: MoneySummaryLine[]) =>
+    lines.length === 0
+      ? ''
+      : panel(
+          P,
+          `${label} (${lines.length})`,
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${lines
+          .map(
+            (l) => `
+          <tr>
+            <td valign="top" style="padding:7px 14px 7px 0;font-family:${BODY};color:${P.text};font-size:13px;line-height:1.6;">${esc(l.title)}</td>
+            <td valign="top" align="right" style="padding:7px 0;font-family:${BODY};color:${P.text};font-size:13px;font-weight:700;line-height:1.6;white-space:nowrap;">${esc(l.amount)}</td>
+          </tr>`,
+          )
+          .join('')}
+        </table>`,
+          16,
+        );
+  return {
+    subject: `Today: ${total} money ${total === 1 ? 'thing' : 'things'} waiting`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${params.failed.length} failed, ${params.owed.length} owed, ${params.refunds.length} refund requests, ${params.unsentRefunds.length} refunds not sent`,
+      content:
+        eyebrow(P, 'Daily money summary') +
+        headline(P, `${total} ${total === 1 ? 'thing is' : 'things are'} waiting`) +
+        section('Failed payments to providers', params.failed) +
+        section('Money providers owe', params.owed) +
+        section('Refund requests', params.refunds) +
+        section('Refunds that never went out', params.unsentRefunds) +
+        note(P, 'Open Money (admin) in your settings in the CERVICED app to deal with these.', 0),
     }),
   };
 }

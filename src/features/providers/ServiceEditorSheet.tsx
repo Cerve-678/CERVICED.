@@ -1,16 +1,24 @@
 /**
- * Edit one service — name, price, duration, description, and whether clients
- * can see it.
+ * Edit one service — name, price, duration, latest start, description, and
+ * whether clients can see it.
  *
  * Deliberately narrow. The fuller service editor in InfoRegScreen still owns
  * safety flags, tags, buffers, add-ons and photos; this is the set a provider
  * changes week to week, opened from the My Services manager without reposting
  * their whole catalogue.
  *
+ * The one exception is findability. A service added here used to get no tags
+ * at all, and client Search can only find what's written down, so a NEW
+ * service — or one that still has no tags or no "who's it for" — gets tags
+ * suggested from its name (suggestServiceDetails, pre-ticked), a who's-it-for
+ * choice, and a description check. Once a service has tags, they're the full
+ * editor's again and this sheet leaves them alone.
+ *
  * Themed from the provider's own palette (passed in), like every other card on
  * that screen, rather than the app's light/dark tokens.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import { useDescriptionTopics } from './useDescriptionTopics';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -24,10 +32,28 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { withAlpha } from '../../constants/providerThemes';
+import { isDarkColor, withAlpha } from '../../constants/providerThemes';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import {
+  DESCRIPTION_PROBLEM_COPY,
+  TAG_GROUP_KEYS,
+  TECHNIQUE_TAGS_BY_CATEGORY,
+  descriptionProblem,
+  emptyTagGroups,
+  hasNoTags,
+  mergeTagGroups,
+  parseTypedTags,
+  suggestServiceDetails,
+  tagLabel,
+  type ServiceAudienceValue,
+  type ServiceTagGroups,
+} from './serviceTags';
+import { formatLatestStart, latestStartToEditor } from '../../utils/latestStart';
+import { PackFormHint, type PackFormKind } from '../info-packs/PackFormHint';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { readableSheet } from '../../constants/readableWidth';
 import { useTranslation, tr } from '../../i18n';
 
 export interface ServiceEditorPalette {
@@ -42,10 +68,18 @@ export interface ServiceEditorPalette {
 export interface ServiceEditorValue {
   name: string;
   price: string;
-  duration: string;
+  /** Length as typed: whole hours plus leftover minutes ("1" + "30"), so a
+   *  provider thinks in hours, the way services are priced and talked about. */
+  hours: string;
+  minutes: string;
+  /** Latest start, 'HH:MM' UK time, or '' for any time in working hours. */
+  latestStart: string;
   description: string;
   /** Only offered when editing. A new service always starts on the menu. */
   isActive: boolean;
+  /** As stored. Only offered here while the service has none (see above). */
+  tags: ServiceTagGroups;
+  audience: ServiceAudienceValue;
 }
 
 /** What a service row looks like coming in. Strings, because that's what the
@@ -54,48 +88,127 @@ export function toEditorValue(service: {
   name: string;
   price: number;
   duration_minutes: number;
+  latest_start_time?: string | null;
   description: string | null;
   is_active: boolean;
+  tags?: string[] | null;
+  technique_tags?: string[] | null;
+  outcome_tags?: string[] | null;
+  occasion_tags?: string[] | null;
+  trend_names?: string[] | null;
+  audience?: Exclude<ServiceAudienceValue, ''> | null;
 }): ServiceEditorValue {
   return {
     name: service.name,
     price: String(service.price ?? ''),
-    duration: String(service.duration_minutes ?? ''),
+    ...splitDuration(service.duration_minutes),
+    latestStart: latestStartToEditor(service.latest_start_time),
     description: service.description ?? '',
     isActive: service.is_active,
+    tags: {
+      styleTags: service.tags ?? [],
+      techniqueTags: service.technique_tags ?? [],
+      outcomeTags: service.outcome_tags ?? [],
+      occasionTags: service.occasion_tags ?? [],
+      trendNames: service.trend_names ?? [],
+    },
+    audience: service.audience ?? '',
   };
+}
+
+/** Stored minutes → the two boxes. A zero part is left blank rather than "0",
+ *  so 45 min shows as just "45" in the minutes box. */
+export function splitDuration(totalMinutes: number | null | undefined): Pick<ServiceEditorValue, 'hours' | 'minutes'> {
+  if (!totalMinutes || totalMinutes <= 0) return { hours: '', minutes: '' };
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return { hours: h ? String(h) : '', minutes: m ? String(m) : '' };
+}
+
+/** The two boxes → minutes for the column, or null when either box holds
+ *  something that isn't a whole number. A blank box counts as 0. */
+export function editorDurationMinutes(value: Pick<ServiceEditorValue, 'hours' | 'minutes'>): number | null {
+  const h = value.hours.trim() === '' ? 0 : Number(value.hours);
+  const m = value.minutes.trim() === '' ? 0 : Number(value.minutes);
+  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || m < 0) return null;
+  return h * 60 + m;
 }
 
 export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
   name: '',
   price: '',
-  duration: '',
+  hours: '',
+  minutes: '',
+  latestStart: '',
   description: '',
   isActive: true,
+  tags: emptyTagGroups(),
+  audience: '',
 };
+
+/** Latest-start choices: on the hour, 9am to 8pm. A stored time off this grid
+ *  (set some other way) still gets its own chip, so it's never hidden. */
+const LATEST_START_HOURS = Array.from({ length: 12 }, (_, i) => `${String(9 + i).padStart(2, '0')}:00`);
+
+function latestStartChoices(current: string): string[] {
+  if (!current || LATEST_START_HOURS.includes(current)) return LATEST_START_HOURS;
+  return [...LATEST_START_HOURS, current].sort();
+}
+
+const AUDIENCE_OPTIONS: { value: Exclude<ServiceAudienceValue, ''>; label: string }[] = [
+  { value: 'everyone', get label() { return tr('providerProfile.ui.everyone'); } },
+  { value: 'women', get label() { return tr('providerProfile.opt.women'); } },
+  { value: 'men', get label() { return tr('providerProfile.opt.men'); } },
+  { value: 'kids', get label() { return tr('providerProfile.ui.kids'); } },
+];
+
+/** How many unticked starter chips to offer when nothing can be suggested. */
+const STARTER_CHIP_COUNT = 10;
+
+type TagChip = { group: keyof ServiceTagGroups; tag: string };
 
 /** Null when the value is usable; otherwise the reason, phrased for the
  *  provider rather than for the column that would reject it. */
 function validateServiceValue(value: ServiceEditorValue): string | null {
   if (!value.name.trim()) return tr('providerProfile.serviceEditor.nameRequired');
   const price = Number(value.price);
-  if (!Number.isFinite(price) || price < 0) return tr('providerProfile.serviceEditor.priceRequired');
-  const duration = Number(value.duration);
+  if (!Number.isFinite(price) || price < 0) return 'Enter a price, or 0 if it varies.';
+  const duration = editorDurationMinutes(value);
   // A zero-length service is what made bookings look like they occupied no
   // time at all and never clash with anything — see the schedule-issues work.
-  if (!Number.isInteger(duration) || duration <= 0) {
-    return tr('providerProfile.serviceEditor.durationRequired');
+  if (duration === null || duration <= 0) {
+    return 'Enter how long it takes, in hours and minutes.';
   }
   return null;
 }
 
-function toDraft(value: ServiceEditorValue, isNew: boolean): MyServiceDraft {
+/** What a NEW service also needs before it's saved: enough for a client to
+ *  know what it is and for Search to find it. Existing services are never
+ *  blocked on these, so a price change can't be held up by an old service's
+ *  missing tags; the My Services review card asks for those instead. */
+function findabilityProblem(value: ServiceEditorValue, tags: ServiceTagGroups, audience: ServiceAudienceValue): string | null {
+  const problem = descriptionProblem(value.description, value.name);
+  if (problem) return DESCRIPTION_PROBLEM_COPY[problem];
+  if (hasNoTags(tags)) return 'Tick at least one tag, so clients searching for it can find this service.';
+  if (!audience) return 'Choose who this service is for.';
+  return null;
+}
+
+function toDraft(
+  value: ServiceEditorValue,
+  isNew: boolean,
+  findability: { tags: ServiceTagGroups | null; audience: ServiceAudienceValue },
+): MyServiceDraft {
   return {
     name: value.name.trim(),
     price: Number(value.price),
-    durationMinutes: Number(value.duration),
+    // validateServiceValue has already rejected a null here.
+    durationMinutes: editorDurationMinutes(value) ?? 0,
+    latestStartTime: value.latestStart || null,
     description: value.description.trim() || null,
     ...(isNew ? {} : { isActive: value.isActive }),
+    ...(findability.tags ? { tags: findability.tags } : {}),
+    ...(findability.audience ? { audience: findability.audience } : {}),
   };
 }
 
@@ -103,25 +216,38 @@ export default function ServiceEditorSheet({
   visible,
   initial,
   categoryName,
+  fallbackKind,
   isNew,
   saving,
   palette,
   onSave,
+  onSaveAndOpen,
   onClose,
 }: {
   visible: boolean;
   initial: ServiceEditorValue;
   categoryName: string;
+  /** The business's own category (providers.service_category), for headings
+   *  whose name doesn't say ("French tips"). */
+  fallbackKind?: string | null;
   isNew: boolean;
   saving: boolean;
   palette: ServiceEditorPalette;
   onSave: (draft: MyServiceDraft) => void;
+  /** Saves like onSave, then opens Info Packs or Forms. When given, the
+   *  sheet shows the Info Pack / Form tip under the description. */
+  onSaveAndOpen?: (draft: MyServiceDraft, kind: PackFormKind) => void;
   onClose: () => void;
 }) {
   const bottomInset = useSystemBottomInset();
   const { t } = useTranslation();
   const [value, setValue] = useState<ServiceEditorValue>(initial);
   const [error, setError] = useState<string | null>(null);
+  // Until the provider taps a chip, the ticked tags follow the name as it's
+  // typed. After that they're the provider's, and typing changes nothing.
+  const [tagsTouched, setTagsTouched] = useState(false);
+  const [audienceTouched, setAudienceTouched] = useState(false);
+  const [ownTag, setOwnTag] = useState('');
 
   // Reseed every time the sheet opens. Without this the second service you
   // tapped would open showing the first one's values.
@@ -129,19 +255,120 @@ export default function ServiceEditorSheet({
     if (visible) {
       setValue(initial);
       setError(null);
+      setTagsTouched(false);
+      setAudienceTouched(false);
+      setOwnTag('');
     }
   }, [visible, initial]);
 
-  const handleSave = useCallback(() => {
-    const problem = validateServiceValue(value);
+  const offerTags = isNew || hasNoTags(initial.tags);
+  const offerAudience = isNew || !initial.audience;
+
+  const suggestion = useMemo(
+    () => suggestServiceDetails({ name: value.name, categoryName, fallbackKind }),
+    [value.name, categoryName, fallbackKind],
+  );
+  const tags = useMemo(
+    () => (tagsTouched ? value.tags : mergeTagGroups(initial.tags, suggestion)),
+    [tagsTouched, value.tags, initial.tags, suggestion],
+  );
+  const audience: ServiceAudienceValue = audienceTouched
+    ? value.audience
+    : initial.audience || suggestion.audience;
+
+  // Ticked first, then what's worth a tap, then (only when nothing could be
+  // read from the name) the category's first few technique tags to start
+  // from. Keyed by group+tag, since one word can be two groups' option.
+  const chips = useMemo<TagChip[]>(() => {
+    const seen = new Set<string>();
+    const out: TagChip[] = [];
+    const push = (group: keyof ServiceTagGroups, tag: string) => {
+      if (seen.has(tag)) return;
+      seen.add(tag);
+      out.push({ group, tag });
+    };
+    for (const group of TAG_GROUP_KEYS) for (const tag of tags[group]) push(group, tag);
+    // A suggestion the provider unticked keeps its chip, so they can change
+    // their mind; dropping it made an untick impossible to undo.
+    for (const group of TAG_GROUP_KEYS) for (const tag of suggestion[group]) push(group, tag);
+    for (const group of TAG_GROUP_KEYS) for (const tag of suggestion.alsoConsider[group]) push(group, tag);
+    if (out.length === 0) {
+      for (const tag of (TECHNIQUE_TAGS_BY_CATEGORY[suggestion.kind] ?? []).slice(0, STARTER_CHIP_COUNT)) {
+        push('techniqueTags', tag);
+      }
+    }
+    return out;
+  }, [tags, suggestion]);
+
+  const toggleChip = useCallback((chip: TagChip) => {
+    Haptics.selectionAsync().catch(() => {});
+    setTagsTouched(true);
+    setValue(v => {
+      const current = tags[chip.group];
+      const next = current.includes(chip.tag) ? current.filter(t => t !== chip.tag) : [...current, chip.tag];
+      return { ...v, tags: { ...tags, [chip.group]: next } };
+    });
+  }, [tags]);
+
+  // A word the chips don't have. Typed text that IS a chip ticks that chip;
+  // anything new goes in the style tags — the one group the full editor
+  // always shows, so it can be seen and unticked there too.
+  const addOwnTags = useCallback(() => {
+    const typed = parseTypedTags(ownTag);
+    setOwnTag('');
+    if (!typed.length) return;
+    Haptics.selectionAsync().catch(() => {});
+    setTagsTouched(true);
+    setValue(v => {
+      const next: ServiceTagGroups = { ...tags };
+      for (const tag of typed) {
+        const existing = chips.find(c => c.tag === tag);
+        const group = existing ? existing.group : 'styleTags';
+        if (!next[group].includes(tag)) next[group] = [...next[group], tag];
+      }
+      return { ...v, tags: next };
+    });
+  }, [ownTag, tags, chips]);
+
+  const descriptionTopics = useDescriptionTopics(value.name, value.description);
+
+  const descriptionHint = useMemo(() => {
+    if (!value.description.trim()) return null;
+    const problem = descriptionProblem(value.description, value.name);
+    return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
+  }, [value.description, value.name]);
+
+  /** The draft to save, or null (with the reason shown) when it can't be. */
+  const readyDraft = useCallback((): MyServiceDraft | null => {
+    const problem =
+      validateServiceValue(value) ??
+      (isNew ? findabilityProblem(value, tags, audience) : null);
     if (problem) {
       setError(problem);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      return;
+      return null;
     }
     setError(null);
-    onSave(toDraft(value, isNew));
-  }, [value, isNew, onSave]);
+    return toDraft(value, isNew, {
+      tags: offerTags && !hasNoTags(tags) ? tags : null,
+      audience: offerAudience ? audience : '',
+    });
+  }, [value, isNew, tags, audience, offerTags, offerAudience]);
+
+  const handleSave = useCallback(() => {
+    const draft = readyDraft();
+    if (draft) onSave(draft);
+  }, [readyDraft, onSave]);
+
+  // Opening Info Packs or Forms closes this sheet, so it saves first rather
+  // than throw away what's been typed.
+  const saveAndOpen = useCallback((kind: PackFormKind): boolean => {
+    if (saving || !onSaveAndOpen) return false;
+    const draft = readyDraft();
+    if (!draft) return false;
+    onSaveAndOpen(draft, kind);
+    return true;
+  }, [saving, onSaveAndOpen, readyDraft]);
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="slide" onRequestClose={onClose}>
@@ -223,17 +450,68 @@ export default function ServiceEditorSheet({
                 />
               </View>
               <View style={styles.pairItem}>
-                <Text style={[styles.label, { color: palette.sub }]}>{t('providerProfile.serviceEditor.minutes')}</Text>
-                <TextInput
-                  value={value.duration}
-                  onChangeText={duration => setValue(v => ({ ...v, duration }))}
-                  keyboardType="number-pad"
-                  placeholder="45"
-                  placeholderTextColor={palette.sub}
-                  style={[styles.input, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
-                />
+                <Text style={[styles.label, { color: palette.sub }]}>HOW LONG</Text>
+                <View style={styles.durationRow}>
+                  <TextInput
+                    value={value.hours}
+                    onChangeText={hours => setValue(v => ({ ...v, hours }))}
+                    keyboardType="number-pad"
+                    placeholder="1"
+                    placeholderTextColor={palette.sub}
+                    accessibilityLabel={t('providerProfile.home.hours')}
+                    style={[styles.input, styles.durationInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <Text style={[styles.durationUnit, { color: palette.sub }]}>hr</Text>
+                  <TextInput
+                    value={value.minutes}
+                    onChangeText={minutes => setValue(v => ({ ...v, minutes }))}
+                    keyboardType="number-pad"
+                    placeholder="30"
+                    placeholderTextColor={palette.sub}
+                    accessibilityLabel={t('providerProfile.ui.minutes')}
+                    style={[styles.input, styles.durationInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <Text style={[styles.durationUnit, { color: palette.sub }]}>min</Text>
+                </View>
               </View>
             </View>
+
+            <Text style={[styles.label, { color: palette.sub }]}>LATEST START</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.timeChipRow}
+            >
+              {['', ...latestStartChoices(value.latestStart)].map(time => {
+                const on = value.latestStart === time;
+                return (
+                  <TouchableOpacity
+                    key={time || 'any'}
+                    style={[
+                      styles.chip,
+                      { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? palette.accent : palette.card },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setValue(v => ({ ...v, latestStart: time }));
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, { color: on ? (isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740') : palette.text }]}>
+                      {time ? formatLatestStart(time) : t('providerProfile.opt.anyTime')}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Text style={[styles.hint, { color: palette.sub }]}>
+              {value.latestStart
+                ? tr('providerProfile.ui.latestStart', { time: formatLatestStart(value.latestStart) })
+                : t('providerProfile.ui.clientsCanBookItToStart')}
+            </Text>
 
             <Text style={[styles.label, { color: palette.sub }]}>{t('providerProfile.serviceEditor.description')}</Text>
             <TextInput
@@ -248,11 +526,132 @@ export default function ServiceEditorSheet({
                 { color: palette.text, backgroundColor: palette.card, borderColor: palette.border },
               ]}
             />
+            {/* Wording offered, never written in for them. */}
+            {!value.description.trim() && suggestion.descriptionIdeas.map(idea => (
+              <TouchableOpacity
+                key={idea}
+                style={[styles.suggestRow, { borderColor: palette.border }]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setValue(v => ({ ...v, description: idea }));
+                }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={tr('providerProfile.ui.useSuggestionA11y', { idea })}
+              >
+                <Ionicons name="sparkles-outline" size={14} color={palette.accent} />
+                <Text style={[styles.suggestText, { color: palette.text }]} numberOfLines={2}>
+                  {tr('providerProfile.ui.useSuggestion', { idea })}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {descriptionTopics.length > 0 ? (
+              <Text style={[styles.hint, { color: palette.sub }]}>
+                {t('providerProfile.ui.othersOfferingThisOftenMention')} {descriptionTopics.join(', ')}.
+              </Text>
+            ) : null}
+            {descriptionHint ? (
+              <Text style={[styles.hint, { color: palette.sub }]}>{descriptionHint}</Text>
+            ) : null}
+            {onSaveAndOpen ? (
+              <PackFormHint
+                tour={TOUR_KEYS.PROVIDER_SERVICE_PACK_TIP}
+                title={t('providerProfile.ui.aftercareOrQuestionsBeforeTheyCome')}
+                body={t('providerProfile.ui.putThemInAnInfoPack')}
+                note="Saves this service first."
+                palette={palette}
+                onOpen={saveAndOpen}
+              />
+            ) : null}
+
+            {offerTags ? (
+              <>
+                <Text style={[styles.label, { color: palette.sub }]}>HELP CLIENTS FIND IT</Text>
+                <Text style={[styles.hint, styles.hintTight, { color: palette.sub }]}>
+                  {hasNoTags(tags)
+                    ? t('providerProfile.ui.tickTheWordsClientsWouldSearch')
+                    : t('providerProfile.ui.tickedFromTheNameUntickAnything')}
+                </Text>
+                <View style={styles.chipGrid}>
+                  {chips.map(chip => {
+                    const on = tags[chip.group].includes(chip.tag);
+                    return (
+                      <TouchableOpacity
+                        key={`${chip.group}:${chip.tag}`}
+                        style={[
+                          styles.chip,
+                          { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? withAlpha(palette.accent, 0.16) : palette.card },
+                        ]}
+                        onPress={() => toggleChip(chip)}
+                        activeOpacity={0.75}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                      >
+                        <Text style={[styles.chipText, { color: on ? palette.accent : palette.text }]}>{tagLabel(chip.tag)}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={styles.ownTagRow}>
+                  <TextInput
+                    value={ownTag}
+                    onChangeText={setOwnTag}
+                    onSubmitEditing={addOwnTags}
+                    placeholder={t('providerProfile.ui.addYourOwnCommasForMore')}
+                    placeholderTextColor={palette.sub}
+                    returnKeyType="done"
+                    autoCapitalize="none"
+                    accessibilityLabel={t('providerProfile.ui.addYourOwnTag')}
+                    style={[styles.input, styles.ownTagInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <TouchableOpacity
+                    style={[styles.ownTagButton, { backgroundColor: ownTag.trim() ? palette.accent : withAlpha(palette.text, 0.12) }]}
+                    onPress={addOwnTags}
+                    disabled={!ownTag.trim()}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('providerProfile.ui.addTag')}
+                  >
+                    <Ionicons name="add" size={20} color={ownTag.trim() ? (isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740') : palette.sub} />
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : null}
+
+            {offerAudience ? (
+              <>
+                <Text style={[styles.label, { color: palette.sub }]}>WHO’S IT FOR?</Text>
+                <View style={styles.chipGrid}>
+                  {AUDIENCE_OPTIONS.map(option => {
+                    const on = audience === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.chip,
+                          { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? palette.accent : palette.card },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setAudienceTouched(true);
+                          setValue(v => ({ ...v, audience: on ? '' : option.value }));
+                        }}
+                        activeOpacity={0.75}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text style={[styles.chipText, { color: on ? '#FFFFFF' : palette.text }]}>{option.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Text style={[styles.footnote, { color: palette.sub }]}>
-              {t('providerProfile.serviceEditor.footnote')}
+              {t('providerProfile.ui.photosAddOnsSafetyDetailsAnd')}
             </Text>
           </ScrollView>
 
@@ -262,8 +661,8 @@ export default function ServiceEditorSheet({
             disabled={saving}
             activeOpacity={0.85}
           >
-            <Text style={styles.saveButtonText}>
-              {saving ? t('providerProfile.serviceEditor.saving') : isNew ? t('providerProfile.serviceEditor.add') : t('providerProfile.serviceEditor.save')}
+            <Text style={[styles.saveButtonText, { color: isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740' }]}>
+              {saving ? t('common.saving') : isNew ? 'Add service' : 'Save changes'}
             </Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>
@@ -281,7 +680,7 @@ const styles = StyleSheet.create({
   dismissArea: {
     flex: 1,
   },
-  sheet: {
+  sheet: { ...readableSheet,
     maxHeight: '86%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -342,6 +741,20 @@ const styles = StyleSheet.create({
   pairItem: {
     flex: 1,
   },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  durationInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 10,
+    textAlign: 'center',
+  },
+  durationUnit: {
+    fontSize: 13,
+  },
   visibilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -372,6 +785,74 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 12,
     marginTop: 12,
+  },
+  hint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  hintTight: {
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 8,
+  },
+  suggestText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  timeChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 4,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  chipText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  ownTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  ownTagInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  ownTagButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footnote: {
     fontFamily: 'Jura-VariableFont_wght',
