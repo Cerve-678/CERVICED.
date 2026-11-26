@@ -1,24 +1,30 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   Modal,
   Pressable,
   ScrollView,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
-import { useTranslation } from '../i18n';
+import { searchPlaces } from '../data/cityAreas';
+import { readableSheet } from '../constants/readableWidth';
+import { tr, trp, useTranslation } from '../i18n';
 
 interface LocationModalProps {
   visible: boolean;
   onClose: () => void;
-  selectedLocation: string;
+  /** The picked place ("Haggerston, London" or "London, UK"), or null for the device's location. */
+  selectedPlace: string | null;
   selectedRadius: number;
-  onLocationChange: (location: string) => void;
+  onPlaceChange: (place: string | null) => void;
   onRadiusChange: (radius: number) => void;
 }
 
@@ -47,7 +53,9 @@ const Chip = memo<{
 ));
 Chip.displayName = 'Chip';
 
-const LOCATIONS = [
+const USE_MY_LOCATION = 'Use my location';
+
+const CITIES = [
   'London, UK',
   'Manchester, UK',
   'Birmingham, UK',
@@ -58,21 +66,44 @@ const LOCATIONS = [
   'Sheffield, UK',
 ];
 
-const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
+const RADIUS_OPTIONS = [
+  { get label() { return trp('discover.location.miles', 1); }, value: 1 },
+  { get label() { return trp('discover.location.miles', 5); }, value: 5 },
+  { get label() { return trp('discover.location.miles', 10); }, value: 10 },
+  { get label() { return trp('discover.location.miles', 25); }, value: 25 },
+  { get label() { return trp('discover.location.miles', 50); }, value: 50 },
+];
 
 export default function LocationModal({
   visible,
   onClose,
-  selectedLocation,
+  selectedPlace,
   selectedRadius,
-  onLocationChange,
+  onPlaceChange,
   onRadiusChange,
 }: LocationModalProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const [query, setQuery] = useState('');
+  useEffect(() => { if (!visible) setQuery(''); }, [visible]);
+
+  // Neighbourhoods and towns, saved the way the resolver reads them back:
+  // "Haggerston, London" for an area, "London, UK" for a whole town.
+  const matches = useMemo(
+    () => searchPlaces(query, 24).flatMap(m =>
+      m.kind === 'area' ? [{ label: `${m.name} · ${m.town}`, value: `${m.name}, ${m.town}` }]
+        : m.kind === 'town' ? [{ label: m.name, value: `${m.name}, UK` }]
+          : []),
+    [query],
+  );
+  // A picked neighbourhood isn't one of the city chips, so it's shown on its
+  // own, otherwise the sheet would open with nothing looking selected.
+  const pickedArea = selectedPlace && !CITIES.includes(selectedPlace) ? selectedPlace : null;
+
   // The hat-aware palette, not useEnterpriseTheme(): this sheet opens over the
   // client Home, and the enterprise tokens are provider-hat only — they'd paint
   // brown/dusty-rose chrome inside the client's plum + blue-grey theme.
   const { palette: P } = useTheme();
-  const { t, tp } = useTranslation();
   const bottomInset = useSystemBottomInset();
 
   return (
@@ -83,56 +114,104 @@ export default function LocationModal({
       onRequestClose={onClose}
       statusBarTranslucent navigationBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(34, bottomInset + 16) }]}
-          onPress={() => {}}
-        >
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: P.text }]}>{t('discover.location.title')}</Text>
-          </View>
-
-          <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
-            <View style={styles.sectionHead}>
-              <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('discover.location.city')}</Text>
-            </View>
-            <View style={styles.pillGrid}>
-              {LOCATIONS.map(location => (
-                <Chip
-                  key={location}
-                  label={location}
-                  palette={P}
-                  isSelected={selectedLocation === location}
-                  onPress={() => onLocationChange(location)}
-                />
-              ))}
-            </View>
-
-            <View style={styles.sectionHead}>
-              <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('discover.location.radius')}</Text>
-            </View>
-            <View style={[styles.pillGrid, styles.pillGridLast]}>
-              {RADIUS_OPTIONS.map(miles => (
-                <Chip
-                  key={miles}
-                  label={tp('discover.location.miles', miles)}
-                  palette={P}
-                  isSelected={selectedRadius === miles}
-                  onPress={() => onRadiusChange(miles)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-
-          <TouchableOpacity
-            style={[styles.applyButton, { backgroundColor: P.accent }]}
-            onPress={onClose}
-            activeOpacity={0.75}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable
+            style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(34, bottomInset + 16) }]}
+            onPress={() => {}}
           >
-            <Text style={[styles.applyButtonText, { color: P.onAccent }]}>{t('common.apply')}</Text>
-          </TouchableOpacity>
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: P.text }]}>{tr('discover.location.title')}</Text>
+            </View>
+
+            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={styles.pillGrid}>
+                <Chip
+                  label={USE_MY_LOCATION}
+                  palette={P}
+                  isSelected={selectedPlace === null}
+                  onPress={() => onPlaceChange(null)}
+                />
+                {pickedArea ? (
+                  <Chip
+                    label={pickedArea.split(',')[0]!}
+                    palette={P}
+                    isSelected
+                    onPress={() => onPlaceChange(pickedArea)}
+                  />
+                ) : null}
+              </View>
+
+              <View style={styles.sectionHead}>
+                <Text style={[styles.sectionTitle, { color: P.sub }]}>{tr('discover.location.yourArea')}</Text>
+              </View>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={tr('discover.location.searchPlaceholder')}
+                placeholderTextColor={P.sub}
+                autoCorrect={false}
+                autoCapitalize="words"
+                returnKeyType="search"
+                style={[styles.searchInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+              />
+              {query.trim() ? (
+                <View style={[styles.pillGrid, styles.matchGrid]}>
+                  {matches.length === 0 ? (
+                    <Text style={[styles.noMatch, { color: P.sub }]}>{tr('discover.location.noArea')}</Text>
+                  ) : matches.map(match => (
+                    <Chip
+                      key={match.value}
+                      label={match.label}
+                      palette={P}
+                      isSelected={selectedPlace === match.value}
+                      onPress={() => { setQuery(''); onPlaceChange(match.value); }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              <View style={styles.sectionHead}>
+                <Text style={[styles.sectionTitle, { color: P.sub }]}>{tr('discover.location.city')}</Text>
+              </View>
+              <View style={styles.pillGrid}>
+                {CITIES.map(city => (
+                  <Chip
+                    key={city}
+                    label={city}
+                    palette={P}
+                    isSelected={selectedPlace === city}
+                    onPress={() => onPlaceChange(city)}
+                  />
+                ))}
+              </View>
+
+              <View style={styles.sectionHead}>
+                <Text style={[styles.sectionTitle, { color: P.sub }]}>{tr('discover.location.radius')}</Text>
+              </View>
+              <View style={[styles.pillGrid, styles.pillGridLast]}>
+                {RADIUS_OPTIONS.map(option => (
+                  <Chip
+                    key={option.value}
+                    label={option.label}
+                    palette={P}
+                    isSelected={selectedRadius === option.value}
+                    onPress={() => onRadiusChange(option.value)}
+                  />
+                ))}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.applyButton, { backgroundColor: P.accent }]}
+              onPress={onClose}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.applyButtonText, { color: P.onAccent }]}>{tr('common.apply')}</Text>
+            </TouchableOpacity>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -143,7 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
-  sheet: {
+  sheet: { ...readableSheet,
     maxHeight: '75%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -182,6 +261,22 @@ const styles = StyleSheet.create({
   },
   pillGridLast: {
     marginBottom: 4,
+  },
+  matchGrid: {
+    marginTop: 10,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  noMatch: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
   },
   pill: {
     borderWidth: 1,

@@ -2,18 +2,21 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   getMyProviderProfile,
+  getMyBookedClientContact,
+  setMyBookedClientContact,
   updateProviderContactDetails,
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -26,7 +29,7 @@ const CP_DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   // Lighter than `accent` for standalone text (e.g. the "Add" template
   // label) — the muted dusty rose reads as faint at small sizes against
   // near-black cards.
@@ -42,7 +45,7 @@ const CP_LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   accentText: '#5C4033',
   ice:     '#FFFFFF',
   text:    '#1C1A18',
@@ -57,12 +60,24 @@ type ContactMethod = 'in_app' | 'email' | 'whatsapp' | 'phone';
 
 const METHOD_META: Record<ContactMethod, { icon: string; label: string; description: string }> = {
   in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Booked clients chat with you inside Cerviced. Anyone browsing your profile can also start a general enquiry via Get In Touch' },
-  email:    { icon: 'mail-outline',                label: 'Email',              description: 'Clients can email you via your public contact email' },
-  whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Clients open a WhatsApp chat with your number' },
-  phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Clients can call your profile phone number' },
+  email:    { icon: 'mail-outline',                label: 'Email',              description: 'Booked clients can email you' },
+  whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Booked clients open a WhatsApp chat with you' },
+  phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Booked clients can call you' },
 };
 
 const ALL_METHODS: ContactMethod[] = ['in_app', 'email', 'whatsapp', 'phone'];
+
+type ValueMethod = Exclude<ContactMethod, 'in_app'>;
+type ContactValues = Record<ValueMethod, string>;
+const EMPTY_VALUES: ContactValues = { email: '', phone: '', whatsapp: '' };
+
+const INPUT_META: Record<ValueMethod, { placeholder: string; keyboardType: 'email-address' | 'phone-pad' }> = {
+  email:    { placeholder: 'Email for booked clients', keyboardType: 'email-address' },
+  phone:    { placeholder: 'Number for booked clients', keyboardType: 'phone-pad' },
+  whatsapp: { placeholder: 'WhatsApp number for booked clients', keyboardType: 'phone-pad' },
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -99,11 +114,13 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<Set<ContactMethod>>(new Set(['in_app']));
-  // Read-only here — displayed under the WhatsApp toggle so the provider can
-  // see what's actually published. Edited in Business Profile → Contact.
-  const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [profileEmail, setProfileEmail] = useState('');
-  const [profilePhone, setProfilePhone] = useState('');
+  // Two sets of values. `booked` is what this screen edits
+  // (provider_booked_contact) — only ever shown to clients with a booking.
+  // `publicValues` is the providers row Get In Touch shows to everyone; it's
+  // read-only here and is what a blank booked field falls back to, server-side
+  // in get_booked_client_contact.
+  const [booked, setBooked] = useState<ContactValues>(EMPTY_VALUES);
+  const [publicValues, setPublicValues] = useState<ContactValues>(EMPTY_VALUES);
 
   useEffect(() => {
     (async () => {
@@ -111,12 +128,20 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         const provider = await getMyProviderProfile();
         if (!provider) return;
         setProviderId(provider.id);
-        setProfileEmail(provider.email ?? '');
-        setProfilePhone(provider.phone ?? '');
-
+        setPublicValues({
+          email: provider.email ?? '',
+          phone: provider.phone ?? '',
+          whatsapp: (provider as any).whatsapp_number ?? '',
+        });
         const methods: ContactMethod[] = (provider as any).preferred_contact_methods ?? ['in_app'];
         setEnabled(new Set(methods));
-        setWhatsappNumber((provider as any).whatsapp_number ?? '');
+
+        const mine = await getMyBookedClientContact(provider.id);
+        setBooked({
+          email: mine.email ?? '',
+          phone: mine.phone ?? '',
+          whatsapp: mine.whatsapp_number ?? '',
+        });
       } catch {
         flash('Could not load contact preferences', 'error');
       } finally {
@@ -144,27 +169,37 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
     });
   }
 
+  // What a booked client actually gets for a channel: the booked-client value
+  // if there is one, else the public one (same rule as the server).
+  const effective = (m: ValueMethod) => booked[m].trim() || publicValues[m].trim();
+
   async function handleSave() {
-    // Toggles only — the values themselves are owned by Business Info and
-    // Business Profile → Contact. All this can validate is that you haven't
-    // switched on a channel that has nothing behind it.
-    const missing = ([...enabled] as ContactMethod[]).filter(m =>
-      (m === 'whatsapp' && !whatsappNumber.trim()) ||
-      (m === 'email' && !profileEmail) ||
-      (m === 'phone' && !profilePhone)
-    );
-    const firstMissing = missing[0];
+    // A switched-on channel needs something behind it, from either set.
+    const firstMissing = ([...enabled].filter(m => m !== 'in_app') as ValueMethod[])
+      .find(m => !effective(m));
     if (firstMissing) {
       flash(`Add your ${METHOD_META[firstMissing].label.toLowerCase()} details before switching it on`, 'error');
+      return;
+    }
+    if (booked.email.trim() && !EMAIL_RE.test(booked.email.trim())) {
+      flash("That email address doesn't look right", 'error');
       return;
     }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      await updateProviderContactDetails(providerId!, {
-        preferred_contact_methods: Array.from(enabled),
-      });
+      await Promise.all([
+        updateProviderContactDetails(providerId!, {
+          preferred_contact_methods: Array.from(enabled),
+        }),
+        // Blank saves as null = "use my public detail".
+        setMyBookedClientContact(providerId!, {
+          email: booked.email.trim() || null,
+          phone: booked.phone.trim() || null,
+          whatsapp_number: booked.whatsapp.trim() || null,
+        }),
+      ]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
@@ -186,7 +221,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView>
           {/* Header */}
@@ -206,30 +241,6 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            {/* Info banner */}
-            <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Ionicons name="information-circle-outline" size={18} color={C.accent} />
-              <Text style={[s.infoText, { color: C.sub }]}>
-                These are for clients who already have a booking with you — on
-                appointment day they see a Contact button in Booking Details with
-                these options. Enable at least one channel.
-              </Text>
-            </View>
-
-            {/* The other audience. Without this, "contact methods" reads like one
-                global setting and providers assume unticking a channel here also
-                hides it from their public profile — it doesn't, and hasn't since
-                the two surfaces were split. */}
-            <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Ionicons name="globe-outline" size={18} color={C.accent} />
-              <Text style={[s.infoText, { color: C.sub }]}>
-                Not the same as your public contact details. Anyone browsing your
-                profile uses Get In Touch, which shows the phone, email, Instagram
-                and website you set in Business Profile → Contact — for general
-                enquiries, not booking admin.
-              </Text>
-            </View>
-
             {/* Contact method toggles */}
             <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
               <Text style={[s.cardTitle, { color: C.text }]}>Booked-Client Contact Channels</Text>
@@ -237,14 +248,6 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                 const meta = METHOD_META[method];
                 const isOn = enabled.has(method);
                 const isLocked = method === 'in_app';
-                // The value itself, not a signpost to where it's typed. These
-                // are set in Business Profile → Contact (and Business Info);
-                // this screen only decides which of them booked clients get.
-                const value =
-                  method === 'email'    ? profileEmail :
-                  method === 'phone'    ? profilePhone :
-                  method === 'whatsapp' ? whatsappNumber :
-                  '';
                 return (
                   <View key={method}>
                     {idx > 0 && <View style={[s.divider, { backgroundColor: C.border }]} />}
@@ -253,7 +256,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                         <Ionicons
                           name={meta.icon as any}
                           size={18}
-                          color={isOn ? C.ice : C.sub}
+                          color={isOn ? C.onAccent : C.sub}
                         />
                       </View>
                       <View style={s.rowText}>
@@ -261,16 +264,11 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           <Text style={[s.rowLabel, { color: C.text }]}>{meta.label}</Text>
                           {isLocked && (
                             <View style={[s.alwaysOnBadge, { backgroundColor: C.accent }]}>
-                              <Text style={[s.alwaysOnText, { color: C.ice }]}>Always on</Text>
+                              <Text style={[s.alwaysOnText, { color: C.onAccent }]}>Always on</Text>
                             </View>
                           )}
                         </View>
                         <Text style={[s.rowDesc, { color: C.sub }]} numberOfLines={2}>{meta.description}</Text>
-                        {method !== 'in_app' && (
-                          value
-                            ? <Text style={[s.rowValue, { color: C.text }]} numberOfLines={1}>{value}</Text>
-                            : <Text style={s.rowWarn}>Not added yet</Text>
-                        )}
                       </View>
                       <Switch
                         value={isOn}
@@ -280,18 +278,35 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                         thumbColor={C.ice}
                       />
                     </View>
+                    {/* Always shown, so the details can be filled in before
+                        the channel is switched on. A value for a switched-off
+                        channel never reaches a client. */}
+                    {method !== 'in_app' && (() => {
+                      const publicValue = publicValues[method].trim();
+                      return (
+                        <View style={s.inputWrap}>
+                          <TextInput
+                            style={[s.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+                            value={booked[method]}
+                            onChangeText={v => setBooked(prev => ({ ...prev, [method]: v }))}
+                            placeholder={publicValue || INPUT_META[method].placeholder}
+                            placeholderTextColor={C.sub}
+                            keyboardType={INPUT_META[method].keyboardType}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                          />
+                          {!booked[method].trim() && (
+                            publicValue
+                              ? <Text style={[s.inputHint, { color: C.sub }]}>Using your public {method === 'email' ? 'email' : 'number'}. Type here to give booked clients a different one.</Text>
+                              : isOn && <Text style={s.rowWarn}>Not added yet</Text>
+                          )}
+                        </View>
+                      );
+                    })()}
                   </View>
                 );
               })}
             </View>
-
-            {/* One footer link, not a per-row "go set this elsewhere" nag. The
-                rows above show the real values; this is only for changing them. */}
-            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessInfo')} activeOpacity={0.7}>
-              <Ionicons name="create-outline" size={16} color={C.accent} />
-              <Text style={[s.linkText, { color: C.text }]}>Edit these contact details</Text>
-              <Ionicons name="chevron-forward" size={14} color={C.sub} />
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[s.saveBtn, { backgroundColor: C.accent }, saving && s.saveBtnDim]}
@@ -300,8 +315,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               {saving
-                ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={[s.saveTxt, { color: C.ice }]}>Save Preferences</Text>
+                ? <ActivityIndicator color={C.onAccent} size="small" />
+                : <Text style={[s.saveTxt, { color: C.onAccent }]}>Save Preferences</Text>
               }
             </TouchableOpacity>
           </ScrollView>
@@ -321,10 +336,7 @@ const s = StyleSheet.create({
   closeBtn:    { width: 34, height: 34, borderRadius: 17, backgroundColor: CP.surface, alignItems: 'center', justifyContent: 'center' },
 
   scroll:        { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE },
-
-  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: CP.surface, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
-  infoText:   { flex: 1, fontSize: 13, color: CP.sub, lineHeight: 18 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE },
 
   card:      { backgroundColor: CP.surface, borderRadius: 16, padding: 16, marginBottom: 14 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: CP.text, marginBottom: 16 },
@@ -338,13 +350,13 @@ const s = StyleSheet.create({
   rowLabel: { fontSize: 15, fontWeight: '600', color: CP.text },
   rowDesc:  { fontSize: 12, color: CP.sub, marginTop: 2, lineHeight: 16 },
   rowWarn:  { fontSize: 11, color: '#FF9F0A', marginTop: 3 },
-  rowValue: { fontSize: 12, color: CP.text, marginTop: 3, fontWeight: '600' },
+  inputWrap: { marginTop: 10, marginLeft: 48 },
+  input:     { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  inputHint: { fontSize: 11, marginTop: 4, lineHeight: 15 },
 
   alwaysOnBadge: { backgroundColor: CP.accent, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   alwaysOnText:  { fontSize: 9, fontWeight: '700', color: CP.ice, letterSpacing: 0.3 },
 
-  linkRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CP.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
-  linkText: { flex: 1, fontSize: 14, color: CP.ice, fontWeight: '500' },
 
   saveBtn:    { backgroundColor: CP.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: CP.ice + '30', marginTop: 6 },
   saveBtnDim: { opacity: 0.6 },

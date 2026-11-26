@@ -13,9 +13,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { UK_CITIES } from '../constants/ukCities';
-import { getCityAreaData, type CityAreaData } from '../data/cityAreas';
+import { getCityAreaData, searchPlaces, COUNTY_TOWNS, type CityAreaData } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
-import { useTranslation } from '../i18n';
+import { readableSheet } from '../constants/readableWidth';
+import { tr, useTranslation } from '../i18n';
 
 type Palette = {
   bg: string; surface: string; card: string; accent: string;
@@ -30,10 +31,9 @@ interface CityMultiSelectProps {
 }
 
 /**
- * Searchable multi-select for UK service-coverage cities. A single reusable
- * source for "where do you work" (signup, Step 4) and the client-side Search
- * "City" filter, so the two stay in sync — the same string always means the
- * same thing on both sides.
+ * Searchable multi-select for UK service-coverage cities, used by the
+ * client-side Search "City" filter. (Client sign-up used to ask with it too;
+ * it now asks for one area with AreaPicker, like Account > Your area.)
  *
  * Each entry can be either a whole city ("Manchester") or, for cities with
  * structured data (see src/data/cityAreas.ts — now all of UK_CITIES),
@@ -43,8 +43,8 @@ interface CityMultiSelectProps {
  * appending to this array instead of composing one string.
  */
 export function CityMultiSelect({ selected, onChange, palette: t, placeholder }: CityMultiSelectProps) {
-  // `t` is the palette here, so the translator is `tx`.
-  const { t: tx } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
@@ -58,6 +58,19 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
     if (!q) return UK_CITIES;
     return UK_CITIES.filter(city => city.toLowerCase().includes(q));
   }, [query]);
+
+  // Anything typed also finds counties ("Kent") and areas ("Stoke Newington"),
+  // which the flat list of towns above can't show on their own.
+  const placeMatches = useMemo(
+    () => searchPlaces(query).filter(match => match.kind !== 'town'),
+    [query],
+  );
+
+  const addCounty = (county: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    const towns = COUNTY_TOWNS[county] ?? [];
+    onChange([...selected, ...towns.filter(town => !selected.includes(town))]);
+  };
 
   const add = (entry: string) => {
     if (!entry.trim() || selected.includes(entry)) return;
@@ -114,14 +127,14 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
         onPress={() => setVisible(true)}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel={tx('discover.cities.chooseA11y')}
+        accessibilityLabel={tr('discover.cities.chooseA11y')}
       >
         <Ionicons name="location-outline" size={18} color={t.sub} />
         <Text
           style={[styles.fieldText, { color: selected.length ? t.text : t.sub }]}
           numberOfLines={1}
         >
-          {selected.length ? selected.join(', ') : (placeholder ?? tx('discover.cities.placeholder'))}
+          {selected.length ? selected.join(', ') : (placeholder ?? 'Select cities')}
         </Text>
         <Ionicons name="chevron-down" size={16} color={t.sub} />
       </TouchableOpacity>
@@ -132,8 +145,8 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
           <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: bottomInset + 16 }]}>
             <View style={[styles.handle, { backgroundColor: t.border }]} />
             <View style={styles.header}>
-              <Text style={[styles.title, { color: t.text }]}>{tx('discover.cities.title')}</Text>
-              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={tx('discover.cities.closeA11y')}>
+              <Text style={[styles.title, { color: t.text }]}>{tr('discover.cities.title')}</Text>
+              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={tr('discover.cities.closeA11y')}>
                 <Ionicons name="close" size={22} color={t.text} />
               </TouchableOpacity>
             </View>
@@ -143,7 +156,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder={tx('discover.cities.search')}
+                placeholder={tr('discover.area.searchCounty')}
                 placeholderTextColor={t.sub}
                 style={[styles.searchInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -159,7 +172,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               <TextInput
                 value={otherText}
                 onChangeText={setOtherText}
-                placeholder={tx('discover.cities.otherPlaceholder')}
+                placeholder={tr('discover.cities.otherPlaceholder')}
                 placeholderTextColor={t.sub}
                 style={[styles.otherInput, { color: t.text }]}
                 autoCapitalize="words"
@@ -171,7 +184,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                 onPress={addOther}
                 disabled={!otherText.trim()}
                 hitSlop={8}
-                accessibilityLabel={tx('discover.cities.addA11y')}
+                accessibilityLabel={tr('discover.cities.addA11y')}
               >
                 <Ionicons
                   name="add-circle"
@@ -186,6 +199,32 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
               keyExtractor={item => item}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.list}
+              ListHeaderComponent={
+                <>
+                  {placeMatches.map(match => {
+                    const entry = match.kind === 'area' ? `${match.name}, ${match.town}` : match.name;
+                    const isSelected = selected.includes(entry);
+                    return (
+                      <View key={`${match.kind}:${entry}`} style={[styles.row, { borderBottomColor: t.border }]}>
+                        <TouchableOpacity
+                          style={styles.rowMain}
+                          onPress={() => {
+                            if (match.kind === 'county') addCounty(match.name);
+                            else if (isSelected) remove(entry);
+                            else add(entry);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.rowText, { color: t.text }]}>
+                            {match.kind === 'county' ? tr('discover.area.allOf', { place: match.name }) : entry}
+                          </Text>
+                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={t.accent} />}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </>
+              }
               renderItem={({ item }) => {
                 const isSelected = selected.includes(item);
                 const isExpanded = expandedCity === item;
@@ -206,9 +245,9 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                           style={styles.expandBtn}
                           onPress={() => toggleExpand(item)}
                           hitSlop={8}
-                          accessibilityLabel={tx('discover.cities.pickAreaA11y', { city: item })}
+                          accessibilityLabel={tr('discover.area.pickSpecificA11y', { place: item })}
                         >
-                          <Text style={[styles.expandBtnText, { color: t.accent }]}>{tx('discover.cities.area')}</Text>
+                          <Text style={[styles.expandBtnText, { color: t.accent }]}>{tr('discover.cities.area')}</Text>
                           <Ionicons
                             name={isExpanded ? 'chevron-up' : 'chevron-down'}
                             size={14}
@@ -270,7 +309,7 @@ export function CityMultiSelect({ selected, onChange, palette: t, placeholder }:
                 );
               }}
               ListEmptyComponent={
-                <Text style={[styles.empty, { color: t.sub }]}>No cities match "{query}"</Text>
+                <Text style={[styles.empty, { color: t.sub }]}>{tr('discover.area.noCitiesMatch', { query })}</Text>
               }
             />
 
@@ -293,7 +332,7 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
+  sheet: { ...readableSheet, height: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 0.5 },

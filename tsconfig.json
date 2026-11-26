@@ -32,6 +32,7 @@
   },
   "include": [
     "App.tsx",
+    "App.web.tsx",
     "AppWithErrorBoundary.tsx",
     "index.ts",
     "src/**/*.ts",

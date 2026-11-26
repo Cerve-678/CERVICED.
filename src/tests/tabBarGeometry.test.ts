@@ -5,7 +5,10 @@ import {
   tabBarIndicatorFrame,
   TAB_BAR_INDICATOR_INSET,
   ANDROID_MAX_NAV_INSET,
+  TAB_BAR_SIDE_MARGIN,
+  tabBarPillWidth,
 } from '../utils/tabBarGeometry';
+import { READABLE_MAX_WIDTH } from '../constants/readableWidth';
 
 const SCREEN_W = 412; // typical Android phone, dp
 const SCREEN_H = 915;
@@ -57,6 +60,19 @@ describe('tab bar geometry — iOS pill', () => {
 
   it('is unchanged by the safe-area inset — its fixed offset already clears it', () => {
     expect(rectFor(0)).toEqual(rectFor(48));
+  });
+
+  it('on an iPad, is capped and centred, not the display width', () => {
+    for (const ipadWidth of [744, 1032, 1376]) {
+      const rect = tabBarRect(false, ipadWidth, 1032, 20);
+      expect(rect.width).toBe(tabBarPillWidth(ipadWidth));
+      expect(rect.width).toBeLessThanOrEqual(READABLE_MAX_WIDTH);
+      expect(rect.x).toBeCloseTo((ipadWidth - rect.width) / 2);
+    }
+  });
+
+  it('on a phone, still runs the screen width less its side margins', () => {
+    expect(rectFor(34).width).toBe(SCREEN_W - TAB_BAR_SIDE_MARGIN * 2);
   });
 });
 

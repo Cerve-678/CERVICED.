@@ -6,11 +6,12 @@ import {
   FlatList,
   type ListRenderItem,
   TouchableOpacity,
-  StatusBar,
   Platform,
   Animated,
   Easing,
+  useWindowDimensions,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,22 +29,15 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
+import { masonryColumnsForWidth } from '../../components/MasonryGrid';
 import { logger } from '../../utils/logger';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { tr, useTranslation } from '../../i18n';
 
 
 type ServiceType = 'ALL' | 'HAIR' | 'NAILS' | 'MUA' | 'LASHES' | 'AESTHETICS' | 'BROWS';
-const SERVICE_TYPES: readonly ServiceType[] = ['ALL', 'HAIR', 'NAILS', 'MUA', 'LASHES', 'AESTHETICS', 'BROWS'];
-// Tab keys are the stored category values; only the label is translated.
-const CATEGORY_LABEL_KEYS: Record<ServiceType, TranslationKey> = {
-  ALL: 'discover.category.all',
-  HAIR: 'discover.category.hair',
-  NAILS: 'discover.category.nails',
-  MUA: 'discover.category.mua',
-  LASHES: 'discover.category.lashes',
-  AESTHETICS: 'discover.category.aesthetics',
-  BROWS: 'discover.category.brows',
-};
+const SERVICE_TABS: { key: ServiceType; label: string }[] =
+  (['ALL', 'HAIR', 'NAILS', 'MUA', 'LASHES', 'AESTHETICS', 'BROWS'] as ServiceType[])
+    .map(s => ({ key: s, label: s }));
 type BookmarkedProvidersScreenNavigationProp = StackNavigationProp<HomeStackParamList, 'BookmarkedProviders'>;
 
 interface Props {
@@ -105,8 +99,9 @@ const skeletonStyles = StyleSheet.create({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { theme, palette: P } = useTheme();
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
 
@@ -140,11 +135,6 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     return counts;
   }, [bookings]);
 
-  const serviceTabs = useMemo(
-    () => SERVICE_TYPES.map(key => ({ key, label: t(CATEGORY_LABEL_KEYS[key]).toUpperCase() })),
-    [t],
-  );
-
   const filteredProviders = useMemo(
     () => selectedService === 'ALL'
       ? liveProviders
@@ -171,7 +161,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         // screen ended up with a back button that drew fine and did nothing.
         // A title is never interactive, so it should never take touches.
         <View style={styles.headerTitleRow} pointerEvents="none">
-          <Text style={[styles.screenTitle, { color: P.text }]}>{t('discover.saved.title')}</Text>
+          <Text style={[styles.screenTitle, { color: P.text }]}>{tr('discover.saved.title')}</Text>
           {liveProviders.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
               <Text style={[styles.countBadgeText, { color: P.sub }]}>{liveProviders.length}</Text>
@@ -193,7 +183,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       // positioned View over the top of the screen for no reason. Leaving it
       // unset with headerTransparent already gives a transparent bar.
     });
-  }, [navigation, P, liveProviders.length, t]);
+  }, [navigation, P, liveProviders.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -233,6 +223,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     navigation.navigate('ProviderProfile', { providerId: provider.slug });
   }, [navigation]);
 
+  // Two columns on a phone, more as the screen widens (an iPad, or one turned
+  // sideways), so the cards stay card-sized instead of growing to fill two.
+  const { width: windowWidth } = useWindowDimensions();
+  const gridColumns = masonryColumnsForWidth(windowWidth);
+  const gridCardWidth = (windowWidth - GRID_SIDE_PADDING * 2 - GRID_GAP * (gridColumns - 1)) / gridColumns;
+
   const renderProviderCard: ListRenderItem<Provider> = useCallback(({ item, index }) => (
     <BookmarkGridCard
       provider={item}
@@ -242,8 +238,9 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       P={P}
       onPress={handleViewProfile}
       onRemove={handleRemoveBookmark}
+      cardWidth={gridCardWidth}
     />
-  ), [P, appointmentCounts, handleRemoveBookmark, handleViewProfile, providerIdsWithOffers]);
+  ), [P, appointmentCounts, gridCardWidth, handleRemoveBookmark, handleViewProfile, providerIdsWithOffers]);
 
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
@@ -252,12 +249,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           <Icon name="bookmark" size={26} color={P.accentText} />
         </View>
         <Text style={[styles.emptyTitle, { color: P.text }]}>
-          {liveProviders.length === 0 ? t('discover.saved.emptyTitle') : t('discover.saved.emptyCategoryTitle', { category: t(CATEGORY_LABEL_KEYS[selectedService]) })}
+          {liveProviders.length === 0 ? tr('discover.saved.emptyTitle') : tr('discover.saved.emptyFiltered', { service: selectedService })}
         </Text>
         <Text style={[styles.emptySubtitle, { color: P.sub }]}>
           {liveProviders.length === 0
-            ? t('discover.saved.emptySub')
-            : t('discover.saved.emptyCategorySub', { category: t(CATEGORY_LABEL_KEYS[selectedService]) })}
+            ? tr('discover.saved.emptySub')
+            : tr('discover.saved.emptyFilteredSub', { service: selectedService.toLowerCase() })}
         </Text>
         {liveProviders.length === 0 ? (
           <TouchableOpacity
@@ -265,17 +262,17 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
           >
-            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>{t('discover.saved.explore')}</Text>
+            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>{tr('discover.saved.explore')}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
     </View>
-  ), [P, liveProviders.length, navigation, selectedService, t]);
+  ), [P, liveProviders.length, navigation, selectedService]);
 
   if (loading) {
     return (
       <ThemedBackground>
-        <StatusBar barStyle={theme.statusBar} />
+        <FocusAwareStatusBar barStyle={theme.statusBar} />
         <SafeAreaView style={styles.container}>
           <View style={[styles.gridRow, { paddingTop: insets.top + 48, paddingHorizontal: 16 }]}>
             {[1, 2, 3, 4, 5, 6].map(k => (
@@ -289,7 +286,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <SafeAreaView style={styles.container} edges={['bottom']}>
 
         {/* ── Header (tabs only — title now lives in the nav bar) ── */}
@@ -302,7 +299,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         >
           {liveProviders.length > 0 && (
             <SlidingTabs
-              tabs={serviceTabs}
+              tabs={SERVICE_TABS}
               activeKey={selectedService}
               onPress={handleServicePress}
               accentColor={P.accent}
@@ -319,7 +316,10 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           data={filteredProviders}
           renderItem={renderProviderCard}
           keyExtractor={provider => provider.id}
-          numColumns={2}
+          // FlatList can't change numColumns while mounted, so a new count
+          // (rotating an iPad) remounts it under a new key.
+          key={`grid-${gridColumns}`}
+          numColumns={gridColumns}
           columnWrapperStyle={styles.gridColumnWrapper}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -344,10 +344,13 @@ interface BookmarkGridCardProps {
   P: AppTheme;
   onPress: (provider: Provider) => void;
   onRemove: (provider: Provider) => void;
+  /** Sized by the screen from its column count, so cards fill the row evenly. */
+  cardWidth: number;
 }
 
-const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
-  const { t, tp } = useTranslation();
+const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove, cardWidth }: BookmarkGridCardProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -360,7 +363,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
   }, [fadeAnim, index, slideAnim]);
 
   return (
-    <Animated.View style={[styles.gridCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View style={[styles.gridCard, { width: cardWidth, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       <TouchableOpacity
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -394,7 +397,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
               </View>
               {hasOffer && (
                 <View style={[styles.offerChip, { backgroundColor: P.accent }]}>
-                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>{t('discover.offers.offerBadge')}</Text>
+                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>{tr('discover.offers.offerBadge')}</Text>
                 </View>
               )}
             </View>
@@ -433,7 +436,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
             {appointmentCount > 0 && (
               <View style={[styles.visitsChip, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                 <Text style={[styles.visitsChipText, { color: P.text }]}>
-                  {tp('discover.saved.appointments', appointmentCount)}
+                  {appointmentCount} {appointmentCount === 1 ? 'appointment' : 'appointments'}
                 </Text>
               </View>
             )}
@@ -443,6 +446,10 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
     </Animated.View>
   );
 });
+
+/** Space between grid cards, and either side of the grid. */
+const GRID_GAP = 12;
+const GRID_SIDE_PADDING = 16;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -482,7 +489,7 @@ const styles = StyleSheet.create({
   scrollContainer: { flex: 1 },
   scrollContent: {
     paddingTop: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: GRID_SIDE_PADDING,
     paddingBottom: Platform.OS === 'android' ? 120 : 140,
   },
 
@@ -493,10 +500,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   gridColumnWrapper: {
-    justifyContent: 'space-between',
+    columnGap: GRID_GAP,
   },
   gridCard: {
-    width: '48%',
     marginBottom: 20,
   },
   imageWrap: {

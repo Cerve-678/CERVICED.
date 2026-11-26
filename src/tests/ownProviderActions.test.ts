@@ -1,6 +1,7 @@
 const mockWrite = jest.fn();
 const mockOwnership = jest.fn();
 const mockEq = jest.fn();
+const mockDeleteEq = jest.fn();
 
 jest.mock('../lib/supabase', () => ({
   supabase: {
@@ -14,7 +15,21 @@ jest.mock('../lib/supabase', () => ({
         };
         return chain;
       }
-      return { insert: mockWrite, upsert: mockWrite };
+      return {
+        insert: mockWrite,
+        upsert: mockWrite,
+        // delete().eq().eq() — resolves after the second filter.
+        delete: () => {
+          mockWrite();
+          const filter = {
+            eq: (...args: unknown[]) => {
+              mockDeleteEq(...args);
+              return mockDeleteEq.mock.calls.length >= 2 ? Promise.resolve({ error: null }) : filter;
+            },
+          };
+          return filter;
+        },
+      };
     },
   },
 }));
@@ -50,4 +65,14 @@ it.each(actions)('allows %s for another provider', async (_, action) => {
   mockOwnership.mockResolvedValue({ data: null, error: null });
   await action();
   expect(mockWrite).toHaveBeenCalledTimes(1);
+});
+
+// The bell is the follow. Turning it off must remove the row, not clear a
+// flag: promotion/announcement audiences and follower counts read every row.
+it('deletes the follow when the bell is turned off', async () => {
+  mockOwnership.mockResolvedValue({ data: null, error: null });
+  await setProviderFollowNotify(providerId, false);
+  expect(mockWrite).toHaveBeenCalledTimes(1);
+  expect(mockDeleteEq).toHaveBeenCalledWith('user_id', 'viewer');
+  expect(mockDeleteEq).toHaveBeenCalledWith('provider_id', providerId);
 });

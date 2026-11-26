@@ -5,20 +5,28 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  StatusBar,
   Animated,
   Easing,
   useWindowDimensions,
+  ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import type { ViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
 import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
-import { exploreScrollHandler, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
+import { exploreScrollHandler, exploreScrollY, explorePillVisible, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
-import { shuffle } from '../../utils/shuffle';
+import { roundRobinMix } from '../../utils/roundRobinMix';
+import { exploreSeenNow, loadExploreSeen, recordExploreSeen } from '../../utils/exploreSeen';
+import { spreadApart, type SpreadRule } from '../../utils/spreadApart';
 import { pickTourCardId } from '../../utils/coachMarkTargets';
 import { mergeSavedExploreCards } from '../../utils/mergeSavedExploreCards';
 import { ExploreStackParamList } from '../../navigation/types';
@@ -50,10 +58,23 @@ import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
+import { useCollectionsStore } from '../../stores/useCollectionsStore';
+import type { ExploreCollection } from '../../types/collections';
+import { CollectionsRow } from '../../components/collections/CollectionsRow';
+import { OpenCollectionHeader } from '../../components/collections/OpenCollectionHeader';
+import { CollectionOfferBar } from '../../components/collections/CollectionOfferBar';
+import { AddToCollectionSheet } from '../../components/collections/AddToCollectionSheet';
+import { CollectionEditorSheet } from '../../components/collections/CollectionEditorSheet';
+import type { FolderPaperRect } from '../../components/collections/CollectionFolder';
+import {
+  CollectionFlight,
+  CollectionFlightTarget,
+  CollectionOpenFlight,
+} from '../../components/collections/CollectionOpenFlight';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { tr, useTranslation, trp } from '../../i18n';
 
 
 // Mixes portfolio photos with service ("bookable") cards for a
@@ -90,10 +111,19 @@ const INITIAL_EXPLORE_ITEMS = 20;
 const EXPLORE_BATCH_SIZE = 18;
 const LOAD_MORE_THRESHOLD = 900;
 const LOAD_MORE_COOLDOWN_MS = 300;
-// Only the first viewport belongs on the critical path. Further source pages
-// are fetched as the client reaches the end of this initial window.
-const DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20;
-const DISCOVER_INITIAL_SERVICE_LIMIT = 10;
+// The first load fetches a wide pool and mixes all of it. Rows come back
+// newest first, and providers upload in batches, so a first page of only the
+// 20 newest photos was routinely two or three providers' latest uploads —
+// the same handful of pictures at the top of Explore every time. The pool is
+// the lean card projection, and only the rendered window's images download.
+// Pages fetched on scroll after the pool stay small.
+const DISCOVER_FIRST_PORTFOLIO_POOL = 200;
+const DISCOVER_FIRST_SERVICE_POOL = 40;
+const DISCOVER_PAGE_PORTFOLIO_LIMIT = 20;
+const DISCOVER_PAGE_SERVICE_LIMIT = 10;
+// The back-to-top arrow appears once the grid is scrolled this many screen
+// heights down, fading in over the next fifth of a screen.
+const BACK_TO_TOP_AFTER_SCREENS = 1;
 
 type DiscoverPageCursor = {
   portfolioOffset: number;
@@ -119,11 +149,42 @@ function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
   });
 }
 
+// The DB hands rows back in upload order, so a provider who posts ten photos at
+// once, or one service's whole carousel, arrives as a block, and a shuffle
+// inside one page can't scatter a block that big. After mixing, nothing from
+// the same provider sits within six cards of itself, and the same category
+// isn't shown three in a row where something else is available.
+const EXPLORE_SPREAD: SpreadRule<PortfolioItem>[] = [
+  { keyOf: card => card.providerSlug ?? card.providerId, gap: 6 },
+  { keyOf: card => card.category, gap: 2 },
+];
+// How much of the feed already on screen a new page is spread against.
+const EXPLORE_SPREAD_LOOKBACK = 8;
+
+// What a card is "seen" by: the photo itself, so the same upload reached as a
+// portfolio card and as a service card counts once.
+function exploreSeenKey(card: PortfolioItem): string {
+  return (card.image as { uri?: string } | undefined)?.uri ?? card.id;
+}
+
+// One card per provider per round, neighbouring providers in different
+// categories, and each provider leading with a photo this phone hasn't shown
+// yet. See roundRobinMix and utils/exploreSeen.
+function mixExploreCards(cards: PortfolioItem[]): PortfolioItem[] {
+  const seen = exploreSeenNow();
+  return roundRobinMix(
+    cards,
+    card => card.providerSlug ?? card.providerId,
+    card => card.category,
+    seen.size > 0 ? card => seen.get(exploreSeenKey(card)) : undefined,
+  );
+}
+
 function interleaveDiscoverFeed(
   portfolioCards: PortfolioItem[],
   serviceCards: PortfolioItem[],
 ): PortfolioItem[] {
-  const bookable = shuffle(serviceCards);
+  const bookable = serviceCards;
   const total = portfolioCards.length + bookable.length;
   if (total === 0) return [];
 
@@ -205,32 +266,19 @@ interface SubTabProps {
   activeTab: 'discover' | 'favourites';
   onTabChange: (tab: 'discover' | 'favourites') => void;
   // Coach-mark target for the first-visit tour's "where your saves land" step.
-  favouritesRef?: React.RefObject<View | null>;
+  favouritesRef?: React.RefObject<ViewInstance | null>;
 }
 
-const SUB_TABS: readonly { key: 'discover' | 'favourites'; labelKey: TranslationKey }[] = [
-  { key: 'discover',   labelKey: 'discover.explore.tab.discover' },
-  { key: 'favourites', labelKey: 'discover.explore.tab.favourites' },
+const SUB_TABS = [
+  { key: 'discover' as const,   get label() { return tr('discover.explore.tab.discover'); } },
+  { key: 'favourites' as const, get label() { return tr('discover.explore.tab.favourites'); } },
 ];
-
-// Filter keys are fixed English ids (filterMap / discoverTotals key off them);
-// only the chip label is translated.
-const FILTER_LABEL_KEYS: Record<string, TranslationKey> = {
-  All: 'discover.category.all',
-  Hair: 'discover.category.hair',
-  Nails: 'discover.category.nails',
-  Makeup: 'discover.category.makeup',
-  Aesthetics: 'discover.category.aesthetics',
-  Brows: 'discover.category.brows',
-  Lashes: 'discover.category.lashes',
-};
 
 // Both tabs match — same heavier BakbakOne treatment, sitting side by side
 // on the left. Underline-when-active, no shared SlidingTabs pill (that
 // treatment is used elsewhere — Bookings, the filter chips below).
 const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange, favouritesRef }) => {
   const { palette: P } = useTheme();
-  const { t } = useTranslation();
   return (
     <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
       {SUB_TABS.map(tab => {
@@ -247,7 +295,7 @@ const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange, favouritesRef }) 
             style={styles.subTab}
           >
             <Text style={[styles.discoverLabel, { color: active ? P.text : P.sub }]}>
-              {t(tab.labelKey)}
+              {tab.label}
             </Text>
             <View style={[styles.subTabUnderline, { backgroundColor: active ? P.accent : 'transparent' }]} />
           </TouchableOpacity>
@@ -262,12 +310,14 @@ SubTabBar.displayName = 'SubTabBar';
 // MAIN EXPLORE SCREEN
 // ============================================================================
 const ExploreScreen = memo(() => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const { isDarkMode, palette: P } = useTheme();
-  const { t, tp } = useTranslation();
   // Measured per render, not captured at module load: the masonry column
   // width is half the screen, so a stale width mis-sizes every card.
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const setExploreFocused = useExploreFocusStore(s => s.setExploreFocused);
 
   // Tell the floating tab bar it should apply its scroll-hide/opacity
@@ -278,7 +328,11 @@ const ExploreScreen = memo(() => {
     useCallback(() => {
       resetExplorePillTracking();
       setExploreFocused(true);
-      return () => setExploreFocused(false);
+      return () => {
+        setExploreFocused(false);
+        // Don't leave the "Add to a collection" bar waiting for when you come back.
+        useCollectionsStore.getState().dismissHost('explore');
+      };
     }, [setExploreFocused])
   );
 
@@ -301,9 +355,43 @@ const ExploreScreen = memo(() => {
   // leaves the grid wherever the previous filter happened to be scrolled to
   // instead of jumping back to the top.
   const discoverGridRef = useRef<MasonryGridHandle>(null);
+  const favouritesGridRef = useRef<MasonryGridHandle>(null);
   useEffect(() => {
     discoverGridRef.current?.scrollToTop();
   }, [selectedFilter]);
+
+  // Back-to-top arrow. Its fade runs on the native thread off the same
+  // scroll value the tab bar uses, so it costs no JS per frame; whether it
+  // takes taps is decided when a scroll settles, which is JS anyway.
+  const [backToTopActive, setBackToTopActive] = useState(false);
+  const backToTopFrom = screenHeight * BACK_TO_TOP_AFTER_SCREENS;
+  const backToTopOpacity = useMemo(
+    () => exploreScrollY.interpolate({
+      inputRange: [backToTopFrom, backToTopFrom + screenHeight * 0.2],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    }),
+    [backToTopFrom, screenHeight],
+  );
+  // Sits just above the tab bar, and drops to the bottom of the screen when
+  // the bar hides on a downward scroll so it doesn't float in empty space.
+  const backToTopDrop = Math.max(0, FLOATING_TAB_BAR_CLEARANCE - (insets.bottom + 24));
+  const backToTopTranslateY = useMemo(
+    () => explorePillVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: [backToTopDrop, 0],
+    }),
+    [backToTopDrop],
+  );
+  const updateBackToTop = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      setBackToTopActive(event.nativeEvent.contentOffset.y > backToTopFrom);
+    },
+    [backToTopFrom],
+  );
+  useEffect(() => {
+    setBackToTopActive(false);
+  }, [activeTab, selectedFilter]);
 
   // Stores
   const { loadSavedPortfolio, savedPortfolioIds } = useBookmarkStore();
@@ -318,6 +406,78 @@ const ExploreScreen = memo(() => {
   // on the first visit to Explore instead of piggy-backing on the other.
   // ---------------------------------------------------------------------
   const { user } = useAuth();
+
+  // Collections: folders of hearted looks at the top of Favourites.
+  const collections = useCollectionsStore(s => s.collections);
+  const loadCollections = useCollectionsStore(s => s.load);
+  const rememberPhotos = useCollectionsStore(s => s.rememberPhotos);
+  const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
+  const [collectionEditor, setCollectionEditor] = useState<{ collection?: ExploreCollection } | null>(null);
+  useEffect(() => {
+    void loadCollections(user?.id ?? null);
+  }, [loadCollections, user?.id]);
+  useEffect(() => {
+    if (activeTab !== 'favourites') {
+      setOpenCollectionId(null);
+      flownCountRef.current = 0;
+      setFlight(null);
+    }
+  }, [activeTab]);
+  const openCollection = useMemo(
+    () => collections.find(c => c.id === openCollectionId) ?? null,
+    [collections, openCollectionId],
+  );
+  // The editor reads the live collection, so a rename shows straight away.
+  const editingCollection = useMemo(
+    // Falls back to the snapshot so a just-deleted folder doesn't flip the
+    // sheet to "New collection" while it closes.
+    () => (collectionEditor?.collection
+      ? collections.find(c => c.id === collectionEditor.collection?.id) ?? collectionEditor.collection
+      : undefined),
+    [collectionEditor, collections],
+  );
+  // Opening a folder flies its looks into the grid (CollectionOpenFlight).
+  // Skipped when the phone asks for less motion.
+  const reduceMotionRef = useRef(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(enabled => { reduceMotionRef.current = enabled; })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', enabled => {
+      reduceMotionRef.current = enabled;
+    });
+    return () => sub.remove();
+  }, []);
+  // Cards report where they are to the flight object itself, not to this
+  // screen's state, so measuring doesn't re-render Explore mid-flight.
+  const [flight, setFlight] = useState<CollectionFlight | null>(null);
+  // How many looks flew in when the open collection opened. The rest of its
+  // cards wait for them to land, then follow straight on.
+  const flownCountRef = useRef(0);
+  const handleOpenCollection = useCallback((collection: ExploreCollection, papers: FolderPaperRect[]) => {
+    const flying = papers.filter(p => p.uri);
+    const next = !reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null;
+    flownCountRef.current = next?.count ?? 0;
+    setFlight(next);
+    setOpenCollectionId(collection.id);
+    favouritesGridRef.current?.scrollToTop();
+  }, []);
+  const handleFlightDone = useCallback(() => setFlight(null), []);
+  const handleCloseCollection = useCallback(() => {
+    flownCountRef.current = 0;
+    setFlight(null);
+    setOpenCollectionId(null);
+  }, []);
+  const handleEditCollection = useCallback(
+    (collection: ExploreCollection) => setCollectionEditor({ collection }),
+    [],
+  );
+  const handleNewCollection = useCallback(() => setCollectionEditor({}), []);
+  const handleCloseEditor = useCallback(() => setCollectionEditor(null), []);
+  const handleCollectionDeleted = useCallback((collectionId: string) => {
+    setOpenCollectionId(current => (current === collectionId ? null : current));
+  }, []);
+
   const [showTour, setShowTour] = useState(false);
   // Explore is a tab screen — it stays mounted after you tap a card through to
   // a provider profile, and CoachMarkTour is a full-screen Modal. Without this
@@ -327,10 +487,10 @@ const ExploreScreen = memo(() => {
   // come back.
   const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
-  const tourHeartRef = useRef<View>(null);
-  const tourPriceRef = useRef<View>(null);
-  const tourFavouritesRef = useRef<View>(null);
-  const tourSavedRef = useRef<View>(null);
+  const tourHeartRef = useRef<ViewInstance>(null);
+  const tourPriceRef = useRef<ViewInstance>(null);
+  const tourFavouritesRef = useRef<ViewInstance>(null);
+  const tourSavedRef = useRef<ViewInstance>(null);
 
   // Category-pill (filter chips) entrance — matches the fade+slide-up every
   // other card/pill row in the app already does on mount.
@@ -348,11 +508,22 @@ const ExploreScreen = memo(() => {
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  // True while saved looks are being fetched, even when some already show.
+  // An open collection waits on this before saying it's empty.
+  const [favouritesHydrating, setFavouritesHydrating] = useState(false);
+  // Read by the fetch below so a re-run keeps what's already loaded.
+  const favouriteItemsRef = useRef<PortfolioItem[]>([]);
+  favouriteItemsRef.current = favouriteItems;
   const [favouritesVisibleCount, setFavouritesVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
 
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  // The feed failed to load (usually the 8s timeout while the server is
+  // stalled). Kept apart from "loaded and empty" so the grid can say it
+  // couldn't load rather than claiming the category has no looks.
+  const [discoverFailed, setDiscoverFailed] = useState(false);
+  const [discoverRetryKey, setDiscoverRetryKey] = useState(0);
   const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
   // The header count per filter: the whole feed's size, not how many pages
   // have loaded so far (portfolioItems grows as the client scrolls).
@@ -360,10 +531,14 @@ const ExploreScreen = memo(() => {
   const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
   const discoverLoadMoreAtRef = useRef(0);
   const discoverPageLoadingRef = useRef(false);
+  // A next-page fetch failed. Hides the bottom spinner so it doesn't spin
+  // forever offline; the next scroll to the end tries again.
+  const [discoverMoreFailed, setDiscoverMoreFailed] = useState(false);
   const favouritesLoadMoreAtRef = useRef(0);
 
   useEffect(() => {
     setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
+    setDiscoverMoreFailed(false);
     discoverLoadMoreAtRef.current = 0;
   }, [selectedFilter]);
 
@@ -410,7 +585,7 @@ const ExploreScreen = memo(() => {
       providerReviewCount: p.review_count,
       kind: 'portfolio',
       ...(item.price != null ? { price: `£${item.price}` } : {}),
-      ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+      ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
     };
   }, []);
 
@@ -459,7 +634,7 @@ const ExploreScreen = memo(() => {
       providerReviewCount: p.review_count,
       kind: 'service' as const,
       serviceId: s.id,
-      ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+      ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
     }));
   }, []);
 
@@ -470,7 +645,7 @@ const ExploreScreen = memo(() => {
 
   // Filters
   const filters = useMemo(() => ['All', 'Hair', 'Nails', 'Makeup', 'Aesthetics', 'Brows', 'Lashes'], []);
-  const filterTabs = useMemo(() => filters.map(f => ({ key: f, label: FILTER_LABEL_KEYS[f] ? t(FILTER_LABEL_KEYS[f]!) : f })), [filters, t]);
+  const filterTabs = useMemo(() => filters.map(f => ({ key: f, label: f })), [filters]);
 
   const filterMap: Record<string, ServiceCategory> = useMemo(() => ({
     Hair: 'HAIR',
@@ -491,8 +666,11 @@ const ExploreScreen = memo(() => {
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT),
-        getDiscoverServices(category, DISCOVER_INITIAL_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
+        getExplorePortfolioItems(category, DISCOVER_FIRST_PORTFOLIO_POOL),
+        getDiscoverServices(category, DISCOVER_FIRST_SERVICE_POOL, undefined, { excludeOwnProvider: false }),
+        // Read alongside the fetch, never after it: what this phone has
+        // already shown, which mixExploreCards reads.
+        loadExploreSeen(),
       ]),
       8_000,
       'Explore feed',
@@ -500,33 +678,36 @@ const ExploreScreen = memo(() => {
 
     // Every getDiscover*/getPortfolioItems query is deterministically
     // ordered (created_at, rating, scraped_at — see databaseService.ts) so
-    // the DB always returns rows in the same order. Shuffling each source's
-    // own rows here, before interleaveDiscoverFeed mixes the two types
-    // together, is what actually randomizes the feed — without it the same
-    // provider's photos (or the same top-rated providers) reliably cluster/
-    // repeat in the same run every load. Shuffled at the row level (before
-    // serviceData's flatMap), not after, so a single service's own carousel
-    // photos stay adjacent to each other instead of scattering across the
-    // feed.
+    // the DB always returns rows in the same order. Each source is mixed
+    // here (mixExploreCards) before interleaveDiscoverFeed puts the two types
+    // together: one photo per provider per round, in a random provider order
+    // each load, so every provider is on the first screen before anyone
+    // repeats. A plain shuffle gave a provider with 33 photos about a fifth
+    // of the top of the feed and one with two photos almost none of it.
+    // spreadApart then breaks up anything the interleave clumps (see
+    // EXPLORE_SPREAD).
     // Deduped across both sources before interleaving — the same photo
     // file can arrive from both (see dedupeByImageUri). Order matters:
     // portfolio cards are passed first so they win over a service photo
     // pointing at the same upload.
-    const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
-    const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
+    const portfolioCards = mixExploreCards(portfolioData.map(mapDbPortfolioItem));
+    const serviceCards = mixExploreCards(serviceData.flatMap(mapDbServiceToCards));
     const deduped = dedupeByImageUri([...portfolioCards, ...serviceCards]);
     const keep = new Set(deduped.map(c => c.id));
-    const feed = interleaveDiscoverFeed(
-      portfolioCards.filter(c => keep.has(c.id)),
-      serviceCards.filter(c => keep.has(c.id)),
+    const feed = spreadApart(
+      interleaveDiscoverFeed(
+        portfolioCards.filter(c => keep.has(c.id)),
+        serviceCards.filter(c => keep.has(c.id)),
+      ),
+      EXPLORE_SPREAD,
     );
     discoverFeedCache.current.set(filter, feed);
     discoverPageCursors.current.set(filter, {
       portfolioOffset: portfolioData.length,
       serviceOffset: serviceData.length,
       hasMore:
-        portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
-        serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+        portfolioData.length === DISCOVER_FIRST_PORTFOLIO_POOL ||
+        serviceData.length === DISCOVER_FIRST_SERVICE_POOL,
     });
     return feed;
   }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
@@ -537,17 +718,18 @@ const ExploreScreen = memo(() => {
 
     const category = filter !== 'All' ? filterMap[filter] : undefined;
     discoverPageLoadingRef.current = true;
+    setDiscoverMoreFailed(false);
     try {
       const [portfolioData, serviceData] = await withTimeout(
         Promise.all([
           getExplorePortfolioItems(
             category,
-            DISCOVER_INITIAL_PORTFOLIO_LIMIT,
+            DISCOVER_PAGE_PORTFOLIO_LIMIT,
             cursor.portfolioOffset,
           ),
           getDiscoverServices(
             category,
-            DISCOVER_INITIAL_SERVICE_LIMIT,
+            DISCOVER_PAGE_SERVICE_LIMIT,
             undefined,
             { excludeOwnProvider: false },
             cursor.serviceOffset,
@@ -561,8 +743,8 @@ const ExploreScreen = memo(() => {
         portfolioOffset: cursor.portfolioOffset + portfolioData.length,
         serviceOffset: cursor.serviceOffset + serviceData.length,
         hasMore:
-          portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
-          serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+          portfolioData.length === DISCOVER_PAGE_PORTFOLIO_LIMIT ||
+          serviceData.length === DISCOVER_PAGE_SERVICE_LIMIT,
       });
 
       setPortfolioItems(existing => {
@@ -571,15 +753,21 @@ const ExploreScreen = memo(() => {
             .map(card => (card.image as { uri?: string } | undefined)?.uri)
             .filter((uri): uri is string => Boolean(uri)),
         );
-        const portfolioCards = portfolioData.map(mapDbPortfolioItem);
-        const serviceCards = serviceData.flatMap(mapDbServiceToCards);
-        const nextCards = interleaveDiscoverFeed(portfolioCards, serviceCards)
-          .filter(card => {
-            const uri = (card.image as { uri?: string } | undefined)?.uri;
-            if (!uri || knownUris.has(uri)) return false;
-            knownUris.add(uri);
-            return true;
-          });
+        // Shuffled and spread like the first page, and against the end of
+        // what's already showing so the join doesn't clump either.
+        const portfolioCards = mixExploreCards(portfolioData.map(mapDbPortfolioItem));
+        const serviceCards = mixExploreCards(serviceData.flatMap(mapDbServiceToCards));
+        const nextCards = spreadApart(
+          interleaveDiscoverFeed(portfolioCards, serviceCards)
+            .filter(card => {
+              const uri = (card.image as { uri?: string } | undefined)?.uri;
+              if (!uri || knownUris.has(uri)) return false;
+              knownUris.add(uri);
+              return true;
+            }),
+          EXPLORE_SPREAD,
+          existing.slice(-EXPLORE_SPREAD_LOOKBACK),
+        );
         const updated = [...existing, ...nextCards];
         discoverFeedCache.current.set(filter, updated);
         return updated;
@@ -590,6 +778,7 @@ const ExploreScreen = memo(() => {
       setDiscoverVisibleCount(current => current + EXPLORE_BATCH_SIZE);
     } catch (error) {
       logger.warn('Failed to load more Explore results:', error);
+      setDiscoverMoreFailed(true);
     } finally {
       discoverPageLoadingRef.current = false;
     }
@@ -607,25 +796,36 @@ const ExploreScreen = memo(() => {
     const cached = discoverFeedCache.current.get(selectedFilter);
     if (cached) {
       setPortfolioItems(cached);
+      // Switching here mid-way through another filter's fetch cancels that
+      // fetch, which skips its finally — so the skeleton is cleared here or
+      // it would stay up over this filter's already-loaded feed.
+      setPortfolioLoading(false);
+      setDiscoverFailed(false);
       return;
     }
 
     let cancelled = false;
     setPortfolioLoading(true);
+    setDiscoverFailed(false);
 
     loadDiscoverFeed(selectedFilter)
       .then(feed => {
         if (!cancelled) setPortfolioItems(feed);
       })
-      .catch(() => {
-        if (!cancelled) setPortfolioItems([]);
+      .catch(error => {
+        logger.warn('Failed to load Explore feed:', error);
+        if (cancelled) return;
+        setPortfolioItems([]);
+        setDiscoverFailed(true);
       })
       .finally(() => {
         if (!cancelled) setPortfolioLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [selectedFilter, loadDiscoverFeed]);
+    // discoverRetryKey re-runs this for the "Try again" button; a failed
+    // load is never cached, so the retry fetches afresh.
+  }, [selectedFilter, loadDiscoverFeed, discoverRetryKey]);
 
   const loadDiscoverTotal = useCallback((filter: string) => {
     const category = filter !== 'All' ? filterMap[filter] : undefined;
@@ -658,8 +858,15 @@ const ExploreScreen = memo(() => {
     setPortfolioRefreshing(true);
     loadDiscoverTotal(selectedFilter);
     loadDiscoverFeed(selectedFilter)
-      .then(feed => setPortfolioItems(feed))
-      .catch(() => setPortfolioItems([]))
+      .then(feed => {
+        setPortfolioItems(feed);
+        setDiscoverFailed(false);
+      })
+      .catch(error => {
+        logger.warn('Failed to refresh Explore feed:', error);
+        setPortfolioItems([]);
+        setDiscoverFailed(true);
+      })
       .finally(() => setPortfolioRefreshing(false));
   }, [selectedFilter, loadDiscoverFeed, loadDiscoverTotal]);
 
@@ -669,6 +876,7 @@ const ExploreScreen = memo(() => {
     if (activeTab !== 'favourites') return;
     if (savedPortfolioIds.length === 0) {
       setFavouriteItems([]);
+      setFavouritesHydrating(false);
       return;
     }
 
@@ -678,8 +886,14 @@ const ExploreScreen = memo(() => {
     );
     // A card just hearted in Discover is already complete and visible. Put it
     // in Favourites now; the database fetch fills in older saves afterwards.
-    setFavouriteItems(localSavedCards);
-    setFavouritesLoading(localSavedCards.length === 0);
+    // Saves already loaded stay too. This runs again every time the tab opens
+    // and whenever the Discover feed changes, and dropping back to only the
+    // looks that happen to be in Discover made an open collection briefly
+    // claim it was empty.
+    const keptCards = mergeSavedExploreCards(savedPortfolioIds, localSavedCards, favouriteItemsRef.current);
+    setFavouriteItems(keptCards);
+    setFavouritesLoading(keptCards.length === 0);
+    setFavouritesHydrating(true);
 
     const load = async () => {
       try {
@@ -702,9 +916,12 @@ const ExploreScreen = memo(() => {
       } catch {
         // Retain current-session saves when the background hydration fails.
         // An empty state would falsely imply that a heart did not work.
-        if (!cancelled) setFavouriteItems(localSavedCards);
+        if (!cancelled) setFavouriteItems(keptCards);
       } finally {
-        if (!cancelled) setFavouritesLoading(false);
+        if (!cancelled) {
+          setFavouritesLoading(false);
+          setFavouritesHydrating(false);
+        }
       }
     };
     load();
@@ -723,10 +940,47 @@ const ExploreScreen = memo(() => {
     () => portfolioItems.slice(0, discoverVisibleCount),
     [portfolioItems, discoverVisibleCount],
   );
+  // Remember what's been put on screen, so the next load or refresh leads
+  // with photos this phone hasn't shown yet.
+  useEffect(() => {
+    if (portfolioLoading || visiblePortfolioItems.length === 0) return;
+    recordExploreSeen(visiblePortfolioItems.map(exploreSeenKey));
+  }, [visiblePortfolioItems, portfolioLoading]);
+  // More looks exist below the last card: either already fetched and not yet
+  // mounted, or another page on the server. Read off the cursor ref, which is
+  // always written just before the setPortfolioItems that re-renders here.
+  const discoverHasMore =
+    discoverVisibleCount < portfolioItems.length ||
+    (discoverPageCursors.current.get(selectedFilter)?.hasMore ?? false);
+  // An open collection narrows Favourites to its looks, newest added first.
+  const shownFavouriteItems = useMemo(() => {
+    if (!openCollection) return favouriteItems;
+    const byId = new Map(favouriteItems.map(card => [card.id, card]));
+    return [...openCollection.itemIds]
+      .reverse()
+      .map(id => byId.get(id))
+      .filter((card): card is PortfolioItem => card !== undefined);
+  }, [favouriteItems, openCollection]);
+  // While a collection's looks fly in, only the cards they land on are built.
+  // Building the whole window at once (photos, gradients, fade-ins) in the
+  // same frames made the flight stutter in a folder with lots of looks. The
+  // masonry packs in order, so those first cards don't move when the rest
+  // arrive.
+  const favouritesWindow = flight ? Math.min(flight.count, favouritesVisibleCount) : favouritesVisibleCount;
   const visibleFavouriteItems = useMemo(
-    () => favouriteItems.slice(0, favouritesVisibleCount),
-    [favouriteItems, favouritesVisibleCount],
+    () => shownFavouriteItems.slice(0, favouritesWindow),
+    [shownFavouriteItems, favouritesWindow],
   );
+  // Folders draw the saved photos themselves, so hand the store every photo
+  // this screen has resolved.
+  useEffect(() => {
+    rememberPhotos(
+      [...favouriteItems, ...portfolioItems].map(card => ({
+        id: card.id,
+        uri: (card.image as { uri?: string } | undefined)?.uri,
+      })),
+    );
+  }, [favouriteItems, portfolioItems, rememberPhotos]);
 
   // Only measure visible cards whose ratio is a fallback. Upload-time ratios
   // are already trustworthy, and probing every offscreen URL on mount was
@@ -804,6 +1058,7 @@ const ExploreScreen = memo(() => {
   const handleDiscoverScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
+      updateBackToTop(event);
       if (!isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - discoverLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
@@ -816,22 +1071,30 @@ const ExploreScreen = memo(() => {
         Math.min(portfolioItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [discoverVisibleCount, portfolioItems.length, loadNextDiscoverPage, selectedFilter],
+    [discoverVisibleCount, portfolioItems.length, loadNextDiscoverPage, selectedFilter, updateBackToTop],
   );
 
   const handleFavouritesScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
-      if (favouritesVisibleCount >= favouriteItems.length || !isNearGridEnd(event)) return;
+      updateBackToTop(event);
+      if (favouritesVisibleCount >= shownFavouriteItems.length || !isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - favouritesLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
       favouritesLoadMoreAtRef.current = now;
       setFavouritesVisibleCount(current =>
-        Math.min(favouriteItems.length, current + EXPLORE_BATCH_SIZE),
+        Math.min(shownFavouriteItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [favouriteItems.length, favouritesVisibleCount],
+    [shownFavouriteItems.length, favouritesVisibleCount, updateBackToTop],
   );
+
+  const handleBackToTop = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const grid = activeTab === 'discover' ? discoverGridRef : favouritesGridRef;
+    grid.current?.scrollToTop(true);
+    setBackToTopActive(false);
+  }, [activeTab]);
 
   const handleViewProfile = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
@@ -879,37 +1142,37 @@ const ExploreScreen = memo(() => {
   const tourSteps = useMemo<CoachMarkStep[]>(() => [
     {
       key: 'heart',
-      title: t('discover.explore.tour.heartTitle'),
-      body: t('discover.explore.tour.heartBody'),
+      title: tr('discover.explore.tour.heartTitle'),
+      body: tr('discover.explore.tour.heartBody'),
       target: { ref: tourHeartRef },
       radius: 15,
       icon: 'heart',
     },
     {
       key: 'price',
-      title: t('discover.explore.tour.priceTitle'),
-      body: t('discover.explore.tour.priceBody'),
+      title: tr('discover.explore.tour.priceTitle'),
+      body: tr('discover.explore.tour.priceBody'),
       target: { ref: tourPriceRef },
       radius: 10,
       icon: 'pricetag',
     },
     {
       key: 'favourites',
-      title: t('discover.explore.tour.favouritesTitle'),
-      body: t('discover.explore.tour.favouritesBody'),
+      title: tr('discover.explore.tour.favouritesTitle'),
+      body: tr('discover.explore.tour.favouritesBody'),
       target: { ref: tourFavouritesRef },
       radius: 10,
       icon: 'sparkles',
     },
     {
       key: 'saved',
-      title: t('discover.explore.tour.savedTitle'),
-      body: t('discover.explore.tour.savedBody'),
+      title: tr('discover.explore.tour.savedTitle'),
+      body: tr('discover.explore.tour.savedBody'),
       target: { ref: tourSavedRef },
       radius: 18,
       icon: 'bookmark',
     },
-  ], [t]);
+  ], []);
 
   // Which step keys this account still has coming; null until resolved.
   const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
@@ -943,25 +1206,43 @@ const ExploreScreen = memo(() => {
   // packer's reserved slot and the card's rendered box must be the exact
   // same number (see masonryHeight.ts), and only this screen holds the
   // measured-ratio cache both sides need to agree on.
+  // While a folder's looks are flying in, the cards they land on wait hidden.
+  // Those cards skip their own fade-in: the flying look is their entrance.
+  const flightCount = flight?.count ?? 0;
   const renderPortfolioCard = useCallback(
-    (item: PortfolioItem, index: number) => (
-      <PortfolioCard
-        item={item}
-        columnWidth={columnWidth}
-        imageHeight={getItemHeight(item, columnWidth)}
-        onPress={handleImagePress}
-        index={index}
-        {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
-      />
-    ),
-    [columnWidth, handleImagePress, getItemHeight, tourCardId]
+    (item: PortfolioItem, index: number) => {
+      const imageHeight = getItemHeight(item, columnWidth);
+      const card = (
+        <PortfolioCard
+          item={item}
+          columnWidth={columnWidth}
+          imageHeight={imageHeight}
+          entrance={index >= flightCount}
+          // Cards after the flown-in looks fade in one after another from
+          // the moment those land, not after the usual per-position wait.
+          {...(flownCountRef.current > 0
+            ? { entranceDelayMs: Math.max(0, index - flownCountRef.current) * 60 }
+            : {})}
+          onPress={handleImagePress}
+          index={index}
+          offersCollections
+          {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
+        />
+      );
+      return (
+        <CollectionFlightTarget index={index} flight={flight} landHeight={imageHeight}>
+          {card}
+        </CollectionFlightTarget>
+      );
+    },
+    [columnWidth, handleImagePress, getItemHeight, tourCardId, flight, flightCount]
   );
 
 
   return (
     <ThemedBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         {/* Sub-tab bar */}
         <SubTabBar activeTab={activeTab} onTabChange={setActiveTab} favouritesRef={tourFavouritesRef} />
@@ -979,7 +1260,7 @@ const ExploreScreen = memo(() => {
               >
                 <TabIcon name="magnifying-glass" size={18} color={P.sub} />
                 <Text style={[styles.searchInput, { color: P.sub }]} numberOfLines={1}>
-                  {t('discover.explore.searchPlaceholder')}
+                  {tr('discover.explore.searchPlaceholder')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1030,6 +1311,13 @@ const ExploreScreen = memo(() => {
                 onMomentumScrollEnd={handleDiscoverScrollSettled}
                 refreshing={portfolioRefreshing}
                 onRefresh={handleRefreshDiscover}
+                ListFooterComponent={
+                  discoverHasMore && !discoverMoreFailed ? (
+                    <View style={styles.loadMoreFooter}>
+                      <ActivityIndicator color={P.accent} />
+                    </View>
+                  ) : null
+                }
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
                     {/* Total only — never the pages loaded so far. A blank line
@@ -1037,19 +1325,39 @@ const ExploreScreen = memo(() => {
                         the grid doesn't shift down when it does. */}
                     <Text style={[styles.gridCount, { color: P.sub }]}>
                       {discoverTotals[selectedFilter] !== undefined
-                        ? tp('discover.explore.results', discoverTotals[selectedFilter] ?? 0)
+                        ? trp('discover.explore.results', discoverTotals[selectedFilter] ?? 0)
                         : ' '}
                     </Text>
                   </View>
                 }
                 ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>{t('discover.explore.noLooks')}</Text>
-                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      {t('discover.explore.noLooksSub')}
-                    </Text>
-                  </View>
+                  discoverFailed ? (
+                    <View style={styles.emptyContainer}>
+                      <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                      <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.loadFailed')}</Text>
+                      <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                        {tr('discover.explore.checkConnection')}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.retryButton, { backgroundColor: P.accent }]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          setDiscoverRetryKey(key => key + 1);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.retryButtonText, { color: P.onAccent }]}>{tr('common.tryAgain')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyContainer}>
+                      <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                      <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.noLooks')}</Text>
+                      <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                        {tr('discover.explore.noLooksSub')}
+                      </Text>
+                    </View>
+                  )
                 }
               />
             )}
@@ -1062,6 +1370,7 @@ const ExploreScreen = memo(() => {
             <SkeletonMasonryGrid />
           ) : (
             <MasonryGrid
+              ref={favouritesGridRef}
               data={visibleFavouriteItems}
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
@@ -1070,27 +1379,109 @@ const ExploreScreen = memo(() => {
               onScrollEndDrag={handleFavouritesScrollSettled}
               onMomentumScrollEnd={handleFavouritesScrollSettled}
               ListHeaderComponent={
-                <View style={styles.gridHeader}>
-                  <Text style={[styles.gridCount, { color: P.sub }]}>
-                    {t('discover.explore.savedCount', { count: favouriteItems.length })}
-                  </Text>
-                </View>
+                openCollection ? (
+                  <OpenCollectionHeader
+                    collection={openCollection}
+                    onBack={handleCloseCollection}
+                    onEdit={() => handleEditCollection(openCollection)}
+                  />
+                ) : (
+                  <View style={styles.gridHeader}>
+                    {/* Bleeds past the grid's side padding so the row can
+                        scroll edge to edge. */}
+                    <View style={styles.collectionsBleed}>
+                      <CollectionsRow
+                        collections={collections}
+                        onOpen={handleOpenCollection}
+                        onEdit={handleEditCollection}
+                        onNew={handleNewCollection}
+                        inset={spacing.lg}
+                      />
+                    </View>
+                    <Text style={[styles.gridCount, { color: P.sub }]}>
+                      {favouriteItems.length} saved
+                    </Text>
+                  </View>
+                )
               }
               ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <TabIcon name="heart" size={48} color={P.sub} />
-                  <Text style={[styles.emptyText, { color: P.text }]}>{t('discover.explore.noFavourites')}</Text>
-                  <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                    {t('discover.explore.noFavouritesSub')}
-                  </Text>
-                </View>
+                openCollection && openCollection.itemIds.length > 0 && favouritesHydrating ? (
+                  // Its looks are still on the way; it isn't empty.
+                  <View style={styles.emptyContainer}>
+                    <ActivityIndicator color={P.sub} />
+                  </View>
+                ) : openCollection && openCollection.itemIds.length > 0 ? (
+                  // It has looks, but none could be shown (for example, their
+                  // provider is no longer on CERVICED).
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.cantShow')}</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      {tr('discover.explore.checkBack')}
+                    </Text>
+                  </View>
+                ) : openCollection ? (
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.collectionEmpty', { name: openCollection.name })}</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      {tr('discover.explore.collectionEmptySub')}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.noFavourites')}</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      {tr('discover.explore.noFavouritesSub')}
+                    </Text>
+                  </View>
+                )
               }
             />
           )
         )}
       </SafeAreaView>
 
+      {/* Back to top */}
+      <Animated.View
+        pointerEvents={backToTopActive ? 'box-none' : 'none'}
+        style={[
+          styles.backToTopWrap,
+          {
+            bottom: FLOATING_TAB_BAR_CLEARANCE,
+            opacity: backToTopOpacity,
+            transform: [{ translateY: backToTopTranslateY }],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={tr('discover.explore.backToTop')}
+          style={[styles.backToTopButton, { backgroundColor: P.card, borderColor: P.sep }]}
+          onPress={handleBackToTop}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <Ionicons name="arrow-up" size={18} color={P.text} />
+        </TouchableOpacity>
+      </Animated.View>
+
+      {flight && (
+        <CollectionOpenFlight key={flight.key} flight={flight} onDone={handleFlightDone} />
+      )}
+
+      {/* After a heart: offer to put the look in a collection. */}
+      <CollectionOfferBar host="explore" bottom={FLOATING_TAB_BAR_CLEARANCE} />
+
       {/* Modals */}
+      <AddToCollectionSheet host="explore" />
+      <CollectionEditorSheet
+        visible={collectionEditor !== null}
+        collection={editingCollection}
+        onClose={handleCloseEditor}
+        onDeleted={handleCollectionDeleted}
+      />
       <ImageDetailModal
         visible={isDetailVisible}
         item={selectedImage}
@@ -1188,6 +1579,10 @@ const styles = StyleSheet.create({
   gridHeader: {
     paddingBottom: spacing.sm,
   },
+  collectionsBleed: {
+    marginHorizontal: -spacing.lg,
+    marginBottom: spacing.xs,
+  },
   gridCount: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
@@ -1195,6 +1590,27 @@ const styles = StyleSheet.create({
   },
 
   // Empty state
+  loadMoreFooter: {
+    paddingTop: spacing.md,
+    alignItems: 'center',
+  },
+  backToTopWrap: {
+    position: 'absolute',
+    right: spacing.lg,
+  },
+  backToTopButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1210,6 +1626,16 @@ const styles = StyleSheet.create({
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     marginTop: spacing.sm,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    fontSize: fonts.body.medium,
+    fontWeight: '600',
   },
 
 });

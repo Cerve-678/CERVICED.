@@ -14,11 +14,14 @@ import {
   Platform,
   AccessibilityInfo,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 // expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
 // masonry grid is unvirtualized, so caching matters more here than elsewhere).
 import { Image } from 'expo-image';
+import { LogoCircle } from './FramedLogo';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   SafeAreaProvider,
@@ -26,6 +29,9 @@ import {
 } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { useCollectionsStore } from '../stores/useCollectionsStore';
+import { CollectionOfferBar } from './collections/CollectionOfferBar';
+import { AddToCollectionSheet } from './collections/AddToCollectionSheet';
 import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import Icon from './IconLibrary';
@@ -111,7 +117,7 @@ export const ImageDetailModal = ({
   // in place without closing the modal — without this, the content
   // ScrollView kept whatever scroll position it was at for the *previous*
   // photo, so the new one could open already scrolled past its info card.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   useEffect(() => {
     if (visible) scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [item?.id, visible]);
@@ -142,6 +148,12 @@ export const ImageDetailModal = ({
     }
   };
 
+  // The bar and folder sheet live inside this modal; don't leave either open
+  // behind it once it's gone.
+  useEffect(() => {
+    if (!visible) useCollectionsStore.getState().dismissHost('imageDetail');
+  }, [visible]);
+
   if (!item) return null;
 
   const hasProvider = !!item.providerName;
@@ -156,6 +168,7 @@ export const ImageDetailModal = ({
       unsavePortfolioItem(savedItemId);
     } else {
       savePortfolioItem(savedItemId);
+      useCollectionsStore.getState().offerFor(savedItemId, 'imageDetail');
     }
   };
 
@@ -359,7 +372,7 @@ interface ModalBodyProps {
   isBookableService: boolean;
   moreLikeThis: PortfolioItem[];
   moreLikeThisIsFallback: boolean;
-  scrollRef: React.RefObject<ScrollView | null>;
+  scrollRef: React.RefObject<ScrollViewInstance | null>;
   onClose: () => void;
   onSelectItem?: ((item: PortfolioItem) => void) | undefined;
   handleBookmark: (savedItemId: string) => void;
@@ -520,6 +533,14 @@ function ModalBody({
 
   const activeSavedItemId = savedCarouselImageId(item, activeImageIndex);
   const isSaved = isPortfolioSaved(activeSavedItemId);
+  const inACollection = useCollectionsStore(s =>
+    s.collections.some(c => c.itemIds.includes(activeSavedItemId)),
+  );
+  // Folders show the photo that was saved, wherever they're drawn.
+  const rememberActivePhoto = () => {
+    const uri = (images[activeImageIndex] as { uri?: string } | undefined)?.uri;
+    useCollectionsStore.getState().rememberPhotos([{ id: activeSavedItemId, uri }]);
+  };
 
   const handleSheetScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -617,9 +638,12 @@ function ModalBody({
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
             () => {},
           );
+          rememberActivePhoto();
           handleBookmark(activeSavedItemId);
         }}
         activeOpacity={0.65}
+        accessibilityRole="button"
+        accessibilityLabel={isSaved ? t('discover.image.unfavourite') : t('discover.image.favourite')}
       >
         <BlurView
           intensity={60}
@@ -635,6 +659,35 @@ function ModalBody({
           />
         </BlurView>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.collectionsButton, { top: insets.top + 12 }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+            () => {},
+          );
+          rememberActivePhoto();
+          useCollectionsStore.getState().openSheet(activeSavedItemId, 'imageDetail');
+        }}
+        activeOpacity={0.65}
+        accessibilityRole="button"
+        accessibilityLabel={t('discover.image.addToCollection')}
+      >
+        <BlurView
+          intensity={60}
+          tint={isDarkMode ? 'dark' : 'light'}
+          style={styles.iconBlur}
+        >
+          <Ionicons
+            name={inACollection ? 'folder' : 'folder-outline'}
+            size={16}
+            color="#FFFFFF"
+          />
+        </BlurView>
+      </TouchableOpacity>
+
+      <CollectionOfferBar host="imageDetail" bottom={insets.bottom + 96} />
+      <AddToCollectionSheet host="imageDetail" />
 
       {/* Pagination dots — pinned to a constant screen position, a sibling
           of the ScrollView rather than inside it, so they're always in the
@@ -752,14 +805,13 @@ function ModalBody({
               activeOpacity={0.5}
             >
               {item.providerLogoUri ? (
-                <Image
-                  source={{ uri: item.providerLogoUri }}
+                <LogoCircle
+                  uri={item.providerLogoUri}
+                  framing={item.providerLogoFraming}
                   style={[
                     styles.providerLogo,
                     { backgroundColor: P.surface },
                   ]}
-                  contentFit="cover"
-                  transition={0}
                 />
               ) : (
                 <View
@@ -1077,6 +1129,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     left: 12,
+    zIndex: 10,
+  },
+  collectionsButton: {
+    position: 'absolute',
+    top: 12,
+    left: 54,
     zIndex: 10,
   },
   infoCard: {

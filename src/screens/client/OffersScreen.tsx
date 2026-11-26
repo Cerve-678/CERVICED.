@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   FlatList,
   Modal,
-  StatusBar,
   Animated,
   ListRenderItem,
   Platform,
   RefreshControl,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -23,8 +24,8 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { HomeStackParamList } from '../../navigation/types';
 import { forgetCachedReads, getActivePromotions } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import type { PublicPromotionWithProvider } from '../../types/database';
-import { useTranslation, tr, localeForLanguage, type TranslationKey } from '../../i18n';
+import type { LogoFraming, PublicPromotionWithProvider } from '../../types/database';
+import { tr, useTranslation } from '../../i18n';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 interface Offer {
@@ -39,6 +40,7 @@ interface Offer {
   providerName: string;
   providerSlug: string | null;
   logo: any;
+  logoFraming: LogoFraming | null;
   service?: string;
 }
 
@@ -47,37 +49,27 @@ function mapPromotion(p: PublicPromotionWithProvider): Offer {
     id: p.id,
     title: p.title,
     description: p.description ?? '',
-    discount: p.discount_text ?? (p.discount_percent
-      ? tr('discover.offers.percentOff', { percent: p.discount_percent })
-      : p.discount_amount ? tr('discover.offers.amountOff', { amount: `£${p.discount_amount}` }) : tr('discover.offers.offerBadge')),
+    discount: p.discount_text ?? (p.discount_percent ? `${p.discount_percent}% OFF` : p.discount_amount ? `£${p.discount_amount} OFF` : 'OFFER'),
     discountPercent: p.discount_percent ?? null,
     discountAmount: p.discount_amount ?? null,
     validUntil: p.valid_until,
     createdAt: p.created_at,
-    providerName: p.providers?.display_name ?? tr('discover.offers.providerFallback'),
+    providerName: p.providers?.display_name ?? 'Provider',
     providerSlug: p.providers?.slug ?? null,
     logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+    logoFraming: p.providers?.logo_framing ?? null,
     ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
   };
 }
 
-// Tab keys are the stored service_category values (upper-cased); only the
-// label is translated, at render.
-const TABS: readonly { key: string; labelKey: TranslationKey }[] = [
-  { key: 'ALL', labelKey: 'discover.category.all' },
-  { key: 'HAIR', labelKey: 'discover.category.hair' },
-  { key: 'NAILS', labelKey: 'discover.category.nails' },
-  { key: 'LASHES', labelKey: 'discover.category.lashes' },
-  { key: 'MUA', labelKey: 'discover.category.mua' },
-  { key: 'BROWS', labelKey: 'discover.category.brows' },
-  { key: 'AESTHETICS', labelKey: 'discover.category.aesthetics' },
-];
+const TABS = ['ALL', 'HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS'];
+const OFFER_TABS = TABS.map(t => ({ key: t, label: t }));
 
 type SortKey = 'newest' | 'expiring' | 'discount';
-const SORT_OPTIONS: { value: SortKey; labelKey: TranslationKey }[] = [
-  { value: 'newest', labelKey: 'discover.offers.sort.newest' },
-  { value: 'expiring', labelKey: 'discover.offers.sort.expiring' },
-  { value: 'discount', labelKey: 'discover.offers.sort.discount' },
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'newest', get label() { return tr('discover.offers.sort.newest'); } },
+  { value: 'expiring', get label() { return tr('discover.offers.sort.expiring'); } },
+  { value: 'discount', get label() { return tr('discover.offers.sort.discount'); } },
 ];
 
 // ── Offer Card — back to the original horizontal list row (logo left, info
@@ -86,7 +78,8 @@ const SORT_OPTIONS: { value: SortKey; labelKey: TranslationKey }[] = [
 interface OfferCardProps { offer: Offer; index: number; P: AppTheme; onPress: () => void }
 
 const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -99,7 +92,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
 
   const expDate = (() => {
     try {
-      return new Date(offer.validUntil).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' });
+      return new Date(offer.validUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     } catch { return ''; }
   })();
 
@@ -112,7 +105,10 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
         disabled={!offer.providerSlug}
       >
         {/* Provider logo */}
-        {offer.logo ? (
+        {/* Square, the same 1:1 shape as the circle, so its framing fits. */}
+        {offer.logo?.uri ? (
+          <LogoCircle uri={offer.logo.uri} framing={offer.logoFraming} style={styles.logo} />
+        ) : offer.logo ? (
           <Image source={offer.logo} style={styles.logo} contentFit="cover" />
         ) : (
           <View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: P.surface }]}>
@@ -148,7 +144,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
               </View>
             ) : null}
             {expDate ? (
-              <Text style={[styles.expiry, { color: P.sub }]}>{t('discover.offers.expires', { date: expDate })}</Text>
+              <Text style={[styles.expiry, { color: P.sub }]}>{tr('discover.offers.expires', { date: expDate })}</Text>
             ) : null}
           </View>
         </View>
@@ -162,8 +158,9 @@ OfferCard.displayName = 'OfferCard';
 type Props = NativeStackScreenProps<HomeStackParamList, 'Offers'>;
 
 export default function OffersScreen({ navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode, palette: P } = useTheme();
-  const { t } = useTranslation();
 
   const [rawPromotions, setRawPromotions] = useState<PublicPromotionWithProvider[]>([]);
   const [selectedTab, setSelectedTab]     = useState('ALL');
@@ -186,9 +183,7 @@ export default function OffersScreen({ navigation }: Props) {
     load().finally(() => setRefreshing(false));
   }, [load]);
 
-  // `t` in the deps so badge text built in mapPromotion follows a language change.
-  const allOffers = useMemo(() => rawPromotions.map(mapPromotion), [rawPromotions, t]);
-  const offerTabs = useMemo(() => TABS.map(tab => ({ key: tab.key, label: t(tab.labelKey).toUpperCase() })), [t]);
+  const allOffers = useMemo(() => rawPromotions.map(mapPromotion), [rawPromotions]);
 
   const filteredOffers = useMemo(() => {
     const byTab = selectedTab === 'ALL' ? allOffers : allOffers.filter(o => o.service === selectedTab);
@@ -227,7 +222,7 @@ export default function OffersScreen({ navigation }: Props) {
       headerShown: true,
       headerTransparent: false,
       headerBackVisible: true,
-      headerTitle: t('discover.offers.title'),
+      headerTitle: tr('discover.offers.title'),
       headerTitleAlign: 'center',
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
@@ -247,18 +242,18 @@ export default function OffersScreen({ navigation }: Props) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, P, sortActive, t]);
+  }, [navigation, P, sortActive]);
 
   return (
     <ThemedBackground style={styles.root}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Category tabs — same sliding-capsule tab bar as booking history,
           coloured with the app accent (brown in light mode, unchanged in
           dark), so this reads as the same control app-wide. */}
       <View style={[styles.tabsScroll, { borderBottomColor: P.sep }]}>
         <SlidingTabs
-          tabs={offerTabs}
+          tabs={OFFER_TABS}
           activeKey={selectedTab}
           onPress={(tab) => {
             if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -291,8 +286,8 @@ export default function OffersScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Text style={[styles.emptyTitle, { color: P.text }]}>{t('discover.offers.emptyTitle')}</Text>
-            <Text style={[styles.emptySub, { color: P.sub }]}>{t('discover.offers.emptySub')}</Text>
+            <Text style={[styles.emptyTitle, { color: P.text }]}>{tr('discover.offers.emptyTitle')}</Text>
+            <Text style={[styles.emptySub, { color: P.sub }]}>{tr('discover.offers.emptySub')}</Text>
           </View>
         }
       />
@@ -308,7 +303,7 @@ export default function OffersScreen({ navigation }: Props) {
           onPress={() => setSortModalVisible(false)}
         >
           <View style={[styles.sortSheet, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sortSheetTitle, { color: P.text }]}>{t('discover.offers.sortTitle')}</Text>
+            <Text style={[styles.sortSheetTitle, { color: P.text }]}>{tr('discover.offers.sortTitle')}</Text>
             {SORT_OPTIONS.map(opt => {
               const active = sortBy === opt.value;
               return (
@@ -322,7 +317,7 @@ export default function OffersScreen({ navigation }: Props) {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.sortRowText, { color: P.text, fontWeight: active ? '700' : '400' }]}>
-                    {t(opt.labelKey)}
+                    {opt.label}
                   </Text>
                   {active && <Text style={[styles.sortCheck, { color: P.accentText }]}>✓</Text>}
                 </TouchableOpacity>

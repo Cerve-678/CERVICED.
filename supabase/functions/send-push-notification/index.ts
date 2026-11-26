@@ -1,5 +1,12 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  BOOKING_BUNDLE_TYPES,
+  BUNDLE_WINDOW_MINUTES,
+  buzzedEarlier,
+  isBundleCandidate,
+  type SiblingNotification,
+} from '../_shared/bookingPushBundle.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -111,21 +118,25 @@ async function handlePushError(
 }
 
 /**
- * Which client-facing notification-settings toggle governs which notification
- * type. Mirrors NotificationPreferences in databaseService.ts and the rows in
- * NotificationsSettingsScreen.
+ * Which notification-settings toggle governs which notification type, per
+ * recipient hat. Mirrors NotificationPreferences / ProviderNotificationPreferences
+ * in databaseService.ts and the rows on each hat's settings screen.
  *
  * Scope is deliberately narrow, and the narrowness is the safety property:
  *  - Only the PUSH is gated. The notifications row is always written, so the
  *    in-app list stays a complete record and a toggle can never destroy
  *    information the user may need later.
- *  - Only recipient_role 'client' is gated. These toggles live on a client
- *    screen; a provider's operational alerts are not theirs to switch off.
- *  - Any type absent from this map always sends. Fail-open is the correct
+ *  - Each hat is gated only by its own map and its own keys, so a dual-hat
+ *    account switching something off as a client never mutes it as a provider.
+ *  - Any type absent from a map always sends. Fail-open is the correct
  *    default for a delivery gate: a missing mapping should mean "not covered
- *    by a toggle", never "silently suppressed".
+ *    by a toggle", never "silently suppressed". The provider's "Needs your
+ *    answer" types (booking requests, reschedule requests, refund requests,
+ *    disputes) are left out on purpose so they can't be muted. So are
+ *    payout_debt_recorded / payout_debt_recovered: money a provider owes, and
+ *    money taken from their payouts to pay it, always reaches them.
  */
-const PREF_KEY_BY_TYPE: Record<string, string> = {
+const CLIENT_PREF_KEY_BY_TYPE: Record<string, string> = {
   // "Booking Confirmed — Instant confirmation alerts"
   booking_pending: 'bookingConfirm',
   booking_confirmed: 'bookingConfirm',
@@ -159,7 +170,44 @@ const PREF_KEY_BY_TYPE: Record<string, string> = {
   aftercare_available: 'maintenanceReminders',
 };
 
-// Must match DEFAULT_NOTIF_PREFS in databaseService.ts.
+// Provider hat. Rows on ProviderNotificationSettingsScreen.
+const PROVIDER_PREF_KEY_BY_TYPE: Record<string, string> = {
+  // "New Bookings"
+  booking_confirmed: 'providerNewBookings',
+  // "Changes & Cancellations"
+  booking_cancelled: 'providerBookingChanges',
+  reschedule_confirmed: 'providerBookingChanges',
+  reschedule_declined: 'providerBookingChanges',
+  reschedule_expired: 'providerBookingChanges',
+  reschedule_provider_response: 'providerBookingChanges',
+  // "Appointment Reminders — the day before, and forms not sent yet"
+  booking_reminder: 'providerReminders',
+  intake_form_reminder: 'providerReminders',
+  // "Client Forms"
+  intake_form_completed: 'providerForms',
+  intake_form_received: 'providerForms',
+  // "Messages"
+  new_message: 'providerMessages',
+  provider_message: 'providerMessages',
+  // "Payment Updates"
+  payment_success: 'providerPayments',
+  cancellation_settled: 'providerPayments',
+  refund_request_updated: 'providerPayments',
+  fee_charged: 'providerPayments',
+  fee_paid_by_client: 'providerPayments',
+  tip_received: 'providerPayments',
+  fee_payment_lapsed: 'providerPayments',
+  fee_dispute_resolved: 'providerPayments',
+  // "Your Business"
+  review_received: 'providerReviews',
+  daily_recap: 'providerDailyRecap',
+  schedule_fully_booked: 'providerFullyBooked',
+  provider_saved: 'providerSaves',
+  // "Waitlist"
+  waitlist_joined: 'providerWaitlist',
+};
+
+// Must match DEFAULT_NOTIF_PREFS and DEFAULT_PROVIDER_NOTIF_PREFS in databaseService.ts.
 const DEFAULT_PREFS: Record<string, boolean> = {
   bookingConfirm: true,
   bookingReminder: true,
@@ -168,6 +216,17 @@ const DEFAULT_PREFS: Record<string, boolean> = {
   newProviders: true,
   weeklySummary: false,
   maintenanceReminders: false,
+  providerNewBookings: true,
+  providerBookingChanges: true,
+  providerReminders: true,
+  providerForms: true,
+  providerMessages: true,
+  providerPayments: true,
+  providerReviews: true,
+  providerDailyRecap: true,
+  providerFullyBooked: true,
+  providerSaves: true,
+  providerWaitlist: true,
 };
 
 /**
@@ -181,17 +240,97 @@ const PUSH_TITLE_OVERRIDES: Record<string, string> = {
   'Booking Request — Outside Your Hours': 'Outside Hours Request',
 };
 
+/**
+ * What a provider's bell covers: everything that provider sends — "has space
+ * again", their monthly release, promotions and announcements. Tapping the
+ * bell for one provider is a yes for that provider, so these push even when
+ * "Offers & Promotions" (off by default) is off; turning the bell off is how
+ * to stop them (it deletes the follow).
+ */
+const BELL_COVERED_TYPES = new Set(['announcement', 'promotion']);
+
+/**
+ * Sent only to people who saved the provider or have their bell on, so they
+ * push like the bell does, even with "Offers & Promotions" off: "Sasha is back
+ * from holiday" (process_schedule_reopen_alerts, 20261124200000).
+ */
+const CHOSEN_PROVIDER_KINDS = new Set(['schedule_reopened']);
+
 /** True when this notification may be pushed to this user. */
 function pushAllowedByPrefs(
   type: string | undefined,
   recipientRole: string | undefined,
   prefs: Record<string, boolean> | null,
+  belled = false,
 ): boolean {
-  if (recipientRole !== 'client') return true;
-  const key = type ? PREF_KEY_BY_TYPE[type] : undefined;
+  if (belled && type && BELL_COVERED_TYPES.has(type)) return true;
+  const map = recipientRole === 'client' ? CLIENT_PREF_KEY_BY_TYPE
+    : recipientRole === 'provider' ? PROVIDER_PREF_KEY_BY_TYPE
+    : null;
+  if (!map) return true;
+  const key = type ? map[type] : undefined;
   if (!key) return true;
   const effective = { ...DEFAULT_PREFS, ...(prefs ?? {}) };
   return effective[key] !== false;
+}
+
+/**
+ * Whether another alert for this booking, or for any booking in the same
+ * checkout, already buzzed. Any lookup failure sends the push: a duplicate
+ * buzz is better than a booking the person never heard about.
+ */
+async function alreadyBuzzedForBooking(
+  supabase: ReturnType<typeof createClient>,
+  record: NotificationPayload['record'],
+  allowed: (type: string) => boolean,
+): Promise<boolean> {
+  try {
+    const [mineRes, bookingRes] = await Promise.all([
+      supabase.from('notifications').select('push_delivery_claimed_at').eq('id', record.id).single(),
+      supabase.from('bookings').select('hold_batch_id').eq('id', record.booking_id!).maybeSingle(),
+    ]);
+    if (mineRes.error) throw mineRes.error;
+    if (bookingRes.error) throw bookingRes.error;
+    const claimedAt = mineRes.data?.push_delivery_claimed_at as string | null;
+    if (!claimedAt) return false;
+
+    let bookingIds: string[] = [record.booking_id!];
+    const batchId = bookingRes.data?.hold_batch_id as string | null | undefined;
+    if (batchId) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('hold_batch_id', batchId)
+        .limit(50);
+      if (error) throw error;
+      bookingIds = Array.from(new Set([record.booking_id!, ...(data ?? []).map((b: { id: string }) => b.id)]));
+    }
+
+    const since = new Date(Date.parse(claimedAt) - BUNDLE_WINDOW_MINUTES * 60 * 1000).toISOString();
+    const { data: rows, error } = await supabase
+      .from('notifications')
+      .select('id, type, push_delivery_claimed_at')
+      .eq('user_id', record.user_id)
+      .eq('recipient_role', 'client')
+      .in('type', [...BOOKING_BUNDLE_TYPES])
+      .in('booking_id', bookingIds)
+      .neq('id', record.id)
+      .gte('push_delivery_claimed_at', since)
+      .limit(50);
+    if (error) throw error;
+
+    const siblings: SiblingNotification[] = (rows ?? []).map(
+      (r: { id: string; type: string; push_delivery_claimed_at: string }) => ({
+        id: r.id,
+        type: r.type,
+        claimedAt: r.push_delivery_claimed_at,
+      }),
+    );
+    return buzzedEarlier({ id: record.id, claimedAt }, siblings, allowed);
+  } catch (e) {
+    console.error(`[push] booking bundle check failed notification=${record.id}: ${String(e)}`);
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -270,11 +409,27 @@ serve(async (req) => {
     // nothing on the send path read these toggles at all, so every switch on
     // that screen was decorative. The notifications row itself is already
     // written and untouched — only the push is suppressed.
+    // Only looked up for the two types the bell can override, so every other
+    // push keeps its single round trip.
+    const kind = payload.record.metadata?.['kind'];
+    let belled = typeof kind === 'string' && CHOSEN_PROVIDER_KINDS.has(kind);
+    if (!belled && BELL_COVERED_TYPES.has(payload.record.type) && payload.record.provider_id) {
+      const { data: follow } = await supabase
+        .from('provider_follows')
+        .select('id')
+        .eq('user_id', user_id)
+        .eq('provider_id', payload.record.provider_id)
+        .eq('notify_enabled', true)
+        .maybeSingle();
+      belled = !!follow;
+    }
+
     if (
       !pushAllowedByPrefs(
         payload.record.type,
         payload.record.recipient_role,
         userRow.notification_preferences as Record<string, boolean> | null,
+        belled,
       )
     ) {
       console.log(
@@ -283,6 +438,22 @@ serve(async (req) => {
       return new Response(JSON.stringify({ sent: false, reason: 'preference_off' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // One buzz per booking: a sibling alert for the same booking or checkout
+    // already buzzed in the last few minutes, so this one goes in quietly.
+    // The row is in the Notifications list either way.
+    if (isBundleCandidate(payload.record)) {
+      const prefs = userRow.notification_preferences as Record<string, boolean> | null;
+      const quiet = await alreadyBuzzedForBooking(supabase, payload.record, (type) =>
+        pushAllowedByPrefs(type, 'client', prefs),
+      );
+      if (quiet) {
+        console.log(`[push] bundled with an earlier booking alert notification=${payload.record.id}`);
+        return new Response(JSON.stringify({ sent: false, reason: 'bundled' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const pushToken = userRow.push_token;

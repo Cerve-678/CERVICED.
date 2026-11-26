@@ -8,7 +8,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -22,8 +21,10 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
+import type { LogoFraming } from '../../types/database';
 import { isDarkColor } from '../../constants/providerThemes';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
   DAY_NAMES_ABBREV,
@@ -33,6 +34,9 @@ import {
   formatTime12,
 } from '../../utils/dateUtils';
 import { EXTERNAL_BOOKING_DISCLAIMER } from '../bookings/externalBookings';
+import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface DidYouBookResult {
   bookingDate: string;
@@ -44,6 +48,8 @@ interface DidYouBookSheetProps {
   visible: boolean;
   providerName: string;
   logoUrl: string | null;
+  /** How the provider framed their circle logo in Info Reg. */
+  logoFraming?: LogoFraming | null | undefined;
   /** Speciality chips from the provider's profile, offered as "what are you
    *  having". "Something else" is always there too. */
   services: readonly string[];
@@ -77,12 +83,15 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
   visible,
   providerName,
   logoUrl,
+  logoFraming,
   services,
   accentColor,
   tokens,
   onSubmit,
   onClose,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const onAccent = isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740';
 
@@ -174,10 +183,10 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={step === 'ask' ? onClose : undefined}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        {/* KeyboardDismissView, not a bare KeyboardAvoidingView: this used
+            no avoidance at all on Android, and the app is edge-to-edge there,
+            so the keyboard sat over the "Something else" field. */}
+        <KeyboardDismissView style={styles.keyboardAvoidingView}>
           <Pressable
             style={[
               styles.sheet,
@@ -192,7 +201,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
               <>
                 <View style={styles.askHeader}>
                   {logoUrl ? (
-                    <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="cover" transition={0} />
+                    <LogoCircle uri={logoUrl} framing={logoFraming} style={styles.logo} />
                   ) : (
                     <View style={[styles.logo, { backgroundColor: accentColor }]}>
                       <Text style={[styles.logoInitials, { color: onAccent }]}>{initials}</Text>
@@ -232,7 +241,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                   <TouchableOpacity
                     onPress={onClose}
                     style={[styles.closeButton, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
-                    accessibilityLabel="Close"
+                    accessibilityLabel={tr('common.close')}
                     accessibilityRole="button"
                   >
                     <Ionicons name="close" size={18} color={tokens.text} />
@@ -300,7 +309,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 )}
                 {picker && Platform.OS === 'ios' && (
                   <TouchableOpacity onPress={() => setPicker(null)} style={styles.linkButton} activeOpacity={0.7}>
-                    <Text style={[styles.linkText, { color: accentColor }]}>Done</Text>
+                    <Text style={[styles.linkText, { color: accentColor }]}>{tr('common.done')}</Text>
                   </TouchableOpacity>
                 )}
 
@@ -341,7 +350,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
               </ScrollView>
             )}
           </Pressable>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </Pressable>
     </Modal>
   );
@@ -350,7 +359,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   keyboardAvoidingView: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
   // A defined height gives the details ScrollView a real viewport. Without
   // one it measures at its content height, so the final button can be pushed
   // beneath the bottom edge on smaller devices.

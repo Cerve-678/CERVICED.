@@ -8,8 +8,6 @@ tags: [screen, client]
 
 ## → Navigates to
 - [[ReportProblemScreen\|ReportProblem]]
-- [[TermsScreen\|Terms]]
-- [[AboutScreen\|About]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

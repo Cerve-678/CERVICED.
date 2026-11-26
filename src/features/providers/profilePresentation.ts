@@ -1,3 +1,4 @@
+import { policyImageUrls } from './policyImages';
 import type { ProviderProfileData } from './profileTypes';
 import type { BusinessType } from '../../types/database';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
@@ -61,7 +62,7 @@ export function hasProviderPolicyInfo(provider: ProviderProfileData): boolean {
   const policy = provider.bookingPolicies;
   if (!policy) return false;
   return (
-    buildPolicyDisplayRows(policy, provider.cancellationNoticeHours).length > 0 ||
-    Boolean(policy.policyImageUrl)
+    buildPolicyDisplayRows(policy, provider.cancellationNoticeHours, { linkOnly: provider.isLinkOnly }).length > 0 ||
+    policyImageUrls(policy).length > 0
   );
 }

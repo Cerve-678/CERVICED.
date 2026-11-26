@@ -7,6 +7,7 @@ import type { DbProviderAvailability, DbProviderDailyStat } from '../../types/da
 import { DAY_NAMES_FULL, dateToYMD, formatTime12Safe } from '../../utils/dateUtils';
 import { DASHBOARD_WEEK_DAYS, hoursFor, startOfDay } from './diaryDays';
 import { sumLinkOnlyStats, type DayBar, type LinkOnlyTotals } from './linkOnlyAnalytics';
+import { tr } from '../../i18n';
 
 /** "Open today 9am–6pm", "Closed today", or null when there are no hours
  *  for today. */
@@ -36,16 +37,39 @@ export interface WeekComparison {
   lastWeek: LinkOnlyTotals;
 }
 
-/** Splits 14 days of counters into the last seven days (ending today) and
- *  the seven before that. Days with no row count as zero. */
+/** Splits counters into the last seven days (ending today) and the seven
+ *  before that. Older rows are ignored, so Home can pass the longer window it
+ *  fetches for join nudges. Days with no row count as zero. */
 export function compareWeeks(rows: readonly DbProviderDailyStat[], today: Date): WeekComparison {
   const cutoff = startOfDay(today);
   cutoff.setDate(cutoff.getDate() - (DASHBOARD_WEEK_DAYS - 1));
   const cutoffYmd = dateToYMD(cutoff);
+  const floor = new Date(cutoff);
+  floor.setDate(floor.getDate() - DASHBOARD_WEEK_DAYS);
+  const floorYmd = dateToYMD(floor);
   return {
     thisWeek: sumLinkOnlyStats(rows.filter(row => row.day >= cutoffYmd)),
-    lastWeek: sumLinkOnlyStats(rows.filter(row => row.day < cutoffYmd)),
+    lastWeek: sumLinkOnlyStats(rows.filter(row => row.day < cutoffYmd && row.day >= floorYmd)),
   };
+}
+
+/** How many join nudges ("Want them on CERVICED?") it takes before Home shows
+ *  the "Become a full member" bar, and how far back they're counted. */
+export const JOIN_NUDGE_BAR_THRESHOLD = 5;
+export const JOIN_NUDGE_WINDOW_DAYS = 90;
+
+/** The nudge count to show on the bar, or null when the bar should stay
+ *  hidden. Only nudges after the day they last closed the bar count, so
+ *  closing it holds until another JOIN_NUDGE_BAR_THRESHOLD come in. A nudge
+ *  is one client on one day, so this counts nudges, not distinct clients. */
+export function joinNudgeBarCount(
+  rows: readonly DbProviderDailyStat[],
+  dismissedYmd: string | null,
+): number | null {
+  const count = rows
+    .filter(row => dismissedYmd == null || row.day > dismissedYmd)
+    .reduce((sum, row) => sum + row.join_nudges, 0);
+  return count >= JOIN_NUDGE_BAR_THRESHOLD ? count : null;
 }
 
 /** "▲ 4", "▼ 9", or null when nothing changed. */
@@ -106,11 +130,11 @@ export function buildProfileStrength(input: ProfileStrengthInput): { items: Prof
   const photosToGo = Math.max(0, FULL_PORTFOLIO_COUNT - input.portfolioCount);
   const items: ProfileStrengthItem[] = [
     { key: 'logo', label: 'Add your logo', hint: 'It shows on your profile and in search', doneLabel: 'Logo', shortLabel: 'logo', done: input.logoSet },
-    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', doneLabel: 'About', shortLabel: 'About', done: input.aboutSet },
+    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', doneLabel: tr('discover.profile.tab.about'), shortLabel: tr('discover.profile.tab.about'), done: input.aboutSet },
     { key: 'hours', label: 'Set your opening hours', hint: 'Shown to clients on your profile', doneLabel: 'Opening hours', shortLabel: 'opening hours', done: input.hoursSet },
-    { key: 'specialities', label: 'Add your specialities', hint: 'Show up in more Search filters', doneLabel: 'Specialities', shortLabel: 'specialities', done: input.specialityCount > 0 },
+    { key: 'specialities', label: 'Add your specialities', hint: 'Show up in more Search filters', doneLabel: tr('discover.profile.specialities'), shortLabel: 'specialities', done: input.specialityCount > 0 },
     { key: 'instagram', label: 'Link your Instagram', hint: 'Clients can see more of your work', doneLabel: 'Instagram', shortLabel: 'Instagram', done: !!input.instagram?.trim() },
-    { key: 'policies', label: 'Add your policies', hint: 'Cancellation and deposit rules', doneLabel: 'Policies', shortLabel: 'policies', done: input.policiesSet },
+    { key: 'policies', label: 'Add your policies', hint: 'Cancellation and deposit rules', doneLabel: tr('providerAccount.linkOnly.policies.title'), shortLabel: 'policies', done: input.policiesSet },
     {
       key: 'photos',
       label: photosToGo === 1 ? 'Add 1 more photo' : `Add ${photosToGo} more photos`,
@@ -119,7 +143,7 @@ export function buildProfileStrength(input: ProfileStrengthInput): { items: Prof
       shortLabel: photosToGo === 1 ? '1 more photo' : `${photosToGo} more photos`,
       done: photosToGo === 0,
     },
-    { key: 'accessibility', label: 'Add accessibility info', hint: 'Step-free access, parking and more', doneLabel: 'Accessibility', shortLabel: 'accessibility info', done: !!input.accessibilityNotes?.trim() },
+    { key: 'accessibility', label: 'Add accessibility info', hint: 'Step-free access, parking and more', doneLabel: tr('discover.profile.accessibility'), shortLabel: 'accessibility info', done: !!input.accessibilityNotes?.trim() },
     { key: 'payments', label: 'State preferred payment method', hint: 'How clients can pay you', doneLabel: 'Payment method', shortLabel: 'payment method', done: (input.paymentMethods?.length ?? 0) > 0 },
   ];
   const done = items.filter(item => item.done).length;

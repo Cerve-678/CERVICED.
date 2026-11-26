@@ -24,13 +24,18 @@ export const CLIENT_PROFILE_SCREENS = new Set([
   "ChangePassword",
   "NotificationsSettings",
   "PaymentMethods",
-  "Subscription",
   "HelpCentre",
-  "About",
-  "Terms",
   "ReportProblem",
   "Points",
 ]);
+
+/**
+ * Profile-tab destinations that are pages on the public website, not screens:
+ * the Terms (cerviced.co/legal) and About (cerviced.co/about). BeccaScreen
+ * opens them in the in-app browser instead of navigating. Both used to be
+ * screens; navigating to the deleted "Terms" route silently did nothing.
+ */
+export const CLIENT_WEBSITE_PAGES = new Set(["Terms", "About"]);
 
 export const PROVIDER_PUSH_NAV: Record<string, string> = {
   schedule: "ProviderSchedule",
@@ -45,6 +50,8 @@ export const PROVIDER_PUSH_NAV: Record<string, string> = {
   analytics: "Analytics",
   history: "BookingHistory",
   automations: "Automations",
+  payments: "Payments",
+  policies: "Policies",
 };
 
 export const PROVIDER_TAB_NAV: Record<string, { tab: string; screen: string }> = {
@@ -52,23 +59,42 @@ export const PROVIDER_TAB_NAV: Record<string, { tab: string; screen: string }> =
   services: { tab: "MyServices", screen: "ProviderServicesMain" },
 };
 
+/**
+ * The provider destinations a link-only pro (booking_mode 'external') can use.
+ *
+ * Their app has no booking calendar, Clientele, Info Packs, Automations,
+ * booking rules or full Analytics, and no My Services tab, so those keys stay
+ * out. Each of these is registered in ProviderBeccaNavigator, the stack their
+ * Home pushes Becca on. `schedule` lands on ProviderScheduleScreen, which
+ * shows them Opening Hours only (`hoursOnly`).
+ */
+export const LINK_ONLY_PROVIDER_NAV = new Set([
+  "schedule",
+  "messages",
+  "conversation",
+  "Notifications",
+]);
+
 /** True only for a navigation action that BeccaScreen can actually fulfil. */
 export function isBeccaNavigationSuggestion(
   hat: BeccaHat,
   suggestion: ChatSuggestion,
+  linkOnly = false,
 ): boolean {
   if (suggestion.action !== "navigate") return true;
   const screen = suggestion.data?.screen;
   if (!screen) return false;
 
   if (hat === "provider") {
+    if (linkOnly) return LINK_ONLY_PROVIDER_NAV.has(screen);
     return screen in PROVIDER_PUSH_NAV || screen in PROVIDER_TAB_NAV;
   }
 
   if (screen === "Explore") return true;
   if (screen === "Profile") {
     const profileScreen = suggestion.data?.params?.["profileScreen"];
-    return typeof profileScreen === "string" && CLIENT_PROFILE_SCREENS.has(profileScreen);
+    return typeof profileScreen === "string"
+      && (CLIENT_PROFILE_SCREENS.has(profileScreen) || CLIENT_WEBSITE_PAGES.has(profileScreen));
   }
   return CLIENT_BECCA_SCREENS.has(screen);
 }
