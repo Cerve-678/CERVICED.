@@ -201,8 +201,9 @@ The tickets below are the remainder of the beta plan.
 - **State:** Needs decision
 - **Owner:** `cerviced-release-lead` with `cerviced-booking-platform-integrity`
 - **Scenario:** Switching from test/mock payment to live Stripe for real bookings.
-- **Decision needed:** Authorisation to enable
-  `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED`, build native, and run a real Stripe
+- **Update 2026-11-26:** the `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` switch
+  no longer exists; every build uses Stripe checkout.
+- **Decision needed:** Authorisation to build native, and run a real Stripe
   test payment (reserve → authorise → finalise → capture → notifications + PDF
   receipt). Ships with the paired staged security migrations, not before.
 - **Why blocked:** Crosses several Autonomy limits at once — production config,

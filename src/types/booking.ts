@@ -65,9 +65,8 @@ export function isAddressPending(address: string | null | undefined): boolean {
  * `providerBusinessType` is the real answer, carried through the
  * client_bookings view. The clientAddress fallback only covers a booking read
  * before that column existed; never branch on clientAddress presence directly
- * — a non-mobile booking could carry one (see the checkout fix in
- * BookingContext.createBookingsFromCart), and a mobile booking legitimately
- * has none until the client sends it.
+ * — a non-mobile booking could carry one from an older checkout, and a
+ * mobile booking legitimately has none until the client sends it.
  *
  * The 'mobile' comparison itself lives in `appointmentVenue`
  * (features/business-details/options.ts) with the rest of what defines a

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-26 (a client booking can only be made by paying for it)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126120000 | `checkout_only_through_payment` | **APPLIED 2026-11-26** on the user's "yes, apply it now", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row, before the branch was pushed (the repo is public and the hole was live). Lock taken on this branch; live max `20261126110000`, no unapplied migration on any open PR. md5 guard on the three live functions matched. Forced-rollback dry run first: all three gone, `prepare_checkout` and `expire_cart_holds` intact, live max unchanged. Verified live: version recorded (live max); 0 of `hold_cart_booking_slots` / `claim_cart_booking_slots` / `release_cart_booking_slots` left; `prepare_checkout(jsonb)` present and executable by authenticated; cron `expire-cart-holds` still scheduled. |
+
 ### Applied 2026-11-26 (every client gets reminders 2 days before and the day before; providers no longer choose)
 
 | Recorded version | Name | Verified live |
