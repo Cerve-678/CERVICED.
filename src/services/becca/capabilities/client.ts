@@ -2877,9 +2877,16 @@ const topRated: Capability = {
     "whos the best", "the best", "any good", "new providers", "newest",
     "just joined", "trending", "popular", "well reviewed", "good reviews",
   ],
-  async run({ rawMessage, clientArea }): Promise<CapabilityResult> {
+  // "who's top rated in lashes" names the list as well as the ranking.
+  // discover.find hands every rating question over to this capability, so if
+  // the service isn't read HERE it is silently dropped and the client gets
+  // the best rated across everything instead.
+  needs: [{ kind: "service", required: false }],
+  async run({ rawMessage, clientArea, entities }): Promise<CapabilityResult> {
     const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
-    let rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
+    const category = entities.service?.value.category;
+    const inService = category ? ` for ${categoryWords(category)}` : "";
+    let rows = wantsNew ? await getNewProviders(12, category) : await getTopRatedProviders(12, category);
 
     // "see who is near me top rated" is one question with two clauses, and
     // rating is the one that decides WHICH list. Distance then reorders it —
@@ -2898,20 +2905,20 @@ const topRated: Capability = {
         text:
           (wantsNew
             ? oneOf(
-              `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`,
-              `Fresh faces: **${rows.length}** new provider${rows.length !== 1 ? "s" : ""}.`,
+              `**${rows.length}** provider${rows.length !== 1 ? "s" : ""}${inService} recently joined:`,
+              `Fresh faces${inService}: **${rows.length}** new provider${rows.length !== 1 ? "s" : ""}.`,
             )
             : oneOf(
-              "Here are the top-rated providers right now:",
-              "These are the best reviewed on CERVICED at the moment:",
-              "The highest rated right now:",
+              `Here are the top-rated providers${inService} right now:`,
+              `These are the best reviewed${inService} on CERVICED at the moment:`,
+              `The highest rated${inService} right now:`,
             )) + proximityNote,
         card: {
           title: wantsNew ? "JUST JOINED" : "TOP RATED",
           meta: `${rows.length} provider${rows.length !== 1 ? "s" : ""}`,
           rows: rows.slice(0, 8).map(providerRow),
         },
-        work: [wantsNew ? "Found who joined most recently" : "Ranked providers by their reviews"],
+        work: [wantsNew ? `Found who joined most recently${inService}` : `Ranked providers${inService} by their reviews`],
         providers: rows.map(providerFromDb),
         suggestions: [
           askChip("free", "Who's free this week?", "Who's free this week?"),
@@ -2929,6 +2936,31 @@ const topRated: Capability = {
     //
     // Fall back to showing who IS here, and say plainly why ratings aren't
     // the sort — rather than dead-ending on an empty, chipless reply.
+    if (!wantsNew && category) {
+      // Same honesty as below, kept to the service that was asked about —
+      // falling back to everyone would drop "lashes" all over again.
+      const inCategory = await getProviders(category);
+      if (inCategory.length > 0) {
+        return {
+          text:
+            `No one${inService} has built up enough reviews yet for a top-rated list — it takes a few before that means anything.\n\n` +
+            `Here ${inCategory.length !== 1 ? "are" : "is"} who's on CERVICED${inService}:`,
+          providers: inCategory.slice(0, 12).map(providerFromDb),
+          suggestions: [
+            askChip("free", "Who's free this week?", "Who's free this week?"),
+            askChip("top", "Top rated overall", "Who are the best rated providers?"),
+          ],
+        };
+      }
+      return {
+        text: `There isn't anyone${inService} on CERVICED yet.`,
+        suggestions: [
+          askChip("top", "Top rated overall", "Who are the best rated providers?"),
+          navChip("explore", "Browse Explore", "Explore"),
+        ],
+      };
+    }
+
     if (!wantsNew) {
       const anyone = await getProviders();
       if (anyone.length > 0) {
@@ -2961,7 +2993,7 @@ const topRated: Capability = {
 
     return {
       text: wantsNew
-        ? "No one's joined recently — but there are still providers to browse."
+        ? `No one${inService} has joined recently — but there are still providers to browse.`
         : "I couldn't find anyone to show right now.",
       suggestions: [
         askChip("browse", "Show me everything", "Show me all services"),
