@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-ac (fix/provider-no-show-opens-refund-request) — 20261126170000_provider_no_show_opens_refund_request, written + dry-run + rolled-back behaviour check, NOT applied (waiting for the user's OK). Also mine and unapplied: 150000 (#819), 160000 (#820); apply in number order.
 ```
 
 ### Applied 2026-11-26 (home-based only, and the client is told to message the provider)

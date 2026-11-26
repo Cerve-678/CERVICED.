@@ -746,6 +746,14 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
   own message, which stays in the app.
 - Requests are only for bookings paid through the app, with one open request
   per booking.
+- **Reporting that the provider didn't turn up opens one.** On the day,
+  after the start time, the client's booking screen has "Provider didn't turn
+  up?" in place of Cancel. Reporting it marks the booking `provider_no_show`
+  (so the provider isn't paid) and, for a booking paid in the app, opens a
+  request with that reason in the same call, unless one is already open. It
+  then follows the usual 3 days. *Not live until migration
+  `20261126170000_provider_no_show_opens_refund_request` is applied; the
+  button change needs a new build.*
 - **A client can ask until the end of the fifth UK day after the day of the
   appointment** (appointment on the 10th, last day the 15th). After that
   `request_booking_refund()` refuses, and the app's ⋯ sheet says when it
@@ -1508,6 +1516,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 13 Nov | A provider can't offer new times once an appointment has started, and a client can't decline a cancel-if-declined offer after the start. Each side is told to message the other. Live since 13 November (migration `20261113170000`); the in-app note needs a new build | A "cancel if declined" offer was a side door to the full refund that a provider cancel after the start is refused |
 | 13 Nov | A provider's written cancellation notice always says the window actually applied; the database rewrites the text from the window, never the reverse. Daminkfinesse (24h → 48h), Nails Studio (48h → 24h) and CuratedByCilva (12h → 24h) were corrected; no window applied changed. Live since 13 November (migration `20261113180000`) | Clients saw one notice on the profile and another on their booking page |
 | 13 Nov | Refund requests close at the end of the fifth UK day after the appointment day, for bookings made from then on, for every reason; complaints stay open | Gives clients time to notice a problem while letting a booking's money settle; older bookings keep the terms they were booked under; the owner's rule |
+| 26 Nov | After the start time a client can't cancel in the app; on the day they can report that the provider didn't turn up instead, and for a booking paid in the app that opens a refund request ("The provider didn't turn up") for the provider to answer like any other | The owner's call. A client whose provider never came used to cancel and pay the late-cancel charge, and the report itself stopped the payout but refunded nobody until they found the separate refund request |
 | 15 Nov | A bank dispute takes money back only from the provider(s) whose booking it's about, matched by amount; when the amount fits no booking, or more than one way, an admin picks and nothing is taken back until then. A won dispute pays the provider back automatically | One payment can pay several providers, and taking from all of them punished providers the client had no complaint about. An admin picking was chosen over splitting the cost across everyone on the payment, which would still charge providers the client had no complaint about |
 | 16 Nov | Bank disputes live. CERVICED stays in the middle because it charges the card (one payment per basket); paying each provider directly was considered and not chosen. An unclear dispute stays an admin pick, not an automatic split by share. Providers see "Paid back · dispute won" and the other dispute lines. Provider Terms §9 explains it all; no 15-day notice while the provider base is being built | Keeps the one-checkout basket; the bank decides and the provider whose booking it was carries the cost |
 

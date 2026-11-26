@@ -45,6 +45,7 @@ pending ──(provider confirms)──> confirmed ──(appt day)──> in_pr
    └──(provider declines / client withdraws)──> cancelled
 
 confirmed ──(provider marks)──> no_show
+confirmed ──(client reports, same UK day, after the start)──> provider_no_show
 
 on_hold (waitlist only, see WAITLIST.md) ──(claimed)──> pending/confirmed
                                           ──(expires/declined)──> cancelled
@@ -499,6 +500,12 @@ in_progress` are translated before a provider ever sees them.
 Two RPCs, deliberately asymmetric — a client cancelling has a notice window
 to respect; a provider cancelling doesn't (it's their calendar):
 
+- **Once the start time has passed** the client's booking screen has no
+  Cancel button. In its place, on the same UK day, is "Provider didn't turn
+  up?" (`client_mark_provider_no_show`), which, for a booking paid in the app,
+  also opens a refund request for the provider to answer (migration
+  `20261126170000`). The server still accepts an after-start cancel from older
+  builds and charges it as a late cancel.
 - **Client**: `cancel_own_booking(booking_id)`
   ([booking_rules_server_enforcement.sql:41](supabase/booking_rules_server_enforcement.sql#L41)) —
   only `pending`/`confirmed` bookings; enforces the provider's

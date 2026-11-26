@@ -313,7 +313,7 @@ export const clientBooking = {
   'clientBooking.detail.reschedule.requested': 'Reschedule Requested',
   'clientBooking.detail.declineRequest': 'Decline Request',
   'clientBooking.detail.reschedule': 'Reschedule',
-  'clientBooking.detail.providerNoShow': "Provider didn't show up",
+  'clientBooking.detail.providerNoShow': "Provider didn't turn up?",
   'clientBooking.detail.rescheduleNow': 'Reschedule Now',
   'clientBooking.detail.disputeNoShow': "This wasn't right — dispute it",
   'clientBooking.detail.cancellingNowTitle': 'Cancelling Now',
@@ -322,6 +322,9 @@ export const clientBooking = {
   'clientBooking.detail.yesCancel': 'Yes, Cancel',
   'clientBooking.detail.cannotReschedule': 'Cannot Reschedule',
   'clientBooking.detail.providerNoShowTitle': "Provider didn't show up?",
+  'clientBooking.detail.providerNoShowSub': "{provider} will be told, and can dispute it if it isn't true. This can't be undone. Are you sure?",
+  'clientBooking.detail.providerNoShowSubRefund': "We'll tell {provider} and ask them to refund you. They have 3 days to refund you or pass it to Cerviced to decide, and they can dispute it if it isn't true. This can't be undone. Are you sure?",
+  'clientBooking.detail.noShowReportedRefund': "We've told {provider} and asked them to refund you. You'll see how it's going on this booking.",
   'clientBooking.detail.disputeTitle': 'Dispute this no-show',
   'clientBooking.detail.sendDispute': 'Send Dispute',
   'clientBooking.detail.requestRefund': 'Request a refund',
@@ -563,6 +566,9 @@ export const clientBooking = {
 /** Keys in this area HELD IN ENGLISH in every language (legal, refund,
  *  cancellation, payment, age and health-safety copy). See ../../translate.ts. */
 export const clientBookingHeld: readonly (keyof typeof clientBooking)[] = [
+  // Provider no-show report: it opens a refund request.
+  'clientBooking.detail.providerNoShowSubRefund',
+  'clientBooking.detail.noShowReportedRefund',
   // Liability disclaimer for bookings made off-app.
   'clientBooking.external.disclaimer',
   // Refund process / timing explanations.

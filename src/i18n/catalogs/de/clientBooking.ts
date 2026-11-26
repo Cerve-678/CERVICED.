@@ -277,6 +277,7 @@ export const clientBooking: AreaCatalog<typeof en> = {
   "clientBooking.detail.yesCancel": "Ja, stornieren",
   "clientBooking.detail.cannotReschedule": "Verschieben nicht möglich",
   "clientBooking.detail.providerNoShowTitle": "Anbieter:in nicht erschienen?",
+  'clientBooking.detail.providerNoShowSub': "Wir informieren {provider}. Dort kann man widersprechen, wenn es nicht stimmt. Das lässt sich nicht rückgängig machen. Bist du sicher?",
   "clientBooking.detail.disputeTitle": "Diesem Nichterscheinen widersprechen",
   "clientBooking.detail.sendDispute": "Widerspruch senden",
   "clientBooking.detail.requestRefund": "Erstattung anfragen",
