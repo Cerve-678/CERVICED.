@@ -2,13 +2,16 @@
 //
 // The full Maintenance screen inside Beauty Profile (screen state, not a
 // route — see BeautyProfileScreen). Items are grouped by what the client
-// should do, not by type. Provider-written prep and aftercare are quoted in
-// full and credited, never paraphrased, and nothing is shown when the provider
-// wrote nothing. The patch-test card shows only the client's own recorded
+// should do, not by type, and each heading says how many it holds. Provider-
+// written prep and aftercare are quoted and credited, never paraphrased: a
+// long note shows its first lines with "Read more" for the rest, and nothing
+// is shown when the provider wrote nothing. The patch-test card shows only the client's own recorded
 // date: no countdown, no verdict.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import type { ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,17 +23,48 @@ import { dateToYMD, formatShortDate, formatShortDayDate, formatTime12Safe, toLoc
 import { toUserMessage } from '../../utils/userFacingError';
 import type { MaintenanceSearchCategory } from '../../constants/maintenanceServiceTypes';
 import {
-  categoryOf, groupMaintenanceItems, rhythmLineFor, snoozedDueOn, type PresentedItem, type RhythmLine,
+  categoryOf, doneOutcome, groupMaintenanceItems, nextUpFrom, presentMaintenanceItem, snoozedDueOn, type PresentedItem,
 } from './presentation';
-import { itemPill, MaintenanceItemCard, primaryActionFor, type ItemAction } from './MaintenanceItemCard';
+import { MaintenanceItemCard, primaryActionFor, type ItemAction } from './MaintenanceItemCard';
+import { NextUpCard } from './NextUpCard';
+import { MaintenanceHowTo } from './MaintenanceHowTo';
+import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { logger } from '../../utils/logger';
 import { ItemMenuSheet } from './ItemMenuSheet';
 import { AddReminderSheet } from './AddReminderSheet';
 import type { MaintenanceState } from './useMaintenance';
 import {
-  Chip, FONT_BODY, FONT_DISPLAY, GhostButton, Note, Pill, PrimaryButton, SectionLabel,
-  semanticColors, ui, hapticError, hapticLight,
+  Chip, FONT_BODY, FONT_DISPLAY, GhostButton, Note, PrimaryButton, SectionLabel,
+  countedLabel, semanticColors, ui, hapticError, hapticLight,
 } from './ui';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey, TranslationParams } from '../../i18n';
+import type { AppTheme } from '../../constants/theme';
+
+/** A provider's note starts this many lines tall; Read more shows the rest. */
+const NOTE_LINES = 3;
+
+/** A provider's note, word for word: the first few lines, then Read more. */
+function NoteText({ text, P, t }: { text: string; P: AppTheme; t: (key: TranslationKey, params?: TranslationParams) => string }) {
+  const [lines, setLines] = useState(0);
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <Text style={[styles.quoteText, { color: P.text }]} selectable numberOfLines={open ? undefined : NOTE_LINES}>{text}</Text>
+      {/* Lays the whole note out unseen, to know whether the lines above cut it short. */}
+      <View pointerEvents="none" style={styles.measure} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <Text style={styles.quoteText} onTextLayout={e => setLines(e.nativeEvent.lines.length)}>{text}</Text>
+      </View>
+      {lines > NOTE_LINES && (
+        <TouchableOpacity onPress={() => { hapticLight(); setOpen(o => !o); }} activeOpacity={0.5} hitSlop={8} accessibilityRole="button" style={styles.more}>
+          <Text style={[styles.moreText, { color: P.accentText }]}>
+            {(open ? t('maintenance.ctx.showLess') : t('maintenance.ctx.readMore')).toUpperCase()}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
 
 type Filter = 'ALL' | MaintenanceSearchCategory | 'OTHER';
 
@@ -47,12 +81,9 @@ const FILTERS: { key: Filter; label: TranslationKey }[] = [
 
 const filterOf = (item: MaintenanceItem): Filter => categoryOf(item) ?? 'OTHER';
 
-/** 3.5 → "3½": learned gaps are read to the half week. */
-function weeksText(weeks: number): string {
-  return Number.isInteger(weeks) ? String(weeks) : `${Math.floor(weeks)}½`;
-}
-
 interface Props {
+  /** For showing "How Maintenance works" once per account. */
+  userId: string | null;
   state: MaintenanceState;
   focusItemId?: string | undefined;
   /** Item id currently resolving a rebook, so its button can show busy. */
@@ -68,7 +99,7 @@ interface Props {
 }
 
 export function MaintenanceView({
-  state, focusItemId, busyItemId, onBack, onItemAction, onOpenSetup, pickedCount, onOpenPicked,
+  userId, state, focusItemId, busyItemId, onBack, onItemAction, onOpenSetup, pickedCount, onOpenPicked,
   onMessageProviders, onViewBooking,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
@@ -88,10 +119,30 @@ export function MaintenanceView({
     [state.items, today],
   );
   // "Next up" looks across everything; the chips only narrow the list below.
-  const nextUp = useMemo(() => {
-    const all = groupMaintenanceItems(visibleItems, today, state.coverage);
-    return all.next ?? all.comingUp[0] ?? null;
-  }, [visibleItems, today, state.coverage]);
+  const nextUp = useMemo(
+    () => nextUpFrom(groupMaintenanceItems(visibleItems, today, state.coverage)),
+    [visibleItems, today, state.coverage],
+  );
+
+  // "How Maintenance works": once per account on the first visit, then from
+  // the ⓘ next to the title.
+  const [howTo, setHowTo] = useState(false);
+  const howToChecked = useRef(false);
+  useEffect(() => {
+    if (howToChecked.current || !userId) return;
+    howToChecked.current = true;
+    let alive = true;
+    // Version 2 is the Show me walkthrough, so anyone who saw the old one sees it once more.
+    resolveTourForUser(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, [{ key: 'howto', sinceVersion: 2 }], userId)
+      .then((decision) => {
+        if (!alive || !decision.show) return;
+        setHowTo(true);
+        void recordTourSeen(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, userId);
+      })
+      .catch((err: unknown) => logger.error('[Maintenance] how-to check failed:', err));
+    return () => { alive = false; };
+  }, [userId]);
+  const [doneBusyId, setDoneBusyId] = useState<string | null>(null);
   const filterCounts = useMemo(() => {
     const counts = new Map<Filter, number>([['ALL', visibleItems.length]]);
     for (const i of visibleItems) counts.set(filterOf(i), (counts.get(filterOf(i)) ?? 0) + 1);
@@ -109,7 +160,7 @@ export function MaintenanceView({
   );
 
   // Landing from a push / notification: scroll to the item and outline it.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const offsets = useRef(new Map<string, number>());
   const scrolledFor = useRef<string | null>(null);
   const tryScroll = useCallback(() => {
@@ -165,8 +216,8 @@ export function MaintenanceView({
           <Text style={[styles.quoteFrom, { color: P.sub }]}>
             {t('maintenance.ctx.from', { provider: note.providerName })}{n.title ? ` ${n.title}` : ''}
           </Text>
-          {/* Full text: not truncated, not paraphrased. */}
-          <Text style={[styles.quoteText, { color: P.text }]} selectable>{n.text}</Text>
+          {/* Never paraphrased: the first lines, then Read more for all of it. */}
+          <NoteText text={n.text} P={P} t={t} />
           <Text style={[styles.quoteMeta, { color: P.sub }]}>
             {n.sentAt
               ? t('maintenance.ctx.sent', { date: formatShortDate(n.sentAt) })
@@ -207,70 +258,30 @@ export function MaintenanceView({
     });
   };
 
-  const rhythmText = (line: RhythmLine): string | null => {
-    if (!line) return null;
-    const weeks = weeksText(line.weeks);
-    switch (line.kind) {
-      case 'learned': return t('maintenance.rhythm.learned', { from: line.from, weeks });
-      case 'provider': return t('maintenance.rhythm.provider', { provider: line.provider, weeks });
-      case 'client': return t('maintenance.rhythm.client', { weeks });
-    }
+  const markDone = (item: MaintenanceItem) => {
+    setBannerError(null);
+    setDoneBusyId(item.id);
+    const outcome = doneOutcome(item, today);
+    const work = outcome.kind === 'update' ? state.updateItem(item.id, outcome.patch) : state.deleteItem(item.id);
+    work
+      .catch(err => {
+        hapticError();
+        setBannerError(toUserMessage(err, t('maintenance.error.save'), '[Maintenance] done it'));
+      })
+      .finally(() => setDoneBusyId(null));
   };
 
-  const renderNextUp = ({ item, view }: PresentedItem) => {
-    const pill = itemPill(item, view, t);
-    const action = primaryActionFor(item, view);
-    const rhythm = rhythmText(rhythmLineFor(item));
-    const canSnooze = item.kind !== 'event' && view.state !== 'booked' && view.state !== 'paused';
-    return (
-      <View style={[styles.next, { backgroundColor: P.accent }]}>
-        <View style={styles.nextTop}>
-          <Text style={[styles.nextEyebrow, { color: P.onAccent }]}>{t('maintenance.next.title').toUpperCase()}</Text>
-          <Pill text={pill.text} tone={pill.tone} P={P} S={S} />
-        </View>
-        <Text style={[styles.nextTitle, { color: P.onAccent }]} numberOfLines={2}>{item.title}</Text>
-        {rhythm && (
-          <View style={styles.nextRhythm}>
-            <Ionicons name="repeat" size={15} color={P.onAccent} />
-            <Text style={[styles.nextRhythmText, { color: P.onAccent }]}>{rhythm}</Text>
-          </View>
-        )}
-        {(action || canSnooze) && (
-          <View style={styles.nextFoot}>
-            {action && (
-              <TouchableOpacity
-                style={[styles.nextBtn, { backgroundColor: P.onAccent }]}
-                onPress={() => { hapticLight(); onItemAction(item, action); }}
-                disabled={busyItemId === item.id}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.nextBtnText, { color: P.accent }]}>
-                  {t(action === 'rebook' ? 'maintenance.action.rebook' : action === 'find' ? 'maintenance.action.find' : 'maintenance.action.resume').toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {canSnooze && (
-              <TouchableOpacity
-                style={[styles.nextBtn, styles.nextGhost, { borderColor: P.onAccent }]}
-                onPress={() => { hapticLight(); snooze(item); }}
-                activeOpacity={0.6}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.nextBtnText, { color: P.onAccent }]}>{t('maintenance.action.snooze').toUpperCase()}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
-    );
+  const book = (item: MaintenanceItem) => {
+    const action = primaryActionFor(item, presentMaintenanceItem(item, today, state.coverage));
+    onItemAction(item, action === 'rebook' ? 'rebook' : 'find');
   };
 
-  const isEmpty = visibleItems.length === 0 && state.context.prep.length === 0 && state.context.aftercare.length === 0 && !patchDate;
+  const noteCount = state.context.prep.length + state.context.aftercare.length;
+  const isEmpty = visibleItems.length === 0 && noteCount === 0 && !patchDate;
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 100 }]}
@@ -287,6 +298,15 @@ export function MaintenanceView({
             <Ionicons name="chevron-back" size={18} color={P.accentText} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: P.text }]}>{t('maintenance.title')}</Text>
+          <TouchableOpacity
+            onPress={() => { hapticLight(); setHowTo(true); }}
+            activeOpacity={0.5}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('maintenance.howto.link')}
+          >
+            <Ionicons name="information-circle-outline" size={20} color={P.accentText} />
+          </TouchableOpacity>
           <View style={{ flex: 1 }} />
           <GhostButton small P={P} icon="add" label={t('maintenance.addMine')} onPress={() => setAdding(true)} />
         </View>
@@ -344,7 +364,15 @@ export function MaintenanceView({
               </View>
             ) : (
               <>
-                {nextUp && renderNextUp(nextUp)}
+                <NextUpCard
+                  nextUp={nextUp}
+                  onBook={book}
+                  onDone={markDone}
+                  onSnooze={snooze}
+                  busyItemId={doneBusyId ?? busyItemId}
+                  P={P}
+                  t={t}
+                />
                 {/* Chips only when there's more than one kind of thing to filter. */}
                 {filterCounts.size > 2 && (
                   <View style={ui.chips}>
@@ -362,19 +390,21 @@ export function MaintenanceView({
               </>
             )}
 
-            {groups.needsAttention.length > 0 && <SectionLabel text={t('maintenance.section.attention').toUpperCase()} P={P} />}
+            {groups.needsAttention.length > 0 && (
+              <SectionLabel text={countedLabel(t('maintenance.section.attention'), groups.needsAttention.length)} P={P} />
+            )}
             {renderItems(groups.needsAttention)}
-            {groups.comingUp.length > 0 && <SectionLabel text={t('maintenance.section.comingUp').toUpperCase()} P={P} />}
+            {groups.comingUp.length > 0 && (
+              <SectionLabel text={countedLabel(t('maintenance.section.comingUp'), groups.comingUp.length)} P={P} />
+            )}
             {renderItems(groups.comingUp)}
 
-            {(state.context.prep.length > 0 || state.context.aftercare.length > 0) && (
-              <SectionLabel text={t('maintenance.section.bookings').toUpperCase()} P={P} />
-            )}
+            {noteCount > 0 && <SectionLabel text={countedLabel(t('maintenance.section.bookings'), noteCount)} P={P} />}
             {state.context.prep.map(n => renderNote(n, 'prep'))}
             {state.context.aftercare.map(n => renderNote(n, 'aftercare'))}
 
             {(groups.events.length > 0 || patchDate) && (
-              <SectionLabel text={t('maintenance.section.patchEvents').toUpperCase()} P={P} />
+              <SectionLabel text={countedLabel(t('maintenance.section.patchEvents'), groups.events.length + (patchDate ? 1 : 0))} P={P} />
             )}
             {patchDate && (
               <View style={[ui.card, styles.ctx, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -400,7 +430,9 @@ export function MaintenanceView({
             )}
             {renderItems(groups.events)}
 
-            {groups.paused.length > 0 && <SectionLabel text={t('maintenance.section.paused').toUpperCase()} P={P} />}
+            {groups.paused.length > 0 && (
+              <SectionLabel text={countedLabel(t('maintenance.section.paused'), groups.paused.length)} P={P} />
+            )}
             {renderItems(groups.paused)}
 
             {visibleItems.length > 0 && (
@@ -430,6 +462,7 @@ export function MaintenanceView({
         onUpdate={state.updateItem}
         onDelete={state.deleteItem}
       />
+      <MaintenanceHowTo visible={howTo} onClose={() => setHowTo(false)} P={P} S={S} t={t} />
       <AddReminderSheet
         visible={adding}
         pastProviders={state.context.pastProviders}
@@ -453,16 +486,6 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, padding: 12 },
   empty: { padding: 16, gap: 8 },
   emptyTitle: { fontFamily: FONT_DISPLAY, fontSize: 17, letterSpacing: 0.8 },
-  next: { borderRadius: 20, padding: 18, gap: 10 },
-  nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  nextEyebrow: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.4, opacity: 0.85 },
-  nextTitle: { fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: 0.8, lineHeight: 26 },
-  nextRhythm: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  nextRhythmText: { flex: 1, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 19, opacity: 0.92 },
-  nextFoot: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  nextBtn: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  nextGhost: { flex: 0, paddingHorizontal: 16, borderWidth: 1, backgroundColor: 'transparent' },
-  nextBtnText: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1.1 },
   ctx: { padding: 14, gap: 8 },
   when: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   whenText: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4 },
@@ -470,6 +493,9 @@ const styles = StyleSheet.create({
   quote: { borderLeftWidth: 3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
   quoteFrom: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.1 },
   quoteText: { fontFamily: FONT_BODY, fontSize: 14.5, lineHeight: 21 },
+  measure: { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 },
+  more: { alignSelf: 'flex-start', marginTop: 4 },
+  moreText: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.2 },
   quoteMeta: { fontFamily: FONT_BODY, fontSize: 11.5 },
   ctxFoot: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 2 },
   patchTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

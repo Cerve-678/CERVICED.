@@ -2,12 +2,12 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -24,18 +24,11 @@ import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 
 const EARN_WAYS = [
-  { icon: 'event-available', label: 'Complete a Booking', points: '+2 pts', desc: 'Every completed appointment', live: true },
-  { icon: 'star', label: 'Leave a Review', points: '+2 pts', desc: 'After each booking', live: true },
-  { icon: 'auto-awesome', label: 'First Review', points: '+50 pts', desc: 'One-time bonus for your first review', live: true },
-  { icon: 'emoji-events', label: 'First Booking', points: '+100 pts', desc: 'One-time welcome bonus', live: true },
-  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday', live: true },
-  { icon: 'person-add', label: 'Refer a Friend', points: '', desc: 'Coming soon', live: false },
-];
-
-const REDEEM_WAYS = [
-  { icon: 'local-offer', label: '£5 Off a Booking', points: '500 pts' },
-  { icon: 'card-giftcard', label: 'Gift a Provider', points: '300 pts' },
-  { icon: 'loyalty', label: 'Upgrade Trial', points: '1,000 pts' },
+  { icon: 'event-available', label: 'Complete a Booking', points: '+2 pts', desc: 'Every completed appointment' },
+  { icon: 'star', label: 'Leave a Review', points: '+2 pts', desc: 'After each booking' },
+  { icon: 'auto-awesome', label: 'First Review', points: '+50 pts', desc: 'One-time bonus for your first review' },
+  { icon: 'emoji-events', label: 'First Booking', points: '+100 pts', desc: 'One-time welcome bonus' },
+  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday' },
 ];
 
 const REASON_LABEL: Record<ClientPointsReason, string> = {
@@ -86,7 +79,7 @@ export default function PointsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
@@ -130,7 +123,7 @@ export default function PointsScreen({ navigation }: any) {
         {EARN_WAYS.map(way => (
           <View
             key={way.label}
-            style={[styles.row, { backgroundColor: P.card, borderColor: P.border, opacity: way.live ? 1 : 0.55 }]}
+            style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}
           >
             <View style={[styles.iconWrap, { backgroundColor: P.iconBg }]}>
               <Icon name={way.icon} size={20} color={P.accentText} />
@@ -139,7 +132,7 @@ export default function PointsScreen({ navigation }: any) {
               <Text style={[styles.rowLabel, { color: P.text }]}>{way.label}</Text>
               <Text style={[styles.rowDesc, { color: P.sub }]}>{way.desc}</Text>
             </View>
-            {way.live && <Text style={[styles.pts, { color: P.accentText }]}>{way.points}</Text>}
+            <Text style={[styles.pts, { color: P.accentText }]}>{way.points}</Text>
           </View>
         ))}
 
@@ -161,20 +154,8 @@ export default function PointsScreen({ navigation }: any) {
           ))
         )}
 
-        {/* How to redeem */}
-        <Text style={[styles.section, { color: P.accentText, marginTop: 24 }]}>REDEEM POINTS · COMING SOON</Text>
-        {REDEEM_WAYS.map(way => (
-          <View key={way.label} style={[styles.row, { backgroundColor: P.card, borderColor: P.border, opacity: 0.55 }]}>
-            <View style={[styles.iconWrap, { backgroundColor: P.iconBg }]}>
-              <Icon name={way.icon} size={20} color={P.accentText} />
-            </View>
-            <Text style={[styles.rowLabel, { color: P.text, flex: 1 }]}>{way.label}</Text>
-            <Text style={[styles.pts, { color: P.sub }]}>{way.points}</Text>
-          </View>
-        ))}
-
         <Text style={[styles.note, { color: P.sub }]}>
-          Points never expire while your account is active. Redeeming points and referral bonuses aren't live yet — earning is.
+          Points never expire while your account is active.
         </Text>
       </ScrollView>
     </ThemedBackground>

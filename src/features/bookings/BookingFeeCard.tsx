@@ -10,10 +10,11 @@ import { buildPaymentSheetAppearance } from '../payments/paymentSheetAppearance'
 import { formatShortDayDate } from '../../utils/dateUtils';
 import { PaymentRequestError } from '../../utils/paymentRequestError';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { feeChargeWindow, feeDisputeOpen, liveFee } from './bookingFeeRules';
+import { bookingFeeButtons, feeChargeWindow, feeDisputeOpen, feeKindLabel, liveFee } from './bookingFeeRules';
 
-// Late-arrival and no-show fees on one booking (auto-memory
-// late-and-no-show-fees-decision). The provider charges within 24 hours and
+// Late-arrival, no-show and late cancellation fees on one booking (auto-memory
+// late-and-no-show-fees-decision, late-cancel-half-top-up). The provider
+// charges within 24 hours of the appointment's end and
 // answers disputes; the client sees the charge and can dispute it within 7
 // days. CERVICED never decides — the server enforces every rule shown here.
 //
@@ -42,22 +43,30 @@ interface Props {
   role: 'provider' | 'client';
   colors: BookingFeeColors;
   /** The other party's name, for copy ("Ask Sam to…"). */
-  otherName?: string;
+  otherName?: string | undefined;
   /** Changes when the booking's status changes, so the card re-reads (e.g. just marked no-show). */
   refreshKey?: string;
   showConfirm: (title: string, message: string | undefined, buttons: { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }[]) => void;
   showAlert: (title: string, message?: string) => void;
+  /** Provider's booking page: only the charge button(s), and once a fee is
+   *  charged, that button greyed out with the result. Nothing here navigates;
+   *  refunds and disputes are on the booking's payment in Payments & payouts. */
+  bookingPage?: boolean;
+  /** Sits inside the Booking payment sheet's card as a section, not a card of its own. */
+  embedded?: boolean;
+  /** After any charge, refund, request or dispute answer, so the parent re-reads. */
+  onChanged?: (() => void) | undefined;
 }
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
-const kindLabel = (kind: BookingFeeKind) => (kind === 'late' ? 'late arrival fee' : 'no-show fee');
+const kindLabel = feeKindLabel;
 
 function errorMessage(err: unknown, fallback: string, context: string): string {
   if (err instanceof PaymentRequestError) return err.message;
   return toUserMessageAllowingDbGuard(err, fallback, context);
 }
 
-export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert }: Props) {
+export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert, bookingPage, embedded, onChanged }: Props) {
   const [charges, setCharges] = useState<BookingFeeCharge[] | null>(null);
   const [terms, setTerms] = useState<BookingFeeTerms | null>(null);
   const [busy, setBusy] = useState(false);
@@ -86,6 +95,21 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   const lastFailed = charges?.[0]?.status === 'failed' ? charges[0] : null;
   const window = terms && !fee ? feeChargeWindow(terms, Date.now()) : null;
 
+  // Provider's booking page: a button per fee on their policy, greyed out
+  // until it can be charged. Re-checked every minute while one shows, so it
+  // turns on (and goes) without leaving the page.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const feeButtons = useMemo(
+    () => (role === 'provider' && bookingPage && terms && !fee ? bookingFeeButtons(terms, nowMs) : []),
+    [role, bookingPage, terms, fee, nowMs],
+  );
+  const hasFeeButtons = feeButtons.length > 0;
+  useEffect(() => {
+    if (!hasFeeButtons) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [hasFeeButtons]);
+
   const run = useCallback(async (action: () => Promise<string | void>, fallback: string, context: string, done?: string) => {
     setBusy(true);
     try {
@@ -99,8 +123,9 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
     } finally {
       setBusy(false);
       await load();
+      onChanged?.();
     }
-  }, [load, showAlert]);
+  }, [load, showAlert, onChanged]);
 
   const confirmCharge = (kind: BookingFeeKind, amountPence: number) => {
     showConfirm(`Charge ${pounds(amountPence)}?`, `This charges ${otherName || 'the client'}'s saved card the ${kindLabel(kind)} they agreed to when booking. They'll be told and can dispute it with you.`, [
@@ -152,6 +177,50 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
 
   if (!charges) return null;
 
+  // Just the button (user, 2026-11-19: "charge late should just be the charge
+  // late button, nothing else"). Once charged it stays, greyed out, saying
+  // what happened; it never opens Payments (user: pressing it shouldn't take
+  // you there). The fee shows on the booking's payment in Payments & payouts.
+  if (role === 'provider' && bookingPage) {
+    if (fee) {
+      const done = feeOutcomeLabel(fee, otherName);
+      return (
+        <View style={st.buttonsOnly}>
+          <View accessible accessibilityLabel={done} style={[st.button, { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}>
+            <Text style={[st.buttonText, { color: C.sub }]}>{done}</Text>
+          </View>
+        </View>
+      );
+    }
+    if (!hasFeeButtons) return null;
+    return (
+      <View style={st.buttonsOnly}>
+        {feeButtons.map(b => {
+          const label = `Charge ${shortFeeName(b.kind).toLowerCase()} · ${pounds(b.pence)}`;
+          const off = !b.enabled || busy;
+          return (
+            <TouchableOpacity
+              key={b.kind}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}. ${b.note}`}
+              accessibilityState={{ disabled: off }}
+              disabled={off}
+              onPress={() => confirmCharge(b.kind, b.pence)}
+              activeOpacity={0.75}
+              style={[st.button, b.enabled
+                ? { backgroundColor: C.accent }
+                : { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}
+            >
+              {busy && b.enabled
+                ? <ActivityIndicator color={C.onAccent} size="small" />
+                : <Text style={[st.buttonText, { color: b.enabled ? C.onAccent : C.sub }]}>{label}</Text>}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  }
+
   const body: React.ReactNode[] = [];
 
   if (role === 'provider' && !fee && window?.open) {
@@ -160,6 +229,15 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
     }
     if (terms?.noShowFeePence && window.canCharge.no_show) {
       body.push(<Action key="no_show" C={C} busy={busy} label={`Charge no-show fee · ${pounds(terms.noShowFeePence)}`} onPress={() => confirmCharge('no_show', terms.noShowFeePence!)} />);
+    }
+    if (terms?.lateCancelFeePence && window.canCharge.late_cancel) {
+      // The deposit is already kept; this is the rest up to half the price.
+      const half = terms.depositPence + terms.lateCancelFeePence;
+      body.push(<Text key="kept" style={[st.title, { color: C.text }]}>You kept the {pounds(terms.depositPence)} deposit.</Text>);
+      body.push(<Text key="why" style={[st.sub, { color: C.sub }]}>
+        Your policy is half the price ({pounds(half)}), so you can charge {otherName || 'the client'}'s saved card {pounds(terms.lateCancelFeePence)} more. If you don't, nothing more is taken.
+      </Text>);
+      body.push(<Action key="late_cancel" C={C} busy={busy} label={`Charge late-cancel fee · ${pounds(terms.lateCancelFeePence)}`} onPress={() => confirmCharge('late_cancel', terms.lateCancelFeePence!)} />);
     }
     if (body.length > 0) {
       body.unshift(<Text key="until" style={[st.sub, { color: C.sub }]}>You can charge until {window.closesAtLabel}.</Text>);
@@ -236,11 +314,23 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
 
   if (body.length === 0) return null;
   return (
-    <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
-      <Text style={[st.heading, { color: C.sub }]}>LATE & NO-SHOW FEES</Text>
+    <View style={embedded ? [st.section, { borderTopColor: C.border }] : [st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+      <Text style={[st.heading, { color: C.sub }]}>{fee?.kind === 'late_cancel' || (window?.canCharge.late_cancel && !fee) ? 'LATE CANCELLATION' : 'LATE & NO-SHOW FEES'}</Text>
       {body}
     </View>
   );
+}
+
+const shortFeeName = (kind: BookingFeeKind) => (kind === 'late' ? 'Late fee' : kind === 'no_show' ? 'No-show fee' : 'Late-cancel fee');
+
+/** What the greyed-out button on the booking page says once a fee is charged. */
+function feeOutcomeLabel(fee: BookingFeeCharge, otherName: string | undefined): string {
+  const name = shortFeeName(fee.kind);
+  if (fee.status === 'processing') return `${name} · charging…`;
+  if (fee.status === 'awaiting_client') return `${name} · waiting for ${otherName || 'the client'} to pay`;
+  if (fee.status === 'refunded') return `${name} refunded · ${pounds(fee.amountPence)}`;
+  if (fee.disputedAt && !fee.disputeResolvedAt) return `${name} disputed · ${pounds(fee.amountPence)}`;
+  return `${name} charged · ${pounds(fee.amountPence)}`;
 }
 
 function Action({ C, label, onPress, busy, ghost }: { C: BookingFeeColors; label: string; onPress: () => void; busy: boolean; ghost?: boolean }) {
@@ -261,4 +351,6 @@ const st = StyleSheet.create({
   input: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, fontSize: 14, textAlignVertical: 'top', marginBottom: 8 },
   button: { borderRadius: 20, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  buttonsOnly: { marginHorizontal: 16, marginTop: 12, gap: 8 },
+  section: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 18, marginTop: 8, gap: 8 },
 });

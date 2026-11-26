@@ -37,6 +37,12 @@ const LOCAL_PREFIX: Record<TourKey, TourSeenPrefix> = {
   client_home: TOUR_SEEN_PREFIXES.CLIENT_HOME,
   client_explore: TOUR_SEEN_PREFIXES.CLIENT_EXPLORE,
   provider_home: TOUR_SEEN_PREFIXES.PROVIDER_HOME,
+  provider_info_packs: TOUR_SEEN_PREFIXES.PROVIDER_INFO_PACKS,
+  provider_forms: TOUR_SEEN_PREFIXES.PROVIDER_FORMS,
+  client_maintenance_howto: TOUR_SEEN_PREFIXES.CLIENT_MAINTENANCE_HOWTO,
+  provider_service_pack_tip: TOUR_SEEN_PREFIXES.PROVIDER_SERVICE_PACK_TIP,
+  provider_policies_pack_tip: TOUR_SEEN_PREFIXES.PROVIDER_POLICIES_PACK_TIP,
+  provider_my_profile: TOUR_SEEN_PREFIXES.PROVIDER_MY_PROFILE,
 };
 
 /** Reads the local cache, absorbing the pre-2026-08-31 boolean shape. `true`

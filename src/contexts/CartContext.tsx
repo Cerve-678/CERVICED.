@@ -4,9 +4,9 @@ import { Alert } from 'react-native';
 import { logger } from '../utils/logger';
 import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
+import { getLiveProviderIds, getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
 import type { EmergencyReason } from '../services/AvailabilityService';
-import { calculatePlatformFee } from '../features/cart/platformFee';
+import type { ChosenAddOn } from '../features/bookings/addOnTime';
 
 /**
  * Resolve a cart item to a real provider UUID: carried providerId → slug lookup
@@ -25,6 +25,21 @@ async function resolveCartItemProviderId(p: {
     if (bySlug?.id) return bySlug.id;
   }
   return getProviderIdByDisplayName(p.providerName).catch(() => null);
+}
+/**
+ * The stored items whose provider is linked but no longer live. Items with no
+ * resolved provider are left to the caller — they're removed for a different
+ * reason (no link at all), not for being offline.
+ */
+export function offlineProviderItems(
+  items: CartItem[],
+  providerIdByItem: ReadonlyMap<string, string>,
+  liveIds: ReadonlySet<string>,
+): CartItem[] {
+  return items.filter(it => {
+    const providerId = providerIdByItem.get(it.id);
+    return providerId !== undefined && !liveIds.has(providerId);
+  });
 }
 // CartItem interface
 /** A time the provider's own scheduling rules exclude, that they've opted
@@ -47,6 +62,10 @@ export interface CartItem {
   /** Promo code to auto-apply in the cart — set when the item was added via
    *  a promotion's "Book Now" button, so the offer isn't silently dropped. */
   initialPromoCode?: string;
+  /** The promo code whose discount is baked into this item's price. Set only
+   *  on CartScreen's frozen checkout snapshot, and sent to prepare_checkout,
+   *  which re-validates and prices it server-side. */
+  appliedPromoCode?: string;
   providerImage: any;
   providerService: string;
   serviceName: string;
@@ -59,11 +78,10 @@ export interface CartItem {
   instanceId?: string;
   addedAt: string;
   serviceInstanceIndex?: number;
-  addOns?: {
-    id: string | number;
-    name: string;
-    price: number;
-  }[];
+  /** Picked add-ons. `duration` above stays the service's own length; the
+   *  appointment's length is durationWithAddOns(duration, addOns)
+   *  (features/bookings/addOnTime), which adds each one's extraMinutes. */
+  addOns?: ChosenAddOn[];
   /** Date/time picked on the provider profile before adding to cart. Absent
    *  for items added via other entry points (Explore "Book Now", rebook) —
    *  those still need scheduling in the cart. */
@@ -103,6 +121,17 @@ export interface CartItem {
    *  re-derived whenever the date/time changes — a request reason belongs to
    *  the time it was accepted for, never to the item. */
   emergencyRequest?: EmergencyRequest;
+  /** Set when this item pays for a waitlist slot held for the client. Its
+   *  date and time can't change, the hold's own clock keeps running, and
+   *  checkout sends the hold's booking id so the server reuses that row (see
+   *  features/bookings/waitlist.ts). */
+  waitlistHold?: WaitlistHoldRef;
+}
+
+/** A waitlist hold an item pays for: the on_hold booking and when it ends. */
+export interface WaitlistHoldRef {
+  bookingId: string;
+  expiresAt: string;
 }
 
 export interface CartState {
@@ -139,8 +168,6 @@ export interface CartContextType {
   isItemInCart: (providerName: string, serviceId: string, selectedOptions?: Record<string, any>) => boolean;
   getItemQuantity: (providerName: string, serviceId: string, selectedOptions?: Record<string, any>) => number;
   getTotalServiceInstances: () => number;
-  getServiceFee: () => number;
-  getFinalTotal: () => number;
   getBookingSummary: () => BookingSummary;
 }
 
@@ -161,11 +188,7 @@ export interface AddToCartParams {
     duration: string;
     description: string;
     instanceId?: string | number;
-    addOns?: {
-      id: string | number;
-      name: string;
-      price: number;
-    }[];
+    addOns?: ChosenAddOn[];
   };
   quantity?: number;
   selectedOptions?: Record<string, any>;
@@ -181,6 +204,8 @@ export interface AddToCartParams {
   policySnapshot?: Record<string, unknown> | undefined;
   /** See CartItem.emergencyRequest. */
   emergencyRequest?: EmergencyRequest | undefined;
+  /** See CartItem.waitlistHold. */
+  waitlistHold?: WaitlistHoldRef | undefined;
 }
 
 /** Fields a BookingSheet edit can change on an existing cart item. */
@@ -321,7 +346,8 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           isDepositOnly,
           bookingBatchId,
           policySnapshot,
-          emergencyRequest
+          emergencyRequest,
+          waitlistHold
         } = action.payload;
 
         const instanceId = forceNewInstance || safeGet(service, 'instanceId') ? 
@@ -370,9 +396,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             ...(isDepositOnly ? { isDepositOnly } : {}),
             ...(bookingBatchId ? { bookingBatchId } : {}),
             ...(policySnapshot ? { policySnapshot } : {}),
-            ...(emergencyRequest ? { emergencyRequest } : {})
+            ...(emergencyRequest ? { emergencyRequest } : {}),
+            ...(waitlistHold ? { waitlistHold } : {})
           };
-          newItems = [...state.items, newItem];
+          // One cart line per held slot: a second tap on "Confirm & pay"
+          // replaces the line rather than adding the same hold twice.
+          newItems = waitlistHold
+            ? [...state.items.filter(existing => existing.waitlistHold?.bookingId !== waitlistHold.bookingId), newItem]
+            : [...state.items, newItem];
         }
 
         const totals = calculateTotals(newItems);
@@ -454,9 +485,16 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         // Spread, not a merge that skips undefined: callers clear a field by
         // passing it explicitly as undefined (splitting an item out of a
         // group sends bookingBatchId: undefined), and that must overwrite.
-        const newItems: CartItem[] = state.items.map(item =>
-          safeGet(item, 'id') === itemId ? ({ ...item, ...updates } as CartItem) : item
-        );
+        const newItems: CartItem[] = state.items.map(item => {
+          if (safeGet(item, 'id') !== itemId) return item;
+          // A held waitlist slot is one fixed time: nothing in the cart may
+          // move it, group it or turn it into a request.
+          if (item.waitlistHold) {
+            const { selectedDate: _d, selectedTime: _t, emergencyRequest: _e, bookingBatchId: _b, ...allowed } = updates;
+            return { ...item, ...allowed } as CartItem;
+          }
+          return { ...item, ...updates } as CartItem;
+        });
         const totals = calculateTotals(newItems);
         return { ...state, items: newItems, ...totals };
       }
@@ -516,29 +554,75 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // launch until the user next changed the cart.
           hydratedRef.current = true;
 
+          const unavailable: CartItem[] = [];
+
           // Repair or drop any stored item that lost its provider link while the
-          // cart sat in storage (provider went offline, was renamed, or the item
-          // predates providerId). Items already carrying a providerId are trusted
-          // and skipped, so this is a no-op DB call in the common case.
-          const needLink = stored.filter(i => !i.providerId);
-          if (needLink.length > 0) {
-            const removedNames: string[] = [];
-            for (const it of needLink) {
-              const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
-              if (resolvedId) {
-                dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
-              } else {
-                dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } });
-                removedNames.push(it.providerDisplayName ?? it.providerName);
-              }
+          // cart sat in storage (provider renamed, or the item predates
+          // providerId). Each distinct provider is looked up once, all in
+          // parallel — several items from one provider share the lookup.
+          const providerIdByItem = new Map<string, string>();
+          const lookupKey = (it: CartItem) => `${it.providerSlug ?? ''}|${it.providerName}`;
+          const unlinked = stored.filter(it => !it.providerId);
+          const lookups = new Map<string, CartItem>();
+          unlinked.forEach(it => {
+            if (!lookups.has(lookupKey(it))) lookups.set(lookupKey(it), it);
+          });
+          const resolvedByKey = new Map(
+            await Promise.all(
+              [...lookups].map(async ([key, it]) =>
+                [key, await resolveCartItemProviderId(it).catch(() => null)] as const,
+              ),
+            ),
+          );
+          for (const it of stored) {
+            if (it.providerId) {
+              providerIdByItem.set(it.id, it.providerId);
+              continue;
             }
-            if (removedNames.length > 0) {
-              const names = [...new Set(removedNames)].join(', ');
-              Alert.alert(
-                'Some items removed',
-                `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
-              );
+            const resolvedId = resolvedByKey.get(lookupKey(it)) ?? null;
+            if (resolvedId) {
+              providerIdByItem.set(it.id, resolvedId);
+              dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
+            } else {
+              // No live provider matches this item at all — same outcome for
+              // the client as one that went offline.
+              unavailable.push(it);
             }
+          }
+
+          // A linked item is not proof the provider is still bookable: one who
+          // went offline while the cart sat in storage stayed in it until
+          // checkout, and tapping their logo opened a profile that couldn't
+          // find them. One batched check for every provider in the cart. If
+          // the check itself fails, keep everything — not knowing isn't the
+          // same as being told they're gone.
+          const linkedIds = [...new Set(providerIdByItem.values())];
+          const liveIds = await getLiveProviderIds(linkedIds).catch((error: unknown) => {
+            logger.warn('Could not check cart providers are still live:', error);
+            return null;
+          });
+          if (liveIds) {
+            unavailable.push(...offlineProviderItems(stored, providerIdByItem, liveIds));
+          }
+
+          // Tell the client and let them decide — a provider can be back
+          // tomorrow, so nothing is taken out of the cart without asking.
+          if (unavailable.length > 0) {
+            const names = [...new Set(unavailable.map(it => it.providerDisplayName ?? it.providerName))];
+            const many = names.length > 1;
+            Alert.alert(
+              'Not accepting bookings',
+              `${names.join(', ')} ${many ? 'are' : 'is'} currently not accepting bookings. Would you like to remove ${many ? 'their services' : 'this'} from your cart?`,
+              [
+                { text: 'Keep', style: 'cancel' },
+                {
+                  text: 'Remove',
+                  style: 'destructive',
+                  onPress: () => unavailable.forEach(it =>
+                    dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } })),
+                },
+              ],
+            );
           }
         }
       } catch (error) {
@@ -680,14 +764,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return Object.keys(serviceGroups).length;
   }, [state.items]);
 
-  const getServiceFee = useCallback(() => {
-    return calculatePlatformFee(memoizedTotals.totalPrice);
-  }, [memoizedTotals.totalPrice]);
-
-  const getFinalTotal = useCallback(() => {
-    return memoizedTotals.totalPrice + getServiceFee();
-  }, [memoizedTotals.totalPrice, getServiceFee]);
-
   const getBookingSummary = useCallback((): BookingSummary => {
     const summary: BookingSummary = {
       totalProviders: Object.keys(itemsByProvider).length,
@@ -754,8 +830,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isItemInCart,
     getItemQuantity,
     getTotalServiceInstances,
-    getServiceFee,
-    getFinalTotal,
     getBookingSummary
   }), [
     state.items,
@@ -776,8 +850,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isItemInCart,
     getItemQuantity,
     getTotalServiceInstances,
-    getServiceFee,
-    getFinalTotal,
     getBookingSummary
   ]);
 

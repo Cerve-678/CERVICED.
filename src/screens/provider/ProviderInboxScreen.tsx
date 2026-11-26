@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -36,6 +37,15 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
+import {
+  filterInboxConversations,
+  hasInboxFilters,
+  INBOX_DATE_CHIPS,
+  INBOX_READ_CHIPS,
+  NO_INBOX_FILTERS,
+  type InboxFilters,
+} from '../../features/providers/inboxFilters';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +138,8 @@ function ConversationRow({
   text,
   sub,
   accent,
+  onAccent,
+  card,
   border,
   onPress,
   onReply,
@@ -138,6 +150,8 @@ function ConversationRow({
   text: string;
   sub: string;
   accent: string;
+  onAccent: string;
+  card: string;
   border: string;
   onPress: () => void;
   onReply: () => void;
@@ -145,7 +159,7 @@ function ConversationRow({
 }) {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const swipeRef  = useRef<Swipeable>(null);
+  const swipeRef  = useRef<SwipeableMethods>(null);
 
   useEffect(() => {
     const delay = Math.min(index * 45, 300);
@@ -172,15 +186,22 @@ function ConversationRow({
         style={[row.swipeBtn, { backgroundColor: accent }]}
         onPress={() => { swipeRef.current?.close(); onReply(); }}
       >
-        <Ionicons name="arrow-undo" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>Reply</Text>
+        <Ionicons name="arrow-undo" size={18} color={onAccent} />
+        <Text style={[row.swipeBtnText, { color: onAccent }]}>Reply</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+      {/* Swipeable draws Mark read and Reply behind the row, so the row needs
+          its own background or they show through it before any swipe. */}
+      <Swipeable
+        ref={swipeRef}
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+        childrenContainerStyle={{ backgroundColor: card }}
+      >
         <TouchableOpacity
           activeOpacity={0.72}
           onPress={onPress}
@@ -221,7 +242,7 @@ const LIGHT_P = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
   border:  'rgba(126,102,103,0.14)',
@@ -231,7 +252,7 @@ const DARK_P = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   text:    '#F0ECE7',
   sub:     '#7E6667',
   border:  'rgba(126,102,103,0.18)',
@@ -254,6 +275,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter === 'enquiries' ? 'enquiries' : 'messages');
 
   const [loadError,     setLoadError]     = useState<string | null>(null);
+  // Narrows whichever tab is open. Kept when switching tabs so "Unread" stays
+  // on while the provider checks both.
+  const [filters,       setFilters]       = useState<InboxFilters>(NO_INBOX_FILTERS);
+  const filtersOn = hasInboxFilters(filters);
 
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
   const [replyText,    setReplyText]    = useState('');
@@ -334,7 +359,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       void loadInbox();
     } catch (err) {
       logger.error('[ProviderInbox] quick reply failed:', err);
-      showToast('Message not sent. Check your connection and try again.', 'error');
+      showToast(toUserMessage(err, 'Message not sent. Check your connection and try again.', '[ProviderInbox] quick reply'), 'error');
     }
     setReplySending(false);
   }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
@@ -391,12 +416,30 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const outstandingCount = unreadCounts.enquiries + unreadCounts.messages;
   // Link-only: every conversation, so one from before they switched to their
   // own booking link can't disappear behind a tab they no longer have.
-  const flatItems = useMemo(
+  const tabItems = useMemo(
     () => isLinkOnly
       ? conversations
       : conversations.filter(c => filter === 'messages' ? c.has_booking : !c.has_booking),
     [conversations, filter, isLinkOnly],
   );
+  const flatItems = useMemo(
+    () => filterInboxConversations(tabItems, filters),
+    [tabItems, filters],
+  );
+
+  const toggleReadFilter = useCallback((key: InboxFilters['read']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(prev => ({ ...prev, read: prev.read === key ? null : key }));
+  }, []);
+  const toggleDateFilter = useCallback((key: InboxFilters['date']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(prev => ({ ...prev, date: prev.date === key ? null : key }));
+  }, []);
+  const clearFilters = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(NO_INBOX_FILTERS);
+    Keyboard.dismiss();
+  }, []);
   const showEnquiries = isLinkOnly || filter === 'enquiries';
 
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -479,6 +522,68 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
         </View>
         )}
 
+        {/* ── Search + filters ────────────────────────────────────── */}
+        <View style={[s.filterBar, { backgroundColor: P.card, borderBottomColor: P.border }]}>
+          <View style={[s.searchBox, { backgroundColor: P.surface }]}>
+            <Ionicons name="search" size={15} color={P.sub} />
+            <TextInput
+              style={[s.searchInput, { color: P.text }]}
+              value={filters.search}
+              onChangeText={search => setFilters(prev => ({ ...prev, search }))}
+              placeholder="Search by name"
+              placeholderTextColor={P.sub}
+              autoCorrect={false}
+              autoCapitalize="words"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              accessibilityLabel="Search conversations by name"
+            />
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={s.chipRow}
+          >
+            {INBOX_READ_CHIPS.map(c => {
+              const on = filters.read === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  activeOpacity={0.75}
+                  onPress={() => toggleReadFilter(c.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[s.chip, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}
+                >
+                  <Text style={[s.chipText, { color: on ? P.onAccent : P.text }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={[s.chipDivider, { backgroundColor: P.border }]} />
+            {INBOX_DATE_CHIPS.map(c => {
+              const on = filters.date === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  activeOpacity={0.75}
+                  onPress={() => toggleDateFilter(c.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[s.chip, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}
+                >
+                  <Text style={[s.chipText, { color: on ? P.onAccent : P.text }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {filtersOn && (
+              <TouchableOpacity activeOpacity={0.75} onPress={clearFilters} style={s.clearChip} accessibilityRole="button">
+                <Text style={[s.chipText, { color: P.accent }]}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+
         {/* ── List ────────────────────────────────────────────────── */}
         {loading ? (
           <View style={{ backgroundColor: P.card, flex: 1 }}>
@@ -493,6 +598,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
             }
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={{ paddingBottom: FLOATING_TAB_BAR_CLEARANCE }}
             renderItem={({ item, index }) => (
               <ConversationRow
@@ -501,6 +608,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 text={P.text}
                 sub={P.sub}
                 accent={P.accent}
+                onAccent={P.onAccent}
+                card={P.card}
                 border={P.border}
                 onPress={() => navigation.navigate('ProviderConversation', {
                   conversationId: item.id,
@@ -514,7 +623,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             ListHeaderComponent={
               // With rows on screen the banner sits above them; with none, the
               // empty state below shows the failure instead of an empty inbox.
-              loadError && flatItems.length > 0 ? (
+              loadError && tabItems.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
                     {loadError} This list may be out of date.
@@ -523,10 +632,22 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     <Text style={[s.errorRetry, { color: P.accent }]}>Retry</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
-              loadError ? (
+              tabItems.length > 0 ? (
+                // There are conversations here, the filters just hide them all.
+                <View style={s.empty}>
+                  <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
+                    <Ionicons name="search-outline" size={36} color={P.sub} />
+                  </View>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>Nothing matches</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>No conversations here fit these filters.</Text>
+                  <TouchableOpacity onPress={clearFilters} style={[s.retryBtn, { borderColor: P.border }]}>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>Clear filters</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : loadError ? (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name="cloud-offline-outline" size={36} color={P.sub} />
@@ -601,7 +722,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     onPress={handleSendReply}
                     disabled={!replyText.trim() || replySending}
                   >
-                    <Text style={m.replySendText}>{replySending ? 'Sending…' : 'Send'}</Text>
+                    <Text style={[m.replySendText, { color: P.onAccent }]}>{replySending ? 'Sending…' : 'Send'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -707,8 +828,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                       activeOpacity={0.8}
                     >
                       {templatesSaving
-                        ? <ActivityIndicator color="#FFFFFF" size="small" />
-                        : <Text style={t.saveText}>Save Templates</Text>}
+                        ? <ActivityIndicator color={P.onAccent} size="small" />
+                        : <Text style={[t.saveText, { color: P.onAccent }]}>Save Templates</Text>}
                     </TouchableOpacity>
                   </View>
                 </KeyboardDismissView>
@@ -742,6 +863,15 @@ const s = StyleSheet.create({
   filterBadge:  { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
 
+  filterBar:   { paddingTop: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, paddingHorizontal: 12, height: 38, borderRadius: 100 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  chipRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  chip:        { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
+  chipText:    { fontSize: 13, fontWeight: '600' },
+  chipDivider: { width: StyleSheet.hairlineWidth, height: 20, marginHorizontal: 2 },
+  clearChip:   { paddingHorizontal: 8, paddingVertical: 7 },
+
   empty:      { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
@@ -773,7 +903,7 @@ const s = StyleSheet.create({
 const m = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   positioner:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  dialog:      { width: '100%', borderRadius: 14, overflow: 'hidden' },
+  dialog: { ...readableDialog, width: '100%', borderRadius: 14, overflow: 'hidden' },
   dialogTitle:   { fontSize: 16, fontWeight: '700', textAlign: 'center', paddingTop: 18, paddingHorizontal: 16 },
   dialogMessage: { fontSize: 13, textAlign: 'center', paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16, lineHeight: 18 },
   divider:     { height: StyleSheet.hairlineWidth, width: '100%' },
@@ -793,7 +923,7 @@ const m = StyleSheet.create({
 const t = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   overlayTap:  { flex: 1 },
-  sheet:       { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  sheet: { ...readableSheet, height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   sheetTitle:  { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
 

@@ -9,6 +9,7 @@ import { ProviderRegistrationData } from './providerRegistrationService';
 import { extractProviderProfileFromUrl } from './databaseService';
 import { reportError } from '../utils/logger';
 import { DEFAULT_PROVIDER_THEME, themeBrandingColours } from '../constants/providerThemes';
+import { DEFAULT_RELEASE_TIME } from '../utils/bookingHorizon';
 
 interface ExtractedProfile {
   providerName?: string;
@@ -50,7 +51,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       bufferAfterMins: null,
       description: svc.description || '',
       images: [],
-      addOns: [],
+      addOnKeys: [],
       tags: [],
       techniqueTags: [],
       outcomeTags: [],
@@ -80,12 +81,14 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     // Acuity has no equivalent concept to import — provider sets this
     // themselves afterward via InfoRegScreen/ProviderAutomationsScreen.
     scheduleReleaseDay: null,
+    scheduleReleaseTime: DEFAULT_RELEASE_TIME,
     // Nothing to import for branding, so start from the default theme's own
     // colours — the ones Branding shows — not a placeholder.
     ...themeBrandingColours(DEFAULT_PROVIDER_THEME),
     hasCustomGradient: false,
     profileTheme: DEFAULT_PROVIDER_THEME,
     logo: null,
+    logoFraming: null,
     categories,
     categoryDescriptions: {},
     // Acuity exposes a single business category, so every imported category
@@ -110,9 +113,12 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     termsAcceptedAt: null,
     languagesSpoken: [],
     priceRange: '',
+    priceBands: [],
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
+    howToGetThere: '',
+    publicDirections: '',
     fullAddressCoordinates: null,
     addressReleasePolicy: 'on_confirmation',
     backgroundImage: null,

@@ -188,17 +188,14 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   const remainingBalance = Math.max(0, payment.remainingBalance);
   const providerName = booking.providerName?.trim() || 'your provider';
 
-  // On a deposit this is the provider's deposit alone — the platform fee is
-  // already its own line above and is not part of what the client has put
-  // towards the service.
-  const paidLabel = payment.isDeposit && !payment.isUnpaid
-    ? 'Deposit paid to provider'
-    : payment.isUnpaid ? 'Total paid' : 'Paid today';
+  // Paid (what left the card, fee included) and Due at Appointment, with a
+  // paid deposit listed first. The deposit is part of the price, so it sits
+  // here under Total, never in the lines above it; Paid says it includes the
+  // fee whenever the deposit is beside it, so the two don't look contradictory.
   const paymentRows: PaymentRow[] = [
-    { label: paidLabel, amount: payment.paidAmount, strong: remainingBalance <= 0 },
-    remainingBalance > 0
-      ? { label: 'Due to provider at appointment', amount: remainingBalance, strong: true }
-      : { label: 'Balance due', amount: 0 },
+    ...(payment.depositPaid > 0 ? [{ label: 'Deposit paid', amount: payment.depositPaid }] : []),
+    { label: payment.isHeld ? payment.paidLabel : payment.depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
+    { label: 'Due at Appointment', amount: remainingBalance, strong: remainingBalance > 0 },
   ];
 
   // Driven by payment_status, never payment_type: a booking the provider
@@ -209,11 +206,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     : payment.isPaidInFull ? 'Paid in full' : 'Awaiting payment';
 
   let aside: string | null = null;
-  if (payment.isDeposit) {
-    aside = `Your ${money(payment.depositAmount)} deposit is for the provider’s service. ${remainingBalance > 0
-      ? `${money(remainingBalance)} remains payable directly to the provider at your appointment.`
-      : 'No balance remains.'}`;
-  } else if (payment.isUnpaid && remainingBalance > 0) {
+  if (payment.isUnpaid && remainingBalance > 0) {
     aside = `No payment has been taken through CERVICED for this booking. Payment is arranged directly with ${providerName}.`;
   }
 
@@ -247,12 +240,15 @@ export function buildProviderInvoiceHTML(booking: ConfirmedBooking): string {
   // client's card and, on a card charge, includes CERVICED's platform fee.
   // Keyed off payment_status (via isUnpaid), so a hand-added booking with
   // nothing paid is never invoiced as a "Full payment".
-  const received = payment.isUnpaid ? 0 : payment.isDeposit ? payment.depositAmount : providerTotal;
+  // A request's payment held on the card hasn't been received yet.
+  const received = payment.isUnpaid || payment.isHeld ? 0 : payment.isDeposit ? payment.depositAmount : providerTotal;
   const balance = Math.max(0, providerTotal - received);
   const providerName = booking.providerName?.trim();
   const clientName = booking.customerName?.trim();
 
-  const state = payment.isUnpaid
+  const state = payment.isHeld
+    ? 'Held on card, taken when accepted'
+    : payment.isUnpaid
     ? 'Not paid in app'
     : payment.isDeposit ? 'Deposit paid' : 'Full payment';
   const paymentRows: PaymentRow[] = [

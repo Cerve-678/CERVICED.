@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
-import { View, Animated, ScrollView, StyleSheet, RefreshControl, useWindowDimensions, Platform } from 'react-native';
+import { View, Animated, ScrollView, StyleSheet, RefreshControl, Platform, useWindowDimensions } from 'react-native';
 import { spacing } from '../constants/PlatformDimensions';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -57,6 +57,8 @@ interface MasonryGridProps<T> {
   columnGap?: number;
   contentPadding?: number;
   ListHeaderComponent?: React.ReactNode;
+  // Rendered under the columns, e.g. a spinner while the next page loads.
+  ListFooterComponent?: React.ReactNode;
   ListEmptyComponent?: React.ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -80,6 +82,7 @@ function MasonryGridInner<T>(
     columnGap = spacing.sm,
     contentPadding = spacing.lg,
     ListHeaderComponent,
+    ListFooterComponent,
     ListEmptyComponent,
     refreshing,
     onRefresh,
@@ -242,6 +245,7 @@ function MasonryGridInner<T>(
           </View>
         ))}
       </View>
+      {ListFooterComponent}
     </Animated.ScrollView>
   );
 }

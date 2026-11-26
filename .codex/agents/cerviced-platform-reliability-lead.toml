@@ -8,7 +8,7 @@ Edge Functions, authentication, notification delivery, payment integrations,
 error handling, observability, performance and release-blocking defects.
 
 Use current code and live inspection where authorised. Enforce the repository
-boundary that databaseService.ts is the sole app-side Supabase access layer.
+boundary that the database layer (databaseService.ts plus its topic files in src/services/database/) is the sole app-side Supabase access layer.
 For every sensitive action, establish authentication, ownership, server-side
 validation, idempotence and a truthful user-facing failure path. SQL needs the
 migration owner lock; never apply live changes without explicit user approval.

@@ -36,16 +36,39 @@ export interface WeekComparison {
   lastWeek: LinkOnlyTotals;
 }
 
-/** Splits 14 days of counters into the last seven days (ending today) and
- *  the seven before that. Days with no row count as zero. */
+/** Splits counters into the last seven days (ending today) and the seven
+ *  before that. Older rows are ignored, so Home can pass the longer window it
+ *  fetches for join nudges. Days with no row count as zero. */
 export function compareWeeks(rows: readonly DbProviderDailyStat[], today: Date): WeekComparison {
   const cutoff = startOfDay(today);
   cutoff.setDate(cutoff.getDate() - (DASHBOARD_WEEK_DAYS - 1));
   const cutoffYmd = dateToYMD(cutoff);
+  const floor = new Date(cutoff);
+  floor.setDate(floor.getDate() - DASHBOARD_WEEK_DAYS);
+  const floorYmd = dateToYMD(floor);
   return {
     thisWeek: sumLinkOnlyStats(rows.filter(row => row.day >= cutoffYmd)),
-    lastWeek: sumLinkOnlyStats(rows.filter(row => row.day < cutoffYmd)),
+    lastWeek: sumLinkOnlyStats(rows.filter(row => row.day < cutoffYmd && row.day >= floorYmd)),
   };
+}
+
+/** How many join nudges ("Want them on CERVICED?") it takes before Home shows
+ *  the "Become a full member" bar, and how far back they're counted. */
+export const JOIN_NUDGE_BAR_THRESHOLD = 5;
+export const JOIN_NUDGE_WINDOW_DAYS = 90;
+
+/** The nudge count to show on the bar, or null when the bar should stay
+ *  hidden. Only nudges after the day they last closed the bar count, so
+ *  closing it holds until another JOIN_NUDGE_BAR_THRESHOLD come in. A nudge
+ *  is one client on one day, so this counts nudges, not distinct clients. */
+export function joinNudgeBarCount(
+  rows: readonly DbProviderDailyStat[],
+  dismissedYmd: string | null,
+): number | null {
+  const count = rows
+    .filter(row => dismissedYmd == null || row.day > dismissedYmd)
+    .reduce((sum, row) => sum + row.join_nudges, 0);
+  return count >= JOIN_NUDGE_BAR_THRESHOLD ? count : null;
 }
 
 /** "▲ 4", "▼ 9", or null when nothing changed. */
