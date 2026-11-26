@@ -17,6 +17,8 @@ import ProviderBookingHistoryScreen from "../../../screens/provider/ProviderBook
 import ProviderAutomationsScreen from "../../../screens/provider/ProviderAutomationsScreen";
 import PaymentsScreen from "../../../screens/provider/PaymentsScreen";
 import PoliciesScreen from "../../../screens/provider/PoliciesScreen";
+import BrandingScreen from "../../../screens/provider/BrandingScreen";
+import FullCervicedFeaturesScreen from "../../../screens/provider/FullCervicedFeaturesScreen";
 import { ProviderBeccaStackParamList } from "../../types";
 
 const ProviderBeccaStack =
@@ -150,6 +152,19 @@ export default function ProviderBeccaNavigator() {
       <ProviderBeccaStack.Screen
         name="Policies"
         component={PoliciesScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      <ProviderBeccaStack.Screen
+        name="Branding"
+        component={BrandingScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      {/* Branding's "see more" for a link-only pro opens this. */}
+      <ProviderBeccaStack.Screen
+        name="FullCervicedFeatures"
+        component={FullCervicedFeaturesScreen}
         options={{ headerShown: false, presentation: "card" }}
       />
     </ProviderBeccaStack.Navigator>

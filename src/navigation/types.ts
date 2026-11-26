@@ -145,6 +145,8 @@ export type ProviderBeccaStackParamList = {
   Automations: undefined;
   Payments: undefined;
   Policies: undefined;
+  Branding: undefined;
+  FullCervicedFeatures: undefined;
 };
 
 // Cart Stack

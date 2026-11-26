@@ -323,8 +323,8 @@ Curated: [[Services]] · **96 files**
 - `src/services/becca/capabilities/client.ts` _(53)_
 - `src/components/ChatComponents.tsx` _(46)_
 - `src/services/becca/types.ts` _(43)_
+- `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(39)_
 - `src/services/database/becca.ts` _(39)_
-- `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(37)_
 - `src/services/beccaStorageService.ts` _(28)_
 - `src/navigation/types.ts` _(24)_
 - `src/services/becca/smallTalk.ts` _(24)_
@@ -340,9 +340,9 @@ Curated: [[Services]] · **96 files**
 - `src/i18n/catalogs/de/clientAccount.ts` _(12)_
 - `src/i18n/catalogs/es/clientAccount.ts` _(12)_
 - `src/i18n/catalogs/fr/clientAccount.ts` _(12)_
+- `src/services/becca/capabilities/provider.ts` _(12)_
 - `src/i18n/catalogs/en/settings.ts` _(11)_
 - `src/i18n/catalogs/fr/settings.ts` _(11)_
-- `src/i18n/catalogs/pl/clientAccount.ts` _(11)_
 - … +66 more
 
 ## Cart & checkout

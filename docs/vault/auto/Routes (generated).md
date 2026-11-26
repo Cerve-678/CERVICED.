@@ -50,6 +50,8 @@ Curated overview: [[Screens & Navigation]].
 - `Automations`
 - `Payments`
 - `Policies`
+- `Branding`
+- `FullCervicedFeatures`
 - `ProfileMain`
 - `ProfileInfo`
 - `BeautyProfile`
@@ -74,10 +76,8 @@ Curated overview: [[Screens & Navigation]].
 - `AccountHolderDetails`
 - `LinkOnlyHomeMain`
 - `LinkOnlyAnalytics`
-- `FullCervicedFeatures`
 - `BeccaStack`
 - `EditProfile`
-- `Branding`
 - `BusinessInfo`
 - `ProviderServicesMain`
 - `MyPublicProfile`

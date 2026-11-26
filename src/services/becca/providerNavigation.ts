@@ -23,6 +23,10 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
     destination: { title: "Scheduling & Availability", path: "Business Details → Scheduling & Availability", screen: "bookingRules", detail: "Change your booking rules and availability options, then save.", fullBookingOnly: true },
   },
   {
+    topic: /\b(?:branding|brand colou?rs?|page styles?|logo)\b/i,
+    destination: { title: "Branding", path: "Business Profile → Branding", screen: "branding", detail: "Change your page style, colours and logo there." },
+  },
+  {
     topic: /\b(?:services?|prices?|price list|menu|portfolio|photos?|specialit(?:y|ies))\b/i,
     destination: { title: "My Services", path: "My Services", screen: "services", detail: "Edit your services, prices and portfolio there.", fullBookingOnly: true },
   },
