@@ -20,31 +20,45 @@ import { getUserBasicInfo } from "./users";
 export const PUBLIC_PROVIDER_SUMMARY_SELECT =
   "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, price_bands, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
-export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
+export async function getNewProviders(
+  limit = 10,
+  category?: string,
+): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
     Date.now() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
-  const { data, error } = await supabase
+  let query = supabase
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
-    .gte("created_at", thirtyDaysAgo)
+    .gte("created_at", thirtyDaysAgo);
+  // Same "any of their declared types" match as getProviders.
+  if (category) query = query.overlaps("service_categories", [category]);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
   return (data ?? []) as PublicProviderSummary[];
 }
 
-/** Top-rated providers — "Top Rated" section (≥3 reviews, rating ≥4.0) */
-export async function getTopRatedProviders(limit = 10): Promise<PublicProviderSummary[]> {
-  const { data, error } = await supabase
+/** Top-rated providers — "Top Rated" section (≥3 reviews, rating ≥4.0),
+ *  optionally within one service category ("top rated in lashes"). */
+export async function getTopRatedProviders(
+  limit = 10,
+  category?: string,
+): Promise<PublicProviderSummary[]> {
+  let query = supabase
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("has_gone_live", true)
     .eq("is_active", true)
     .gte("review_count", 3)
-    .gte("rating", 4.0)
+    .gte("rating", 4.0);
+  // Same "any of their declared types" match as getProviders — a
+  // lashes-and-brows business counts as top rated in brows too.
+  if (category) query = query.overlaps("service_categories", [category]);
+  const { data, error } = await query
     .order("rating", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
