@@ -214,6 +214,8 @@ export const settings = {
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'profile.appInfo.terms.title': 'Terms & Conditions',
   'profile.appInfo.terms.sub': 'Legal info',
+  'profile.appInfo.privacy.title': 'Privacy Policy',
+  'profile.appInfo.privacy.sub': 'How we use your data',
   'profile.appInfo.report.title': 'Report a Problem',
   'profile.appInfo.report.sub': 'Bugs, feedback',
 
@@ -310,6 +312,8 @@ export const settings = {
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'providerAccount.appInfo.terms.title': 'Terms & Conditions',
   'providerAccount.appInfo.terms.sub': 'Legal info',
+  'providerAccount.appInfo.privacy.title': 'Privacy Policy',
+  'providerAccount.appInfo.privacy.sub': 'How we use your data',
   'providerAccount.appInfo.report.title': 'Report a Problem',
   'providerAccount.appInfo.report.sub': 'Bugs, feedback',
 
@@ -409,8 +413,12 @@ export const settingsHeld: readonly (keyof typeof settings)[] = [
   'helpCentre.action.terms', // legal reference
   'profile.appInfo.terms.title', // legal reference
   'profile.appInfo.terms.sub', // legal reference
+  'profile.appInfo.privacy.title', // legal reference
+  'profile.appInfo.privacy.sub', // legal reference
   'providerAccount.appInfo.terms.title', // legal reference
   'providerAccount.appInfo.terms.sub', // legal reference
+  'providerAccount.appInfo.privacy.title', // legal reference
+  'providerAccount.appInfo.privacy.sub', // legal reference
   'helpCentre.faq.request.a',
   'helpCentre.faq.tip.a',
   'helpCentre.faq.beautyProfile.a',
