@@ -24,28 +24,7 @@ import Icon from '../../components/IconLibrary';
 import { supportMailtoUrl } from '../../constants/support';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
-
-// FAQ copy lives in the i18n catalog; this list just names the question/answer
-// keys. Two answers (cancel, payment) are legal/payment copy and are HELD IN
-// ENGLISH by the i18n DO_NOT_TRANSLATE guard even when another language is
-// active — see src/i18n/translate.ts.
-const FAQ_KEYS: ReadonlyArray<{ q: TranslationKey; a: TranslationKey }> = [
-  { q: 'helpCentre.faq.book.q', a: 'helpCentre.faq.book.a' },
-  { q: 'helpCentre.faq.cancel.q', a: 'helpCentre.faq.cancel.a' },
-  { q: 'helpCentre.faq.becca.q', a: 'helpCentre.faq.becca.a' },
-  { q: 'helpCentre.faq.points.q', a: 'helpCentre.faq.points.a' },
-  { q: 'helpCentre.faq.payment.q', a: 'helpCentre.faq.payment.a' },
-];
-
-// The provider hat's questions. Help Centre is registered in both hats'
-// navigators, and a pro never needs to know how to book an appointment.
-const PROVIDER_FAQ_KEYS: ReadonlyArray<{ q: TranslationKey; a: TranslationKey }> = [
-  { q: 'helpCentre.providerFaq.live.q', a: 'helpCentre.providerFaq.live.a' },
-  { q: 'helpCentre.providerFaq.book.q', a: 'helpCentre.providerFaq.book.a' },
-  { q: 'helpCentre.providerFaq.saves.q', a: 'helpCentre.providerFaq.saves.a' },
-  { q: 'helpCentre.providerFaq.messages.q', a: 'helpCentre.providerFaq.messages.a' },
-  { q: 'helpCentre.providerFaq.becca.q', a: 'helpCentre.providerFaq.becca.a' },
-];
+import { helpAudienceFor, helpSectionsFor } from '../../features/help/helpTopics';
 
 function FAQItem({ q, a, P }: { q: string; a: string; P: AppTheme }) {
   const [open, setOpen] = useState(false);
@@ -93,8 +72,10 @@ export default function HelpCentreScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { hatState } = useAuth();
-  const faqs = hatState.active === 'provider' ? PROVIDER_FAQ_KEYS : FAQ_KEYS;
+  const { hatState, myBookingMode } = useAuth();
+  // Each hat sees only its own questions, and a pro who takes bookings through
+  // their own link doesn't see payouts, deposits or the waitlist.
+  const sections = helpSectionsFor(helpAudienceFor(hatState.active, myBookingMode));
   const [moreOpen, setMoreOpen] = useState(false);
 
   const actions = buildMoreActions(navigation, t);
@@ -151,9 +132,13 @@ export default function HelpCentreScreen({ navigation }: any) {
           {t('helpCentre.subtitle')}
         </Text>
 
-        <Text style={[styles.section, { color: P.accentText }]}>{t('helpCentre.section.faqs')}</Text>
-        {faqs.map(item => (
-          <FAQItem key={item.q} q={t(item.q)} a={t(item.a)} P={P} />
+        {sections.map((section, i) => (
+          <View key={section.title} style={i > 0 ? styles.sectionGap : undefined}>
+            <Text style={[styles.section, { color: P.accentText }]}>{t(section.title)}</Text>
+            {section.items.map(item => (
+              <FAQItem key={item.q} q={t(item.q)} a={t(item.a)} P={P} />
+            ))}
+          </View>
         ))}
       </ScrollView>
 
@@ -203,6 +188,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 28, lineHeight: 20 },
   section: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2, marginBottom: 12 },
+  sectionGap: { marginTop: 18 },
   faqItem: {
     borderRadius: 14,
     borderWidth: 0.5,
