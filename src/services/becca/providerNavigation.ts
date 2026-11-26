@@ -47,7 +47,7 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
     destination: { title: "Info Packs", path: "Info Packs", screen: "infopacks", detail: "Manage client information and forms there.", fullBookingOnly: true },
   },
   {
-    topic: /\b(?:payment settings?|payouts?|bank details?)\b/i,
+    topic: /\b(?:payment settings?|payouts?|bank details?|get paid|paid out)\b/i,
     destination: { title: "Payments", path: "Business Profile → Payments & payouts", screen: "payments", detail: "Review or update your payment details there.", fullBookingOnly: true },
   },
   {
@@ -75,5 +75,5 @@ export function isProviderNavigationAsk(message: string): boolean {
   // The analytics capability already opens Analytics while adding a useful
   // business summary; keep that established route for this exact command.
   if (/^open\s+(?:my\s+)?analytics\b/i.test(message)) return false;
-  return /\b(?:where (?:do|can|is)|how (?:do|can)|show me where|take me to|open|find|go to|navigate|set|change|edit|update|switch|turn (?:on|off)|enable|disable|manage|add|remove|block out)\b/i.test(message);
+  return /\b(?:where (?:do|can|is)|how (?:do|can)|show me where|take me to|open|find|go to|navigate|set|set up|change|edit|update|switch|turn (?:on|off)|enable|disable|manage|add|remove|block out|create)\b/i.test(message);
 }
