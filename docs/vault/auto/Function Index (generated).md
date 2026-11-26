@@ -5,11 +5,11 @@
 
 #generated
 
-**4457 functions** across **716 files**.
+**4459 functions** across **717 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
-- `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
+- `AddOnPickerModal.tsx` — **AddOnPickerModal** · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · runOnClose · showAlert · showConfirm · showToast · Toast · **useAppDialog**
@@ -166,7 +166,7 @@
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `ExternalBookingCard.tsx` — createStyles · styles
-- `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · **splitExternalBookings**
+- `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · knownBookingSite · **splitExternalBookings**
 - `noShowDispute.ts` — **fileNoShowDispute**
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **cancelsWithRefund** · **describeCancelRefund** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
@@ -207,6 +207,9 @@
 
 ### `src/features/explore/` (1)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
+
+### `src/features/help/` (1)
+- `helpTopics.ts` — **helpAudienceFor** · **helpSectionsFor**
 
 ### `src/features/home/` (2)
 - `SkeletonSection.tsx` — **SkeletonSection**

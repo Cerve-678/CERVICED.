@@ -55,6 +55,8 @@ import {
 } from "./ProfilePageStyle";
 import { latteShade } from "./heroes/LatteHero";
 import type { HeroPhotoFrames } from "./HeroPhoto";
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const noop = () => {};
 
@@ -208,6 +210,8 @@ export function ProfileStylePreview({
   pinnedBarBottom = 40,
   editParts,
 }: ProfileStylePreviewProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Tap Your Page: a part of the page in a dashed outline with its name on
   // it; the one they're changing is drawn solid. Its content takes no
   // touches, so a tap anywhere on it picks the part.
@@ -511,10 +515,10 @@ export function ProfileStylePreview({
               <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />
               <View style={[styles.tabs, { borderBottomColor: OP.border }]}>
                 <View style={[styles.tab, { borderBottomColor: accent, borderBottomWidth: 2 }]}>
-                  <Text style={[styles.tabText, { color: OP.text }]}>About</Text>
+                  <Text style={[styles.tabText, { color: OP.text }]}>{tr('discover.profile.tab.about')}</Text>
                 </View>
                 <View style={styles.tab}>
-                  <Text style={[styles.tabText, { color: OP.sub }]}>Policy</Text>
+                  <Text style={[styles.tabText, { color: OP.sub }]}>{tr('discover.profile.tab.policy')}</Text>
                 </View>
               </View>
               {aboutBody(OP.text, OP.sep)}
@@ -553,7 +557,7 @@ export function ProfileStylePreview({
           {/* Services (on Latte, all of it on the services band) */}
           <View style={pourBandStyle(servicesPalette)}>
           {pageStyle.heading === "plain" ? (
-            <Text style={[styles.servicesTitle, { color: OP.text }]}>Services</Text>
+            <Text style={[styles.servicesTitle, { color: OP.text }]}>{tr('discover.profile.services')}</Text>
           ) : zone("headingStyle", "Headings", (
             <View>
               {pageStyle.divider ? <SectionDivider divider={pageStyle.divider} accent={accent} /> : null}
@@ -673,7 +677,7 @@ export function ProfileStylePreview({
                   </View>
                 )}
                 <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook || glowBook || captionBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }], glowBook && [styles.bookOutline, { borderColor: accent }], captionBook && [styles.bookOutline, { borderColor: serviceInk.text }], darkPillBook && { backgroundColor: serviceInk.text }, shopBook && styles.bookShopBox, arrowBook && styles.bookArrow]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook || captionBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText, captionBook && styles.bookCaptionText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? "Book now" : darkPillBook ? "book" : "Book"}</Text>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook || glowBook || captionBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText, (shopBook || glowBook) && styles.bookShopText, captionBook && styles.bookCaptionText, darkPillBook && [styles.bookDarkPillText, { color: isDarkColor(serviceInk.text) ? "#FAF8F3" : "#26241F" }]]}>{arrowBook || shopBook ? tr('maintenance.countdown.bookNow') : darkPillBook ? "book" : "Book"}</Text>
                   {arrowBook ? (
                     <View style={[styles.bookArrowCircle, { borderColor: onAccentInk(accent).text }]}>
                       <Ionicons name="chevron-forward" size={10} color={onAccentInk(accent).text} />
@@ -742,7 +746,7 @@ export function ProfileStylePreview({
             )}
           </View>
           <View style={[styles.pinnedButton, squareButtons && styles.bookSquare, { backgroundColor: accent }]}>
-            <Text style={[styles.pinnedButtonText, squareButtons && styles.bookSquareText]}>Book</Text>
+            <Text style={[styles.pinnedButtonText, squareButtons && styles.bookSquareText]}>{tr('beautyProfile.hello.book')}</Text>
           </View>
           <View style={styles.pinnedClose}>
             <Ionicons name="close" size={18} color={OP.sub} />

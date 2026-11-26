@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { ProviderContactOption } from './contactOptions';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface ProviderContactSheetColors {
   surface: string;
@@ -44,6 +46,8 @@ export function ProviderContactSheet({
   /** The website caps the page at a phone's width; the sheet matches it. */
   maxWidth?: number;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
     <Modal
       visible={visible}
@@ -97,7 +101,7 @@ export function ProviderContactSheet({
             onPress={onClose}
             activeOpacity={0.75}
           >
-            <Text style={[styles.closeText, { color: colors.text }]}>Close</Text>
+            <Text style={[styles.closeText, { color: colors.text }]}>{tr('common.close')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
