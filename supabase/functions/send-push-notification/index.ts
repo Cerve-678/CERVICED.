@@ -183,6 +183,7 @@ const PROVIDER_PREF_KEY_BY_TYPE: Record<string, string> = {
   // "Appointment Reminders — the day before, and forms not sent yet"
   booking_reminder: 'providerReminders',
   intake_form_reminder: 'providerReminders',
+  address_release_reminder: 'providerReminders',
   // "Client Forms"
   intake_form_completed: 'providerForms',
   intake_form_received: 'providerForms',

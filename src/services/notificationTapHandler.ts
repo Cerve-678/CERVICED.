@@ -75,6 +75,9 @@ const BOOKING_TYPES = new Set([
   'intake_form_received',
   'info_pack_received',
   'address_released',
+  // A provider on Manual release hasn't sent their address yet:
+  // the booking is where "Send address to client" is.
+  'address_release_reminder',
   // Carries the hold's booking_id when a slot is held for the client. Bookings
   // shows a held slot at the top, or "this slot has gone" if the hold has
   // ended since (20261113210000). Notices with no booking are routed above.

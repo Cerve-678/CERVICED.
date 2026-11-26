@@ -19,8 +19,8 @@ Curated: [[Address Release]] · **172 files**
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
 - `src/screens/client/BookingsScreen.tsx` _(38)_
+- `src/types/database.ts` _(37)_
 - `src/types/booking.ts` _(35)_
-- `src/types/database.ts` _(35)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `src/i18n/catalogs/en/discover.ts` _(33)_
 - `src/screens/provider/BusinessInfoScreen.tsx` _(33)_
@@ -123,8 +123,8 @@ Curated: [[Booking Flow]] · **492 files**
 - `src/screens/client/RescheduleScreen.tsx` _(192)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
+- `src/screens/shared/NotificationsScreen.tsx` _(143)_
 - `src/services/database/edgeFunctions.ts` _(143)_
-- `src/screens/shared/NotificationsScreen.tsx` _(142)_
 - `src/services/AvailabilityService.ts` _(141)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(139)_
 - `supabase/waitlist_holds.sql` _(134)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **492 files**
 ## Notifications
 Curated: [[Notifications]] · **261 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(415)_
+- `src/screens/shared/NotificationsScreen.tsx` _(421)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/database/notifications.ts` _(118)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
@@ -157,7 +157,7 @@ Curated: [[Notifications]] · **261 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(61)_
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(54)_
-- `src/services/notificationTapHandler.ts` _(52)_
+- `src/services/notificationTapHandler.ts` _(53)_
 - `supabase/automation_jobs.sql` _(51)_
 - `src/services/becca/capabilities/client.ts` _(48)_
 - `src/i18n/catalogs/de/shared.ts` _(47)_

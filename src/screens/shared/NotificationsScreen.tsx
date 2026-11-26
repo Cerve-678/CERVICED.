@@ -89,7 +89,8 @@ interface Notification {
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
       | 'schedule_fully_booked' | 'points_earned'
       | 'maintenance_due'    | 'aftercare_available'
-      | 'provider_saved'     | 'follow_request'     | 'waitlist_joined';
+      | 'provider_saved'     | 'follow_request'     | 'waitlist_joined'
+      | 'address_release_reminder';
   title: string;
   message: string;
   timestamp: string;
@@ -711,6 +712,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'intake_form_received' ||
         notification.type === 'info_pack_received' ||
         notification.type === 'address_released' ||
+        notification.type === 'address_release_reminder' ||
         notification.type === 'pending_booking_reminder' ||
         notification.type === 'rebooking_nudge' ||
         notification.type === 'daily_recap') {
@@ -1021,7 +1023,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
-    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available', 'waitlist_joined'].includes(type)) return '#FF9500';
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available', 'waitlist_joined', 'address_release_reminder'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
     if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved', 'follow_request'].includes(type)) return P.accentText;
     return '#FF9800';
@@ -1109,6 +1111,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return t('shared.notifications.action.openChat');
       case 'address_released':
         return t('shared.notifications.action.viewAddress');
+      // The booking is where "Send address to client" is.
+      case 'address_release_reminder':
+        return t('shared.notifications.action.viewBooking');
       case 'schedule_fully_booked':
         return 'View Certificate';
       case 'payout_failed':

@@ -136,7 +136,10 @@ export type NotificationType =
   /** Client: someone asked to follow their private account. metadata.follower_id says who. */
   | "follow_request"
   /** Provider: a client joined their waitlist. metadata.waitlist_id says which entry. */
-  | "waitlist_joined";
+  | "waitlist_joined"
+  /** Provider: on Manual release and hasn't sent their address
+   *  for a booking yet. metadata.stage is '3d', '1d' or '4h' before it. */
+  | "address_release_reminder";
 
 export type NotificationPriority = "high" | "medium" | "low";
 

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-26 (a provider on Manual release is reminded to send their address)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126100000 | `address_release_reminder` | **APPLIED 2026-11-26** on the user's "apply", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261125170000`, no unapplied migration on any open PR. Nothing redefined (new function + cron; one type added to `notifications_type_check` read from live), so no md5 guard. Forced-rollback dry run first, triggers off: 3 days / 1 day / 4 hours each sent once, a booking confirmed after a point skips it (except 4 hours), sent address or a 5-day-out booking gets nothing, mobile on Manual reminded too, second run sent 0. Verified live: version recorded (live max); `process_address_release_reminders` md5 `b201aa46…`, not executable by anon/authenticated; cron `address-release-reminders` `7,17,27,37,47,57 * * * *`; 60 types in the check incl. `address_release_reminder`; 0 sent at apply (no provider is on Manual yet). |
+
 ### Applied 2026-11-25 (language filter on everything one person writes to another)
 
 | Recorded version | Name | Verified live |
