@@ -8,7 +8,6 @@ import { dateToYMD, dayName, formatTime12Safe } from '../../utils/dateUtils';
 import { tr, trp } from '../../i18n/translate';
 import { DASHBOARD_WEEK_DAYS, hoursFor, startOfDay } from './diaryDays';
 import { sumLinkOnlyStats, type DayBar, type LinkOnlyTotals } from './linkOnlyAnalytics';
-import { tr } from '../../i18n';
 
 /** "Open today 9am–6pm", "Closed today", or null when there are no hours
  *  for today. */
