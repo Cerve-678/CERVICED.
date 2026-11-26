@@ -14,6 +14,8 @@ import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
 import { isDarkColor } from '../../constants/providerThemes';
 import type { TourKey } from '../../utils/coachMarkTours';
 import { logger } from '../../utils/logger';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export type PackFormKind = 'packs' | 'forms';
 
@@ -65,6 +67,8 @@ export function PackFormTipCard({
   onOpen: (kind: PackFormKind) => void;
   onClose: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const onAccent = isDarkColor(palette.accent) ? '#FFFFFF' : '#1A1815';
   const accentText = palette.accentText ?? palette.accent;
   const open = (kind: PackFormKind) => {
@@ -84,7 +88,7 @@ export function PackFormTipCard({
           hitSlop={10}
           activeOpacity={0.6}
           accessibilityRole="button"
-          accessibilityLabel="Hide this tip"
+          accessibilityLabel={tr('providerBusiness.newp.hideThisTip')}
           style={s.close}
         >
           <Ionicons name="close" size={18} color={palette.sub} />

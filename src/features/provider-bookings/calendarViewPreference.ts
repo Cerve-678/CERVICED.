@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../../utils/logger';
 import { STORAGE_KEYS } from '../../utils/storageKeys';
+import { tr } from '../../i18n/translate';
 
 export type CalendarView = 'list' | 'timeline' | 'week';
 
@@ -17,9 +18,9 @@ export const DEFAULT_CALENDAR_VIEW: CalendarView = 'timeline';
 
 /** In the order the Home button cycles through them. */
 export const CALENDAR_VIEW_OPTIONS: readonly { key: CalendarView; label: string; icon: 'list-outline' | 'time-outline' | 'calendar-outline' }[] = [
-  { key: 'timeline', label: 'Full day', icon: 'time-outline' },
-  { key: 'list', label: 'List', icon: 'list-outline' },
-  { key: 'week', label: 'Week', icon: 'calendar-outline' },
+  { key: 'timeline', get label() { return tr('providerBusiness.newp.fullDay'); }, icon: 'time-outline' },
+  { key: 'list', get label() { return tr('providerBusiness.newp.list'); }, icon: 'list-outline' },
+  { key: 'week', get label() { return tr('providerBusiness.newp.week'); }, icon: 'calendar-outline' },
 ];
 
 const STORAGE_KEY = STORAGE_KEYS.PROVIDER_CALENDAR_VIEW;

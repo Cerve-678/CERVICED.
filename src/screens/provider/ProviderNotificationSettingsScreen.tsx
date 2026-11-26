@@ -10,6 +10,7 @@ import {
   saveProviderNotificationPreferences,
   type ProviderNotificationPreferences,
 } from '../../services/databaseService';
+import { tr } from '../../i18n';
 
 type Section = NotificationPreferenceSection<ProviderNotificationPreferences>;
 
@@ -17,19 +18,19 @@ type Section = NotificationPreferenceSection<ProviderNotificationPreferences>;
 // PROVIDER_PREF_KEY_BY_TYPE in send-push-notification — a row here with no
 // types there would be a switch that does nothing.
 const BOOKINGS: Section = {
-  title: 'BOOKINGS',
+  get title() { return tr('achievements.group.bookings'); },
   rows: [
-    { key: 'providerNewBookings', icon: 'calendar-today', title: 'New Bookings', subtitle: 'When a client books with you' },
-    { key: 'providerBookingChanges', icon: 'sliders', title: 'Changes & Cancellations', subtitle: 'Cancelled bookings and reschedule outcomes' },
-    { key: 'providerReminders', icon: 'notifications', title: 'Appointment Reminders', subtitle: 'The day before, and forms not sent yet' },
-    { key: 'providerForms', icon: 'receipt', title: 'Client Forms', subtitle: 'When a client fills in a form' },
-    { key: 'providerWaitlist', icon: 'people', title: 'Waitlist', subtitle: 'When someone joins your waitlist' },
+    { key: 'providerNewBookings', icon: 'calendar-today', get title() { return tr('providerBusiness.newp.newBookings'); }, get subtitle() { return tr('providerBusiness.newp.whenAClientBooksWithYou'); } },
+    { key: 'providerBookingChanges', icon: 'sliders', get title() { return tr('providerBusiness.newp.changesCancellations'); }, get subtitle() { return tr('providerBusiness.newp.cancelledBookingsAndRescheduleOutcomes'); } },
+    { key: 'providerReminders', icon: 'notifications', get title() { return tr('providerBusiness.newp.appointmentReminders'); }, get subtitle() { return tr('providerBusiness.newp.theDayBeforeAndFormsNot'); } },
+    { key: 'providerForms', icon: 'receipt', get title() { return tr('providerBusiness.newp.clientForms'); }, get subtitle() { return tr('providerBusiness.newp.whenAClientFillsInA'); } },
+    { key: 'providerWaitlist', icon: 'people', get title() { return tr('providerBusiness.newp.waitlist'); }, get subtitle() { return tr('providerBusiness.newp.whenSomeoneJoinsYourWaitlist'); } },
   ],
 };
 const MESSAGES: Section = {
   title: 'MESSAGES',
   rows: [
-    { key: 'providerMessages', icon: 'message', title: 'Messages', subtitle: 'New messages and unread reminders' },
+    { key: 'providerMessages', icon: 'message', get title() { return tr('providerBusiness.inbox.filter.messages'); }, get subtitle() { return tr('providerBusiness.newp.newMessagesAndUnreadReminders'); } },
   ],
 };
 const PAYMENTS: Section = {
@@ -40,15 +41,15 @@ const PAYMENTS: Section = {
 };
 // A count once a day, never names, so who saved you stays private.
 const SAVES_ROW: Section['rows'][number] = {
-  key: 'providerSaves', icon: 'bookmark', title: 'Saves', subtitle: 'A daily count of people who saved you',
+  key: 'providerSaves', icon: 'bookmark', get title() { return tr('providerBusiness.newp.saves'); }, get subtitle() { return tr('providerBusiness.newp.aDailyCountOfPeopleWho'); },
 };
 const YOUR_BUSINESS: Section = {
-  title: 'YOUR BUSINESS',
+  get title() { return tr('providerAccount.section.yourBusiness'); },
   rows: [
     SAVES_ROW,
-    { key: 'providerReviews', icon: 'star', title: 'Reviews', subtitle: 'When a client leaves a review' },
-    { key: 'providerDailyRecap', icon: 'stack', title: 'Today’s Schedule', subtitle: 'A morning recap of the day ahead' },
-    { key: 'providerFullyBooked', icon: 'bar-chart', title: 'Fully Booked', subtitle: 'When every slot you’ve opened is booked, with your certificate' },
+    { key: 'providerReviews', icon: 'star', get title() { return tr('providerBusiness.newp.reviews'); }, get subtitle() { return tr('providerBusiness.newp.whenAClientLeavesAReview'); } },
+    { key: 'providerDailyRecap', icon: 'stack', get title() { return tr('providerBusiness.newp.todaySSchedule'); }, get subtitle() { return tr('providerBusiness.newp.aMorningRecapOfTheDay'); } },
+    { key: 'providerFullyBooked', icon: 'bar-chart', get title() { return tr('achievements.name.fullyBookedFirst'); }, get subtitle() { return tr('providerBusiness.newp.whenEverySlotYouVeOpened'); } },
   ],
 };
 
@@ -61,9 +62,9 @@ const LINK_ONLY_PROFILE: Section = {
 // would let a request lapse unseen. They are absent from the edge function's
 // map, which is what keeps them sending.
 const ALWAYS_ON: AlwaysOnRow[] = [
-  { icon: 'bell', title: 'Booking Requests', subtitle: 'Bookings waiting for you to accept' },
-  { icon: 'swap-horiz', title: 'Reschedule Requests', subtitle: 'A client asking to move their appointment' },
-  { icon: 'gavel', title: 'Refund Requests & Disputes', subtitle: 'A client asking for money back or disputing a fee' },
+  { icon: 'bell', get title() { return tr('providerBusiness.newp.bookingRequests'); }, get subtitle() { return tr('providerBusiness.newp.bookingsWaitingForYouToAccept'); } },
+  { icon: 'swap-horiz', get title() { return tr('providerBusiness.newp.rescheduleRequests'); }, get subtitle() { return tr('providerBusiness.newp.aClientAskingToMoveTheir'); } },
+  { icon: 'gavel', get title() { return tr('providerBusiness.newp.refundRequestsDisputes'); }, get subtitle() { return tr('providerBusiness.newp.aClientAskingForMoneyBack'); } },
 ];
 
 export default function ProviderNotificationSettingsScreen({ navigation }: { navigation: { goBack: () => void } }) {

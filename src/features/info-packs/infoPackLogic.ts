@@ -1,3 +1,5 @@
+
+import { tr } from '../../i18n/translate';
 // Pure rules behind Info Packs: which bookings a pack is for, what it has
 // reached, and what a booking is still missing. Kept out of the screens so the
 // list, the send sheet and the booking detail all agree, and so it can be
@@ -123,15 +125,15 @@ export const PACK_HEADINGS = {
 
 /** The ADD row, in the order a client meets them: before, on the day, after. */
 export const PACK_SECTIONS = [
-  { key: 'before', heading: PACK_HEADINGS.before, label: 'Before' },
-  { key: 'expect', heading: PACK_HEADINGS.expect, label: 'What to expect' },
-  { key: 'arrive', heading: PACK_HEADINGS.arrive, label: 'Arriving' },
-  { key: 'bring', heading: PACK_HEADINGS.bring, label: 'What to bring' },
-  { key: 'late', heading: PACK_HEADINGS.late, label: 'Running late' },
-  { key: 'after', heading: PACK_HEADINGS.after, label: 'Aftercare' },
-  { key: 'last', heading: PACK_HEADINGS.last, label: 'Making it last' },
-  { key: 'next', heading: PACK_HEADINGS.next, label: 'Next appointment' },
-  { key: 'questions', heading: PACK_HEADINGS.questions, label: 'Questions' },
+  { key: 'before', heading: PACK_HEADINGS.before, get label() { return tr('providerBusiness.newp.before'); } },
+  { key: 'expect', heading: PACK_HEADINGS.expect, get label() { return tr('providerBusiness.newp.whatToExpect'); } },
+  { key: 'arrive', heading: PACK_HEADINGS.arrive, get label() { return tr('providerBusiness.newp.arriving'); } },
+  { key: 'bring', heading: PACK_HEADINGS.bring, get label() { return tr('providerBusiness.newp.whatToBring'); } },
+  { key: 'late', heading: PACK_HEADINGS.late, get label() { return tr('providerBusiness.conversation.prompt.runningLate'); } },
+  { key: 'after', heading: PACK_HEADINGS.after, get label() { return tr('providerBusiness.newp.aftercare'); } },
+  { key: 'last', heading: PACK_HEADINGS.last, get label() { return tr('providerBusiness.newp.makingItLast'); } },
+  { key: 'next', heading: PACK_HEADINGS.next, get label() { return tr('providerBusiness.newp.nextAppointment'); } },
+  { key: 'questions', heading: PACK_HEADINGS.questions, get label() { return tr('providerBusiness.newp.questions'); } },
 ] as const;
 
 export type PackSectionKey = (typeof PACK_SECTIONS)[number]['key'];

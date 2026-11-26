@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **172 files**
 - … +142 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **300 files**
+Curated: [[Availability & Slots]] · **299 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(189)_
 - `src/services/database/availability.ts` _(182)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **300 files**
 - `src/i18n/catalogs/en/cart.ts` _(30)_
 - `src/types/database.ts` _(28)_
 - `src/screens/client/BookingsScreen.tsx` _(27)_
-- … +270 more
+- … +269 more
 
 ## Payments
 Curated: [[Payments]] · **256 files**
@@ -162,21 +162,21 @@ Curated: [[Notifications]] · **261 files**
 - `src/services/becca/capabilities/client.ts` _(48)_
 - `src/i18n/catalogs/de/shared.ts` _(47)_
 - `src/i18n/catalogs/pl/shared.ts` _(47)_
+- `src/i18n/catalogs/en/providerBusiness.ts` _(46)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
 - `supabase/notifications_cleanup_2026_08.sql` _(40)_
 - `supabase/fix_pending_booking_provider_reminder.sql` _(38)_
 - `src/screens/client/NotificationsSettingsScreen.tsx` _(37)_
-- `src/i18n/catalogs/en/providerBusiness.ts` _(36)_
+- `src/i18n/catalogs/fr/providerBusiness.ts` _(33)_
 - `supabase/waitlist_holds.sql` _(32)_
+- `src/i18n/catalogs/es/providerBusiness.ts` _(30)_
+- `src/i18n/catalogs/pl/providerBusiness.ts` _(29)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(29)_
-- `supabase/phase1_schema.sql` _(29)_
-- `src/navigation/RootNavigation.tsx` _(28)_
-- `supabase/consolidate_address_release_notification.sql` _(28)_
 - … +231 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **120 files**
+Curated: [[Provider Onboarding & Go-Live]] · **125 files**
 - `src/features/providers/goLiveStatus.ts` _(89)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(72)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **120 files**
 - `src/services/database/bookings.ts` _(6)_
 - `src/services/database/notifications.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
-- … +90 more
+- … +95 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **129 files**

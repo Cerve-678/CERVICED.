@@ -399,4 +399,233 @@ export const providerBusiness: AreaCatalog<typeof en> = {
   'providerBusiness.ui2.bookedYouOrTurnedOnYour':
     'Han reservado contigo o tienen tu campana activada',
   'providerBusiness.ui2.peopleWhoTurnedOnYourBell': 'Personas que tienen tu campana activada',
+  'providerBusiness.newp.addAQuestion': '+ Añadir una pregunta',
+  'providerBusiness.newp.addAnotherAddOn': '+ Añadir otro extra',
+  'providerBusiness.newp.addToThisService': '+ Añadir a este servicio',
+  'providerBusiness.newp.aClientAskingForMoneyBack':
+    'Un cliente que pide un reembolso o disputa una tarifa',
+  'providerBusiness.newp.aClientAskingToMoveTheir': 'Un cliente que pide cambiar su cita',
+  'providerBusiness.newp.aDailyCountOfPeopleWho': 'Un recuento diario de quién te ha guardado',
+  'providerBusiness.newp.aLineOrTwoOnWhat':
+    'Una o dos líneas sobre lo que recibe el cliente. Aparece bajo el nombre.',
+  'providerBusiness.newp.aMorningRecapOfTheDay':
+    'Un resumen por la mañana del día que tienes por delante',
+  'providerBusiness.newp.achievements': 'Logros',
+  'providerBusiness.newp.addACategoryFirst': 'Primero añade una categoría.',
+  'providerBusiness.newp.addAServiceFirst': 'Primero añade un servicio.',
+  'providerBusiness.newp.addAddOn': 'Añadir extra',
+  'providerBusiness.newp.addOnChangesGoLiveWhen':
+    'Los cambios en los extras se publican al tocar Guardar y publicar. También puedes marcar extras o crear uno al editar un servicio.',
+  'providerBusiness.newp.addOnName': 'Nombre del extra',
+  'providerBusiness.newp.afterEachVisitWeRemindThem':
+    'Después de cada visita les recordamos cuándo les toca, con un botón para volver a reservar contigo.',
+  'providerBusiness.newp.aftercare': 'Cuidados posteriores',
+  'providerBusiness.newp.allOfBranding': 'Toda la imagen de marca',
+  'providerBusiness.newp.anExtraClientsCanAddTo':
+    'Un extra que los clientes pueden añadir a un servicio al reservar.',
+  'providerBusiness.newp.announcements': 'Anuncios',
+  'providerBusiness.newp.appointmentReminders': 'Recordatorios de citas',
+  'providerBusiness.newp.arriving': 'Llegada',
+  'providerBusiness.newp.availableThisWeek': 'Disponible esta semana',
+  'providerBusiness.newp.before': 'Antes',
+  'providerBusiness.newp.bookingRequests': 'Solicitudes de reserva',
+  'providerBusiness.newp.bookingsWaitingForYouToAccept': 'Reservas pendientes de que las aceptes',
+  'providerBusiness.newp.cancellationsRefill': 'Las cancelaciones se vuelven a llenar',
+  'providerBusiness.newp.cancelledBookingsAndRescheduleOutcomes':
+    'Reservas canceladas y resultados de cambios de cita',
+  'providerBusiness.newp.categories': 'Categorías',
+  'providerBusiness.newp.changeItHereAndItChanges':
+    'Cámbialo aquí y cambia en todos los servicios. Las reservas ya hechas mantienen el precio que pagó el cliente.',
+  'providerBusiness.newp.changesCancellations': 'Cambios y cancelaciones',
+  'providerBusiness.newp.chooseADay': 'Elige un día',
+  'providerBusiness.newp.chooseADifferentPhoto': 'Elegir otra foto',
+  'providerBusiness.newp.chooseReleaseDayTime': 'Elegir día y hora de apertura',
+  'providerBusiness.newp.chooseWhereItGoes': 'Elige dónde va',
+  'providerBusiness.newp.chooseWhichServicesClientsCanAdd':
+    'Elige a qué servicios pueden añadirlo los clientes.',
+  'providerBusiness.newp.clientForms': 'Formularios de clientes',
+  'providerBusiness.newp.clientsAddItWhenTheyBook': 'Los clientes lo añaden al reservar',
+  'providerBusiness.newp.clientsCanAddItWhenThey':
+    'Los clientes pueden añadirlo al reservar. Desactívalo para pausarlo en todas partes sin eliminarlo.',
+  'providerBusiness.newp.clientsGetAReminderTheDay':
+    'Los clientes reciben un recordatorio el día antes de su cita.',
+  'providerBusiness.newp.clientsRemindedToRebookYou':
+    'Recordamos a los clientes que vuelvan a reservar contigo',
+  'providerBusiness.newp.clientsSeeThisNameAndPrice':
+    'Los clientes ven este nombre y precio al reservar. El precio es el mismo en todos los servicios donde aparece.',
+  'providerBusiness.newp.clientsSee': 'Los clientes ven',
+  'providerBusiness.newp.closeReleaseDayPicker': 'Cerrar selector de día de apertura',
+  'providerBusiness.newp.couldnTLoadYourBookings': 'No se han podido cargar tus reservas.',
+  'providerBusiness.newp.deleteAddOn': 'Eliminar extra',
+  'providerBusiness.newp.descriptionOptional': 'Descripción (opcional)',
+  'providerBusiness.newp.earningsOverTimeYourTopServices':
+    'Ingresos a lo largo del tiempo, tus servicios principales, citas completadas y ausencias, y valoraciones por servicio.',
+  'providerBusiness.newp.everySearchFilter': 'Todos los filtros de búsqueda',
+  'providerBusiness.newp.everyColourSetFontAndHero':
+    'Todos los conjuntos de colores, tipografías y acabados de cabecera, o crea tus propios colores.',
+  'providerBusiness.newp.everyService': 'Todos los servicios',
+  'providerBusiness.newp.everyServiceWholeCategoriesOrOnly':
+    'Todos los servicios, categorías enteras o solo los que elijas. Una categoría entera incluye también los servicios que añadas después.',
+  'providerBusiness.newp.extraTime': 'Tiempo extra',
+  'providerBusiness.newp.extrasClientsCanAddToA':
+    'Extras que los clientes pueden añadir a un servicio al reservar. Un precio en todas partes.',
+  'providerBusiness.newp.followersHearWhenYouReFree':
+    'Tus seguidores se enteran cuando tienes hueco',
+  'providerBusiness.newp.fullAnalytics': 'Estadísticas completas',
+  'providerBusiness.newp.fullDay': 'Día completo',
+  'providerBusiness.newp.hideThisTip': 'Ocultar este consejo',
+  'providerBusiness.newp.howAddOnsWork': 'Cómo funcionan los extras',
+  'providerBusiness.newp.infoFromYourProvider': 'Información de tu profesional',
+  'providerBusiness.newp.itComesOffEveryServiceBookings':
+    'Se quita de todos los servicios. Las reservas ya hechas lo mantienen, al precio que pagó el cliente.',
+  'providerBusiness.newp.justThisService': 'Solo este servicio',
+  'providerBusiness.newp.keepIt': 'Mantenerlo',
+  'providerBusiness.newp.knowThemBeforeTheyArrive': 'Conócelos antes de que lleguen',
+  'providerBusiness.newp.list': 'Lista',
+  'providerBusiness.newp.lookAfterEveryClient': 'Cuida de cada cliente',
+  'providerBusiness.newp.makeItOnce': 'Hazlo una vez',
+  'providerBusiness.newp.makeYourFirstAddOn': 'Crea tu primer extra',
+  'providerBusiness.newp.makesTheAppointmentLongerWhenA':
+    'Alarga la cita cuando un cliente lo elige. Solo verá horas en las que estés libre todo el tiempo.',
+  'providerBusiness.newp.makingItLast': 'Que dure',
+  'providerBusiness.newp.matching': 'Coincidentes',
+  'providerBusiness.newp.messageAllYourClientsOrJust':
+    'Escribe a todos tus clientes o solo a los habituales, nuevos o inactivos, ahora o programado para más tarde.',
+  'providerBusiness.newp.messages': 'Mensajes',
+  'providerBusiness.newp.moreClientsFindYou': 'Más clientes te encuentran',
+  'providerBusiness.newp.nameItEGParking': 'Ponle nombre, p. ej. Aparcamiento',
+  'providerBusiness.newp.name': 'Nombre',
+  'providerBusiness.newp.newBookings': 'Nuevas reservas',
+  'providerBusiness.newp.newMessagesAndUnreadReminders': 'Mensajes nuevos y recordatorios sin leer',
+  'providerBusiness.newp.newSavedWithThisService': 'Nuevo · se guarda con este servicio',
+  'providerBusiness.newp.nextAppointment': 'Próxima cita',
+  'providerBusiness.newp.noExtraTime': 'Sin tiempo extra',
+  'providerBusiness.newp.noOtherUpcomingBookings': 'No hay más reservas próximas.',
+  'providerBusiness.newp.noReleaseDayUseARolling': 'Sin día de apertura, usar un margen móvil',
+  'providerBusiness.newp.noUpcomingBookingsForTheseServices':
+    'Aún no hay reservas próximas para estos servicios.',
+  'providerBusiness.newp.offerItToClients': 'Ofrecerlo a los clientes',
+  'providerBusiness.newp.onePriceEverywhere': 'Un precio en todas partes',
+  'providerBusiness.newp.otherUpcoming': 'Otras próximas',
+  'providerBusiness.newp.pauseInsteadOfDeleting': 'Pausar en vez de eliminar',
+  'providerBusiness.newp.paused': 'En pausa',
+  'providerBusiness.newp.pausedHiddenOnEveryServiceUntil':
+    'En pausa: oculto en todos los servicios hasta que lo reactives.',
+  'providerBusiness.newp.pickADayAndATime': 'Elige un día y una hora',
+  'providerBusiness.newp.pickServices': 'Elegir servicios',
+  'providerBusiness.newp.pickTheServicesItGoesWith': 'Elige los servicios a los que acompaña.',
+  'providerBusiness.newp.pinchToZoomDragToMove': 'Pellizca para ampliar, arrastra para mover.',
+  'providerBusiness.newp.prepAndAftercareNotesForA':
+    'Notas de preparación y cuidados de un servicio, esperando en la reserva del cliente.',
+  'providerBusiness.newp.priceInPounds': 'Precio en libras',
+  'providerBusiness.newp.price': 'Precio',
+  'providerBusiness.newp.priceAvailabilityRatingAndHairType':
+    'Precio, disponibilidad, valoración y tipo de cabello, no solo categoría, especialidad y zona.',
+  'providerBusiness.newp.pricesExtraTimeAndWhereElse':
+    'Los precios, el tiempo extra y dónde más va un extra se cambian en Tus extras, en la página de servicios.',
+  'providerBusiness.newp.promotions': 'Promociones',
+  'providerBusiness.newp.publishToGoLive': 'Publica para estar en línea',
+  'providerBusiness.newp.questions': 'Preguntas',
+  'providerBusiness.newp.refundRequestsDisputes': 'Solicitudes de reembolso y disputas',
+  'providerBusiness.newp.releaseDay': 'Día de apertura',
+  'providerBusiness.newp.releaseTime': 'Hora de apertura',
+  'providerBusiness.newp.reminders': 'Recordatorios',
+  'providerBusiness.newp.rescheduleRequests': 'Solicitudes de cambio de cita',
+  'providerBusiness.newp.reviews': 'Reseñas',
+  'providerBusiness.newp.runAFlashSaleALoyalty':
+    'Haz una oferta relámpago, una recompensa de fidelidad o una oferta para clientes nuevos, y cuéntaselo a tus clientes y seguidores.',
+  'providerBusiness.newp.saveAddOn': 'Guardar extra',
+  'providerBusiness.newp.saves': 'Guardados',
+  'providerBusiness.newp.sealsForMilestonesLikeYourFirst':
+    'Sellos por hitos como tu primera reserva, reseñas de cinco estrellas y meses completos.',
+  'providerBusiness.newp.sendInfoPack': 'Enviar dosier',
+  'providerBusiness.newp.sendItToClientsAlreadyBooked':
+    'Envíalo a los clientes ya reservados o guárdalo para nuevas reservas.',
+  'providerBusiness.newp.sent': 'Enviado',
+  'providerBusiness.newp.showUpOnClientsHomeWhen':
+    'Aparece en el Inicio de los clientes cuando tengas hueco.',
+  'providerBusiness.newp.showWholeLogo': 'Mostrar el logo entero',
+  'providerBusiness.newp.startFromAnExample': 'Empezar con un ejemplo',
+  'providerBusiness.newp.takesItOffEveryServiceBookings':
+    'Lo quita de todos los servicios. Las reservas ya hechas lo mantienen.',
+  'providerBusiness.newp.tapAddOnAtTheTop':
+    'Toca + Extra arriba de esta página. Ponle nombre, precio y el tiempo extra que necesite.',
+  'providerBusiness.newp.theAddOn': 'El extra',
+  'providerBusiness.newp.theAppointmentGetsThisMuchLonger':
+    'La cita se alarga este tiempo cuando un cliente lo elige.',
+  'providerBusiness.newp.theDayBeforeAndFormsNot': 'El día antes y formularios aún sin enviar',
+  'providerBusiness.newp.thePriceIsAddedToTheir':
+    'El precio se suma a su total y la cita se alarga el tiempo extra. Solo ven horas en las que estés libre todo el tiempo.',
+  'providerBusiness.newp.theQuestion': 'La pregunta',
+  'providerBusiness.newp.theirHairSkinAndPreferencesFor':
+    'Su cabello, piel y preferencias para ese tratamiento, con alergias y notas médicas destacadas.',
+  'providerBusiness.newp.theyGetANotificationAndRead':
+    'Reciben una notificación y lo leen con su reserva. Las nuevas reservas lo reciben automáticamente.',
+  'providerBusiness.newp.tickAll': 'Marcar todo',
+  'providerBusiness.newp.todaySSchedule': 'Agenda de hoy',
+  'providerBusiness.newp.turnYourWaitlistOnAndA':
+    'Activa tu lista de espera y un hueco cancelado irá primero a ella.',
+  'providerBusiness.newp.untickAll': 'Desmarcar todo',
+  'providerBusiness.newp.waitlist': 'Lista de espera',
+  'providerBusiness.newp.week': 'Semana',
+  'providerBusiness.newp.whatClientsShouldKnow': 'Lo que deben saber los clientes',
+  'providerBusiness.newp.whatToBring': 'Qué traer',
+  'providerBusiness.newp.whatToExpect': 'Qué esperar',
+  'providerBusiness.newp.whenAClientBooksWithYou': 'Cuando un cliente reserva contigo',
+  'providerBusiness.newp.whenAClientFillsInA': 'Cuando un cliente rellena un formulario',
+  'providerBusiness.newp.whenAClientLeavesAReview': 'Cuando un cliente deja una reseña',
+  'providerBusiness.newp.whenEverySlotYouVeOpened':
+    'Cuando todos los huecos que abriste están reservados, con tu certificado',
+  'providerBusiness.newp.whenSomeoneJoinsYourWaitlist':
+    'Cuando alguien se apunta a tu lista de espera',
+  'providerBusiness.newp.whenYouVeBeenFullyBooked':
+    'Cuando has estado completo y se libera hueco, se avisa a todos los que activaron tu campana.',
+  'providerBusiness.newp.whereItGoes': 'Dónde va',
+  'providerBusiness.newp.writeItOnceWeSendIt': 'Escríbelo una vez. Nosotros lo enviamos.',
+  'providerBusiness.newp.writeYourAftercarePrepOrWhat':
+    'Escribe una vez tus notas de cuidados, preparación o qué traer.',
+  'providerBusiness.newp.youAlreadyHaveThisOne': 'Ya tienes este',
+  'providerBusiness.newp.yourSections': 'Tus secciones',
+  'providerBusiness.newp.yourAddOnsDidnTLoad':
+    'No se han cargado tus extras, así que ahora no se pueden cambiar. Al guardar se mantienen igual. Cierra esta página y vuelve a abrirla para editarlos.',
+  'providerBusiness.newp.yourAddOnsDidnTLoad2':
+    'No se han cargado tus extras, así que ahora no se pueden cambiar. Al guardar se mantienen igual.',
+  'providerBusiness.newp.yourAnswer': 'Tu respuesta',
+  'providerBusiness.newp.yourBooking': 'Tu reserva',
+  'providerBusiness.newp.yourBrandAndYourNumbers': 'Tu marca y tus cifras',
+  'providerBusiness.newp.yourDiaryFillsItself': 'Tu agenda se llena sola',
+  'providerBusiness.newp.yourOwnSectionsEachShownOn':
+    'Tus propias secciones, cada una en tu perfil bajo Información adicional. Añade solo lo que necesites.',
+  'providerBusiness.newp.eGDoYouDoChildren': 'p. ej. ¿Peinas a niños?',
+  'providerBusiness.newp.eGLashRemoval': 'p. ej. Retirada de pestañas',
+  'providerBusiness.newp.eGSafeRemovalOfYour':
+    'p. ej. Retirada segura de tu set anterior antes del nuevo',
+  'providerBusiness.newp.eGYesFromAge8': 'p. ej. Sí, a partir de 8 años con un adulto.',
+  'providerBusiness.newp2.customNameA11y': 'Nombre de la sección personalizada {n}',
+  'providerBusiness.newp2.customSection': 'Sección personalizada {n}',
+  'providerBusiness.newp2.sectionText': 'Texto de {name}',
+  'providerBusiness.newp2.writtenBy': 'Muestra «Escrito por» con tu nombre en tu perfil.',
+  'providerBusiness.newp2.removeQuestion': 'Quitar la pregunta {n}',
+  'providerBusiness.newp2.questionN': 'Pregunta {n}',
+  'providerBusiness.newp2.answerN': 'Respuesta {n}',
+  'providerBusiness.newp2.addName': 'Añadir {name}',
+  'providerBusiness.newp2.dayOfMonth': 'Día {day} del mes',
+  'providerBusiness.newp2.alreadySent': '{name}, ya enviado',
+  'providerBusiness.newp2.sentYou': 'Te ha enviado «{title}»',
+  'providerBusiness.newp2.deleteQ': '¿Eliminar {name}?',
+  'providerBusiness.newp2.tickAll': 'Marcar todo {name}',
+  'providerBusiness.newp2.untickAll': 'Desmarcar todo {name}',
+  'providerBusiness.newp2.maxAddOns': 'Has llegado a {count} extras, el máximo permitido.',
+  'providerBusiness.newp2.profileLogoA11y':
+    'El logo de tu perfil. Pellizca para ampliar, arrastra para mover.',
+  'providerBusiness.newp2.logoOnA11y':
+    'Tu logo en {where}. Pellizca para ampliar, arrastra para mover.',
+  'providerBusiness.newp2.duplicate':
+    'Ya tienes «{name}». Márcalo arriba o ponle otro nombre a este.',
+  'providerBusiness.newp2.useOnService': 'Usar {name} en este servicio',
+  'providerBusiness.newp2.use': 'Usar',
+  'providerBusiness.newp2.allOf': 'Todo {name}',
+  'providerBusiness.newp2.extra': '{time} extra',
+  'providerBusiness.newp.switchOffOfferItTo':
+    'Desactiva «Ofrecerlo a los clientes» para ocultarlo en todos los servicios. Vuelve a activarlo cuando quieras.',
 };

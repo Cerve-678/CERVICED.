@@ -11,6 +11,8 @@ import {
   logoFrameLayout,
   minLogoZoom,
 } from '../../utils/logoFraming';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface LogoCardFramerProps {
   /** Which card is being framed; null = closed. */
@@ -46,6 +48,8 @@ const FILL_LABELS: Record<LogoCardSlot, string> = {
  * each shape can frame it differently.
  */
 export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCancel, onReplace, palette }: LogoCardFramerProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const card = LOGO_CARD_SIZES[slot ?? 'large'];
   const cardRatio = card.width / card.height;
@@ -118,12 +122,12 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
       <GestureHandlerRootView style={[styles.backdrop, { backgroundColor: palette.bg }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onCancel} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={[styles.headerAction, { color: palette.sub }]}>Cancel</Text>
+            <Text style={[styles.headerAction, { color: palette.sub }]}>{tr('common.cancel')}</Text>
           </TouchableOpacity>
           <Text style={[styles.title, { color: palette.text }]}>{TITLES[slot]}</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <Text style={[styles.hint, { color: palette.sub }]}>Pinch to zoom, drag to move.</Text>
+        <Text style={[styles.hint, { color: palette.sub }]}>{tr('providerBusiness.newp.pinchToZoomDragToMove')}</Text>
 
         <GestureDetector gesture={gesture}>
           <View
@@ -131,7 +135,7 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
               styles.frame,
               { width: frameW, height: frameH, borderRadius: card.radius * (frameW / card.width), backgroundColor: palette.card },
             ]}
-            accessibilityLabel={`Your ${slot === 'circle' ? 'profile logo' : `logo on the ${TITLES[slot].toLowerCase()}`}. Pinch to zoom, drag to move.`}
+            accessibilityLabel={slot === 'circle' ? tr('providerBusiness.newp2.profileLogoA11y') : tr('providerBusiness.newp2.logoOnA11y', { where: TITLES[slot].toLowerCase() })}
           >
             <ReAnimated.Image source={{ uri }} style={[styles.image, imageStyle]} resizeMode="cover" fadeDuration={0} />
           </View>
@@ -144,7 +148,7 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
             accessibilityRole="button"
             style={[styles.preset, { backgroundColor: palette.card }]}
           >
-            <Text style={[styles.presetText, { color: palette.text }]}>Show whole logo</Text>
+            <Text style={[styles.presetText, { color: palette.text }]}>{tr('providerBusiness.newp.showWholeLogo')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => animateTo(DEFAULT_LOGO_FRAME)}
@@ -157,7 +161,7 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
         </View>
         {onReplace && (
           <TouchableOpacity onPress={onReplace} activeOpacity={0.7} accessibilityRole="button" style={styles.replace}>
-            <Text style={[styles.replaceText, { color: palette.sub }]}>Choose a different photo</Text>
+            <Text style={[styles.replaceText, { color: palette.sub }]}>{tr('providerBusiness.newp.chooseADifferentPhoto')}</Text>
           </TouchableOpacity>
         )}
 
@@ -170,7 +174,7 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
           accessibilityRole="button"
           style={[styles.done, { backgroundColor: palette.accent }]}
         >
-          <Text style={[styles.doneText, { color: palette.onAccent }]}>Done</Text>
+          <Text style={[styles.doneText, { color: palette.onAccent }]}>{tr('common.done')}</Text>
         </TouchableOpacity>
       </GestureHandlerRootView>
     </Modal>

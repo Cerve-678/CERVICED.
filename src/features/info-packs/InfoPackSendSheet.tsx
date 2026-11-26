@@ -17,6 +17,8 @@ import { formatShortDayDate, formatTime12Safe } from '../../utils/dateUtils';
 import { BAKBAK, type InfoPackPalette } from './infoPackPalette';
 import { packServiceLabel } from './infoPackLogic';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface SendSheetPack {
   id: string;
@@ -46,6 +48,8 @@ export function InfoPackSendSheet({
   onPickBooking: (booking: BookingWithAddOns) => void;
   onClose: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(520)).current;
   const fade = useRef(new Animated.Value(0)).current;
@@ -95,7 +99,7 @@ export function InfoPackSendSheet({
           }]}
         >
           <View style={[st.handle, { backgroundColor: P.border }]} />
-          <Text style={[st.title, { color: P.text }]}>Send Info Pack</Text>
+          <Text style={[st.title, { color: P.text }]}>{tr('providerBusiness.newp.sendInfoPack')}</Text>
           {shown && (
             <Text style={[st.packName, { color: P.sub }]} numberOfLines={1}>
               {shown.title} · {packServiceLabel(shown.serviceNames)}
@@ -118,7 +122,7 @@ export function InfoPackSendSheet({
                   }}
                 >
                   <Text style={[st.tabText, { color: active ? P.text : P.sub }]}>
-                    {key === 'matching' ? 'Matching' : 'Other upcoming'}{loading || error ? '' : ` ${count}`}
+                    {key === 'matching' ? tr('providerBusiness.newp.matching') : tr('providerBusiness.newp.otherUpcoming')}{loading || error ? '' : ` ${count}`}
                   </Text>
                 </TouchableOpacity>
               );
@@ -129,9 +133,9 @@ export function InfoPackSendSheet({
             <View style={st.state}><ActivityIndicator color={P.accent} /></View>
           ) : error ? (
             <View style={st.state}>
-              <Text style={[st.stateText, { color: P.sub }]}>Couldn't load your bookings.</Text>
+              <Text style={[st.stateText, { color: P.sub }]}>{tr('providerBusiness.newp.couldnTLoadYourBookings')}</Text>
               <TouchableOpacity onPress={onRetry} activeOpacity={0.7} style={[st.retry, { backgroundColor: P.iconBg }]}>
-                <Text style={[st.retryText, { color: P.accent }]}>Try again</Text>
+                <Text style={[st.retryText, { color: P.accent }]}>{tr('common.tryAgain')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -140,7 +144,7 @@ export function InfoPackSendSheet({
               {rows.length === 0 ? (
                 <View style={st.state}>
                   <Text style={[st.stateText, { color: P.sub }]}>
-                    {tab === 'matching' ? 'No upcoming bookings for these services yet.' : 'No other upcoming bookings.'}
+                    {tab === 'matching' ? tr('providerBusiness.newp.noUpcomingBookingsForTheseServices') : tr('providerBusiness.newp.noOtherUpcomingBookings')}
                   </Text>
                 </View>
               ) : (
@@ -157,7 +161,7 @@ export function InfoPackSendSheet({
                         activeOpacity={0.7}
                         disabled={sent || !!sendingBookingId}
                         onPress={() => onPickBooking(b)}
-                        accessibilityLabel={sent ? `${name}, already sent` : `Send to ${name}`}
+                        accessibilityLabel={sent ? tr('providerBusiness.newp2.alreadySent', { name }) : tr('providerBusiness.ui.sendTo', { recipients: name })}
                       >
                         <View style={[st.avatar, { backgroundColor: P.iconBg }]}>
                           <Text style={[st.avatarText, { color: P.accent }]}>{name.trim().charAt(0).toUpperCase()}</Text>
@@ -173,7 +177,7 @@ export function InfoPackSendSheet({
                         ) : sent ? (
                           <View style={st.sent}>
                             <Ionicons name="checkmark" size={14} color={P.sub} />
-                            <Text style={[st.sentText, { color: P.sub }]}>Sent</Text>
+                            <Text style={[st.sentText, { color: P.sub }]}>{tr('providerBusiness.newp.sent')}</Text>
                           </View>
                         ) : (
                           <Ionicons name="paper-plane-outline" size={18} color={P.accent} />

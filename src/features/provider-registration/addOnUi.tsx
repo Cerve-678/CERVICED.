@@ -8,6 +8,8 @@ import * as Haptics from 'expo-haptics';
 import { withAlpha } from '../../constants/providerThemes';
 import { ADD_ON_EXTRA_TIME_CHOICES } from './addOnLibrary';
 import { formatAddOnExtraTime } from '../bookings/addOnTime';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface AddOnPalette {
   bg: string;
@@ -84,6 +86,8 @@ export function ExtraTimeChips({
   onChange: (minutes: number) => void;
   palette: AddOnPalette;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const choices: number[] = [...ADD_ON_EXTRA_TIME_CHOICES];
   if (!choices.includes(value)) choices.push(value);
   return (
@@ -91,8 +95,8 @@ export function ExtraTimeChips({
       {choices.map(minutes => (
         <AddOnChip
           key={minutes}
-          label={minutes === 0 ? 'None' : formatAddOnExtraTime(minutes)}
-          accessibilityLabel={minutes === 0 ? 'No extra time' : `${formatAddOnExtraTime(minutes)} extra`}
+          label={minutes === 0 ? tr('common.none') : formatAddOnExtraTime(minutes)}
+          accessibilityLabel={minutes === 0 ? tr('providerBusiness.newp.noExtraTime') : tr('providerBusiness.newp2.extra', { time: formatAddOnExtraTime(minutes) })}
           active={value === minutes}
           onPress={() => onChange(minutes)}
           palette={palette}
