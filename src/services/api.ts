@@ -1,4 +1,5 @@
 import { storage, STORAGE_KEYS } from '../utils/storage';
+import { tr } from '../i18n/translate';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -79,12 +80,12 @@ class ApiService {
 
   private getErrorMessage(error: any): string {
     if (error.name === 'AbortError') {
-      return 'Request timed out. Please check your connection and try again.';
+      return tr('shared.api.timeout');
     }
     if (error.message?.includes('Network request failed')) {
-      return 'No internet connection. Please check your network.';
+      return tr('shared.api.offline');
     }
-    return 'Network error. Please try again.';
+    return tr('shared.api.network');
   }
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
@@ -99,14 +100,14 @@ class ApiService {
       } else {
         return {
           success: false,
-          error: data.message || data.error || `Request failed (${response.status})`,
+          error: data.message || data.error || tr('shared.api.requestFailed', { status: response.status }),
           message: data.message,
         };
       }
     } catch {
       return {
         success: false,
-        error: 'Failed to parse response',
+        error: tr('shared.api.parseFailed'),
       };
     }
   }

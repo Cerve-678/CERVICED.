@@ -11,6 +11,8 @@ import type { TextStyle } from "react-native";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 import { HeroPhoto } from "../HeroPhoto";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 /** The four prints, as placed on the canvas's 320pt-wide board: left or
  *  right edge, top, size and tilt. The fourth is the round one. */
@@ -98,6 +100,8 @@ export function MoodboardHero({
   onBookNow?: (() => void) | undefined;
   onOpenPhoto?: ((index: number) => void) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { paper, shadow } = moodboardPrint(sheetColour);
   const types = kicker.split("·").map(part => part.trim()).filter(Boolean);
   const emptyFill = blend(accent, paper, 0.55);
@@ -162,7 +166,7 @@ export function MoodboardHero({
             style={[styles.book, { borderColor: heroText }]}
             onPress={onBookNow}
             accessibilityRole="button"
-            accessibilityLabel="Book"
+            accessibilityLabel={tr('beautyProfile.hello.book')}
             activeOpacity={0.8}
           >
             <Text style={[styles.bookText, { color: heroText }]}>BOOK</Text>

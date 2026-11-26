@@ -22,6 +22,7 @@ import {
 import { formatShortDayDate, formatTime12Safe } from '../../utils/dateUtils';
 import { REFUND_REVIEW_PROMISE, refundReplyDeadline } from './refundRequestTimeline';
 import { minutesOfDay } from './tipWindow';
+import { tr } from '../../i18n/translate';
 
 export type ActivityBooking = Pick<
   ConfirmedBooking,
@@ -192,7 +193,7 @@ export function buildClientActivity(
     needsYou.push({
       key: `hold:${hold.bookingId}`,
       kind: 'waitlist_hold',
-      title: 'A slot opened up for you',
+      title: tr('clientBooking.activity.slotOpened'),
       detail: `${service} with ${provider}${slot ? ` · ${slot}` : ''}.${until ? ` Confirm and pay for it before ${until}.` : ''}`,
       summary: `Confirm and pay for your ${service} slot${until ? ` before ${until}` : ''}`,
       caption: until ? `Ends at ${until}` : undefined,
@@ -208,7 +209,7 @@ export function buildClientActivity(
     needsYou.push({
       key: `reschedule:${b.id}`,
       kind: 'reschedule_pick',
-      title: 'Pick a new time',
+      title: tr('clientBooking.activity.pickNewTime'),
       detail: `${provider} sent new times for ${service}.`,
       summary: `Pick a new time for ${service}`,
       target: { type: 'reschedule', bookingId: b.id },
@@ -270,7 +271,7 @@ export function buildClientActivity(
       title: 'Marked as a no-show',
       detail: `${provider} marked you as not turning up for ${service}. If that's wrong, you can say so by ${formatShortDayDate(new Date(deadline))}.`,
       summary: `Marked as a no-show for ${service}`,
-      caption: `Reply by ${formatShortDayDate(new Date(deadline))}`,
+      caption: tr('clientBooking.activity.replyBy', { date: formatShortDayDate(new Date(deadline)) }),
       target: { type: 'booking', bookingId: b.id },
       sortAt: deadline,
     });
@@ -287,7 +288,7 @@ export function buildClientActivity(
       inProgress.push({
         key: `refund:${r.id}`,
         kind: 'refund_request',
-        title: 'Refund requested',
+        title: tr('clientBooking.refundTimeline.requested'),
         detail: `With ${provider} for ${service}.${by ? ` If they haven't replied by ${by}, it comes to Cerviced.` : ''}`,
         summary: `${provider} has your refund request`,
         target: { type: 'booking', bookingId: r.bookingId },
@@ -313,7 +314,7 @@ export function buildClientActivity(
     inProgress.push({
       key: `refundpending:${b.id}`,
       kind: 'refund_pending',
-      title: 'Refund pending',
+      title: tr('clientBooking.refundOutcome.refundPending'),
       detail: `${service} with ${provider}. It's being processed and will update here once it has gone through.`,
       summary: `Your refund for ${service} is being processed`,
       target: { type: 'booking', bookingId: b.id },
@@ -328,7 +329,7 @@ export function buildClientActivity(
     inProgress.push({
       key: `reschedulewait:${b.id}`,
       kind: 'reschedule_waiting',
-      title: 'Reschedule requested',
+      title: tr('clientBooking.activity.rescheduleRequested'),
       detail: `Waiting for ${provider} to send new times for ${service}.`,
       summary: `Waiting for ${provider} to send new times`,
       target: { type: 'booking', bookingId: b.id },
@@ -342,7 +343,7 @@ export function buildClientActivity(
     inProgress.push({
       key: `confirm:${b.id}`,
       kind: 'awaiting_confirmation',
-      title: 'Waiting to be confirmed',
+      title: tr('clientBooking.activity.awaitingConfirm'),
       detail: `${provider} hasn't confirmed ${service}${when(b) ? ` on ${when(b)}` : ''} yet.`,
       summary: `Waiting for ${provider} to confirm ${service}`,
       target: { type: 'booking', bookingId: b.id },
@@ -370,7 +371,7 @@ export function buildClientActivity(
       seenDone.add(open);
       done.push(d.kind === 'form_sent'
         ? { ...base, key: `done:form:${d.id}`, title: 'Fill in your form', detail: `Sent to ${provider} for ${service}.`, summary: 'Form sent' }
-        : { ...base, key: `done:pack:${d.id}`, title: 'Read your info pack', detail: `From ${provider} for ${service}.`, summary: 'Info pack read' });
+        : { ...base, key: `done:pack:${d.id}`, title: tr('clientBooking.activity.readInfoPack'), detail: tr('clientBooking.activity.fromFor', { provider, service }), summary: tr('clientBooking.activity.infoPackRead') });
     } else if (d.kind === 'fee_paid') {
       done.push({
         ...base,
@@ -383,7 +384,7 @@ export function buildClientActivity(
       done.push({
         ...base,
         key: `done:refund:${d.id}`,
-        title: 'Refund requested',
+        title: tr('clientBooking.refundTimeline.requested'),
         detail: d.outcome === 'refunded'
           ? `${service} with ${provider}. Decided: refund issued.`
           : `${service} with ${provider}. Decided: not refunded. Open the booking to see why.`,

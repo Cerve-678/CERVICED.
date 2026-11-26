@@ -30,6 +30,8 @@ import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type Dashbo
 import { compactTime } from './linkOnlyDashboard';
 import { CalendarChooserSheet } from './CalendarChooserSheet';
 import { logger } from '../../utils/logger';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface DiaryPalette {
   card: string;
@@ -70,6 +72,8 @@ function daySummary(day: DashboardWeekDay): string {
 /** `hours` — their weekly opening hours, so closed days read "Closed" rather
  *  than "Free all day". */
 export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbProviderAvailability[] }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useMemo(() => createStyles(P), [P]);
   const [phase, setPhase] = useState<Phase>('loading');
   const [events, setEvents] = useState<DiaryEvent[]>([]);
@@ -161,7 +165,7 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
         <View style={styles.headerRow}>
           <Ionicons name="calendar-outline" size={22} color={P.accent} />
           <Text style={[styles.title, styles.eventText]}>Connect your calendar</Text>
-          <Text style={styles.free}>Free</Text>
+          <Text style={styles.free}>{tr('common.free')}</Text>
         </View>
       )}
 
@@ -193,7 +197,7 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
         <>
           <Text style={styles.body}>Couldn't read your calendar just now.</Text>
           <TouchableOpacity style={styles.button} onPress={() => { void load(); }} activeOpacity={0.85}>
-            <Text style={styles.buttonText}>Try again</Text>
+            <Text style={styles.buttonText}>{tr('common.tryAgain')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -233,7 +237,7 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
                     </View>
                   )}
                   {day.events.length === 0 && (day.closed ? (
-                    <Text style={styles.closedText}>Closed</Text>
+                    <Text style={styles.closedText}>{tr('discover.profile.closed')}</Text>
                   ) : (
                     <View style={styles.freeChip}>
                       <Text style={styles.freeText}>Free all day</Text>

@@ -16,6 +16,7 @@ import type { AppTheme } from '../constants/theme';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { searchPlaces } from '../data/cityAreas';
 import { readableSheet } from '../constants/readableWidth';
+import { tr, trp, useTranslation } from '../i18n';
 
 interface LocationModalProps {
   visible: boolean;
@@ -66,11 +67,11 @@ const CITIES = [
 ];
 
 const RADIUS_OPTIONS = [
-  { label: '1 mile', value: 1 },
-  { label: '5 miles', value: 5 },
-  { label: '10 miles', value: 10 },
-  { label: '25 miles', value: 25 },
-  { label: '50 miles', value: 50 },
+  { get label() { return trp('discover.location.miles', 1); }, value: 1 },
+  { get label() { return trp('discover.location.miles', 5); }, value: 5 },
+  { get label() { return trp('discover.location.miles', 10); }, value: 10 },
+  { get label() { return trp('discover.location.miles', 25); }, value: 25 },
+  { get label() { return trp('discover.location.miles', 50); }, value: 50 },
 ];
 
 export default function LocationModal({
@@ -81,6 +82,8 @@ export default function LocationModal({
   onPlaceChange,
   onRadiusChange,
 }: LocationModalProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [query, setQuery] = useState('');
   useEffect(() => { if (!visible) setQuery(''); }, [visible]);
 
@@ -118,7 +121,7 @@ export default function LocationModal({
             onPress={() => {}}
           >
             <View style={styles.header}>
-              <Text style={[styles.title, { color: P.text }]}>LOCATION &amp; RADIUS</Text>
+              <Text style={[styles.title, { color: P.text }]}>{tr('discover.location.title')}</Text>
             </View>
 
             <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -140,12 +143,12 @@ export default function LocationModal({
               </View>
 
               <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, { color: P.sub }]}>Your area</Text>
+                <Text style={[styles.sectionTitle, { color: P.sub }]}>{tr('discover.location.yourArea')}</Text>
               </View>
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search an area, e.g. Haggerston"
+                placeholder={tr('discover.location.searchPlaceholder')}
                 placeholderTextColor={P.sub}
                 autoCorrect={false}
                 autoCapitalize="words"
@@ -155,7 +158,7 @@ export default function LocationModal({
               {query.trim() ? (
                 <View style={[styles.pillGrid, styles.matchGrid]}>
                   {matches.length === 0 ? (
-                    <Text style={[styles.noMatch, { color: P.sub }]}>No area by that name yet.</Text>
+                    <Text style={[styles.noMatch, { color: P.sub }]}>{tr('discover.location.noArea')}</Text>
                   ) : matches.map(match => (
                     <Chip
                       key={match.value}
@@ -169,7 +172,7 @@ export default function LocationModal({
               ) : null}
 
               <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, { color: P.sub }]}>City</Text>
+                <Text style={[styles.sectionTitle, { color: P.sub }]}>{tr('discover.location.city')}</Text>
               </View>
               <View style={styles.pillGrid}>
                 {CITIES.map(city => (
@@ -184,7 +187,7 @@ export default function LocationModal({
               </View>
 
               <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, { color: P.sub }]}>Search radius</Text>
+                <Text style={[styles.sectionTitle, { color: P.sub }]}>{tr('discover.location.radius')}</Text>
               </View>
               <View style={[styles.pillGrid, styles.pillGridLast]}>
                 {RADIUS_OPTIONS.map(option => (
@@ -204,7 +207,7 @@ export default function LocationModal({
               onPress={onClose}
               activeOpacity={0.75}
             >
-              <Text style={[styles.applyButtonText, { color: P.onAccent }]}>Apply</Text>
+              <Text style={[styles.applyButtonText, { color: P.onAccent }]}>{tr('common.apply')}</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

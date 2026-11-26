@@ -35,6 +35,8 @@ import {
 } from '../../utils/dateUtils';
 import { EXTERNAL_BOOKING_DISCLAIMER } from '../bookings/externalBookings';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface DidYouBookResult {
   bookingDate: string;
@@ -88,6 +90,8 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
   onSubmit,
   onClose,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const onAccent = isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740';
 
@@ -237,7 +241,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                   <TouchableOpacity
                     onPress={onClose}
                     style={[styles.closeButton, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
-                    accessibilityLabel="Close"
+                    accessibilityLabel={tr('common.close')}
                     accessibilityRole="button"
                   >
                     <Ionicons name="close" size={18} color={tokens.text} />
@@ -305,7 +309,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
                 )}
                 {picker && Platform.OS === 'ios' && (
                   <TouchableOpacity onPress={() => setPicker(null)} style={styles.linkButton} activeOpacity={0.7}>
-                    <Text style={[styles.linkText, { color: accentColor }]}>Done</Text>
+                    <Text style={[styles.linkText, { color: accentColor }]}>{tr('common.done')}</Text>
                   </TouchableOpacity>
                 )}
 

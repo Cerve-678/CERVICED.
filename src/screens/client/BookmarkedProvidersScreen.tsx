@@ -31,6 +31,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { masonryColumnsForWidth } from '../../components/MasonryGrid';
 import { logger } from '../../utils/logger';
+import { tr, useTranslation } from '../../i18n';
 
 
 type ServiceType = 'ALL' | 'HAIR' | 'NAILS' | 'MUA' | 'LASHES' | 'AESTHETICS' | 'BROWS';
@@ -98,6 +99,8 @@ const skeletonStyles = StyleSheet.create({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -158,7 +161,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         // screen ended up with a back button that drew fine and did nothing.
         // A title is never interactive, so it should never take touches.
         <View style={styles.headerTitleRow} pointerEvents="none">
-          <Text style={[styles.screenTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
+          <Text style={[styles.screenTitle, { color: P.text }]}>{tr('discover.saved.title')}</Text>
           {liveProviders.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
               <Text style={[styles.countBadgeText, { color: P.sub }]}>{liveProviders.length}</Text>
@@ -246,12 +249,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           <Icon name="bookmark" size={26} color={P.accentText} />
         </View>
         <Text style={[styles.emptyTitle, { color: P.text }]}>
-          {liveProviders.length === 0 ? 'No Saved Providers' : `No ${selectedService} providers saved`}
+          {liveProviders.length === 0 ? tr('discover.saved.emptyTitle') : tr('discover.saved.emptyFiltered', { service: selectedService })}
         </Text>
         <Text style={[styles.emptySubtitle, { color: P.sub }]}>
           {liveProviders.length === 0
-            ? 'Save providers you love to find them quickly here'
-            : `You haven't bookmarked any ${selectedService.toLowerCase()} providers yet`}
+            ? tr('discover.saved.emptySub')
+            : tr('discover.saved.emptyFilteredSub', { service: selectedService.toLowerCase() })}
         </Text>
         {liveProviders.length === 0 ? (
           <TouchableOpacity
@@ -259,7 +262,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
           >
-            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>Explore Providers</Text>
+            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>{tr('discover.saved.explore')}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -346,6 +349,8 @@ interface BookmarkGridCardProps {
 }
 
 const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove, cardWidth }: BookmarkGridCardProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -392,7 +397,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
               </View>
               {hasOffer && (
                 <View style={[styles.offerChip, { backgroundColor: P.accent }]}>
-                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>OFFER</Text>
+                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>{tr('discover.offers.offerBadge')}</Text>
                 </View>
               )}
             </View>

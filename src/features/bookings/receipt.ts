@@ -9,6 +9,7 @@ import {
   RECEIPT_FONT_JURA,
   RECEIPT_FONT_PRATA,
 } from './receiptAssets';
+import { tr } from '../../i18n/translate';
 
 /** expo-print defaults to US Letter; both documents are laid out for A4. */
 export const A4_PRINT_SIZE = { width: 595, height: 842 } as const;
@@ -193,9 +194,9 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   // here under Total, never in the lines above it; Paid says it includes the
   // fee whenever the deposit is beside it, so the two don't look contradictory.
   const paymentRows: PaymentRow[] = [
-    ...(payment.depositPaid > 0 ? [{ label: 'Deposit paid', amount: payment.depositPaid }] : []),
+    ...(payment.depositPaid > 0 ? [{ label: tr('clientBooking.detail.depositPaid'), amount: payment.depositPaid }] : []),
     { label: payment.isHeld ? payment.paidLabel : payment.depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
-    { label: 'Due at Appointment', amount: remainingBalance, strong: remainingBalance > 0 },
+    { label: tr('clientBooking.detail.dueAtAppointment'), amount: remainingBalance, strong: remainingBalance > 0 },
   ];
 
   // Driven by payment_status, never payment_type: a booking the provider
@@ -253,7 +254,7 @@ export function buildProviderInvoiceHTML(booking: ConfirmedBooking): string {
     : payment.isDeposit ? 'Deposit paid' : 'Full payment';
   const paymentRows: PaymentRow[] = [
     ...(received > 0 ? [{ label: payment.isDeposit ? 'Deposit paid' : 'Full payment', amount: received, strong: balance <= 0 }] : []),
-    ...(balance > 0 ? [{ label: 'Balance due', amount: balance, strong: true }] : []),
+    ...(balance > 0 ? [{ label: tr('clientBooking.detail.balanceDue'), amount: balance, strong: true }] : []),
   ];
 
   const withParts = [

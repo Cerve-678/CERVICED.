@@ -7,6 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { formatShortDayDate, formatTime12Safe } from '../../utils/dateUtils';
 import { bookedOnLabel, externalBookingStart } from './externalBookings';
+import { useTranslation } from '../../i18n';
 
 interface ExternalBookingCardProps {
   entry: ClientExternalBookingWithProvider;
@@ -20,8 +21,9 @@ interface ExternalBookingCardProps {
  */
 export const ExternalBookingCard = React.memo<ExternalBookingCardProps>(({ entry, onPress }) => {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => createStyles(P), [P]);
-  const name = entry.provider?.display_name ?? 'A professional no longer on CERVICED';
+  const name = entry.provider?.display_name ?? t('clientBooking.external.providerGone');
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
   const start = externalBookingStart(entry);
 

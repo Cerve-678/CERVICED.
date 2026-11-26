@@ -5,11 +5,11 @@
 
 #generated
 
-**4464 functions** across **716 files**.
+**4468 functions** across **717 files**.
 
-### `src/components/` (69)
+### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
-- `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
+- `AddOnPickerModal.tsx` — **AddOnPickerModal** · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · runOnClose · showAlert · showConfirm · showToast · Toast · **useAppDialog**
@@ -28,6 +28,7 @@
 - `ColourWheelPicker.tsx` — ColourWheelPicker · commit · onBar · onHexText · onSquare
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
+- `ErrorBoundary.tsx` — component · DefaultFallback
 - `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar** · reassert
 - `FramedLogo.tsx` — **FramedLogo** · **LogoCircle**
 - `FullImageViewer.tsx` — clampX · clampY · close · **FullImageViewer** · onZoomChange · report · settle · ZoomablePage
@@ -166,7 +167,7 @@
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `ExternalBookingCard.tsx` — createStyles · styles
-- `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · **splitExternalBookings**
+- `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · knownBookingSite · **splitExternalBookings**
 - `noShowDispute.ts` — **fileNoShowDispute**
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **cancelsWithRefund** · **describeCancelRefund** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
@@ -207,6 +208,9 @@
 
 ### `src/features/explore/` (1)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
+
+### `src/features/help/` (1)
+- `helpTopics.ts` — **helpAudienceFor** · **helpSectionsFor**
 
 ### `src/features/home/` (2)
 - `SkeletonSection.tsx` — **SkeletonSection**

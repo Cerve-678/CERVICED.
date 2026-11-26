@@ -1,5 +1,6 @@
 import { formatShortDayDate } from '../../utils/dateUtils';
 import type { RefundRequest } from '../../types/booking';
+import { tr } from '../../i18n/translate';
 
 /**
  * The steps of a refund request, read straight off refund_requests.status:
@@ -60,7 +61,7 @@ export function describeRefundRequestTimeline(
   const passed = r.status === 'under_review' || !!r.passedToCervicedAt;
 
   const steps: RefundStep[] = [
-    { key: 'requested', title: 'Refund requested', detail: r.reason, date: day(r.createdAt), state: 'done' },
+    { key: 'requested', title: tr('clientBooking.refundTimeline.requested'), detail: r.reason, date: day(r.createdAt), state: 'done' },
   ];
 
   if (r.status === 'with_provider') {
@@ -77,7 +78,7 @@ export function describeRefundRequestTimeline(
   } else if (passed) {
     steps.push({
       key: 'review',
-      title: 'Under review by Cerviced',
+      title: tr('clientBooking.refundTimeline.underReview'),
       detail: r.status !== 'under_review' ? null
         : r.passedAutomatically
           ? forProvider
@@ -93,7 +94,7 @@ export function describeRefundRequestTimeline(
   if (r.status === 'refunded') {
     steps.push({
       key: 'outcome',
-      title: 'Refunded',
+      title: tr('clientBooking.refundTimeline.refunded'),
       detail: forProvider
         ? (r.refundedAmount != null && r.refundedAmount > 0 ? `£${r.refundedAmount.toFixed(2)} went back to the client.` : null)
         : r.refundedAmount != null && r.refundedAmount > 0
@@ -105,15 +106,15 @@ export function describeRefundRequestTimeline(
   } else if (r.status === 'declined') {
     steps.push({
       key: 'outcome',
-      title: 'Not refunded',
+      title: tr('clientBooking.refundTimeline.notRefunded'),
       // A decline always carries a note (CHECK on refund_requests); the
       // fallback only covers a row read mid-migration.
-      detail: r.outcomeNote?.trim() || "Cerviced reviewed it against the booking's policy and isn't refunding it.",
+      detail: r.outcomeNote?.trim() || tr('clientBooking.refundTimeline.notRefundedDetail'),
       date: day(r.resolvedAt),
       state: 'declined',
     });
   } else {
-    steps.push({ key: 'outcome', title: 'Outcome', detail: null, date: null, state: 'upcoming' });
+    steps.push({ key: 'outcome', title: tr('clientBooking.refundTimeline.outcome'), detail: null, date: null, state: 'upcoming' });
   }
 
   return steps;
