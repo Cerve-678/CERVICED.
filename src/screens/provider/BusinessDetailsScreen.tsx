@@ -31,6 +31,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation } from '../../i18n';
 import { useBusinessPalette, type Palette } from '../../features/business-details/BusinessDetailsKit';
 
 interface RowProps {
@@ -61,6 +62,7 @@ NavRow.displayName = 'NavRow';
 
 export default function BusinessDetailsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
 
   return (
@@ -68,7 +70,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
       <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={[st.header, { borderBottomColor: C.border }]}>
-          <Text style={[st.headerTitle, { color: C.text }]}>Business Details</Text>
+          <Text style={[st.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.title')}</Text>
           <TouchableOpacity
             style={[st.closeBtn, { backgroundColor: C.surface }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -80,48 +82,47 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
           <Text style={[st.intro, { color: C.sub }]}>
-            Everything clients see about your business, grouped so you can update one area at a time.
+            {t('providerProfile.businessDetails.intro')}
           </Text>
 
           <NavRow
             icon="storefront-outline"
-            title="Business Info"
-            subtitle="Name, Instagram, website, contact & booking emails"
+            title={t('providerProfile.businessDetails.info.title')}
+            subtitle={t('providerProfile.businessDetails.info.sub')}
             onPress={() => navigation.navigate('BusinessInfo')}
             C={C}
           />
           <NavRow
             icon="pricetags-outline"
-            title="Services & Pricing"
-            subtitle="Specialties, pricing, style & products you use"
+            title={t('providerProfile.businessDetails.services.title')}
+            subtitle={t('providerProfile.ui.specialtiesPricingStyleProductsYouUse')}
             onPress={() => navigation.navigate('ServicesPricing')}
             C={C}
           />
           <NavRow
             icon="document-text-outline"
-            title="Policies & Info"
-            subtitle="Cancellations, reschedules, no-shows, refunds & what's on your profile"
+            title={t('providerProfile.ui.policiesInfo')}
+            subtitle={t('providerProfile.ui.cancellationsReschedulesNoShowsRefundsWhat')}
             onPress={() => navigation.navigate('Policies')}
             C={C}
           />
           <NavRow
             icon="shield-checkmark-outline"
-            title="About You"
-            subtitle="Areas you cover, who you work with, credentials, patch test policy, languages & accessibility"
+            title={t('providerProfile.businessDetails.about.title')}
+            subtitle={t('providerProfile.ui.areasYouCoverWhoYouWork')}
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />
           <NavRow
             icon="calendar-outline"
-            title="Scheduling & Availability"
-            subtitle="Working hours, availability, buffers & booking rules"
+            title={t('providerProfile.businessDetails.scheduling.title')}
+            subtitle={t('providerProfile.businessDetails.scheduling.sub')}
             onPress={() => navigation.navigate('Scheduling')}
             C={C}
           />
 
           <Text style={[st.footnote, { color: C.sub }]}>
-            Looking for reminders and client nudges? Those live in Automations & Preferences.
-            Payment types, deposits and payouts moved to Payments, alongside Automations.
+            {t('providerProfile.businessDetails.footnote')}
           </Text>
         </ScrollView>
       </SafeAreaView>

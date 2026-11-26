@@ -18,6 +18,7 @@ import LinkOnlyMessagesNavigator from "./tabs/LinkOnlyMessagesNavigator";
 import TabIcon from "../../components/TabIcon";
 import IslandPillTabBar from "../../components/IslandPillTabBar";
 import ErrorBoundary from "../../components/ErrorBoundary";
+import { useTranslation } from '../../i18n';
 import { useTheme } from "../../contexts/ThemeContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
@@ -26,6 +27,7 @@ const Tab = createBottomTabNavigator<ProviderTabParamList>();
 
 export default function ProviderTabNavigation() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const { myBookingMode, myProviderIdStatus } = useAuth();
 
   // Which set of tabs to draw depends on the booking mode, which is looked up
@@ -87,7 +89,7 @@ export default function ProviderTabNavigation() {
       <Tab.Screen
         name="ProviderHome"
         options={{
-          title: "Home",
+          title: t('shared.nav.home'),
           tabBarIcon: ({ focused }) => (
             <TabIcon
               name="calendar-today"
@@ -107,7 +109,7 @@ export default function ProviderTabNavigation() {
       <Tab.Screen
         name="MyServices"
         options={{
-          title: "My Services",
+          title: t('shared.nav.myServices'),
           tabBarIcon: ({ focused }) => (
             <TabIcon
               name="grid-layout"
@@ -149,6 +151,7 @@ export default function ProviderTabNavigation() {
 
 function LinkOnlyProviderTabs() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const icon = (name: string) => ({ focused }: { focused: boolean }) => (
     <TabIcon name={name} focused={focused} color={theme.text} size={26} />
   );
@@ -165,21 +168,21 @@ function LinkOnlyProviderTabs() {
         tabBarHideOnKeyboard: true,
       }}
     >
-      <Tab.Screen name="ProviderHome" options={{ title: "Home", tabBarIcon: icon("house") }}>
+      <Tab.Screen name="ProviderHome" options={{ title: t('shared.nav.home'), tabBarIcon: icon("house") }}>
         {() => (
           <ErrorBoundary>
             <ProviderHomeNavigator linkOnly />
           </ErrorBoundary>
         )}
       </Tab.Screen>
-      <Tab.Screen name="LinkOnlyPortfolio" options={{ title: "Portfolio", tabBarIcon: icon("grid-layout") }}>
+      <Tab.Screen name="LinkOnlyPortfolio" options={{ title: t('shared.nav.portfolio'), tabBarIcon: icon("grid-layout") }}>
         {() => (
           <ErrorBoundary>
             <LinkOnlyPortfolioNavigator />
           </ErrorBoundary>
         )}
       </Tab.Screen>
-      <Tab.Screen name="LinkOnlyMessages" options={{ title: "Messages", tabBarIcon: icon("chat-dots") }}>
+      <Tab.Screen name="LinkOnlyMessages" options={{ title: t('shared.nav.messages'), tabBarIcon: icon("chat-dots") }}>
         {() => (
           <ErrorBoundary>
             <LinkOnlyMessagesNavigator />

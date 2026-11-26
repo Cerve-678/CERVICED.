@@ -77,25 +77,26 @@ import {
   ChipGroup, Field, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
-import { PAYMENT_OPTS } from '../../features/business-details/options';
+import { PAYMENT_OPTS, optionText } from '../../features/business-details/options';
+import { useTranslation, type TranslationKey } from '../../i18n';
 import { resolveEditorDepositMode, type DepositMode } from '../../utils/depositPolicy';
 import { toUserMessage } from '../../utils/userFacingError';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
 
 // `sub` is the full explanation, read out as each option's accessibility hint;
 // the button itself only has room for `label` + `hint`.
-const DEPOSIT_MODE_OPTS: { value: DepositMode; label: string; hint: string; sub: string }[] = [
-  { value: 'full_only',        label: 'None',     hint: 'Pay in full',  sub: 'Clients pay the full price when they book.' },
-  { value: 'client_choice',    label: 'Optional', hint: 'Client picks', sub: 'Clients choose: pay a deposit now, or pay in full now.' },
-  { value: 'deposit_required', label: 'Required', hint: 'Deposit only', sub: 'Clients must pay the deposit to book \u2014 paying in full isn\u2019t offered.' },
+const DEPOSIT_MODE_OPTS: { value: DepositMode; label: TranslationKey; hint: TranslationKey; sub: TranslationKey }[] = [
+  { value: 'full_only',        label: 'providerBusiness.payments.mode.none',     hint: 'providerBusiness.payments.mode.noneHint',     sub: 'providerBusiness.payments.mode.noneSub' },
+  { value: 'client_choice',    label: 'providerBusiness.payments.mode.optional', hint: 'providerBusiness.payments.mode.optionalHint', sub: 'providerBusiness.payments.mode.optionalSub' },
+  { value: 'deposit_required', label: 'providerBusiness.payments.mode.required', hint: 'providerBusiness.payments.mode.requiredHint', sub: 'providerBusiness.payments.mode.requiredSub' },
 ];
 
 // The buttons the client booking sheet shows for each mode — previewed under
 // the deposit controls so the provider sees the effect of what they picked.
-const CLIENT_SEES: Record<DepositMode, string[]> = {
-  full_only:        ['Pay Full Amount'],
-  client_choice:    ['Pay Full Amount', 'Pay Deposit'],
-  deposit_required: ['Pay Deposit'],
+const CLIENT_SEES: Record<DepositMode, TranslationKey[]> = {
+  full_only:        ['providerBusiness.payments.seesFull'],
+  client_choice:    ['providerBusiness.payments.seesFull', 'providerBusiness.payments.seesDeposit'],
+  deposit_required: ['providerBusiness.payments.seesDeposit'],
 };
 
 const paymentLabel = (value: string) => PAYMENT_OPTS.find(o => o.value === value)?.label ?? value;
@@ -103,6 +104,7 @@ const paymentLabel = (value: string) => PAYMENT_OPTS.find(o => o.value === value
 export default function PaymentsScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
 
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -168,7 +170,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
         }
       } catch {
         setLoadFailed(true);
-        flash('Could not load your payment settings', 'error');
+        flash(t('providerBusiness.payments.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -181,14 +183,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
   }
 
   const handleSave = useCallback(async () => {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash(t('providerBusiness.payments.noProfile'), 'error'); return; }
     // See loadFailed above: writing without a successful read would delete the
     // policy keys this screen carries but doesn't edit.
-    if (loadFailed) { flash('Your payment settings could not be loaded — reopen this screen before saving', 'error'); return; }
+    if (loadFailed) { flash(t('providerBusiness.payments.loadFailedSave'), 'error'); return; }
     // Without an amount the client booking sheet falls back to a 20% deposit
     // this provider never agreed to, so an empty amount can't be saved.
     if (depositMode !== 'full_only' && !(Number(depositAmount) > 0)) {
-      flash('Enter how much the deposit is', 'error');
+      flash(t('providerBusiness.payments.amountRequired'), 'error');
       return;
     }
 
@@ -222,10 +224,10 @@ export default function PaymentsScreen({ navigation, route }: any) {
       ]);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      flash('Payment settings saved', 'success');
+      flash(t('providerBusiness.payments.saved'), 'success');
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(toUserMessage(e, 'Could not save your changes.', 'PaymentsScreen.save'), 'error');
+      flash(toUserMessage(e, t('providerBusiness.payments.saveFailed'), 'PaymentsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -233,12 +235,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
 
 
   const acceptedLabels = paymentMethods.map(paymentLabel);
+  // acceptedLabels stay English: ChipGroup matches them against PAYMENT_OPTS.
+  const acceptedText = acceptedLabels.map(label => optionText(label, t));
   const depositAmountLabel = depositType === 'percent' ? `${depositAmount}%` : `£${depositAmount}`;
   const setupSummary = loading || loadFailed ? undefined : {
     deposit: depositMode === 'full_only' ? 'No deposit'
       : [depositMode === 'client_choice' ? 'Optional' : 'Required', depositAmount && depositAmountLabel, depositNonRefundable && 'non-refundable', depositRequiredNew && 'new clients']
           .filter(Boolean).join(' · '),
-    inPerson: acceptedLabels.length ? acceptedLabels.join(', ') : 'None set',
+    inPerson: acceptedText.length ? acceptedText.join(', ') : t('providerBusiness.payments.summary.noneSet'),
   };
 
   return (
@@ -246,7 +250,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
       <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={[s.header, { borderBottomColor: C.border }]}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Payments & payouts</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t('providerBusiness.payments.title')}</Text>
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Done, close payments"
@@ -254,7 +258,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); closeWithinTab(navigation); }}
             activeOpacity={0.5}
           >
-            <Text style={[st.rowAction, { color: C.accentText, fontSize: 14 }]}>Done</Text>
+            <Text style={[st.rowAction, { color: C.accentText, fontSize: 14 }]}>{t('common.done')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -268,7 +272,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
 
           <ProviderStripePayments stripeReturn={route?.params?.stripeReturn} setup={setupSummary}>
           {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
-          {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
+          {loadFailed && <Toast message={t('providerBusiness.payments.loadFailedBanner')} type="error" />}
 
           {/* One card for how clients pay: the deposit, then the payment types
               shown on the profile (user, 2026-11-18: these were three
@@ -284,14 +288,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
                     key={o.value}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: on }}
-                    accessibilityLabel={`Deposit: ${o.label}`}
-                    accessibilityHint={o.sub}
+                    accessibilityLabel={t('providerBusiness.payments.modeA11y', { mode: t(o.label) })}
+                    accessibilityHint={t(o.sub)}
                     style={[st.modeBtn, { backgroundColor: on ? C.accent : C.surface, borderColor: on ? C.accent : C.border }]}
                     onPress={() => { Haptics.selectionAsync().catch(() => {}); setDepositMode(o.value); }}
                     activeOpacity={0.75}
                   >
-                    <Text style={[st.modeLabel, { color: on ? C.bg : C.text }]}>{o.label}</Text>
-                    <Text style={[st.modeHint, { color: on ? C.bg : C.sub }]}>{o.hint}</Text>
+                    <Text style={[st.modeLabel, { color: on ? C.bg : C.text }]}>{t(o.label)}</Text>
+                    <Text style={[st.modeHint, { color: on ? C.bg : C.sub }]}>{t(o.hint)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -309,7 +313,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
                         key={v}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: depositType === v }}
-                        accessibilityLabel={v === 'percent' ? 'Percentage of price' : 'Fixed amount in pounds'}
+                        accessibilityLabel={v === 'percent' ? t('providerBusiness.payments.percentA11y') : t('providerBusiness.payments.fixedA11y')}
                         style={[st.segmentBtn, depositType === v && { backgroundColor: C.card }]}
                         onPress={() => { Haptics.selectionAsync().catch(() => {}); setDepositType(v); }}
                         activeOpacity={0.75}
@@ -322,14 +326,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
                     {depositType === 'fixed' && <Text style={[st.amountAffix, { color: C.sub }]}>£</Text>}
                     <TextInput
                       style={[st.amountInput, { color: C.text }]}
-                      accessibilityLabel="Deposit amount"
-                      placeholder={depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
+                      accessibilityLabel={t('providerBusiness.payments.amountA11y')}
+                      placeholder={depositType === 'percent' ? t('providerBusiness.payments.amountPlaceholderPercent') : t('providerBusiness.payments.amountPlaceholderFixed')}
                       placeholderTextColor={C.sub}
                       value={depositAmount}
                       onChangeText={v => setDepositAmount(v.replace(/[^0-9.]/g, ''))}
                       keyboardType="numeric"
                     />
-                    {depositType === 'percent' && <Text style={[st.amountAffix, { color: C.sub }]}>% of price</Text>}
+                    {depositType === 'percent' && <Text style={[st.amountAffix, { color: C.sub }]}>{t('providerBusiness.payments.percentOfPrice')}</Text>}
                   </View>
                 </View>
 
@@ -341,23 +345,23 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 />
 
                 <ToggleRow
-                  label="New clients only"
-                  sub="Only first-time clients pay your deposit. Returning clients book as normal."
+                  label={t('providerBusiness.payments.newOnly')}
+                  sub={t('providerBusiness.payments.newOnlySub')}
                   value={depositRequiredNew}
                   onChange={setDepositRequiredNew}
                 />
 
                 <Field
-                  label="Note to clients (optional)"
+                  label={t('providerBusiness.payments.note')}
                   value={depositNote}
                   onChange={setDepositNote}
-                  placeholder='e.g. "Deposit comes off your final bill"'
+                  placeholder={t('providerBusiness.payments.notePlaceholder')}
                 />
               </>
             )}
 
             <View style={[st.preview, { borderColor: C.accent }]}>
-              <Text style={[st.eyebrow, { color: C.accentText }]}>CLIENTS WILL SEE</Text>
+              <Text style={[st.eyebrow, { color: C.accentText }]}>{t('providerBusiness.payments.clientsSee')}</Text>
               <View style={st.previewRow}>
                 {CLIENT_SEES[depositMode].map(label => (
                   <View key={label} style={[st.previewBtn, { backgroundColor: C.surface }]}>
@@ -366,13 +370,13 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 ))}
               </View>
               {depositMode === 'deposit_required' && (
-                <Text style={[st.footnote, { color: C.sub }]}>The balance is due at their appointment.</Text>
+                <Text style={[st.footnote, { color: C.sub }]}>{t('providerBusiness.payments.balanceDue')}</Text>
               )}
             </View>
 
             <View style={[st.divider, { backgroundColor: C.border }]} />
             <SectionLabel text="Payment types" />
-            <Text style={[st.footnote, { color: C.sub, marginBottom: 8 }]}>Shown on your profile so clients know what to expect.</Text>
+            <Text style={[st.footnote, { color: C.sub, marginBottom: 8 }]}>{t('providerBusiness.payments.howYouTakeSub')}</Text>
             <ChipGroup
               options={PAYMENT_OPTS.map(o => o.label)}
               selected={acceptedLabels}
@@ -385,14 +389,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
               }}
             />
             <Text style={[st.footnote, { color: C.sub, marginTop: 6 }]}>
-              Cerviced doesn't process payments you take in person — these are shown to clients as a heads-up, nothing more.
+              {t('providerBusiness.payments.inPersonNote')}
             </Text>
             <View style={[st.toldPanel, { backgroundColor: C.surface }]}>
-              <Text style={[st.eyebrow, { color: C.accentText }]}>WHAT CLIENTS ARE TOLD</Text>
+              <Text style={[st.eyebrow, { color: C.accentText }]}>{t('providerBusiness.payments.clientsTold')}</Text>
               <Text style={[st.body, { color: C.text }]}>
-                {acceptedLabels.length === 0
-                  ? 'No payment types selected yet — clients won’t see any payment guidance on your profile.'
-                  : `Accepts ${acceptedLabels.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`}
+                {acceptedText.length === 0
+                  ? t('providerBusiness.payments.noTypes')
+                  : t('providerBusiness.payments.accepts', { list: acceptedText.length === 1 ? acceptedText[0]! : acceptedText.slice(0, -1).join(', ') + t('providerBusiness.payments.and') + acceptedText[acceptedText.length - 1] })}
               </Text>
             </View>
             <Text style={[st.footnote, { color: C.sub, marginTop: 12 }]}>
@@ -412,10 +416,10 @@ export default function PaymentsScreen({ navigation, route }: any) {
             activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[st.rowTitle, { color: C.text }]}>Your policies</Text>
+              <Text style={[st.rowTitle, { color: C.text }]}>{t('providerBusiness.payments.yourPolicies')}</Text>
               <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>Cancelling, rescheduling, refunds, late and no-show fees</Text>
             </View>
-            <Text style={[st.rowAction, { color: C.accentText }]}>Open</Text>
+            <Text style={[st.rowAction, { color: C.accentText }]}>{t('common.open')}</Text>
           </TouchableOpacity>
           </>}
           </ProviderStripePayments>

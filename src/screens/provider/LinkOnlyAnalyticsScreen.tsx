@@ -41,12 +41,14 @@ import {
   type IoniconName,
 } from '../../components/analytics/AnalyticsKit';
 import { formatShortDayDate } from '../../utils/dateUtils';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 import { logger } from '../../utils/logger';
 
-const PERIODS: { key: LinkOnlyPeriod; label: string }[] = [
-  { key: '7d', label: '7 days' },
-  { key: '30d', label: '30 days' },
-  { key: 'all', label: 'All time' },
+const PERIODS: { key: LinkOnlyPeriod; labelKey: TranslationKey }[] = [
+  { key: '7d', labelKey: 'providerProfile.analytics.period.7d' },
+  { key: '30d', labelKey: 'providerProfile.analytics.period.30d' },
+  { key: 'all', labelKey: 'providerProfile.analytics.period.all' },
 ];
 
 /** Compact, evenly sized tiles; the final nudge tile wraps naturally on phones. */
@@ -55,7 +57,9 @@ const TILE_COLUMNS = 4;
 export default function LinkOnlyAnalyticsScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode: dark } = useTheme();
+  const { t } = useTranslation();
   const accent = accentColor(dark);
+  const periods = useMemo(() => PERIODS.map(p => ({ key: p.key, label: t(p.labelKey) })), [t]);
   const [period, setPeriod] = useState<LinkOnlyPeriod>('7d');
   const [rows, setRows] = useState<DbProviderDailyStat[] | null>(null);
   const [saves, setSaves] = useState<number | null>(null);
@@ -106,11 +110,11 @@ export default function LinkOnlyAnalyticsScreen() {
   const ratio = bookTapRatio(totals);
 
   const tiles = useMemo<{ label: string; value: number; icon: IoniconName; color: string }[]>(() => [
-    { label: 'Profile views',  value: totals.profileViews,      icon: 'eye',            color: CHART.blue },
-    { label: 'In Search',      value: totals.searchAppearances, icon: 'search',         color: CHART.teal },
-    { label: 'Instagram taps', value: totals.instagramTaps,     icon: 'logo-instagram', color: CHART.pink },
-    { label: 'Saves',          value: saves ?? 0,               icon: 'bookmark',       color: accent },
-    { label: 'Join nudges',    value: totals.joinNudges,        icon: 'megaphone',      color: CHART.amber },
+    { label: t('providerProfile.analytics.tile.views'),  value: totals.profileViews,      icon: 'eye',            color: CHART.blue },
+    { label: t('providerProfile.analytics.tile.search'),      value: totals.searchAppearances, icon: 'search',         color: CHART.teal },
+    { label: t('providerProfile.analytics.tile.instagram'), value: totals.instagramTaps,     icon: 'logo-instagram', color: CHART.pink },
+    { label: t('providerProfile.analytics.tile.saves'),          value: saves ?? 0,               icon: 'bookmark',       color: accent },
+    { label: t('providerProfile.ui.joinNudges'),    value: totals.joinNudges,        icon: 'megaphone',      color: CHART.amber },
   ], [totals, saves, accent]);
 
   return (
@@ -121,19 +125,19 @@ export default function LinkOnlyAnalyticsScreen() {
           contentContainerStyle={styles.scroll}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent} />}
         >
-          <AnalyticsHeader title="Analytics" onBack={() => navigation.goBack()} dark={dark} theme={theme} />
+          <AnalyticsHeader title={t('providerProfile.analytics.title')} onBack={() => navigation.goBack()} dark={dark} theme={theme} />
 
           <View style={styles.rangeArea}>
-            <RangeSelector options={PERIODS} range={period} onChange={setPeriod} dark={dark} theme={theme} />
+            <RangeSelector options={periods} range={period} onChange={setPeriod} dark={dark} theme={theme} />
           </View>
 
           <View style={styles.body}>
             {failed ? (
               <DeckCard dark={dark}>
                 <View style={styles.message}>
-                  <Text style={[styles.messageTitle, { color: theme.text }]}>Couldn't load your numbers</Text>
+                  <Text style={[styles.messageTitle, { color: theme.text }]}>{t('providerProfile.analytics.loadFailed')}</Text>
                   <Text style={[styles.note, { color: theme.secondaryText }]}>
-                    Check your connection and pull down to try again.
+                    {t('providerProfile.analytics.loadFailedBody')}
                   </Text>
                 </View>
               </DeckCard>
@@ -145,13 +149,13 @@ export default function LinkOnlyAnalyticsScreen() {
                   <DeckCard dark={dark} style={heroText.panel}>
                     <HeroGradient dark={dark} accent={accent} />
                     <View style={heroText.inner}>
-                      <Text style={[heroText.label, { color: theme.secondaryText }]}>Book button taps</Text>
+                      <Text style={[heroText.label, { color: theme.secondaryText }]}>{t('providerProfile.analytics.hero.label')}</Text>
                       <AnimatedNumber value={totals.bookTaps} style={[heroText.value, { color: theme.text }]} />
-                      <Text style={[heroText.sub, { color: theme.secondaryText }]}>Clients sent to your booking page</Text>
+                      <Text style={[heroText.sub, { color: theme.secondaryText }]}>{t('providerProfile.analytics.hero.sub')}</Text>
 
                       <View style={styles.chartArea}>
                         <View style={heroText.chartHead}>
-                          <Text style={[heroText.chartHeadK, { color: theme.secondaryText }]}>Book taps by day</Text>
+                          <Text style={[heroText.chartHeadK, { color: theme.secondaryText }]}>{t('providerProfile.analytics.chart.title')}</Text>
                           {selectedDay && (
                             <View style={styles.readout}>
                               <Text style={[heroText.roLabel, { color: theme.secondaryText }]}>
@@ -159,7 +163,7 @@ export default function LinkOnlyAnalyticsScreen() {
                               </Text>
                               <Text style={[heroText.roVal, { color: accent }]}>{selectedDay.value}</Text>
                               <Text style={[heroText.roSub, { color: theme.secondaryText }]}>
-                                tap{selectedDay.value !== 1 ? 's' : ''}
+                                {selectedDay.value === 1 ? t('providerProfile.analytics.chart.tapSingle') : t('providerProfile.analytics.chart.tapSeveral')}
                               </Text>
                             </View>
                           )}
@@ -173,7 +177,7 @@ export default function LinkOnlyAnalyticsScreen() {
                           selectedIndex={selectedIndex}
                           onSelect={setSelectedBar}
                         />
-                        <Text style={[heroText.chartHint, { color: theme.secondaryText }]}>Tap a bar to see that day</Text>
+                        <Text style={[heroText.chartHint, { color: theme.secondaryText }]}>{t('providerProfile.analytics.chart.hint')}</Text>
                       </View>
                     </View>
                   </DeckCard>
@@ -187,14 +191,14 @@ export default function LinkOnlyAnalyticsScreen() {
                       accent={accent}
                       text={
                         <>
-                          <Text style={styles.strong}>1 in {ratio}</Text> people who view your profile tap Book. Adding more portfolio photos usually helps.
+                          <Text style={styles.strong}>{t('providerProfile.analytics.insight.ratio', { ratio })}</Text>{t('providerProfile.analytics.insight.body')}
                         </>
                       }
                     />
                   </Reveal>
                 )}
 
-                <SectionLabel theme={theme}>At a glance</SectionLabel>
+                <SectionLabel theme={theme}>{t('providerProfile.analytics.atAGlance')}</SectionLabel>
                 <View style={styles.tileGrid}>
                   {tiles.map((t, i) => (
                     <Reveal key={t.label} index={i + 1}>
@@ -212,7 +216,7 @@ export default function LinkOnlyAnalyticsScreen() {
                 </View>
 
                 <Text style={[styles.note, styles.footnote, { color: theme.secondaryText }]}>
-                  We count taps on your Book button. Bookings happen on your own page, so CERVICED can't see whether they finished booking. Saves is everyone who's saved you, not just this period.
+                  {t('providerProfile.analytics.footnote')}
                 </Text>
               </>
             )}

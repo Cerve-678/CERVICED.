@@ -46,14 +46,17 @@ import {
   type InboxFilters,
 } from '../../features/providers/inboxFilters';
 import { readableDialog, readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FilterKey = 'enquiries' | 'messages';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'enquiries', label: 'General enquiries' },
-  { key: 'messages', label: 'Messages' },
+  { key: 'enquiries', get label() { return tr('providerBusiness.inbox.filter.enquiries'); } },
+  { key: 'messages', get label() { return tr('providerBusiness.inbox.filter.messages'); } },
 ];
 
 function timeAgoISO(iso: string | null): string {
@@ -157,6 +160,8 @@ function ConversationRow({
   onReply: () => void;
   onMarkRead: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const swipeRef  = useRef<SwipeableMethods>(null);
@@ -180,14 +185,14 @@ function ConversationRow({
         onPress={() => { swipeRef.current?.close(); onMarkRead(); }}
       >
         <Ionicons name="checkmark-done" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>Mark read</Text>
+        <Text style={row.swipeBtnText}>{tr('providerBusiness.inbox.markRead')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[row.swipeBtn, { backgroundColor: accent }]}
         onPress={() => { swipeRef.current?.close(); onReply(); }}
       >
         <Ionicons name="arrow-undo" size={18} color={onAccent} />
-        <Text style={[row.swipeBtnText, { color: onAccent }]}>Reply</Text>
+        <Text style={[row.swipeBtnText, { color: onAccent }]}>{tr('providerBusiness.inbox.reply')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -260,6 +265,8 @@ const DARK_P = {
 };
 
 export default function ProviderInboxScreen({ navigation, route }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { showToast, DialogHost } = useAppDialog();
   const { isDarkMode: dark } = useTheme();
   const { user, myBookingMode } = useAuth();
@@ -339,7 +346,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       .then(() => loadInbox())
       .catch((err) => {
         logger.error('[ProviderInbox] mark-read failed:', err);
-        Alert.alert('Could not mark as read', 'Check your connection and try again.');
+        Alert.alert(tr('providerBusiness.inbox.markReadFailed'), tr('providerBusiness.inbox.checkConnection'));
       });
   }, [loadInbox]);
 
@@ -389,7 +396,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setTemplates(cleaned);
       setTemplatesOpen(false);
       Keyboard.dismiss();
-      showToast('Templates saved.', 'success');
+      showToast(tr('providerBusiness.inbox.templatesSaved'), 'success');
     } catch (err) {
       logger.error('[ProviderInbox] save templates failed:', err);
       showToast(toUserMessage(err, "We couldn't save your templates just now.", '[ProviderInbox] templates save'), 'error');
@@ -473,7 +480,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           )}
 
           <View style={s.headerCenter}>
-            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? 'General enquiries' : 'Inbox'}</Text>
+            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? tr('providerBusiness.inbox.filter.enquiries') : tr('providerBusiness.inbox.title')}</Text>
             {outstandingCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
                 <Text style={s.badgeText}>{outstandingCount}</Text>
@@ -485,7 +492,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             onPress={openTemplates}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-            accessibilityLabel="Message templates"
+            accessibilityLabel={tr('providerBusiness.inbox.templatesA11y')}
           >
             <Ionicons name="documents-outline" size={18} color={P.text} />
           </TouchableOpacity>
@@ -507,7 +514,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 }}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={`${f.label}, ${badgeCount} unread conversations`}
+                accessibilityLabel={tr('providerBusiness.inbox.filterA11y', { label: f.label, count: badgeCount })}
                 style={[s.filterChip, active && { borderBottomColor: P.accent, borderBottomWidth: 2 }]}
               >
                 <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{f.label}</Text>
@@ -530,13 +537,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               style={[s.searchInput, { color: P.text }]}
               value={filters.search}
               onChangeText={search => setFilters(prev => ({ ...prev, search }))}
-              placeholder="Search by name"
+              placeholder={tr('providerBusiness.ui2.searchByName')}
               placeholderTextColor={P.sub}
               autoCorrect={false}
               autoCapitalize="words"
               returnKeyType="search"
               clearButtonMode="while-editing"
-              accessibilityLabel="Search conversations by name"
+              accessibilityLabel={tr('providerBusiness.ui2.searchConversationsByName')}
             />
           </View>
           <ScrollView
@@ -578,7 +585,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             })}
             {filtersOn && (
               <TouchableOpacity activeOpacity={0.75} onPress={clearFilters} style={s.clearChip} accessibilityRole="button">
-                <Text style={[s.chipText, { color: P.accent }]}>Clear</Text>
+                <Text style={[s.chipText, { color: P.accent }]}>{tr('common.clear')}</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -626,10 +633,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               loadError && tabItems.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
-                    {loadError} This list may be out of date.
+                    {loadError} {tr('providerBusiness.inbox.outOfDate')}
                   </Text>
                   <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={[s.errorRetry, { color: P.accent }]}>Retry</Text>
+                    <Text style={[s.errorRetry, { color: P.accent }]}>{tr('common.retry')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : undefined
@@ -641,10 +648,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name="search-outline" size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>Nothing matches</Text>
-                  <Text style={[s.emptySub, { color: P.sub }]}>No conversations here fit these filters.</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBusiness.ui2.nothingMatches')}</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>{tr('providerBusiness.ui2.noConversationsHereFitTheseFilters')}</Text>
                   <TouchableOpacity onPress={clearFilters} style={[s.retryBtn, { borderColor: P.border }]}>
-                    <Text style={[s.retryBtnText, { color: P.accent }]}>Clear filters</Text>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>{tr('providerBusiness.ui2.clearFilters')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : loadError ? (
@@ -652,13 +659,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name="cloud-offline-outline" size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>Couldn't load your inbox</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBusiness.inbox.loadFailedTitle')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>{loadError}</Text>
                   <TouchableOpacity
                     onPress={onRefresh}
                     style={[s.retryBtn, { borderColor: P.border }]}
                   >
-                    <Text style={[s.retryBtnText, { color: P.accent }]}>Try again</Text>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>{tr('common.tryAgain')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -666,10 +673,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name={showEnquiries ? 'mail-open-outline' : 'chatbubble-outline'} size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? 'No general enquiries yet' : 'No client messages yet'}</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? tr('providerBusiness.inbox.empty.enquiries') : tr('providerBusiness.inbox.empty.messages')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
                     {isLinkOnly
-                      ? 'Questions clients send you through Get In Touch on your profile appear here.'
+                      ? tr('providerBusiness.inbox.empty.linkOnlySub')
                       : filter === 'messages'
                         ? 'Conversations with clients who have booked with you appear here.'
                         : 'Questions sent through Get In Touch appear here until the person books with you.'}
@@ -696,13 +703,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             <KeyboardDismissView style={m.positioner}>
               <View style={[m.replyDialog, { backgroundColor: P.card }]}>
                 <Text style={[m.dialogTitle, { color: P.text }]}>
-                  Reply to {replyTarget.client?.name ?? 'client'}
+                  {tr('providerBusiness.ui.replyTo', { name: replyTarget.client?.name ?? tr('providerBusiness.ui.client') })}
                 </Text>
                 <TextInput
                   style={[m.replyInput, { color: P.text, borderColor: P.border }]}
                   value={replyText}
                   onChangeText={setReplyText}
-                  placeholder="Type a reply…"
+                  placeholder={tr('providerBusiness.inbox.replyPlaceholder')}
                   placeholderTextColor={P.sub}
                   multiline
                   autoFocus
@@ -714,7 +721,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     activeOpacity={0.7}
                     onPress={() => { setReplyTarget(null); setReplyText(''); Keyboard.dismiss(); }}
                   >
-                    <Text style={[m.dialogBtnText, { color: P.sub }]}>Cancel</Text>
+                    <Text style={[m.dialogBtnText, { color: P.sub }]}>{tr('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[m.replySendBtn, { backgroundColor: P.accent, opacity: replyText.trim() && !replySending ? 1 : 0.5 }]}
@@ -722,7 +729,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     onPress={handleSendReply}
                     disabled={!replyText.trim() || replySending}
                   >
-                    <Text style={[m.replySendText, { color: P.onAccent }]}>{replySending ? 'Sending…' : 'Send'}</Text>
+                    <Text style={[m.replySendText, { color: P.onAccent }]}>{replySending ? tr('providerBusiness.inbox.sending') : tr('common.send')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -745,7 +752,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             />
             <View style={[t.sheet, { backgroundColor: P.bg }]}>
               <View style={[t.sheetHeader, { borderBottomColor: P.border }]}>
-                <Text style={[t.sheetTitle, { color: P.text }]}>Message Templates</Text>
+                <Text style={[t.sheetTitle, { color: P.text }]}>{tr('providerBusiness.inbox.templatesTitle')}</Text>
                 <TouchableOpacity
                   onPress={() => { setTemplatesOpen(false); Keyboard.dismiss(); }}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -769,14 +776,12 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     keyboardDismissMode="interactive"
                   >
                     <Text style={[t.intro, { color: P.sub }]}>
-                      Private to you. Tapping a template fills the message box in a
-                      conversation — you can always edit it before sending.
+                      {tr('providerBusiness.inbox.templatesIntro')}
                     </Text>
 
                     {templates.length === 0 ? (
                       <Text style={[t.empty, { color: P.sub }]}>
-                        No templates yet. Create reusable replies for confirming an
-                        address, availability, or booking details.
+                        {tr('providerBusiness.inbox.templatesEmpty')}
                       </Text>
                     ) : templates.map((template, index) => (
                       <View key={index} style={[t.item, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -785,7 +790,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                             style={[t.labelInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                             value={template.label}
                             onChangeText={value => updateTemplate(index, 'label', value)}
-                            placeholder="Template name"
+                            placeholder={tr('providerBusiness.inbox.templateName')}
                             placeholderTextColor={P.sub}
                             maxLength={60}
                           />
@@ -797,7 +802,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                           style={[t.contentInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                           value={template.content}
                           onChangeText={value => updateTemplate(index, 'content', value)}
-                          placeholder="Message text"
+                          placeholder={tr('providerBusiness.inbox.templateText')}
                           placeholderTextColor={P.sub}
                           maxLength={1000}
                           multiline
@@ -815,7 +820,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     >
                       <Ionicons name="add" size={18} color={P.accent} />
                       <Text style={[t.addText, { color: P.accent }]}>
-                        {templates.length >= 12 ? 'Template limit reached' : 'Add template'}
+                        {templates.length >= 12 ? tr('providerBusiness.inbox.templateLimit') : tr('providerBusiness.inbox.addTemplate')}
                       </Text>
                     </TouchableOpacity>
                   </ScrollView>
@@ -829,7 +834,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     >
                       {templatesSaving
                         ? <ActivityIndicator color={P.onAccent} size="small" />
-                        : <Text style={[t.saveText, { color: P.onAccent }]}>Save Templates</Text>}
+                        : <Text style={[t.saveText, { color: P.onAccent }]}>{tr('providerBusiness.inbox.saveTemplates')}</Text>}
                     </TouchableOpacity>
                   </View>
                 </KeyboardDismissView>

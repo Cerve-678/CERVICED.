@@ -13,6 +13,8 @@ import type {
   NativeSyntheticEvent,
 } from 'react-native';
 import type { InfoRegSection, InfoRegSectionKey } from './infoRegSections';
+import { INFO_REG_SECTION_TEXT } from './infoRegSections';
+import { useTranslation } from '../../i18n';
 
 interface InfoRegPagerProps {
   sections: readonly InfoRegSection[];
@@ -49,6 +51,7 @@ export const InfoRegPager = forwardRef<ScrollViewInstance, InfoRegPagerProps>(
     },
     ref,
   ) {
+    const { t } = useTranslation();
     const [lineEnds, setLineEnds] = useState<{ first: number; last: number } | null>(null);
 
     const recordEnd = useCallback(
@@ -82,7 +85,7 @@ export const InfoRegPager = forwardRef<ScrollViewInstance, InfoRegPagerProps>(
         <View
           style={styles.waypointRow}
           accessibilityRole="tablist"
-          accessibilityLabel="Profile setup sections"
+          accessibilityLabel={t('providerSetup.pager.a11y')}
         >
           <View
             pointerEvents="none"
@@ -115,7 +118,7 @@ export const InfoRegPager = forwardRef<ScrollViewInstance, InfoRegPagerProps>(
                 activeOpacity={0.6}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: current }}
-                accessibilityLabel={`${section.num} ${section.title}`}
+                accessibilityLabel={`${section.num} ${t(INFO_REG_SECTION_TEXT[section.key].title)}`}
               >
                 <View
                   style={[
@@ -142,7 +145,7 @@ export const InfoRegPager = forwardRef<ScrollViewInstance, InfoRegPagerProps>(
                       current && { color: colors.onAccent, fontSize: 11 },
                     ]}
                   >
-                    {section.short}
+                    {t(INFO_REG_SECTION_TEXT[section.key].short)}
                   </Text>
                 </View>
               </TouchableOpacity>

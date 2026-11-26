@@ -26,6 +26,9 @@ import {
 } from './pageStyles';
 import { DEFAULT_CUSTOM_CHOICES, encodeCustomChoices, parseCustomChoices, type CustomChoices } from './customPageStyle';
 // Default beige content backdrop — matches the app background.
+import type { TranslationKey } from '../i18n/types';
+import { tr } from '../i18n/translate';
+
 export const SHEET_BG = '#F5F1EC';
 
 // Shared neutral card tone. Content cards (About / Services / Reviews) use this
@@ -70,11 +73,11 @@ export type HeroFinish = 'blend' | 'solid' | 'glow' | 'split' | 'sheen';
 export const DEFAULT_HERO_FINISH: HeroFinish = 'blend';
 
 export const HERO_FINISHES: { key: HeroFinish; name: string; description: string }[] = [
-  { key: 'blend', name: 'Blend', description: 'One colour melting into the other' },
-  { key: 'solid', name: 'Solid', description: 'Just the first colour' },
-  { key: 'glow',  name: 'Glow',  description: 'The second colour glowing from the top corner' },
-  { key: 'split', name: 'Split', description: 'Both colours, side by side on a diagonal' },
-  { key: 'sheen', name: 'Sheen', description: 'A soft band of light across both colours, like metal' },
+  { key: 'blend', name: 'Blend', get description() { return tr('providerProfile.ui.oneColourMeltingIntoTheOther'); } },
+  { key: 'solid', name: 'Solid', get description() { return tr('providerProfile.ui.justTheFirstColour'); } },
+  { key: 'glow',  name: 'Glow',  get description() { return tr('providerProfile.ui.theSecondColourGlowingFromThe'); } },
+  { key: 'split', name: 'Split', get description() { return tr('providerProfile.ui.bothColoursSideBySideOn'); } },
+  { key: 'sheen', name: 'Sheen', get description() { return tr('providerProfile.ui.aSoftBandOfLightAcross'); } },
 ];
 
 function isHeroFinish(value: string | undefined): value is HeroFinish {
@@ -91,8 +94,8 @@ export type CardShape = 'rounded' | 'square';
 export const DEFAULT_CARD_SHAPE: CardShape = 'rounded';
 
 export const CARD_SHAPES: { key: CardShape; name: string; description: string }[] = [
-  { key: 'rounded', name: 'Rounded', description: 'Soft, rounded corners' },
-  { key: 'square',  name: 'Square',  description: 'Straight, square corners' },
+  { key: 'rounded', name: 'Rounded', get description() { return tr('providerProfile.ui.softRoundedCorners'); } },
+  { key: 'square',  name: 'Square',  get description() { return tr('providerProfile.ui.straightSquareCorners'); } },
 ];
 
 function isCardShape(value: string | undefined): value is CardShape {
@@ -110,14 +113,14 @@ function isCardShape(value: string | undefined): value is CardShape {
 export type ThemeCollectionKey = 'atelier' | 'sorbet' | 'terra' | 'afterdark' | 'statement' | 'clean' | 'gilded' | 'classics';
 
 export const THEME_COLLECTIONS: { key: ThemeCollectionKey; name: string; description: string }[] = [
-  { key: 'atelier',   name: 'Atelier',    description: 'Quiet, tailored neutrals' },
-  { key: 'sorbet',    name: 'Sorbet',     description: 'Soft pastels with a contrasting accent' },
-  { key: 'terra',     name: 'Terra',      description: 'Warm, sun-baked earth tones' },
-  { key: 'afterdark', name: 'After Dark', description: 'Deep jewel tones with a light accent' },
-  { key: 'statement', name: 'Statement',  description: 'Bold colour clashes' },
-  { key: 'clean',     name: 'Clean Girl', description: 'Milky whites and soft neutrals' },
-  { key: 'gilded',    name: 'Gilded',     description: 'Golds, from white and gold to black and gold' },
-  { key: 'classics',  name: 'Classics',   description: 'The original CERVICED sets' },
+  { key: 'atelier',   name: 'Atelier',    get description() { return tr('providerProfile.ui.quietTailoredNeutrals'); } },
+  { key: 'sorbet',    name: 'Sorbet',     get description() { return tr('providerProfile.ui.softPastelsWithAContrastingAccent'); } },
+  { key: 'terra',     name: 'Terra',      get description() { return tr('providerProfile.ui.warmSunBakedEarthTones'); } },
+  { key: 'afterdark', name: 'After Dark', get description() { return tr('providerProfile.ui.deepJewelTonesWithALight'); } },
+  { key: 'statement', name: 'Statement',  get description() { return tr('providerProfile.ui.boldColourClashes'); } },
+  { key: 'clean',     name: 'Clean Girl', get description() { return tr('providerProfile.ui.milkyWhitesAndSoftNeutrals'); } },
+  { key: 'gilded',    name: 'Gilded',     get description() { return tr('providerProfile.ui.goldsFromWhiteAndGoldTo'); } },
+  { key: 'classics',  name: 'Classics',   get description() { return tr('providerProfile.ui.theOriginalCervicedSets'); } },
 ];
 
 /**
@@ -261,23 +264,23 @@ export function buildMonochromeTheme(mainColor: string, sheet: string = SHEET_BG
 // still covers pink for anyone who wants it.)
 
 const PRESET_DEFS: { key: string; name: string; description: string; backdrop: string; card: string; accent: string; gradient?: [string, string]; suggestedSheet: string }[] = [
-  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#4A2C20', card: '#FFFFFF', accent: '#4A2C1E', suggestedSheet: 'beige' },
-  { key: 'blush',      name: 'Blush',       description: 'Soft pink cards and backdrop',         backdrop: '#F2D4DE', card: '#FDF5F7', accent: '#E9799F', suggestedSheet: 'blush' },
-  { key: 'grey',       name: 'Grey',        description: 'Clean neutral grey',                   backdrop: '#D6D6DA', card: '#F7F7F8', accent: '#5F6068', suggestedSheet: 'mist' },
+  { key: 'app',        name: 'App',         get description() { return tr('providerProfile.ui.matchesTheCervicedAppLook'); },        backdrop: '#4A2C20', card: '#FFFFFF', accent: '#4A2C1E', suggestedSheet: 'beige' },
+  { key: 'blush',      name: 'Blush',       get description() { return tr('providerProfile.ui.softPinkCardsAndBackdrop'); },         backdrop: '#F2D4DE', card: '#FDF5F7', accent: '#E9799F', suggestedSheet: 'blush' },
+  { key: 'grey',       name: 'Grey',        get description() { return tr('providerProfile.ui.cleanNeutralGrey'); },                   backdrop: '#D6D6DA', card: '#F7F7F8', accent: '#5F6068', suggestedSheet: 'mist' },
   // Charcoal keeps its dark hero but uses the shared neutral card like every
   // other theme, so About/Services/Reviews read the same clean off-white.
-  { key: 'charcoal',   name: 'Charcoal',    description: 'Near-black hero over clean neutral cards', backdrop: '#26262B', card: NEUTRAL_CARD, accent: '#4A4A52', suggestedSheet: 'mist' },
+  { key: 'charcoal',   name: 'Charcoal',    get description() { return tr('providerProfile.ui.nearBlackHeroOverCleanNeutral'); }, backdrop: '#26262B', card: NEUTRAL_CARD, accent: '#4A4A52', suggestedSheet: 'mist' },
   // Black is the only preset meant to read as genuinely black: without its own
   // gradient it would fall back to [backdrop, sheet] and fade straight out to
   // the pale content colour, leaving a mostly-grey hero. The near-black second
   // stop keeps depth without lifting it off black.
-  { key: 'black',      name: 'Black',        description: 'True black hero over clean neutral cards', backdrop: '#000000', card: NEUTRAL_CARD, accent: '#000000', gradient: ['#000000', '#0B0B0D'], suggestedSheet: 'mist' },
-  { key: 'pinkolive',  name: 'Pink & Olive', description: 'Soft pink backdrop with an olive accent', backdrop: '#F9D1D9', card: '#FDF6F7', accent: '#838F58', suggestedSheet: 'blush' },
+  { key: 'black',      name: 'Black',        get description() { return tr('providerProfile.ui.trueBlackHeroOverCleanNeutral'); }, backdrop: '#000000', card: NEUTRAL_CARD, accent: '#000000', gradient: ['#000000', '#0B0B0D'], suggestedSheet: 'mist' },
+  { key: 'pinkolive',  name: 'Pink & Olive', get description() { return tr('providerProfile.ui.softPinkBackdropWithAnOlive'); }, backdrop: '#F9D1D9', card: '#FDF6F7', accent: '#838F58', suggestedSheet: 'blush' },
   // Burgundy carries its own wine-into-wine blend for the same reason Black
   // does: the default [backdrop, sheet] fade would wash a deep hero out to
   // the pale content colour. Blue accent is dark enough to hold white label
   // text on the pale cards (WCAG ~6.8:1) while reading as a true blue, not navy.
-  { key: 'burgundyblue', name: 'Burgundy & Blue', description: 'Deep burgundy hero with a true blue accent', backdrop: '#6B2737', card: NEUTRAL_CARD, accent: '#2C5AA0', gradient: ['#5A1F2C', '#7E3644'], suggestedSheet: 'mist' },
+  { key: 'burgundyblue', name: 'Burgundy & Blue', get description() { return tr('providerProfile.ui.deepBurgundyHeroWithATrue'); }, backdrop: '#6B2737', card: NEUTRAL_CARD, accent: '#2C5AA0', gradient: ['#5A1F2C', '#7E3644'], suggestedSheet: 'mist' },
 ];
 
 // Monochrome sets — ONE main colour drives the backdrop and accent; the
@@ -285,8 +288,8 @@ const PRESET_DEFS: { key: string; name: string; description: string; backdrop: s
 // theme, so only the hero carries the hue. e.g. Emerald gives a rich green
 // hero with a deep green accent over clean neutral cards.
 const MONOCHROME_DEFS: { key: string; name: string; description: string; main: string; suggestedSheet: string }[] = [
-  { key: 'ocean',   name: 'Ocean Blue', description: 'True blue hero over clean neutral cards',      main: '#2E6F9E', suggestedSheet: 'beige' },
-  { key: 'berry',   name: 'Berry',      description: 'Deep wine hero over clean neutral cards',      main: '#8E3B6B', suggestedSheet: 'beige' },
+  { key: 'ocean',   name: 'Ocean Blue', get description() { return tr('providerProfile.ui.trueBlueHeroOverCleanNeutral'); },      main: '#2E6F9E', suggestedSheet: 'beige' },
+  { key: 'berry',   name: 'Berry',      get description() { return tr('providerProfile.ui.deepWineHeroOverCleanNeutral'); },      main: '#8E3B6B', suggestedSheet: 'beige' },
 ];
 
 // Gradient sets — muted, "in-between" tones that sit just off the obvious
@@ -295,13 +298,13 @@ const MONOCHROME_DEFS: { key: string; name: string; description: string; main: s
 // backdrop reads as one refined, hard-to-name colour story. The card stays
 // the shared neutral; only the hero and accent carry the tone.
 const GRADIENT_DEFS: { key: string; name: string; description: string; from: string; to: string; accent?: string; suggestedSheet: string }[] = [
-  { key: 'clay',      name: 'Clay',       description: 'Muted terracotta into warm greyed sand',    from: '#9E6B57', to: '#CBAF98', suggestedSheet: 'beige' },
-  { key: 'thyme',     name: 'Thyme',      description: 'Greyed sage into soft olive',               from: '#6C7A63', to: '#A8AE8E', suggestedSheet: 'beige' },
-  { key: 'harbour',   name: 'Harbour',    description: 'Dusty slate-blue into muted teal-grey',     from: '#4F6672', to: '#8FA6A8', suggestedSheet: 'beige' },
-  { key: 'garnet',    name: 'Garnet',     description: 'Deep muted red into soft brick-rose',       from: '#8E3A34', to: '#C07E6E', suggestedSheet: 'beige' },
-  { key: 'fig',       name: 'Fig',        description: 'Dusty aubergine into greyed mauve',         from: '#5B4457', to: '#9B8090', suggestedSheet: 'beige' },
-  { key: 'fern',      name: 'Fern',       description: 'Deep forest green into muted moss',         from: '#3E5541', to: '#8AA07E', suggestedSheet: 'beige' },
-  { key: 'greypink',  name: 'Grey & Pink', description: 'Cool grey fading into soft pink',          from: '#B9B9C0', to: '#F3D3DE', accent: '#9C6B7A', suggestedSheet: 'blush' },
+  { key: 'clay',      name: 'Clay',       get description() { return tr('providerProfile.ui.mutedTerracottaIntoWarmGreyedSand'); },    from: '#9E6B57', to: '#CBAF98', suggestedSheet: 'beige' },
+  { key: 'thyme',     name: 'Thyme',      get description() { return tr('providerProfile.ui.greyedSageIntoSoftOlive'); },               from: '#6C7A63', to: '#A8AE8E', suggestedSheet: 'beige' },
+  { key: 'harbour',   name: 'Harbour',    get description() { return tr('providerProfile.ui.dustySlateBlueIntoMutedTeal'); },     from: '#4F6672', to: '#8FA6A8', suggestedSheet: 'beige' },
+  { key: 'garnet',    name: 'Garnet',     get description() { return tr('providerProfile.ui.deepMutedRedIntoSoftBrick'); },       from: '#8E3A34', to: '#C07E6E', suggestedSheet: 'beige' },
+  { key: 'fig',       name: 'Fig',        get description() { return tr('providerProfile.ui.dustyAubergineIntoGreyedMauve'); },         from: '#5B4457', to: '#9B8090', suggestedSheet: 'beige' },
+  { key: 'fern',      name: 'Fern',       get description() { return tr('providerProfile.ui.deepForestGreenIntoMutedMoss'); },         from: '#3E5541', to: '#8AA07E', suggestedSheet: 'beige' },
+  { key: 'greypink',  name: 'Grey & Pink', get description() { return tr('providerProfile.ui.coolGreyFadingIntoSoftPink'); },          from: '#B9B9C0', to: '#F3D3DE', accent: '#9C6B7A', suggestedSheet: 'blush' },
 ];
 
 // The collections — two-tone heroes, each with an accent chosen to complement
@@ -311,38 +314,38 @@ const GRADIENT_DEFS: { key: string; name: string; description: string; from: str
 // Cobalt & Blush were darkened to about 5:1 at the owner's request
 // (2026-11-03); their first, lighter accents sat near 2:1.
 const COLLECTION_DEFS: { key: string; name: string; description: string; from: string; to: string; accent: string; suggestedSheet: string; collection: ThemeCollectionKey }[] = [
-  { key: 'oatmilk',       name: 'Oat Milk',          description: 'Toasted oat into steamed milk, with a latte-brown accent', from: '#D8C6AF', to: '#EFE3D3', accent: '#7A5A43', suggestedSheet: 'ivory',    collection: 'atelier' },
-  { key: 'cashmere',      name: 'Cashmere',          description: 'Warm greige into soft camel, with a cinnamon accent',      from: '#C9B2A3', to: '#E9DCD1', accent: '#8C5647', suggestedSheet: 'shell',    collection: 'atelier' },
-  { key: 'linenink',      name: 'Linen & Ink',       description: 'Pale linen with a near-black ink accent',                  from: '#E4DED3', to: '#F3EFE8', accent: '#23262E', suggestedSheet: 'beige',    collection: 'atelier' },
-  { key: 'mushroom',      name: 'Mushroom',          description: 'Earthy taupe into stone, with a deep bark accent',         from: '#9C8F84', to: '#CFC5BA', accent: '#4A403A', suggestedSheet: 'oat',      collection: 'atelier' },
-  { key: 'ivoryoxblood',   name: 'Ivory & Oxblood',  description: 'Warm ivory with a rich oxblood accent',                 from: '#EDE3D9', to: '#F9F4EC', accent: '#772F3D', suggestedSheet: 'ivory',    collection: 'atelier' },
-  { key: 'cocoacream',     name: 'Cocoa & Cream',    description: 'Deep cocoa above a warm cream content area',           from: '#3C302D', to: '#6A514A', accent: '#79543B', suggestedSheet: 'ivory',    collection: 'atelier' },
-  { key: 'blushcocoa',    name: 'Blush & Cocoa',     description: 'Soft blush pink with a rich cocoa accent, like a beauty shop', from: '#F2C9D5', to: '#FBE6EC', accent: '#6B3A2E', suggestedSheet: 'milk',     collection: 'sorbet' },
-  { key: 'rosesage',      name: 'Rose & Sage',       description: 'Dusty rose with a soft sage accent',                       from: '#E6B3B9', to: '#F2D9D9', accent: '#66805F', suggestedSheet: 'blush',    collection: 'sorbet' },
-  { key: 'powderapricot', name: 'Powder & Apricot',  description: 'Powder blue into apricot, with a burnt-orange accent',      from: '#B9CFE3', to: '#F4D6BF', accent: '#B9643F', suggestedSheet: 'mist',     collection: 'sorbet' },
-  { key: 'desertrose',    name: 'Desert Rose',       description: 'Sandstone pink with a dark rosewood accent',               from: '#B4807A', to: '#DFBDB1', accent: '#6A3D3A', suggestedSheet: 'shell',    collection: 'terra' },
-  { key: 'emeraldgold',   name: 'Emerald & Gold',    description: 'Bottle green with an antique-gold accent',                 from: '#1D4A3C', to: '#2E6A54', accent: '#A98235', suggestedSheet: 'ivory',    collection: 'afterdark' },
-  { key: 'sapphireblush', name: 'Sapphire & Blush',  description: 'Midnight sapphire with a deep rose accent',                from: '#1D2C52', to: '#3A4B78', accent: '#B04A68', suggestedSheet: 'blush',    collection: 'afterdark' },
-  { key: 'plumchampagne', name: 'Plum & Champagne',  description: 'Velvet plum with an antique-bronze accent',                from: '#3C1F3E', to: '#683C64', accent: '#8A6438', suggestedSheet: 'ivory',    collection: 'afterdark' },
-  { key: 'hibiscus',      name: 'Hibiscus',          description: 'Deep hibiscus wine with a raspberry-pink accent',          from: '#4A1426', to: '#7A2A45', accent: '#A63A62', suggestedSheet: 'petal',    collection: 'afterdark' },
-  { key: 'tealcoral',     name: 'Deep Teal & Coral', description: 'Inky teal with a warm coral accent',                       from: '#113A41', to: '#1E5B62', accent: '#D9714F', suggestedSheet: 'mist',     collection: 'afterdark' },
-  { key: 'cobaltblush',   name: 'Cobalt & Blush',    description: 'Electric cobalt with a raspberry-pink accent',             from: '#2747A0', to: '#4A68BE', accent: '#B8436A', suggestedSheet: 'blush',    collection: 'statement' },
-  { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    description: 'Glossy cherry with a dark cocoa accent',                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
-  { key: 'cocoapink',     name: 'Cocoa & Pink',      description: 'Dark chocolate with a hot-pink accent, like a poster',      from: '#2B0B0A', to: '#4A1720', accent: '#B23A76', suggestedSheet: 'candy',    collection: 'statement' },
-  { key: 'matchaink',     name: 'Matcha & Ink',      description: 'Whisked matcha with a deep ink-green accent',              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
-  { key: 'tangerinenavy', name: 'Tangerine & Navy',  description: 'Juicy tangerine with a crisp navy accent',                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },
-  { key: 'royalyellow',    name: 'Royal Blue & Yellow', description: 'Royal blue with a golden-yellow accent',              from: '#2446A6', to: '#4167BC', accent: '#AA7600', suggestedSheet: 'butter',   collection: 'statement' },
-  { key: 'violetlime',     name: 'Violet & Lime',     description: 'Electric violet with a fresh lime accent',                from: '#55339B', to: '#7851B0', accent: '#647A16', suggestedSheet: 'sagemist', collection: 'statement' },
-  { key: 'milkglaze',     name: 'Milk Glaze',        description: 'Barely-there oat into pure white, with a soft taupe accent', from: '#F3EFEA', to: '#FFFFFF', accent: '#8A7766', suggestedSheet: 'milk',      collection: 'clean' },
-  { key: 'glazedrose',    name: 'Glazed Rose',       description: 'A sheer pink glaze over white, with a dusty-rose accent',    from: '#F1E4DE', to: '#FFFFFF', accent: '#9E6A66', suggestedSheet: 'shell',     collection: 'clean' },
-  { key: 'coconutink',    name: 'Coconut & Ink',     description: 'All white with a near-black accent',                         from: '#FFFFFF', to: '#F1EEEA', accent: '#22201E', suggestedSheet: 'milk',      collection: 'clean' },
-  { key: 'almondsilk',    name: 'Almond Silk',       description: 'Almond into silk, with a toasted-almond accent',             from: '#E6D8C6', to: '#F5EEE4', accent: '#7A664C', suggestedSheet: 'beige',     collection: 'clean' },
-  { key: 'cloud',         name: 'Cloud',             description: 'Soft cloud grey into white, with a slate accent',            from: '#E8E9EB', to: '#FFFFFF', accent: '#3E4859', suggestedSheet: 'milk',      collection: 'clean' },
-  { key: 'sagemilk',      name: 'Sage & Milk',       description: 'Pale sage into milky white, with a deep green accent',      from: '#E8EEE6', to: '#FBFCFA', accent: '#4E6A55', suggestedSheet: 'sagemist', collection: 'clean' },
-  { key: 'bluelinen',     name: 'Blue & Linen',     description: 'Blue mist into warm linen, with a slate-blue accent',       from: '#E5EEF1', to: '#FBF8F2', accent: '#3D6174', suggestedSheet: 'mist',     collection: 'clean' },
-  { key: 'whitegold',     name: 'White & Gold',      description: 'Clean white warming into gold, with a polished-gold accent', from: '#FFFFFF', to: '#F2E7D2', accent: '#9C7633', suggestedSheet: 'milk',      collection: 'gilded' },
-  { key: 'blackgold',     name: 'Black & Gold',      description: 'Near-black with an antique-gold accent',                     from: '#0D0C0A', to: '#2A2418', accent: '#98742D', suggestedSheet: 'dove',      collection: 'gilded' },
-  { key: 'antiquebronze', name: 'Antique Bronze',    description: 'Dark bronze into burnished gold, with a bronze accent',      from: '#5E4424', to: '#8E6C3E', accent: '#7A5A2B', suggestedSheet: 'champagne', collection: 'gilded' },
+  { key: 'oatmilk',       name: 'Oat Milk',          get description() { return tr('providerProfile.ui.toastedOatIntoSteamedMilkWith'); }, from: '#D8C6AF', to: '#EFE3D3', accent: '#7A5A43', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'cashmere',      name: 'Cashmere',          get description() { return tr('providerProfile.ui.warmGreigeIntoSoftCamelWith'); },      from: '#C9B2A3', to: '#E9DCD1', accent: '#8C5647', suggestedSheet: 'shell',    collection: 'atelier' },
+  { key: 'linenink',      name: 'Linen & Ink',       get description() { return tr('providerProfile.ui.paleLinenWithANearBlack'); },                  from: '#E4DED3', to: '#F3EFE8', accent: '#23262E', suggestedSheet: 'beige',    collection: 'atelier' },
+  { key: 'mushroom',      name: 'Mushroom',          get description() { return tr('providerProfile.ui.earthyTaupeIntoStoneWithA'); },         from: '#9C8F84', to: '#CFC5BA', accent: '#4A403A', suggestedSheet: 'oat',      collection: 'atelier' },
+  { key: 'ivoryoxblood',   name: 'Ivory & Oxblood',  get description() { return tr('providerProfile.ui.warmIvoryWithARichOxblood'); },                 from: '#EDE3D9', to: '#F9F4EC', accent: '#772F3D', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'cocoacream',     name: 'Cocoa & Cream',    get description() { return tr('providerProfile.ui.deepCocoaAboveAWarmCream'); },           from: '#3C302D', to: '#6A514A', accent: '#79543B', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'blushcocoa',    name: 'Blush & Cocoa',     get description() { return tr('providerProfile.ui.softBlushPinkWithARich'); }, from: '#F2C9D5', to: '#FBE6EC', accent: '#6B3A2E', suggestedSheet: 'milk',     collection: 'sorbet' },
+  { key: 'rosesage',      name: 'Rose & Sage',       get description() { return tr('providerProfile.ui.dustyRoseWithASoftSage'); },                       from: '#E6B3B9', to: '#F2D9D9', accent: '#66805F', suggestedSheet: 'blush',    collection: 'sorbet' },
+  { key: 'powderapricot', name: 'Powder & Apricot',  get description() { return tr('providerProfile.ui.powderBlueIntoApricotWithA'); },      from: '#B9CFE3', to: '#F4D6BF', accent: '#B9643F', suggestedSheet: 'mist',     collection: 'sorbet' },
+  { key: 'desertrose',    name: 'Desert Rose',       get description() { return tr('providerProfile.ui.sandstonePinkWithADarkRosewood'); },               from: '#B4807A', to: '#DFBDB1', accent: '#6A3D3A', suggestedSheet: 'shell',    collection: 'terra' },
+  { key: 'emeraldgold',   name: 'Emerald & Gold',    get description() { return tr('providerProfile.ui.bottleGreenWithAnAntiqueGold'); },                 from: '#1D4A3C', to: '#2E6A54', accent: '#A98235', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'sapphireblush', name: 'Sapphire & Blush',  get description() { return tr('providerProfile.ui.midnightSapphireWithADeepRose'); },                from: '#1D2C52', to: '#3A4B78', accent: '#B04A68', suggestedSheet: 'blush',    collection: 'afterdark' },
+  { key: 'plumchampagne', name: 'Plum & Champagne',  get description() { return tr('providerProfile.ui.velvetPlumWithAnAntiqueBronze'); },                from: '#3C1F3E', to: '#683C64', accent: '#8A6438', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'hibiscus',      name: 'Hibiscus',          get description() { return tr('providerProfile.ui.deepHibiscusWineWithARaspberry'); },          from: '#4A1426', to: '#7A2A45', accent: '#A63A62', suggestedSheet: 'petal',    collection: 'afterdark' },
+  { key: 'tealcoral',     name: 'Deep Teal & Coral', get description() { return tr('providerProfile.ui.inkyTealWithAWarmCoral'); },                       from: '#113A41', to: '#1E5B62', accent: '#D9714F', suggestedSheet: 'mist',     collection: 'afterdark' },
+  { key: 'cobaltblush',   name: 'Cobalt & Blush',    get description() { return tr('providerProfile.ui.electricCobaltWithARaspberryPink'); },             from: '#2747A0', to: '#4A68BE', accent: '#B8436A', suggestedSheet: 'blush',    collection: 'statement' },
+  { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    get description() { return tr('providerProfile.ui.glossyCherryWithADarkCocoa'); },                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
+  { key: 'cocoapink',     name: 'Cocoa & Pink',      get description() { return tr('providerProfile.ui.darkChocolateWithAHotPink'); },      from: '#2B0B0A', to: '#4A1720', accent: '#B23A76', suggestedSheet: 'candy',    collection: 'statement' },
+  { key: 'matchaink',     name: 'Matcha & Ink',      get description() { return tr('providerProfile.ui.whiskedMatchaWithADeepInk'); },              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
+  { key: 'tangerinenavy', name: 'Tangerine & Navy',  get description() { return tr('providerProfile.ui.juicyTangerineWithACrispNavy'); },                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },
+  { key: 'royalyellow',    name: 'Royal Blue & Yellow', get description() { return tr('providerProfile.ui.royalBlueWithAGoldenYellow'); },              from: '#2446A6', to: '#4167BC', accent: '#AA7600', suggestedSheet: 'butter',   collection: 'statement' },
+  { key: 'violetlime',     name: 'Violet & Lime',     get description() { return tr('providerProfile.ui.electricVioletWithAFreshLime'); },                from: '#55339B', to: '#7851B0', accent: '#647A16', suggestedSheet: 'sagemist', collection: 'statement' },
+  { key: 'milkglaze',     name: 'Milk Glaze',        get description() { return tr('providerProfile.ui.barelyThereOatIntoPureWhite'); }, from: '#F3EFEA', to: '#FFFFFF', accent: '#8A7766', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'glazedrose',    name: 'Glazed Rose',       get description() { return tr('providerProfile.ui.aSheerPinkGlazeOverWhite'); },    from: '#F1E4DE', to: '#FFFFFF', accent: '#9E6A66', suggestedSheet: 'shell',     collection: 'clean' },
+  { key: 'coconutink',    name: 'Coconut & Ink',     get description() { return tr('providerProfile.ui.allWhiteWithANearBlack'); },                         from: '#FFFFFF', to: '#F1EEEA', accent: '#22201E', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'almondsilk',    name: 'Almond Silk',       get description() { return tr('providerProfile.ui.almondIntoSilkWithAToasted'); },             from: '#E6D8C6', to: '#F5EEE4', accent: '#7A664C', suggestedSheet: 'beige',     collection: 'clean' },
+  { key: 'cloud',         name: 'Cloud',             get description() { return tr('providerProfile.ui.softCloudGreyIntoWhiteWith'); },            from: '#E8E9EB', to: '#FFFFFF', accent: '#3E4859', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'sagemilk',      name: 'Sage & Milk',       get description() { return tr('providerProfile.ui.paleSageIntoMilkyWhiteWith'); },      from: '#E8EEE6', to: '#FBFCFA', accent: '#4E6A55', suggestedSheet: 'sagemist', collection: 'clean' },
+  { key: 'bluelinen',     name: 'Blue & Linen',     get description() { return tr('providerProfile.ui.blueMistIntoWarmLinenWith'); },       from: '#E5EEF1', to: '#FBF8F2', accent: '#3D6174', suggestedSheet: 'mist',     collection: 'clean' },
+  { key: 'whitegold',     name: 'White & Gold',      get description() { return tr('providerProfile.ui.cleanWhiteWarmingIntoGoldWith'); }, from: '#FFFFFF', to: '#F2E7D2', accent: '#9C7633', suggestedSheet: 'milk',      collection: 'gilded' },
+  { key: 'blackgold',     name: 'Black & Gold',      get description() { return tr('providerProfile.ui.nearBlackWithAnAntiqueGold'); },                     from: '#0D0C0A', to: '#2A2418', accent: '#98742D', suggestedSheet: 'dove',      collection: 'gilded' },
+  { key: 'antiquebronze', name: 'Antique Bronze',    get description() { return tr('providerProfile.ui.darkBronzeIntoBurnishedGoldWith'); },      from: '#5E4424', to: '#8E6C3E', accent: '#7A5A2B', suggestedSheet: 'champagne', collection: 'gilded' },
 ];
 
 export const PROVIDER_THEMES: ProviderThemePreset[] = [
@@ -482,4 +485,42 @@ export function themeBrandingColours(key: string | null | undefined): {
 } {
   const tokens = resolveProviderTheme(key);
   return { gradient: [...tokens.gradient], accentColor: tokens.accent };
+}
+
+// ── Display names ───────────────────────────────────────────────────────────
+// Theme and sheet keys are what's stored; `name` above is the English label.
+// Pickers show names through themeDisplayName / sheetDisplayName so they
+// follow the app language. Descriptions are never shown, so stay English.
+const THEME_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
+  "app": 'providerProfile.theme.app',
+  "blush": 'providerProfile.theme.blush',
+  "grey": 'providerProfile.theme.grey',
+  "charcoal": 'providerProfile.theme.charcoal',
+  "black": 'providerProfile.theme.black',
+  "pinkolive": 'providerProfile.theme.pinkolive',
+  "burgundyblue": 'providerProfile.theme.burgundyblue',
+  "ocean": 'providerProfile.theme.ocean',
+  "berry": 'providerProfile.theme.berry',
+  "clay": 'providerProfile.theme.clay',
+  "thyme": 'providerProfile.theme.thyme',
+  "harbour": 'providerProfile.theme.harbour',
+  "garnet": 'providerProfile.theme.garnet',
+  "fig": 'providerProfile.theme.fig',
+  "fern": 'providerProfile.theme.fern',
+  "greypink": 'providerProfile.theme.greypink',
+};
+const SHEET_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
+  "beige": 'providerProfile.sheet.beige',
+  "blush": 'providerProfile.sheet.blush',
+  "ivory": 'providerProfile.sheet.ivory',
+  "mist": 'providerProfile.sheet.mist',
+  "sagemist": 'providerProfile.sheet.sagemist',
+};
+export function themeDisplayName(key: string, fallback: string, translate: (key: TranslationKey) => string): string {
+  const k = THEME_NAME_KEYS[key];
+  return k ? translate(k) : fallback;
+}
+export function sheetDisplayName(key: string, fallback: string, translate: (key: TranslationKey) => string): string {
+  const k = SHEET_NAME_KEYS[key];
+  return k ? translate(k) : fallback;
 }

@@ -28,6 +28,8 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { validateDob, validatePhone } from '../../utils/validation';
 import { type BookingDetail, missingBookingDetails } from './beforeYouBook';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // How long a closing sheet takes to slide out. React Native can leave the next
 // Modal behind one that's still dismissing, so the next one waits this long.
@@ -67,6 +69,8 @@ export function BeforeYouBookSheet({
   onClose: () => void;
   onDone: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: t } = useTheme();
   const { updateUser } = useAuth();
   const insets = useSafeAreaInsets();
@@ -126,21 +130,21 @@ export function BeforeYouBookSheet({
           avoidance at all on Android, and the app is edge-to-edge there, so
           the keyboard sat over the name and mobile fields. */}
       <KeyboardDismissView style={styles.backdrop}>
-        <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} accessibilityLabel="Close" />
+        <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} accessibilityLabel={tr('common.close')} />
         <View style={[styles.sheet, { backgroundColor: t.bg, paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
             style={styles.close}
             onPress={onClose}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel="Close"
+            accessibilityLabel={tr('common.close')}
           >
             <Ionicons name="close" size={24} color={t.text} />
           </TouchableOpacity>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <ScreenTitle
-              title="Before you can book"
-              subtitle="Just these to finish setting up your account. You'll only need to do this once."
+              title={tr('clientBooking.beforeBook.title')}
+              subtitle={tr('clientBooking.beforeBook.sub')}
             />
             <FormCard>
               {asked.includes('name') && (
@@ -185,9 +189,9 @@ export function BeforeYouBookSheet({
               )}
             </FormCard>
             {saveFailed && (
-              <Text style={styles.saveError}>We couldn't save your details. Please try again.</Text>
+              <Text style={styles.saveError}>{tr('clientBooking.beforeBook.saveFailed')}</Text>
             )}
-            <PrimaryButton label="Continue" onPress={handleContinue} loading={saving} style={styles.button} />
+            <PrimaryButton label={tr('common.continue')} onPress={handleContinue} loading={saving} style={styles.button} />
           </ScrollView>
         </View>
       </KeyboardDismissView>

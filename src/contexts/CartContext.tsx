@@ -6,6 +6,7 @@ import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { getLiveProviderIds, getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
 import type { EmergencyReason } from '../services/AvailabilityService';
+import { tr } from '../i18n';
 import type { ChosenAddOn } from '../features/bookings/addOnTime';
 
 /**
@@ -528,7 +529,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
     // surface the failure through state instead. CartScreen watches
     // `cartError` and shows it via its own showAlert/DialogHost, then calls
     // clearCartError() to reset this.
-    return { ...state, lastError: 'Something went wrong updating your cart. Please try again.' };
+    return { ...state, lastError: tr('cart.context.updateFailed') };
   }
 };
 
@@ -611,12 +612,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const names = [...new Set(unavailable.map(it => it.providerDisplayName ?? it.providerName))];
             const many = names.length > 1;
             Alert.alert(
-              'Not accepting bookings',
-              `${names.join(', ')} ${many ? 'are' : 'is'} currently not accepting bookings. Would you like to remove ${many ? 'their services' : 'this'} from your cart?`,
+              tr('cart.context.unavailable.title'),
+              tr(many ? 'cart.context.unavailable.several' : 'cart.context.unavailable.single', { names: names.join(', ') }),
               [
-                { text: 'Keep', style: 'cancel' },
+                { text: tr('cart.context.unavailable.keep'), style: 'cancel' },
                 {
-                  text: 'Remove',
+                  text: tr('cart.context.unavailable.remove'),
                   style: 'destructive',
                   onPress: () => unavailable.forEach(it =>
                     dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } })),
@@ -679,8 +680,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         dispatch({ type: CartActionType.ADD_ITEM, payload: { ...item, providerId: resolvedId } });
       } else {
         Alert.alert(
-          'Provider unavailable',
-          `${item.providerDisplayName ?? item.providerName} isn't available to book right now. Please try again from their profile a little later.`
+          tr('cart.context.providerUnavailableTitle'),
+          tr('cart.context.providerUnavailable', { provider: item.providerDisplayName ?? item.providerName }),
         );
       }
     })();

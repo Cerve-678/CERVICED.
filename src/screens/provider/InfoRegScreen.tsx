@@ -174,6 +174,8 @@ import {
   type BusinessType,
 } from '../../features/business-details/options';
 import { readableDialog, readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -368,13 +370,13 @@ const PATCH_TEST_DEFAULT_CATEGORIES: ReadonlySet<CategoryKind> = new Set(['HAIR'
 // fuller, client-facing text pre-filled into the category's description box
 // when this kind is chosen (still editable before saving).
 const CATEGORY_META: Record<CategoryKind, { icon: string; label: string; blurb: string; description: string }> = {
-  HAIR:       { icon: 'cut-outline',            label: 'Hair',       blurb: 'Cuts, colour, braids, extensions', description: 'Cuts, colour, treatments and styling — from a fresh trim to a full colour transformation, tailored to your hair type and the look you\'re after.' },
-  NAILS:      { icon: 'color-palette-outline',  label: 'Nails',      blurb: 'Gel, acrylic, BIAB, nail art', description: 'Manicures, pedicures and nail enhancements — gel, acrylic, BIAB and nail art, finished to last and look salon-fresh for weeks.' },
-  LASHES:     { icon: 'eye-outline',            label: 'Lashes',     blurb: 'Classic, volume, lifts', description: 'Lash extensions, lifts and tints — classic to volume sets, for fuller, longer-looking lashes without daily mascara.' },
-  BROWS:      { icon: 'contrast-outline',       label: 'Brows',      blurb: 'Lamination, microblading, tint', description: 'Brow shaping, tinting and semi-permanent makeup — defined, symmetrical brows that frame your face and hold their shape.' },
-  MUA:        { icon: 'brush-outline',          label: 'Makeup',     blurb: 'Glam, bridal, editorial', description: 'Makeup for every occasion — bridal, glam and editorial looks, camera-ready and built to last.' },
-  AESTHETICS: { icon: 'sparkles-outline',       label: 'Aesthetics', blurb: 'Facials, peels, injectables', description: 'Skin and injectable treatments — facials, peels and anti-ageing treatments to refresh, firm and even out your skin.' },
-  OTHER:      { icon: 'apps-outline',           label: 'Other',      blurb: 'Anything else you offer', description: '' },
+  HAIR:       { icon: 'cut-outline',            get label() { return tr('beautyProfile.hello.hair'); },       blurb: 'Cuts, colour, braids, extensions', description: 'Cuts, colour, treatments and styling — from a fresh trim to a full colour transformation, tailored to your hair type and the look you\'re after.' },
+  NAILS:      { icon: 'color-palette-outline',  get label() { return tr('beautyProfile.hello.nails'); },      blurb: 'Gel, acrylic, BIAB, nail art', description: 'Manicures, pedicures and nail enhancements — gel, acrylic, BIAB and nail art, finished to last and look salon-fresh for weeks.' },
+  LASHES:     { icon: 'eye-outline',            get label() { return tr('maintenance.add.type.lashes'); },     blurb: 'Classic, volume, lifts', description: 'Lash extensions, lifts and tints — classic to volume sets, for fuller, longer-looking lashes without daily mascara.' },
+  BROWS:      { icon: 'contrast-outline',       get label() { return tr('maintenance.add.type.brows'); },      blurb: 'Lamination, microblading, tint', description: 'Brow shaping, tinting and semi-permanent makeup — defined, symmetrical brows that frame your face and hold their shape.' },
+  MUA:        { icon: 'brush-outline',          get label() { return tr('beautyProfile.hello.makeup'); },     blurb: 'Glam, bridal, editorial', description: 'Makeup for every occasion — bridal, glam and editorial looks, camera-ready and built to last.' },
+  AESTHETICS: { icon: 'sparkles-outline',       get label() { return tr('providerProfile.opt.cat.aesthetics'); }, blurb: 'Facials, peels, injectables', description: 'Skin and injectable treatments — facials, peels and anti-ageing treatments to refresh, firm and even out your skin.' },
+  OTHER:      { icon: 'apps-outline',           get label() { return tr('maintenance.add.type.misc'); },      blurb: 'Anything else you offer', description: '' },
 };
 
 // Subcategory suggestions shown when a provider adds a category — scoped to
@@ -619,21 +621,21 @@ const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
   'Makeup Lessons':         { templates: ['Makeup Lesson'] },
   // AESTHETICS
   'Lip Fillers':            { templates: ['Skin Consultation'], techniques: ['filler'], outcomes: ['hydration', 'definition'],
-                              variantGroups: [{ label: 'Volume', options: ['0.5ml', '1ml', '1.5ml', '2ml'], duration: '45 min', serviceType: 'enhancement' }] },
+                              variantGroups: [{ get label() { return tr('providerSetup.ui.volume'); }, options: ['0.5ml', '1ml', '1.5ml', '2ml'], duration: '45 min', serviceType: 'enhancement' }] },
   'Anti-Wrinkle':           { templates: ['Skin Consultation'], techniques: ['botox'], outcomes: ['smoothness', 'rejuvenation'],
-                              variantGroups: [{ label: 'Areas', options: ['1 area', '2 areas', '3 areas', 'Full Face'], duration: '30 min', serviceType: 'treatment' }] },
+                              variantGroups: [{ get label() { return tr('providerSetup.ui.areas'); }, options: ['1 area', '2 areas', '3 areas', 'Full Face'], duration: '30 min', serviceType: 'treatment' }] },
   'Dermal Fillers':         { templates: ['Skin Consultation'], techniques: ['filler'], outcomes: ['lifting', 'definition', 'firmness'],
-                              variantGroups: [{ label: 'Area', options: ['Cheeks', 'Jawline', 'Chin', 'Tear Trough'], duration: '45 min', serviceType: 'enhancement' }] },
+                              variantGroups: [{ get label() { return tr('providerSetup.ui.area'); }, options: ['Cheeks', 'Jawline', 'Chin', 'Tear Trough'], duration: '45 min', serviceType: 'enhancement' }] },
   'Chemical Peels':         { templates: ['Chemical Peel', 'Skin Consultation'], techniques: ['chemical-peel'], outcomes: ['glow', 'smoothness'],
-                              variantGroups: [{ label: 'Depth', options: ['Light', 'Medium', 'Deep'], duration: '30 min', serviceType: 'treatment' }] },
+                              variantGroups: [{ get label() { return tr('providerSetup.ui.depth'); }, options: ['Light', 'Medium', 'Deep'], duration: '30 min', serviceType: 'treatment' }] },
   'Microneedling':          { templates: ['Microneedling', 'Skin Consultation'], techniques: ['microneedling', 'prp'], outcomes: ['firmness', 'rejuvenation', 'smoothness'] },
   'Skin Boosters':          { templates: ['Skin Booster Treatment', 'Skin Consultation'], techniques: ['mesotherapy', 'filler'], outcomes: ['hydration', 'glow'] },
   'HydraFacial':            { templates: ['HydraFacial', 'Skin Consultation'], techniques: ['hydrafacial'], outcomes: ['glow', 'hydration'],
-                              variantGroups: [{ label: 'Tier', options: ['Signature', 'Deluxe', 'Platinum'], duration: '1 hr', serviceType: 'treatment' }] },
+                              variantGroups: [{ get label() { return tr('providerSetup.ui.tier'); }, options: ['Signature', 'Deluxe', 'Platinum'], duration: '1 hr', serviceType: 'treatment' }] },
   'Dermaplaning':           { templates: ['Dermaplaning', 'Skin Consultation'], techniques: ['dermaplaning'], outcomes: ['smoothness', 'glow'] },
   'Thread Lifts':           { templates: ['Thread Lift', 'Skin Consultation'], techniques: ['filler'], outcomes: ['lifting', 'firmness'] },
   'Fat Dissolving':         { templates: ['Skin Consultation'], techniques: ['mesotherapy'], outcomes: ['reduction'],
-                              variantGroups: [{ label: 'Areas', options: ['1 area', '2 areas', '3+ areas'], duration: '30 min', serviceType: 'treatment' }] },
+                              variantGroups: [{ get label() { return tr('providerSetup.ui.areas'); }, options: ['1 area', '2 areas', '3+ areas'], duration: '30 min', serviceType: 'treatment' }] },
   'LED Light Therapy':      { templates: ['Red Light Therapy (Anti-Ageing)', 'Blue Light Therapy (Acne)', 'Combination LED Therapy', 'Skin Consultation'], techniques: ['led-therapy'], outcomes: ['radiance', 'even-tone', 'collagen-boost', 'pore-refinement'] },
   'Radiofrequency':         { templates: ['Radiofrequency Face Tightening', 'Radiofrequency Body Contouring', 'Skin Consultation'], techniques: ['radiofrequency'], outcomes: ['firmness', 'collagen-boost', 'reduction'] },
   'Cryotherapy':            { templates: ['Cryotherapy Facial', 'Localised Cryotherapy (Fat Freezing)', 'Skin Consultation'], techniques: ['cryotherapy'], outcomes: ['radiance', 'pore-refinement', 'reduction', 'firmness'] },
@@ -658,6 +660,8 @@ interface TagSelectWithOtherProps {
   styles: any;
 }
 const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, selected, onToggle, onAddOther, accentColor = '#9C27B0', styles }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const chrome = useChrome();
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [otherValue, setOtherValue] = useState('');
@@ -692,9 +696,9 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
         <TouchableOpacity
           style={[styles.chip, showOtherInput && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
           onPress={() => { tapSelect(); setShowOtherInput(v => !v); }}
-          accessibilityLabel="Add your own tag"
+          accessibilityLabel={tr('providerProfile.ui.addYourOwnTag')}
         >
-          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>+ Your own</Text>
+          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>{tr('providerSetup.ui.yourOwn')}</Text>
         </TouchableOpacity>
       </View>
       {showOtherInput && (
@@ -704,7 +708,7 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={styles.textInput}
               value={otherValue}
               onChangeText={setOtherValue}
-              placeholder="A word clients search for, commas for more"
+              placeholder={tr('providerSetup.ui.aWordClientsSearchForCommas')}
               placeholderTextColor={chrome.fg(0.4)}
               onSubmitEditing={submitOther}
               returnKeyType="done"
@@ -754,6 +758,8 @@ const pageKey = (page: TemplatePage, index: number): string => {
 const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   visible, categoryName, fallbackKind, accentColor, onPick, onClose,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useScreenStyles();
   const chrome = useChrome();
   const insets = useSafeAreaInsets();
@@ -814,8 +820,8 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Add a {categoryName || meta.label} Service</Text>
-                <Text style={styles.templateSheetSub}>Pick a starting point or build your own</Text>
+                <Text style={styles.modalTitle}>{tr('providerSetup.ui.addAService', { category: categoryName || meta.label })}</Text>
+                <Text style={styles.templateSheetSub}>{tr('providerSetup.templates.sub')}</Text>
               </View>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => { tapLight(); onClose(); }}>
                 <Text style={styles.modalCloseText}>✕</Text>
@@ -823,7 +829,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
             </View>
             {templates.length > 0 && (
               <Text style={[styles.templateGroupLabel, styles.templateCarouselLabel]}>
-                Popular {groupLabel} services
+                {tr('providerSetup.ui.popular')} {groupLabel} services
               </Text>
             )}
             <ScrollView
@@ -844,8 +850,8 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                     <TouchableOpacity style={[styles.templateScratchCard, { borderColor: accentColor }]} onPress={() => { tapSelect(); onPick(null); }} activeOpacity={0.85}>
                       <Ionicons name="create-outline" size={20} color={accentColor} style={styles.templateScratchIcon} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.templateScratchTitle}>Start from scratch</Text>
-                        <Text style={styles.templateScratchSub}>Blank service — fill in your own details</Text>
+                        <Text style={styles.templateScratchTitle}>{tr('providerSetup.templates.scratch')}</Text>
+                        <Text style={styles.templateScratchSub}>{tr('providerSetup.templates.scratchSub')}</Text>
                       </View>
                     </TouchableOpacity>
                   )}
@@ -858,7 +864,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                           <Text style={styles.templateDuration}>{page.template.duration}</Text>
                         </View>
                       </View>
-                      <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
+                      <Text style={[styles.templateAdd, { color: accentColor }]}>{tr('providerSetup.templates.use')}</Text>
                     </TouchableOpacity>
                   )}
                   {page.type === 'variant' && (
@@ -877,7 +883,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                           <Text style={styles.templateDuration}>{page.group.duration ?? '30 min'}</Text>
                         </View>
                       </View>
-                      <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
+                      <Text style={[styles.templateAdd, { color: accentColor }]}>{tr('providerSetup.templates.use')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -973,6 +979,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   accentColor = '#AF9197',
   onOpenPackOrForm,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useScreenStyles();
   const chrome = useChrome();
   // The sheet's own footer needs the LIVE inset, not just modalOverlay's
@@ -1209,7 +1217,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       if (!uris.length) return;
       setCropQueue({ uris, total: uris.length });
     } catch (e) {
-      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
+      Alert.alert(tr('providerSetup.ui.couldNotOpenYourPhotos'), toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
   };
 
@@ -1259,7 +1267,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       if (request === historyRequestRef.current) setDescriptionHistory(revisions);
     } catch (cause) {
       logger.error('[ServiceModal] description history failed:', cause);
-      if (request === historyRequestRef.current) setError('Could not load previous descriptions. Please try again.');
+      if (request === historyRequestRef.current) setError(tr('providerSetup.ui.couldNotLoadPreviousDescriptionsPlease'));
     } finally {
       if (request === historyRequestRef.current) setHistoryLoading(false);
     }
@@ -1334,7 +1342,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       if (then) onOpenPackOrForm?.(then);
     } catch (cause) {
       logger.error('[ServiceModal] service draft backup failed:', cause);
-      setError('Could not back up this description. Please try again.');
+      setError(tr('providerSetup.ui.couldNotBackUpThisDescription'));
     } finally {
       setSavingDraft(false);
     }
@@ -1361,10 +1369,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const serviceTypeOptions = useMemo(() => serviceTypeOptionsFor(catKey, serviceType), [catKey, serviceType]);
 
   const SERVICE_AUDIENCE_OPTS: { value: ServiceData['audience']; label: string }[] = [
-    { value: 'everyone', label: 'Everyone' },
-    { value: 'women',    label: 'Women' },
-    { value: 'men',      label: 'Men' },
-    { value: 'kids',     label: 'Kids' },
+    { value: 'everyone', label: tr('providerProfile.ui.everyone') },
+    { value: 'women',    label: tr('providerProfile.opt.women') },
+    { value: 'men',      label: tr('providerProfile.opt.men') },
+    { value: 'kids',     label: tr('providerProfile.ui.kids') },
   ];
 
   return (
@@ -1379,7 +1387,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
           activeOpacity={1}
           onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
           accessibilityRole="button"
-          accessibilityLabel="Close without saving"
+          accessibilityLabel={tr('providerSetup.service.closeWithoutSaving')}
         />
         {/* Bottom sheet, matching the quick service editor on the My Services
             dashboard: grabber, eyebrow + title, then one accent action, and
@@ -1406,7 +1414,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
-                accessibilityLabel="Close"
+                accessibilityLabel={tr('common.close')}
               >
                 <Ionicons name="close" size={22} color={accentColor} />
               </TouchableOpacity>
@@ -1424,17 +1432,17 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   before its wording, so the field a provider is most likely to
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
-                <Text style={styles.serviceSheetSection}>Service Images</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.images')}</Text>
                 <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onReorder={handleReorderImages} size={100} styles={styles} />
               </View>
 
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
-                <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Service Name</RequiredLabel>
-                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={handleNameChange} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
+                <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>{tr('providerSetup.service.name')}</RequiredLabel>
+                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={handleNameChange} placeholder={tr('providerSetup.service.namePlaceholder')} placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
                 {suggestedCount > 0 ? (
                   <Text style={styles.serviceSheetHint}>
-                    {suggestedCount === 1 ? 'We ticked a tag' : `We ticked ${suggestedCount} tags`} from the name so clients can find this. Check them below.
+                    {suggestedCount === 1 ? tr('providerSetup.ui.tickedOneTag') : tr('providerSetup.ui.tickedTags', { count: suggestedCount })}
                   </Text>
                 ) : null}
               </View>
@@ -1448,17 +1456,17 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['price'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetPairRow}>
                   <View style={styles.serviceSheetPairItem}>
-                    <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Price (£)</RequiredLabel>
-                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('price')} />
+                    <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>{tr('providerSetup.service.price')}</RequiredLabel>
+                    <TextInput style={[styles.serviceSheetInput, fieldBox]} value={price} onChangeText={setPrice} placeholder={tr('providerSetup.service.pricePlaceholder')} placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('price')} />
                   </View>
                   <View style={styles.serviceSheetPairItem}>
-                    <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Duration</RequiredLabel>
+                    <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>{tr('providerSetup.service.duration')}</RequiredLabel>
                     <TouchableOpacity
                       style={[styles.serviceSheetInput, styles.serviceSheetSelect, fieldBox]}
                       onPress={() => { tapLight(); setDurationOpen(open => !open); }}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={duration ? `Duration, ${duration}` : 'Choose how long this service takes'}
+                      accessibilityLabel={duration ? tr('providerSetup.service.durationA11y', { duration: duration }) : tr('providerSetup.service.durationChooseA11y')}
                     >
                       <Text style={[styles.serviceSheetSelectText, !duration && { color: chrome.fg(0.4) }]} numberOfLines={1}>
                         {duration || 'Tap to choose'}
@@ -1474,18 +1482,18 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
               {/* Description */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.serviceSheetLabel}>Description</Text>
-                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+                <Text style={styles.serviceSheetLabel}>{tr('providerSetup.service.description')}</Text>
+                <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder={tr('providerProfile.serviceEditor.descriptionPlaceholder')} placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
                 {providerId && service ? (
                   <>
                     <TouchableOpacity onPress={() => { void showDescriptionHistory(); }} accessibilityRole="button" style={{ marginTop: 10, marginBottom: 8 }}>
                       <Text style={[styles.serviceSheetHint, { color: accentColor }]}>
-                        {descriptionHistory ? 'Hide previous descriptions' : 'View previous descriptions'}
+                        {descriptionHistory ? tr('providerSetup.ui.hidePreviousDescriptions') : tr('providerSetup.ui.viewPreviousDescriptions')}
                       </Text>
                     </TouchableOpacity>
-                    {descriptionHistory ? <Text style={styles.serviceSheetHint}>Choose a version, save this service, then tap Save & Publish on your profile.</Text> : null}
+                    {descriptionHistory ? <Text style={styles.serviceSheetHint}>{tr('providerSetup.ui.chooseAVersionSaveThisService')}</Text> : null}
                     {historyLoading ? <ActivityIndicator color={accentColor} /> : null}
-                    {descriptionHistory?.length === 0 ? <Text style={styles.serviceSheetHint}>No previous descriptions yet.</Text> : null}
+                    {descriptionHistory?.length === 0 ? <Text style={styles.serviceSheetHint}>{tr('providerSetup.ui.noPreviousDescriptionsYet')}</Text> : null}
                     {descriptionHistory?.map(revision => (
                       <TouchableOpacity
                         key={revision.id}
@@ -1495,12 +1503,12 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                         style={[styles.serviceSheetInput, { marginBottom: 8, paddingVertical: 10 }, fieldBox]}
                       >
                         <Text style={styles.serviceSheetHint}>
-                          {revision.source === 'draft' ? 'Editor draft' : 'Published'} · {new Date(revision.created_at).toLocaleString()}
+                          {revision.source === 'draft' ? tr('providerSetup.ui.editorDraft') : tr('providerSetup.ui.published')} · {new Date(revision.created_at).toLocaleString()}
                         </Text>
                         <Text style={{ color: chrome.fg(0.9) }} numberOfLines={4}>
                           {revision.description || '(Empty description)'}
                         </Text>
-                        <Text style={[styles.serviceSheetHint, { color: accentColor, marginTop: 6 }]}>Use this description</Text>
+                        <Text style={[styles.serviceSheetHint, { color: accentColor, marginTop: 6 }]}>{tr('providerSetup.ui.useThisDescription')}</Text>
                       </TouchableOpacity>
                     ))}
                   </>
@@ -1512,21 +1520,21 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                     style={[styles.chip, styles.serviceSheetSuggestion, { borderColor: accentColor }]}
                     onPress={() => { tapSelect(); setDescription(idea); }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Use suggested description: ${idea}`}
+                    accessibilityLabel={tr('providerProfile.ui.useSuggestionA11y', { idea: idea })}
                   >
                     <Ionicons name="sparkles-outline" size={14} color={accentColor} />
-                    <Text style={[styles.chipText, styles.serviceSheetSuggestionText]} numberOfLines={2}>Use: “{idea}”</Text>
+                    <Text style={[styles.chipText, styles.serviceSheetSuggestionText]} numberOfLines={2}>{tr('providerSetup.ui.useIdea', { idea })}</Text>
                   </TouchableOpacity>
                 ))}
                 {descriptionTopics.length > 0 ? (
-                  <Text style={styles.serviceSheetHint}>Others offering this often mention {descriptionTopics.join(', ')}.</Text>
+                  <Text style={styles.serviceSheetHint}>{tr('providerProfile.ui.othersOfferingThisOftenMention')} {descriptionTopics.join(', ')}.</Text>
                 ) : null}
                 {descriptionHint ? <Text style={styles.serviceSheetHint}>{descriptionHint}</Text> : null}
                 {onOpenPackOrForm ? (
                   <PackFormHint
                     tour={TOUR_KEYS.PROVIDER_SERVICE_PACK_TIP}
-                    title="Aftercare or questions before they come?"
-                    body="Put them in an Info Pack or a Form. Clients get it with their booking, without you sending a thing."
+                    title={tr('providerProfile.ui.aftercareOrQuestionsBeforeTheyCome')}
+                    body={tr('providerProfile.ui.putThemInAnInfoPack')}
                     // Packs and Forms list live services, and a new one
                     // here isn't live until Save & Publish.
                     note={isEditing
@@ -1560,30 +1568,30 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   be given a padding the account level doesn't offer. */}
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Buffer Time (optional)</Text>
-                <Text style={styles.serviceSheetHint}>Blocks extra minutes around this service so back-to-back bookings can't crowd it. "My default" follows the buffer set in Scheduling; "None" turns it off for this service only.</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.buffer')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.bufferHint')}</Text>
                 <View style={styles.serviceSheetPairRow}>
                   <View style={styles.serviceSheetPairItem}>
-                    <Text style={styles.serviceSheetLabel}>Before</Text>
+                    <Text style={styles.serviceSheetLabel}>{tr('providerSetup.service.bufferBefore')}</Text>
                     <TouchableOpacity
                       style={[styles.serviceSheetInput, styles.serviceSheetSelect, fieldBox]}
                       onPress={() => { tapLight(); setOpenBuffer(open => (open === 'before' ? null : 'before')); }}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Buffer before, ${bufferOptionLabel(bufferBefore, SERVICE_BUFFER_BEFORE_OPTS)}`}
+                      accessibilityLabel={tr('providerSetup.service.bufferBeforeA11y', { value: bufferOptionLabel(bufferBefore, SERVICE_BUFFER_BEFORE_OPTS) })}
                     >
                       <Text style={styles.serviceSheetSelectText} numberOfLines={1}>{bufferOptionLabel(bufferBefore, SERVICE_BUFFER_BEFORE_OPTS)}</Text>
                       <Ionicons name={openBuffer === 'before' ? 'chevron-up' : 'chevron-down'} size={16} color={accentColor} />
                     </TouchableOpacity>
                   </View>
                   <View style={styles.serviceSheetPairItem}>
-                    <Text style={styles.serviceSheetLabel}>After</Text>
+                    <Text style={styles.serviceSheetLabel}>{tr('providerSetup.service.bufferAfter')}</Text>
                     <TouchableOpacity
                       style={[styles.serviceSheetInput, styles.serviceSheetSelect, fieldBox]}
                       onPress={() => { tapLight(); setOpenBuffer(open => (open === 'after' ? null : 'after')); }}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Buffer after, ${bufferOptionLabel(bufferAfter, SERVICE_BUFFER_AFTER_OPTS)}`}
+                      accessibilityLabel={tr('providerSetup.service.bufferAfterA11y', { value: bufferOptionLabel(bufferAfter, SERVICE_BUFFER_AFTER_OPTS) })}
                     >
                       <Text style={styles.serviceSheetSelectText} numberOfLines={1}>{bufferOptionLabel(bufferAfter, SERVICE_BUFFER_AFTER_OPTS)}</Text>
                       <Ionicons name={openBuffer === 'after' ? 'chevron-up' : 'chevron-down'} size={16} color={accentColor} />
@@ -1605,8 +1613,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   aesthetics-only fields most providers never see. */}
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Service Type</Text>
-                <Text style={styles.serviceSheetHint}>Helps clients understand what kind of service this is</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerProfile.info.serviceType.title')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.typeHint')}</Text>
                 <View style={styles.chipGrid}>
                   {serviceTypeOptions.map(({ value, label }) => {
                     const active = serviceType === value;
@@ -1628,9 +1636,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
                 {isEditing
-                  ? <Text style={styles.serviceSheetSection}>Who's This For?</Text>
-                  : <RequiredLabel required labelStyle={styles.serviceSheetSection} styles={styles}>Who's This For?</RequiredLabel>}
-                <Text style={styles.serviceSheetHint}>Helps the app suggest this service to the right clients</Text>
+                  ? <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.audienceTitle')}</Text>
+                  : <RequiredLabel required labelStyle={styles.serviceSheetSection} styles={styles}>{tr('providerSetup.service.audienceTitle')}</RequiredLabel>}
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.audienceHint')}</Text>
                 <View style={styles.chipGrid}>
                   {SERVICE_AUDIENCE_OPTS.map(({ value, label }) => {
                     const active = audience === value;
@@ -1646,16 +1654,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* ── Style Tags ───────────────────────────────────────── */}
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Style / Vibe</Text>
-                <Text style={styles.serviceSheetHint}>How would you describe this service's aesthetic?</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.style')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.styleHint')}</Text>
                 <TagSelectWithOther options={withSuggested(styleOptions, suggestion.styleTags)} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={addOtherTag(selectedTags, setSelectedTags)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Occasion Tags ────────────────────────────────────── */}
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Best For (Occasion)</Text>
-                <Text style={styles.serviceSheetHint}>When would a client typically book this?</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.occasion')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.occasionHint')}</Text>
                 <TagSelectWithOther options={withSuggested(occasionOptions, suggestion.occasionTags)} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={addOtherTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} styles={styles} />
               </View>
 
@@ -1663,8 +1671,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {techniquOptions.length > 0 && (
                 <View style={styles.inputGroup}>
                   <View style={styles.serviceSheetSectionRule} />
-                  <Text style={styles.serviceSheetSection}>Techniques Used</Text>
-                  <Text style={styles.serviceSheetHint}>Select every technique this service involves</Text>
+                  <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.techniques')}</Text>
+                  <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.techniquesHint')}</Text>
                   <TagSelectWithOther options={withSuggested(techniquOptions, suggestion.techniqueTags)} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={addOtherTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
@@ -1673,8 +1681,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {outcomeOptions.length > 0 && (
                 <View style={styles.inputGroup}>
                   <View style={styles.serviceSheetSectionRule} />
-                  <Text style={styles.serviceSheetSection}>Results / Outcomes</Text>
-                  <Text style={styles.serviceSheetHint}>What will the client achieve with this service?</Text>
+                  <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.outcomes')}</Text>
+                  <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.outcomesHint')}</Text>
                   <TagSelectWithOther options={withSuggested(outcomeOptions, suggestion.outcomeTags)} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={addOtherTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
@@ -1682,8 +1690,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* ── Trend Names ──────────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['trendInput'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Trend Names (Optional)</Text>
-                <Text style={styles.serviceSheetHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.trends')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.ui.viralNames', { category: CATEGORY_META[catKey].label.toLowerCase() })}</Text>
                 {trendNames.length > 0 && (
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
@@ -1694,7 +1702,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" onFocus={() => handleInputFocus('trendInput')} />
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder={tr('providerSetup.ui.eGGlazedDonut')} placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1714,18 +1722,18 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {isHair && (
                 <View style={styles.inputGroup}>
                   <View style={styles.serviceSheetSectionRule} />
-                  <Text style={styles.serviceSheetSection}>Suitable Hair Types</Text>
-                  <Text style={styles.serviceSheetHint}>Select which hair types this service suits — leave blank if it suits all</Text>
+                  <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.hairTypes')}</Text>
+                  <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.hairTypesHint')}</Text>
                   <ChipSelect options={HAIR_TYPES} selected={hairTypesSuitable} onToggle={toggleTag(hairTypesSuitable, setHairTypesSuitable)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Suitable Skin Tones</Text>
-                <Text style={styles.serviceSheetHint}>Select the skin tones this service suits. Leave blank if not specified.</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.skinTones')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.service.skinTonesHint')}</Text>
                 <TouchableOpacity onPress={() => setSkinTonesSuitable(skinTonesSuitable.length === SKIN_TONES.length ? [] : [...SKIN_TONES])}>
-                  <Text style={[styles.serviceSheetHint, { color: accentColor }]}>{skinTonesSuitable.length === SKIN_TONES.length ? 'Clear selection' : 'Select all skin tones'}</Text>
+                  <Text style={[styles.serviceSheetHint, { color: accentColor }]}>{skinTonesSuitable.length === SKIN_TONES.length ? tr('providerSetup.service.clearSelection') : tr('providerSetup.service.selectAllSkinTones')}</Text>
                 </TouchableOpacity>
                 <ChipSelect options={SKIN_TONES} selected={skinTonesSuitable} onToggle={toggleTag(skinTonesSuitable, setSkinTonesSuitable)} accentColor={accentColor} styles={styles} />
               </View>
@@ -1811,15 +1819,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* ── Aftercare Notes ──────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['aftercareNotes'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Aftercare Notes (Optional)</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.ui.aftercareNotesOptional')}</Text>
                 <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={3} onFocus={() => handleInputFocus('aftercareNotes')} />
               </View>
 
               {/* ── Add-Ons ──────────────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Add-Ons (Optional)</Text>
-                <Text style={styles.serviceSheetHint}>Extras clients can add to this service. Your add-ons are shared, so tick any you already have.</Text>
+                <Text style={styles.serviceSheetSection}>{tr('providerSetup.service.addOns')}</Text>
+                <Text style={styles.serviceSheetHint}>{tr('providerSetup.ui.extrasClientsCanAddToThis')}</Text>
                 <ServiceAddOnsField
                   library={addOnLibrary}
                   pending={pendingAddOns}
@@ -1843,7 +1851,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 disabled={savingDraft}
               >
                 <Text style={[styles.serviceSheetSaveText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                  {savingDraft ? 'Saving…' : isEditing ? 'Save changes' : 'Add service'}
+                  {savingDraft ? tr('common.saving') : isEditing ? 'Save changes' : 'Add service'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1854,7 +1862,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
         uri={cropping}
         accent={accentColor}
         onAccent={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'}
-        cancelLabel={cropQueue.total > 1 ? 'Skip' : 'Cancel'}
+        cancelLabel={cropQueue.total > 1 ? tr('common.skip') : tr('common.cancel')}
         progressLabel={cropQueue.total > 1 ? `${cropQueue.total - cropQueue.uris.length + 1} of ${cropQueue.total}` : null}
         onCancel={nextCrop}
         onDone={uri => { setImages(prev => [...prev, { uri, fit: 'cover' }]); nextCrop(); }}
@@ -1877,6 +1885,8 @@ interface AddCategoryModalProps {
 }
 
 const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, onAdd, existing, businessKind, accentColor = '#AF9197' }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useScreenStyles();
   const chrome = useChrome();
   const insets = useSafeAreaInsets();
@@ -1906,11 +1916,11 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
   const addCategory = (name: string, description: string) => {
     const trimmed = name.trim();
     if (!trimmed) {
-      Alert.alert('Missing Name', 'Please enter a category name.');
+      Alert.alert(tr('providerSetup.categoryModal.missingNameTitle'), tr('providerSetup.categoryModal.missingNameBody'));
       return;
     }
     if (isDuplicate(trimmed)) {
-      Alert.alert('Already Added', `You already have a "${trimmed}" category.`);
+      Alert.alert(tr('providerSetup.categoryModal.duplicateTitle'), tr('providerSetup.categoryModal.duplicateBody', { name: trimmed }));
       return;
     }
     onAdd(trimmed, description.trim());
@@ -1927,11 +1937,11 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Add a Category</Text>
+                <Text style={styles.modalTitle}>{tr('providerSetup.categoryModal.title')}</Text>
                 <Text style={styles.templateSheetSub}>
                   {showSubcategories
-                    ? `Suggested for your ${CATEGORY_META[myKind].label} business — tap to fill in`
-                    : "Pick a type — we'll suggest matching services & tags"}
+                    ? tr('providerSetup.categoryModal.suggestedFor', { category: CATEGORY_META[myKind].label })
+                    : tr('providerSetup.categoryModal.pickType')}
                 </Text>
               </View>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => { tapLight(); onClose(); }}>
@@ -1943,8 +1953,8 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 24, 24) }}
             >
-              <Text style={styles.templateGroupLabel}>Category Name</Text>
-              <Text style={styles.inputHint}>Type your own, or tap a suggestion below.</Text>
+              <Text style={styles.templateGroupLabel}>{tr('providerSetup.categoryModal.name')}</Text>
+              <Text style={styles.inputHint}>{tr('providerSetup.categoryModal.nameHint')}</Text>
               <View style={styles.addAddOnRow}>
                 <View style={[styles.inputBlur, { flex: 1 }]}>
                   <TextInput
@@ -1962,14 +1972,14 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.templateGroupLabel, { marginTop: 18 }]}>Description</Text>
-              <Text style={styles.inputHint}>Shown to clients under this category — what it includes and why they should book.</Text>
+              <Text style={[styles.templateGroupLabel, { marginTop: 18 }]}>{tr('providerSetup.service.description')}</Text>
+              <Text style={styles.inputHint}>{tr('providerSetup.categoryModal.descriptionHint')}</Text>
               <View style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={categoryDescription}
                   onChangeText={setCategoryDescription}
-                  placeholder="e.g. Cuts, colour and treatments tailored to your hair type."
+                  placeholder={tr('providerSetup.categoryModal.descriptionPlaceholder')}
                   placeholderTextColor={chrome.fg(0.4)}
                   multiline
                   numberOfLines={3}
@@ -1990,7 +2000,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                         disabled={used}
                       >
                         <Text style={styles.categoryTypeLabel}>{sub.name}</Text>
-                        <Text style={styles.categoryTypeBlurb} numberOfLines={2}>{used ? 'Added' : sub.description}</Text>
+                        <Text style={styles.categoryTypeBlurb} numberOfLines={2}>{used ? tr('providerSetup.categoryModal.added') : sub.description}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -2009,7 +2019,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                         disabled={used}
                       >
                         <Text style={styles.categoryTypeLabel}>{meta.label}</Text>
-                        <Text style={styles.categoryTypeBlurb}>{used ? 'Added' : meta.blurb}</Text>
+                        <Text style={styles.categoryTypeBlurb}>{used ? tr('providerSetup.categoryModal.added') : meta.blurb}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -2037,6 +2047,8 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   onTransfer,
   onSkip,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useScreenStyles();
   const chrome = useChrome();
   const [acuityUrl, setAcuityUrl] = useState('');
@@ -2075,9 +2087,9 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
             colors={[chrome.surf(0.9), chrome.surf(0.7)]}
             style={styles.transferGradient}
           />
-          <Text style={styles.transferTitle}>Import from Acuity</Text>
+          <Text style={styles.transferTitle}>{tr('providerSetup.acuity.title')}</Text>
           <Text style={styles.transferSubtitle}>
-            Paste your Acuity Scheduling link and we'll automatically import your services, prices, and business info.
+            {tr('providerSetup.acuity.sub')}
           </Text>
 
           <View style={styles.inputBlur}>
@@ -2112,11 +2124,11 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
               disabled={isLoading}
             >
               <Text style={styles.transferButtonText}>
-                {isLoading ? 'Importing…' : 'Import My Profile'}
+                {isLoading ? tr('providerSetup.acuity.importing') : tr('providerSetup.acuity.import')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.skipButton} onPress={() => { tapLight(); onSkip(); }} disabled={isLoading}>
-              <Text style={styles.skipButtonText}>Start Fresh Instead</Text>
+              <Text style={styles.skipButtonText}>{tr('providerSetup.acuity.startFresh')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2141,6 +2153,8 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   categoryName,
   categoryDescription,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useScreenStyles();
   const chrome = useChrome();
   const [newName, setNewName] = useState(categoryName);
@@ -2153,7 +2167,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 
   const handleSave = () => {
     if (!newName.trim()) {
-      Alert.alert('Missing Name', 'Please enter a category name.');
+      Alert.alert(tr('providerSetup.categoryModal.missingNameTitle'), tr('providerSetup.categoryModal.missingNameBody'));
       return;
     }
     onSave(categoryName, newName.trim(), description.trim());
@@ -2163,25 +2177,25 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
         <View style={styles.smallModal}>
-          <Text style={styles.smallModalTitle}>Edit Category</Text>
-          <Text style={styles.inputLabel}>Name</Text>
+          <Text style={styles.smallModalTitle}>{tr('providerSetup.editCategory.title')}</Text>
+          <Text style={styles.inputLabel}>{tr('providerProfile.ui.name')}</Text>
           <View style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={newName}
               onChangeText={setNewName}
-              placeholder="Category name"
+              placeholder={tr('providerSetup.editCategory.namePlaceholder')}
               placeholderTextColor={chrome.fg(0.4)}
               autoFocus
             />
           </View>
-          <Text style={[styles.inputLabel, { marginTop: 14 }]}>Description (shown to clients)</Text>
+          <Text style={[styles.inputLabel, { marginTop: 14 }]}>{tr('providerSetup.editCategory.description')}</Text>
           <View style={[styles.inputBlur, styles.inputBlurMultiline]}>
             <TextInput
               style={[styles.textInput, styles.textInputMultiline]}
               value={description}
               onChangeText={setDescription}
-              placeholder="What's included in this category, and why clients should book it..."
+              placeholder={tr('providerSetup.editCategory.descriptionPlaceholder')}
               placeholderTextColor={chrome.fg(0.4)}
               multiline
               numberOfLines={3}
@@ -2190,10 +2204,10 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
           </View>
           <View style={styles.smallModalButtons}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => { tapLight(); onClose(); }}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{tr('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveButton} onPress={() => { tapMedium(); handleSave(); }}>
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>{tr('common.save')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2235,6 +2249,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   isLinkOnly,
   specialities,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const styles = useScreenStyles();
   const chrome = useChrome();
   const insets = useSafeAreaInsets();
@@ -2327,7 +2343,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewCardHighlight}
                 />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
+                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>{tr('providerSetup.section.contact.title')}</Text>
                 {/* Mirrors get_public_provider_address: a salon/studio on
                     "Always visible" shows its full address to anyone signed in, so the
                     preview does too. Everyone else shows the area. */}
@@ -2340,39 +2356,39 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   const shown = publicAddress || providerData.location;
                   return shown ? (
                     <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                      <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
+                      <Text style={[styles.previewContactLabel, { color: PP.sub }]}>{tr('providerSetup.preview.location')}</Text>
                       <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={publicAddress ? 2 : 1}>{publicAddress ? `${shown} ›` : shown}</Text>
                     </View>
                   ) : null;
                 })()}
                 {providerData.phone ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Message ›</Text>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>{tr('providerSetup.preview.phone')}</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>{tr('providerSetup.preview.message')}</Text>
                   </View>
                 ) : null}
                 {providerData.whatsapp ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
                     <Text style={[styles.previewContactLabel, { color: PP.sub }]}>WhatsApp</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Open ›</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>{tr('providerSetup.preview.open')}</Text>
                   </View>
                 ) : null}
                 {providerData.email ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Send ›</Text>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>{tr('providerSetup.preview.email')}</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>{tr('providerSetup.preview.send')}</Text>
                   </View>
                 ) : null}
                 {providerData.instagram ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Instagram</Text>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>{tr('providerProfile.dashboard.strength.instagram.done')}</Text>
                     <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram} ›</Text>
                   </View>
                 ) : null}
                 {providerData.website ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Website</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Visit ›</Text>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>{tr('providerProfile.info.website')}</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>{tr('providerSetup.preview.visit')}</Text>
                   </View>
                 ) : null}
                 {providerData.tiktok ? (
@@ -2383,7 +2399,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 ) : null}
                 {providerData.externalBookingUrl ? (
                   <View style={styles.previewContactRow}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Booking Link</Text>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>{tr('providerProfile.info.link.label')}</Text>
                     <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.externalBookingUrl}</Text>
                   </View>
                 ) : null}
@@ -2391,7 +2407,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   style={[styles.previewContactButton, { backgroundColor: accentColor }]}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.previewContactButtonText}>Get In Touch</Text>
+                  <Text style={styles.previewContactButtonText}>{tr('providerSetup.preview.getInTouch')}</Text>
                 </TouchableOpacity>
               </BlurView>
     </>
@@ -2401,7 +2417,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               {/* Portfolio Section — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
               {portfolio.length > 0 && (
                 <View style={styles.previewPortfolioSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Portfolio</Text>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>{tr('providerProfile.portfolio.title')}</Text>
                   <View style={styles.previewPortfolioColumns}>
                     {portfolioColumns.map((column, colIdx) => (
                       <View key={`preview-pcol-${colIdx}`} style={styles.previewPortfolioColumn}>
@@ -2435,7 +2451,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   the provider where these photos actually land. */}
               {venuePhotos.length > 0 && (
                 <View style={styles.previewPortfolioSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Venue</Text>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>{tr('providerSetup.preview.venue')}</Text>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -2504,7 +2520,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               <Text style={styles.previewBackText}>←</Text>
             </TouchableOpacity>
             <View style={styles.previewBadge}>
-              <Text style={styles.previewBadgeText}>PREVIEW</Text>
+              <Text style={styles.previewBadgeText}>{tr('providerSetup.preview.badge')}</Text>
             </View>
           </View>
         </View>
@@ -2555,7 +2571,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               <Text style={styles.previewBackText}>←</Text>
             </TouchableOpacity>
             <View style={styles.previewBadge}>
-              <Text style={styles.previewBadgeText}>PREVIEW</Text>
+              <Text style={styles.previewBadgeText}>{tr('providerSetup.preview.badge')}</Text>
             </View>
           </View>
 
@@ -2624,7 +2640,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               )}
 
               {providerData.yearsExperience ? (
-                <Text style={[styles.previewYearsText, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>{providerData.yearsExperience} years experience</Text>
+                <Text style={[styles.previewYearsText, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>{providerData.yearsExperience} {tr('providerSetup.ui.yearsExperience')}</Text>
               ) : null}
 
               {/* Link-only: Book (their own page) with socials and messaging
@@ -2652,7 +2668,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     </View>
                   </View>
                   <Text style={[styles.previewLinkOnlyCaption, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>
-                    Books on their own page — opens inside CERVICED
+                    {tr('providerSetup.ui.booksOnTheirOwnPageOpens')}
                   </Text>
                 </View>
               ) : (
@@ -2703,7 +2719,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     end={{ x: 0, y: 1 }}
                     style={styles.previewCardHighlight}
                   />
-                  <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
+                  <Text style={[styles.previewSectionTitle, { color: PP.text }]}>{tr('providerProfile.dashboard.strength.about.done')}</Text>
                   <ExpandableAboutText
                     text={providerData.aboutText || 'A short summary of your business will appear here.'}
                     textStyle={[styles.previewAboutText, { color: PP.sub }]}
@@ -2723,7 +2739,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               {/* Services Section */}
               {!isLinkOnly && categoryNames.length > 0 && (
                 <View style={styles.previewServicesSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Services</Text>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>{tr('providerSetup.section.services.title')}</Text>
 
                   {/* Category Tabs — shared frosted-glass pill, same as clients see */}
                   <FlatList
@@ -2803,7 +2819,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                           {/* Book Button — decorative here (this is a preview of
                               the client view, not an editable live control) */}
                           <View style={[styles.previewBookButton, { backgroundColor: accentColor }]}>
-                            <Text style={styles.previewBookButtonText}>Book</Text>
+                            <Text style={styles.previewBookButtonText}>{tr('beautyProfile.hello.book')}</Text>
                           </View>
                         </View>
 
@@ -2829,7 +2845,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewCardHighlight}
                 />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Reviews</Text>
+                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>{tr('providerSetup.preview.reviews')}</Text>
               </BlurView>
               )}
 
@@ -2849,6 +2865,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
 // Main Component
 const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // This screen never follows the app's dark mode setting (nothing here
   // reads useTheme().isDarkMode or branches on device/app appearance) — but
   // its chrome DOES follow the provider's own chosen branding once they're
@@ -3200,7 +3218,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         setClaimError(
           isClaimGuardError(err)
             ? err.message
-            : "We couldn't open your claim on that listing just now. We'll try again next time you open this screen.",
+            : tr('providerSetup.ui.weCouldnTOpenYourClaim'),
         );
       })
       .finally(() => {
@@ -3475,7 +3493,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         setPortfolioItems(prev => prev.map(p => (p.id === tempId ? item : p)));
       } catch (e: any) {
         setPortfolioItems(prev => prev.filter(p => p.id !== tempId));
-        Alert.alert('Upload failed', toUserMessage(e, 'Could not upload one of those images. Please try again.', 'InfoRegScreen.uploadPortfolio'));
+        Alert.alert(tr('providerProfile.portfolio.uploadFailedTitle'), toUserMessage(e, 'Could not upload one of those images. Please try again.', 'InfoRegScreen.uploadPortfolio'));
       }
     }));
     setPortfolioUploading(false);
@@ -3499,7 +3517,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         try { await removePortfolioStorageObject(path); } catch { /* ignore */ }
       }
     } catch {
-      Alert.alert('Error', 'Could not remove photo.');
+      Alert.alert(tr('common.error'), tr('providerSetup.removePhotoFailed'));
     }
   }, []);
 
@@ -3665,7 +3683,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (firstCat) setSelectedCategory(firstCat);
     setShowTransferModal(false);
     Alert.alert(
-      'Import Complete!',
+      tr('providerSetup.acuity.completeTitle'),
       `We found ${Object.values(extracted.categories).flat().length} services from your Acuity profile. Review and save when ready.`
     );
   }, []);
@@ -3691,12 +3709,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Delete category
   const handleDeleteCategory = useCallback((name: string) => {
     Alert.alert(
-      'Delete Category',
-      `Are you sure you want to delete "${name}" and all its services?`,
+      tr('providerSetup.deleteCategory.title'),
+      tr('providerSetup.deleteCategory.body', { name: name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: tr('common.delete'),
           style: 'destructive',
           onPress: () => {
             delete editedServiceCategoriesRef.current[name];
@@ -3732,7 +3750,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     const trimmedNew = newName.trim();
     if (Object.keys(providerData.categories).some(name =>
       name !== oldName && name.toLocaleLowerCase() === trimmedNew.toLocaleLowerCase())) {
-      Alert.alert('Category already exists', 'Choose a different category name.');
+      Alert.alert(tr('providerSetup.ui.categoryAlreadyExists'), tr('providerSetup.ui.chooseADifferentCategoryName'));
       return;
     }
 
@@ -3882,22 +3900,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // one tap away and easy to not connect back to this deletion.
     if (totalServices <= 1) {
       showConfirm(
-        'This will pause your account',
-        "Deleting your last service removes you from client search until you add another — you won't be bookable with an empty catalogue. This takes effect once you save.",
+        tr('providerSetup.deleteLastService.title'),
+        tr('providerSetup.deleteLastService.body'),
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete anyway', style: 'destructive', onPress: remove },
+          { text: tr('common.cancel'), style: 'cancel' },
+          { text: tr('providerSetup.deleteLastService.confirm'), style: 'destructive', onPress: remove },
         ],
       );
       return;
     }
 
     Alert.alert(
-      'Delete Service',
-      'Are you sure you want to delete this service?',
+      tr('providerSetup.deleteService.title'),
+      tr('providerSetup.deleteService.body'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: remove },
+        { text: tr('common.cancel'), style: 'cancel' },
+        { text: tr('common.delete'), style: 'destructive', onPress: remove },
       ]
     );
   }, [providerData.categories, showConfirm]);
@@ -3906,15 +3924,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const handleSubmit = useCallback(async () => {
     setHasAttemptedSave(true);
     if (!providerData.providerName.trim()) {
-      Alert.alert('Missing Information', 'Please enter your business name.');
+      Alert.alert(tr('providerSetup.missingInfo'), tr('providerSetup.missingInfo.businessName'));
       return;
     }
     if (!providerData.providerService) {
-      Alert.alert('Missing Information', 'Please choose your service type.');
+      Alert.alert(tr('providerSetup.missingInfo'), tr('providerSetup.ui.pleaseChooseYourServiceType'));
       return;
     }
     if (!providerData.location.trim()) {
-      Alert.alert('Missing Information', 'Please enter your location.');
+      Alert.alert(tr('providerSetup.missingInfo'), tr('providerSetup.missingInfo.location'));
       return;
     }
     // Business type and the private address drive CERVICED's own booking
@@ -3923,21 +3941,21 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // but their booking link is, since it's the only way clients book them.
     if (isLinkOnly) {
       if (!normalizeExternalBookingUrl(providerData.externalBookingUrl)) {
-        Alert.alert('Missing Information', 'Please add your booking link — it\'s where clients go when they tap Book.');
+        Alert.alert(tr('providerSetup.missingInfo'), tr('providerSetup.missingInfo.bookingLink'));
         return;
       }
     } else {
       if (!providerData.businessType) {
-        Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
+        Alert.alert(tr('providerSetup.missingInfo'), tr('providerSetup.missingInfo.businessType'));
         return;
       }
       if (!providerData.fullAddress.trim()) {
-        Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
+        Alert.alert(tr('providerSetup.missingInfo'), tr('providerSetup.missingInfo.fullAddress'));
         return;
       }
     }
     if (!user?.id) {
-      Alert.alert('Not Logged In', 'Please log in to save your profile.');
+      Alert.alert(tr('providerSetup.notLoggedIn'), tr('providerSetup.notLoggedInBody'));
       return;
     }
     // Gates in edit mode too. It's a live checkbox either way, and a tick a
@@ -3993,23 +4011,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         await saveMyProviderTermsText(ownTerms);
       }
       Alert.alert(
-        'Profile Saved!',
-        'Your provider profile has been saved successfully.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        tr('providerSetup.saved.title'),
+        tr('providerSetup.saved.body'),
+        [{ text: tr('common.ok'), onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
       if (e instanceof ServiceDescriptionVerificationError) {
         logger.error('[InfoRegScreen] service descriptions could not be verified:', e);
         Alert.alert(
-          'Descriptions not confirmed',
-          'We could not confirm that your service descriptions were published. Your edits are still in this editor. Check them and try Save & Publish again.',
+          tr('providerSetup.ui.descriptionsNotConfirmed'),
+          tr('providerSetup.ui.weCouldNotConfirmThatYour'),
         );
         return;
       }
       // saveProviderToSupabase prefixes its error with the failing step, which
       // is what makes these diagnosable — but that belongs in the log, not in
       // front of a provider. toUserMessage reports it and returns safe copy.
-      Alert.alert('Couldn\'t save your profile', toUserMessage(e, 'Please try again.', 'InfoRegScreen.saveProfile'));
+      Alert.alert(tr('providerSetup.saveFailedTitle'), toUserMessage(e, 'Please try again.', 'InfoRegScreen.saveProfile'));
     } finally {
       setIsSubmitting(false);
     }
@@ -4149,45 +4167,45 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       }[] = [
         {
           section: 'identity',
-          title: 'Business identity',
+          title: tr('providerSetup.ui.businessIdentity'),
           rows: [
-            { label: 'Business name', value: filled(providerData.providerName), required: true },
-            { label: 'Service type', value: serviceTypeLabel, required: true },
-            { label: 'Where you\'re based', value: filled(providerData.location), required: true },
-            { label: 'Logo', value: providerData.logo ? 'Added' : '' },
+            { label: tr('providerSetup.missing.businessName'), value: filled(providerData.providerName), required: true },
+            { label: tr('providerSetup.ui.serviceType'), value: serviceTypeLabel, required: true },
+            { label: tr('providerSetup.missing.location'), value: filled(providerData.location), required: true },
+            { label: tr('providerProfile.dashboard.strength.logo.done'), value: providerData.logo ? 'Added' : '' },
           ],
         },
         {
           section: 'about',
-          title: 'About & portfolio',
+          title: tr('providerSetup.ui.aboutPortfolio'),
           rows: [
-            { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
+            { label: tr('providerSetup.ui.introduction'), value: filled(providerData.aboutText) ? 'Written' : '' },
             {
-              label: 'Portfolio',
+              label: tr('providerProfile.portfolio.title'),
               value: workPhotos.length > 0 ? `${workPhotos.length} photo${workPhotos.length === 1 ? '' : 's'}` : '',
             },
           ],
         },
         {
           section: 'contact',
-          title: 'Contact details',
+          title: tr('providerSetup.ui.contactDetails'),
           rows: [
-            { label: 'Phone', value: filled(providerData.phone) },
-            { label: 'Email', value: filled(providerData.email) },
-            { label: 'Instagram', value: filled(providerData.instagram) },
-            { label: 'Website', value: filled(providerData.website) },
+            { label: tr('providerSetup.preview.phone'), value: filled(providerData.phone) },
+            { label: tr('providerSetup.preview.email'), value: filled(providerData.email) },
+            { label: tr('providerProfile.dashboard.strength.instagram.done'), value: filled(providerData.instagram) },
+            { label: tr('providerProfile.info.website'), value: filled(providerData.website) },
             { label: 'TikTok', value: filled(providerData.tiktok) },
             ...(isLinkOnly
-              ? [{ label: 'Booking link', value: filled(providerData.externalBookingUrl), required: true }]
+              ? [{ label: tr('providerSetup.missing.bookingLink'), value: filled(providerData.externalBookingUrl), required: true }]
               : []),
           ],
         },
         {
           section: 'services',
-          title: 'Services & prices',
+          title: tr('providerSetup.ui.servicesPrices'),
           rows: [
             {
-              label: 'Services',
+              label: tr('providerSetup.section.services.title'),
               value: serviceCount > 0 ? `${serviceCount} across ${categoryNames.length} categor${categoryNames.length === 1 ? 'y' : 'ies'}` : '',
               // Already required to go live (schedule + service + address —
               // see goLiveStatus.ts) — this just brings InfoReg's own
@@ -4199,7 +4217,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         },
         {
           section: 'policies',
-          title: 'Business setup',
+          title: tr('providerSetup.ui.businessSetup'),
           rows: [
             // Required to publish: business_type decides which address-release
             // timings exist and, more importantly, WHO TRAVELS TO WHOM — a
@@ -4209,8 +4227,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             // address under a type nobody chose. It was already required at
             // signup (Step 4); the claim/transfer paths bypassed that, which
             // is how live rows ended up NULL.
-            { label: 'Business type', value: filled(providerData.businessType) ? businessTypeLabel(providerData.businessType) : '', required: true },
-            { label: 'Full address', value: filled(providerData.fullAddress) ? 'Added (stays private)' : '', required: true },
+            { label: tr('providerSetup.missing.businessType'), value: filled(providerData.businessType) ? businessTypeLabel(providerData.businessType) : '', required: true },
+            { label: tr('providerSetup.missing.fullAddress'), value: filled(providerData.fullAddress) ? 'Added (stays private)' : '', required: true },
           ],
         },
       ];
@@ -4424,17 +4442,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       <View style={styles.loading}>
         <Ionicons name="cloud-offline-outline" size={32} color={chromeTheme.sub} style={{ marginBottom: 12 }} />
         <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 16, color: chromeTheme.text, textAlign: 'center', marginBottom: 8 }}>
-          Couldn't load your profile
+          {tr('providerProfile.home.loadFailed')}
         </Text>
         <Text style={{ fontSize: 13, color: chromeTheme.sub, textAlign: 'center', marginBottom: 20, maxWidth: 260 }}>
-          Check your connection and try again.
+          {tr('providerSetup.loadFailedBody')}
         </Text>
         <TouchableOpacity
           onPress={() => { tapSelect(); retryLoadProvider(); }}
           style={{ backgroundColor: chromeTheme.accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 22 }}
           activeOpacity={0.8}
         >
-          <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 14, color: chromeTheme.onAccent }}>Retry</Text>
+          <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 14, color: chromeTheme.onAccent }}>{tr('common.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -4445,10 +4463,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Contact for a link-only one (who has no Services or Address pages).
   const documentEnd = (
     <View style={styles.docEnd}>
-      <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
+      <Text style={styles.docEndMark}>{tr('providerSetup.docEnd')}</Text>
       <Text style={styles.reviewFootnote}>
-        Publishing saves your profile and policies. You can come back and
-        change any of this at any time.
+        {tr('providerSetup.docEndNote')}
       </Text>
 
       {/* alignSelf:'stretch' is load-bearing. docEnd is
@@ -4649,7 +4666,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {isEditMode ? 'Public Profile' : 'Set Up Your Profile'}
+              {isEditMode ? tr('providerSetup.header.edit') : tr('providerProfile.myProfile.empty.title')}
             </Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
@@ -4675,25 +4692,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <View style={{ flex: 1 }}>
                 {claim.status === 'pending' ? (
                   <>
-                    <Text style={styles.claimBannerTitle}>Confirm @{displayHandle(claim.instagramHandle)} is yours</Text>
-                    <Text style={styles.claimBannerText}>Add this code to your Instagram bio:</Text>
+                    <Text style={styles.claimBannerTitle}>{tr('providerSetup.ui.claimConfirm', { handle: displayHandle(claim.instagramHandle) })}</Text>
+                    <Text style={styles.claimBannerText}>{tr('providerSetup.ui.addThisCodeToYourInstagram')}</Text>
                     <Text style={styles.claimBannerCode} selectable>{claim.bioCode}</Text>
                     <Text style={styles.claimBannerText}>
-                      We'll check it and link the listing to your account, usually within a day. You can take the code out once it's confirmed.
+                      {tr('providerSetup.ui.weLlCheckItAndLink')}
                     </Text>
                   </>
                 ) : claim.status === 'approved' ? (
                   <>
-                    <Text style={styles.claimBannerTitle}>@{displayHandle(claim.instagramHandle)} is confirmed as yours</Text>
+                    <Text style={styles.claimBannerTitle}>{tr('providerSetup.ui.claimApproved', { handle: displayHandle(claim.instagramHandle) })}</Text>
                     <Text style={styles.claimBannerText}>
-                      We saw your code, so the listing is now part of your account. You can take {claim.bioCode} out of your bio.
+                      {tr('providerSetup.ui.claimApprovedBody', { code: claim.bioCode })}
                     </Text>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.claimBannerTitle}>We couldn't confirm @{displayHandle(claim.instagramHandle)}</Text>
+                    <Text style={styles.claimBannerTitle}>{tr('providerSetup.ui.claimRejected', { handle: displayHandle(claim.instagramHandle) })}</Text>
                     <Text style={styles.claimBannerText}>
-                      So the listing hasn't been linked to your account. If it is your business, email support@cerviced.co and we'll look again.
+                      {tr('providerSetup.ui.soTheListingHasnTBeen')}
                     </Text>
                   </>
                 )}
@@ -4743,8 +4760,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={styles.docSection}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>01</Text>
-              <Text style={styles.docHeading}>Identity</Text>
-              <Text style={styles.docSub}>Business identity · how clients first find you</Text>
+              <Text style={styles.docHeading}>{tr('providerSetup.section.identity.title')}</Text>
+              <Text style={styles.docSub}>{tr('providerSetup.section.identity.sub')}</Text>
 
             {/* Plain circular avatar picker — no card chrome around it. The
                 standard avatar treatment (circle + corner camera badge) reads
@@ -4776,8 +4793,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               onPress={() => { tapSelect(); handleFrameLogo('circle'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Adjust logo"
-                              accessibilityHint="Swipe left to see it on Home"
+                              accessibilityLabel={tr('providerSetup.logo.adjustA11y')}
+                              accessibilityHint={tr('providerSetup.logo.swipeHint')}
                             >
                               <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.providerLogo} />
                               {/* Badge sits on the 45° diagonal of the circle rather than a
@@ -4794,7 +4811,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               onPress={() => { tapSelect(); handleFrameLogo('small'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Your logo on a small Home card. Adjust how it sits"
+                              accessibilityLabel={tr('providerSetup.ui.yourLogoOnASmallHome')}
                             >
                               <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="small" style={{ borderRadius: LOGO_CARD_SIZES.small.radius }} />
                             </TouchableOpacity>
@@ -4805,7 +4822,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               onPress={() => { tapSelect(); handleFrameLogo('large'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Your logo on a large Home card. Adjust how it sits"
+                              accessibilityLabel={tr('providerSetup.ui.yourLogoOnALargeHome')}
                             >
                               <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="large" style={{ borderRadius: LOGO_CARD_SIZES.large.radius }} />
                             </TouchableOpacity>
@@ -4827,7 +4844,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       onPress={() => { tapSelect(); handleSelectLogo(); }}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel="Add logo"
+                      accessibilityLabel={tr('providerSetup.logo.addA11y')}
                     >
                       <View style={styles.logoPlaceholder}>
                         <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
@@ -4836,7 +4853,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         <Ionicons name="camera" size={14} color={chrome.onAccent} />
                       </View>
                     </TouchableOpacity>
-                    <Text style={styles.logoCaption}>Add Logo</Text>
+                    <Text style={styles.logoCaption}>{tr('providerSetup.logo.add')}</Text>
                   </>
                 )}
               </View>
@@ -4863,7 +4880,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('businessName')}
               >
-                <RequiredLabel required missing={visibleMissingRequiredSet.has('Business name')} styles={styles}>Business Name</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has('Business name')} styles={styles}>{tr('providerProfile.account.businessName')}</RequiredLabel>
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
@@ -4873,7 +4890,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       </Text>
                     </View>
                     <Text style={styles.inputHint}>
-                      Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
+                      {tr('providerSetup.identity.businessNameHint')}
                     </Text>
                   </>
                 ) : (
@@ -4882,7 +4899,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       style={styles.textInput}
                       value={providerData.providerName}
                       onChangeText={providerName => setProviderData(prev => ({ ...prev, providerName }))}
-                      placeholder="Business name"
+                      placeholder={tr('providerSetup.missing.businessName')}
                       placeholderTextColor={chrome.fg(0.45)}
                     />
                   </View>
@@ -4900,7 +4917,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   no longer sends the column, so a pick made here would not
                   save. */}
               <View style={styles.inputGroup}>
-                <RequiredLabel required missing={visibleMissingRequiredSet.has('Service type')} styles={styles}>Service Type</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has('Service type')} styles={styles}>{tr('providerProfile.info.serviceType.title')}</RequiredLabel>
                 {isEditMode ? (
                   <>
                     {/* Every type they ticked at sign-up, each locked. One
@@ -4921,8 +4938,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </View>
                     <Text style={styles.inputHint}>
                       {serviceTypes.length > 1
-                        ? 'Change your service types in Business Profile → Business Details → Business Info.'
-                        : 'Change your service type in Business Profile → Business Details → Business Info.'}
+                        ? tr('providerSetup.ui.changeYourServiceTypesInBusiness')
+                        : tr('providerSetup.ui.changeYourServiceTypeInBusiness')}
                     </Text>
                   </>
                 ) : (
@@ -4958,12 +4975,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   first-time setup chooses business type here. */}
               {isLinkOnly && (
                 <View style={styles.inputGroup}>
-                  <RequiredLabel styles={styles}>Business Type</RequiredLabel>
+                  <RequiredLabel styles={styles}>{tr('providerProfile.info.businessType.title')}</RequiredLabel>
                   {isEditMode ? (
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
                       <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
                       <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                        {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                        {providerData.businessType ? businessTypeLabel(providerData.businessType) : tr('providerProfile.opt.notSet')}
                       </Text>
                     </View>
                   ) : (
@@ -4982,8 +4999,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   )}
                   <Text style={styles.inputHint}>
                     {isEditMode
-                      ? 'Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.'
-                      : 'Where you see clients. Shown on your profile.'}
+                      ? tr('providerSetup.identity.businessTypeHint')
+                      : tr('providerProfile.info.businessType.subLinkOnly')}
                   </Text>
                 </View>
               )}
@@ -4993,7 +5010,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('location')}
               >
-                <RequiredLabel required missing={visibleMissingRequiredSet.has("Where you're based")} styles={styles}>Where you're based</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has("Where you're based")} styles={styles}>{tr('providerSetup.missing.location')}</RequiredLabel>
                 {/* providerData.location → geocoded and saved as location_text:
                     the single place the business is based. Drives the Distance
                     filter/sort, free-text search matching, and the location
@@ -5016,7 +5033,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     setProviderData(prev => ({ ...prev, location }))
                   }
                   accentColor={adaptiveAccentColor}
-                  subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
+                  subtitle={tr('providerSetup.identity.locationHint')}
                 />
               </View>
 
@@ -5032,7 +5049,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 }}
                 activeOpacity={0.55}
               >
-                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · About & Portfolio</Text>
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>{tr('providerSetup.next.about')}</Text>
                 <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
@@ -5058,8 +5075,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={styles.docSection}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>02</Text>
-              <Text style={styles.docHeading}>About & Portfolio</Text>
-              <Text style={styles.docSub}>Your introduction and the work clients see</Text>
+              <Text style={styles.docHeading}>{tr('providerSetup.section.about.title')}</Text>
+              <Text style={styles.docSub}>{tr('providerSetup.section.about.sub')}</Text>
 
               {/* The only editor of years of experience once a profile exists.
                   Sign-up asks too and stages its answer on the user row, which
@@ -5068,7 +5085,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('yearsExperience')}
               >
-                <Text style={styles.inputLabel}>Years of Experience</Text>
+                <Text style={styles.inputLabel}>{tr('providerSetup.ui.yearsOfExperience')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5082,7 +5099,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     onFocus={() => handleInputFocus('yearsExperience', 'about')}
                   />
                 </View>
-                <Text style={styles.inputHint}>Shown on your public profile (optional).</Text>
+                <Text style={styles.inputHint}>{tr('providerSetup.ui.shownOnYourPublicProfileOptional')}</Text>
               </View>
 
             {/* About Section */}
@@ -5090,8 +5107,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('about')}
               >
-                <Text style={styles.inputLabel}>About your business</Text>
-                <Text style={styles.inputHint}>A short summary clients read first on your profile.</Text>
+                <Text style={styles.inputLabel}>{tr('providerSetup.ui.aboutYourBusiness')}</Text>
+                <Text style={styles.inputHint}>{tr('providerSetup.ui.aShortSummaryClientsReadFirst')}</Text>
                 <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
                   {/* Opens the keyboard on a real tap only, not when a scroll
                       down the page happens to start on top of it. */}
@@ -5101,7 +5118,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     onChangeText={(text) =>
                       setProviderData({ ...providerData, aboutText: text })
                     }
-                    placeholder="Who you are, what you're known for and what clients can expect when they book with you."
+                    placeholder={tr('providerSetup.ui.whoYouAreWhatYouRe')}
                     placeholderTextColor={chrome.fg(0.4)}
                     multiline
                     numberOfLines={6}
@@ -5125,8 +5142,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('scheduleReleaseDay')}
               >
                 <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead. You can also change it in Scheduling & Availability.</Text>
+                  <Text style={styles.toggleLabel}>{tr('providerSetup.ui.monthlyReleaseDay')}</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} {tr('providerSetup.ui.leaveItUnsetToLetClients')}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.releaseDayBtn}
@@ -5136,7 +5153,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Text style={styles.releaseDayBtnText}>
                     {providerData.scheduleReleaseDay != null
                       ? `Day ${providerData.scheduleReleaseDay} of every month at ${releaseTimeLabel(providerData.scheduleReleaseTime)}`
-                      : 'Choose a day'}
+                      : tr('providerSetup.about.chooseDay')}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
                 </TouchableOpacity>
@@ -5144,9 +5161,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
             {/* Portfolio — client work gallery shown on your public profile */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Portfolio</Text>
+                <Text style={styles.inputLabel}>{tr('providerProfile.portfolio.title')}</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Photos of your work, shown on your public profile in a two-column gallery.
+                  {tr('providerSetup.about.portfolioHint')}
                 </Text>
 
                 {portfolioLoading ? (
@@ -5179,7 +5196,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ) : (
                         <>
                           <Text style={styles.portfolioAddPlus}>+</Text>
-                          <Text style={styles.portfolioAddText}>Add Photos</Text>
+                          <Text style={styles.portfolioAddText}>{tr('providerSetup.about.addPhotos')}</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -5187,7 +5204,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
 
                 {!providerDbId && !portfolioLoading && (
-                  <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
+                  <Text style={styles.inputHint}>{tr('providerSetup.about.saveFirst')}</Text>
                 )}
               </View>
 
@@ -5199,7 +5216,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 }}
                 activeOpacity={0.55}
               >
-                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Contact</Text>
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>{tr('providerSetup.next.contact')}</Text>
                 <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
@@ -5225,8 +5242,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={styles.docSection}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>03</Text>
-              <Text style={styles.docHeading}>Contact</Text>
-              <Text style={styles.docSub}>Public details — anyone browsing can use these</Text>
+              <Text style={styles.docHeading}>{tr('providerSetup.section.contact.title')}</Text>
+              <Text style={styles.docSub}>{tr('providerSetup.section.contact.sub')}</Text>
 
             {/* Contact Information — the PUBLIC audience. Anything filled in
                 here is published: it's what the Get In Touch button on your
@@ -5235,17 +5252,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 audience (clients who already hold an appointment, via Booking
                 Details → Contact) and do not hide anything from this list. */}
               <Text style={styles.sectionSubtitle}>
-                Public — anything you fill in here appears on your profile under
-                Get In Touch, for general enquiries from anyone browsing. Contact
-                options for clients who've already booked are set separately in
-                Communications.
+                {tr('providerSetup.contact.publicNote')}
               </Text>
 
               <View
                 style={styles.inputGroup}
                 ref={registerField('phone')}
               >
-                <Text style={styles.inputLabel}>Phone Number</Text>
+                <Text style={styles.inputLabel}>{tr('providerSetup.contact.phone')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5268,7 +5282,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('whatsapp')}
               >
-                <Text style={styles.inputLabel}>WhatsApp Number</Text>
+                <Text style={styles.inputLabel}>{tr('providerSetup.contact.whatsapp')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5286,7 +5300,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('contactEmail')}
               >
-                <Text style={styles.inputLabel}>Public Enquiry Email</Text>
+                <Text style={styles.inputLabel}>{tr('providerProfile.info.enquiryEmail')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5306,7 +5320,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('instagram')}
               >
-                <Text style={styles.inputLabel}>Instagram Handle</Text>
+                <Text style={styles.inputLabel}>{tr('providerProfile.info.instagram')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5327,7 +5341,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('tiktok')}
               >
-                <Text style={styles.inputLabel}>TikTok Handle</Text>
+                <Text style={styles.inputLabel}>{tr('providerSetup.contact.tiktok')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5348,7 +5362,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('website')}
               >
-                <Text style={styles.inputLabel}>Website</Text>
+                <Text style={styles.inputLabel}>{tr('providerProfile.info.website')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -5372,13 +5386,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('externalBookingUrl')}
               >
-                <Text style={styles.inputLabel}>Your booking link</Text>
+                <Text style={styles.inputLabel}>{tr('providerSetup.contact.bookingLink')}</Text>
                 <View style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.externalBookingUrl}
                     onChangeText={(text) => setProviderData({ ...providerData, externalBookingUrl: text })}
-                    placeholder="e.g. your Fresha or Acuity booking page"
+                    placeholder={tr('providerProfile.info.link.placeholder')}
                     placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="url"
                     autoCapitalize="none"
@@ -5387,7 +5401,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   />
                 </View>
                 <Text style={styles.inputHint}>
-                  Your Fresha, Treatwell, Acuity or similar page. When clients tap Book, it opens inside CERVICED.
+                  {tr('providerSetup.contact.bookingLinkHint')}
                 </Text>
               </View>
               )}
@@ -5401,7 +5415,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   }}
                   activeOpacity={0.55}
                 >
-                  <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
+                  <Text style={[styles.docNextButtonText, { color: chromeText }]}>{tr('providerSetup.next.services')}</Text>
                   <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
                 </TouchableOpacity>
               )}
@@ -5452,12 +5466,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={styles.docSection}
             >
               <Text style={[styles.docNum, styles.docNumLead, { color: adaptiveAccentColor }]}>04</Text>
-              <Text style={styles.docHeading}>Services</Text>
-              <Text style={styles.docSub}>What you offer, and what it costs</Text>
+              <Text style={styles.docHeading}>{tr('providerSetup.section.services.title')}</Text>
+              <Text style={styles.docSub}>{tr('providerSetup.section.services.sub')}</Text>
 
               <View style={styles.servicesSection}>
                 <View style={styles.servicesSectionHeader}>
-                  <Text style={styles.sectionTitleNoCard}>Your Categories</Text>
+                  <Text style={styles.sectionTitleNoCard}>{tr('providerSetup.ui.yourCategories')}</Text>
                   <View style={styles.servicesHeaderButtons}>
                     {/* New add-ons start here, beside + Add Category. Hidden
                         when the add-on list didn't load (a save mustn't
@@ -5468,14 +5482,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         onPress={() => { tapLight(); openAddOnEditor(null); }}
                         accessibilityRole="button"
                       >
-                        <Text style={[styles.addCategoryText, { color: adaptiveAccentColor }]}>+ Add-on</Text>
+                        <Text style={[styles.addCategoryText, { color: adaptiveAccentColor }]}>{tr('providerSetup.ui.addOn')}</Text>
                       </TouchableOpacity>
                     ) : null}
                     <TouchableOpacity
                       style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
                       onPress={() => { tapLight(); setShowingAddOns(false); setShowCategoryModal(true); }}
                     >
-                      <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
+                      <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>{tr('providerSetup.services.addCategory')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -5520,7 +5534,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 },
                               ]}
                             >
-                              {serviceTypes.length > 1 ? serviceType : 'Categories'}
+                              {serviceTypes.length > 1 ? serviceType : tr('providerSetup.ui.categories')}
                               {count > 0 ? `  ${count}` : ''}
                             </Text>
                           </TouchableOpacity>
@@ -5568,13 +5582,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <Text style={styles.emptyServicesText}>
                       {serviceTypes.length > 1 ? (
                         <>
-                          Nothing under <Text style={{ fontWeight: '700' }}>{selectedServiceType}</Text> yet.
-                          Clients won't see it on your profile until you add a service to it.
+                          {tr('providerSetup.ui.nothingUnder', { type: selectedServiceType })}
                         </>
                       ) : (
                         <>
-                          Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
-                          (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
+                          {tr('providerSetup.ui.tapToPick', { action: tr('providerSetup.services.addCategory') })}
                         </>
                       )}
                     </Text>
@@ -5582,7 +5594,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ) : (
                   <>
                     <Text style={styles.categoryHint}>
-                      Tap to open · drag ☰ to reorder · long-press to edit or delete
+                      {tr('providerSetup.services.categoryHint')}
                     </Text>
                     {/* Category Tabs */}
                     <ScrollView
@@ -5637,17 +5649,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 tapMedium();
                                 Alert.alert(
                                   `“${item}”`,
-                                  'What would you like to do?',
+                                  tr('providerSetup.services.categoryActions'),
                                   [
-                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: tr('common.cancel'), style: 'cancel' },
                                     {
-                                      text: 'Edit',
+                                      text: tr('common.edit'),
                                       onPress: () => {
                                         setEditingCategory(item);
                                         setShowEditCategoryModal(true);
                                       },
                                     },
-                                    { text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteCategory(item) },
+                                    { text: tr('common.delete'), style: 'destructive' as const, onPress: () => handleDeleteCategory(item) },
                                   ]
                                 );
                               }}
@@ -5826,7 +5838,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         >
                           <View style={styles.addServiceBlur}>
                             <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
-                              + Add Service to {selectedCategory}
+                              {tr('providerSetup.ui.addServiceTo', { category: selectedCategory })}
                             </Text>
                           </View>
                         </TouchableOpacity>
@@ -5857,7 +5869,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 }}
                 activeOpacity={0.55}
               >
-                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Address Confirmation</Text>
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>{tr('providerSetup.next.address')}</Text>
                 <Ionicons name="arrow-forward" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
@@ -5884,8 +5896,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={[styles.docSection, styles.docSectionLast]}
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>05</Text>
-              <Text style={styles.docHeading}>Address Confirmation</Text>
-              <Text style={styles.docSub}>Business setup, address release</Text>
+              <Text style={styles.docHeading}>{tr('providerSetup.section.policies.title')}</Text>
+              <Text style={styles.docSub}>{tr('providerSetup.section.policies.sub')}</Text>
 
               {/* Cancellations, reschedules, deposits, no-shows, refund policy,
                   booking instructions and the detailed policy image all moved to
@@ -5897,13 +5909,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   accessibility) is required or required-adjacent for first
                   publish, so a new provider is still asked for it during
                   signup. */}
-              <Text style={styles.policySectionTitle}>Business Setup</Text>
+              <Text style={styles.policySectionTitle}>{tr('providerSetup.setup.title')}</Text>
               <View style={styles.docFieldRow}>
                 <Text style={styles.policyLabel}>
-                  BUSINESS TYPE <Text style={styles.requiredStar}>*</Text>
+                  {tr('providerSetup.setup.businessType')} <Text style={styles.requiredStar}>*</Text>
                 </Text>
                 {visibleMissingRequiredSet.has('Business type') && (
-                  <Text style={styles.docFieldFlag}>Required</Text>
+                  <Text style={styles.docFieldFlag}>{tr('common.required')}</Text>
                 )}
               </View>
                 {/* Admin-created accounts have no sign-up answer to prefill.
@@ -5915,12 +5927,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
                         <Ionicons name="lock-closed" size={11} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />
                         <Text style={[styles.policyPillText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                          {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                          {providerData.businessType ? businessTypeLabel(providerData.businessType) : tr('providerProfile.opt.notSet')}
                         </Text>
                       </View>
                     </View>
                     <Text style={styles.inputHint}>
-                      Not editable here — change it in Business Profile → Business Details → Business Info.
+                      {tr('providerSetup.setup.businessTypeHint')}
                     </Text>
                   </>
                 ) : (
@@ -5940,15 +5952,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View style={[styles.docFieldRow, { marginTop: 14 }]}>
                 <Text style={styles.policyLabel}>
-                  FULL ADDRESS <Text style={styles.requiredStar}>*</Text>
+                  {tr('providerSetup.setup.fullAddress')} <Text style={styles.requiredStar}>*</Text>
                 </Text>
                 {visibleMissingRequiredSet.has('Full address') && (
-                  <Text style={styles.docFieldFlag}>Required</Text>
+                  <Text style={styles.docFieldFlag}>{tr('common.required')}</Text>
                 )}
               </View>
               <Text style={styles.addressHint}>
                 {providerData.businessType === 'mobile'
-                  ? "Never shown publicly, and never sent to a client automatically — you travel to them, so they give you their address instead. If you do want to share yours, pick Manual release below and send it per booking from that booking's detail page. Include your postcode."
+                  ? tr('providerSetup.setup.addressMobile')
                   : providerData.businessType === 'home_based'
                   ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
                   : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
@@ -5976,7 +5988,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <>
                   <Text style={[styles.policyLabel, { marginTop: 14 }]}>HOW TO GET THERE</Text>
                   <Text style={styles.addressHint}>
-                    Optional, shown on your profile — nearest station, where to park, landmarks. Anyone can see this, so no door codes.
+                    {tr('providerSetup.ui.optionalShownOnYourProfileNearest')}
                   </Text>
                   <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                     <TextInput
@@ -5989,13 +6001,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       maxLength={300}
                       numberOfLines={3}
                       textAlignVertical="top"
-                      accessibilityLabel="How to get there"
+                      accessibilityLabel={tr('providerSetup.ui.howToGetThere')}
                     />
                   </View>
 
                   <Text style={[styles.policyLabel, { marginTop: 14 }]}>ARRIVAL DETAILS</Text>
                   <Text style={styles.addressHint}>
-                    Optional, private — door or buzzer codes, flat number, which entrance. Only booked clients see this, at the same time as your address.
+                    {tr('providerSetup.ui.optionalPrivateDoorOrBuzzerCodes')}
                   </Text>
                   <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                     <TextInput
@@ -6008,7 +6020,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       maxLength={500}
                       numberOfLines={3}
                       textAlignVertical="top"
-                      accessibilityLabel="Arrival details"
+                      accessibilityLabel={tr('providerSetup.ui.arrivalDetails')}
                     />
                   </View>
                 </>
@@ -6025,7 +6037,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   hand, per booking. */}
               {providerData.businessType && (
                 <>
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>{tr('providerSetup.setup.addressRelease')}</Text>
                   <View style={styles.pillRow}>
                     {[
                       ...ADDRESS_RELEASE_OPTS
@@ -6034,7 +6046,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       // Mobile only — see BusinessInfoScreen. '' is stored
                       // as NULL, i.e. never released.
                       ...(providerData.businessType === 'mobile'
-                        ? [{ value: '', label: 'Never share' }]
+                        ? [{ value: '', label: tr('providerProfile.info.release.never') }]
                         : []),
                     ].map(({ value: v, label: l }) => (
                       <TouchableOpacity
@@ -6062,7 +6074,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     if (providerData.addressReleasePolicy == null) {
                       return (
                         <Text style={styles.addressHint}>
-                          Your address is never sent to clients. They give you theirs instead.
+                          {tr('providerProfile.info.release.neverSub')}
                         </Text>
                       );
                     }
@@ -6082,9 +6094,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   the profile regardless of business type or address-release
                   policy — the hint says so explicitly rather than implying
                   the same privacy the address field gets. */}
-              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS PHOTOS</Text>
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>{tr('providerSetup.setup.addressPhotos')}</Text>
               <Text style={styles.addressHint}>
-                Photos of your venue or workspace, shown publicly under Additional Information on your profile rather than in your portfolio — clients booking mobile or home-based providers often look for these before choosing who to book, so adding some can help boost bookings.
+                {tr('providerSetup.setup.addressPhotosHint')}
               </Text>
               <View style={[styles.portfolioGrid, styles.addressPhotoGrid]}>
                 {venuePhotos.map(item => (
@@ -6117,13 +6129,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ) : (
                     <>
                       <Text style={styles.portfolioAddPlus}>+</Text>
-                      <Text style={styles.portfolioAddText}>Add Photos</Text>
+                      <Text style={styles.portfolioAddText}>{tr('providerSetup.about.addPhotos')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
               {!providerDbId && (
-                <Text style={styles.inputHint}>Save your profile once before adding address photos.</Text>
+                <Text style={styles.inputHint}>{tr('providerSetup.setup.addressPhotosSaveFirst')}</Text>
               )}
 
 
@@ -6160,7 +6172,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={policies.bookingInstructions}
                   onChangeText={(text) => setPolicies(prev => ({ ...prev, bookingInstructions: text }))}
-                  placeholder="Write your own or tap a suggestion below"
+                  placeholder={tr('providerProfile.ui.instructionsPlaceholder')}
                   placeholderTextColor={chrome.fg(0.4)}
                   multiline
                   numberOfLines={4}
@@ -6257,8 +6269,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Ionicons name="alert-circle-outline" size={15} color={REVIEW_WARN_COLOR} />
                   <Text style={styles.publishWarningText} numberOfLines={1}>
                     {visibleMissingRequired.length === 1
-                      ? 'Still needed before you can publish — tap to jump there:'
-                      : `${visibleMissingRequired.length} things still needed before you can publish — tap to jump:`}
+                      ? tr('providerSetup.missing.single')
+                      : tr('providerSetup.missing.several', { count: visibleMissingRequired.length })}
                   </Text>
                 </View>
                 {/* Each chip pages straight to the offending field's section
@@ -6294,7 +6306,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <>
                   <Ionicons name="checkmark" size={18} color={chrome.onAccent} />
                   <Text style={[styles.pinnedBarButtonText, { color: chrome.onAccent }]}>
-                    Save &amp; Publish
+                    {tr('providerSetup.ui.saveAmpPublish')}
                   </Text>
                 </>
               )}

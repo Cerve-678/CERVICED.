@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 /**
  * "Post anonymously" switch for the rating sheets. Off by default; the sheet
@@ -22,12 +24,14 @@ export function AnonymousReviewToggle({
   palette: { text: string; sub: string; accent: string; border: string };
   disabled?: boolean;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   return (
     <View style={[styles.row, { borderColor: palette.border }]}>
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: palette.text }]}>Post anonymously</Text>
+        <Text style={[styles.title, { color: palette.text }]}>{tr('clientBooking.review.anonymous')}</Text>
         <Text style={[styles.sub, { color: palette.sub }]}>
-          Your name won't be shown on the review.
+          {tr('clientBooking.review.anonymousSub')}
         </Text>
       </View>
       <Switch
@@ -39,7 +43,7 @@ export function AnonymousReviewToggle({
         }}
         trackColor={{ false: '#D1D1D6', true: palette.accent }}
         thumbColor={value ? '#fff' : '#f4f3f4'}
-        accessibilityLabel="Post anonymously"
+        accessibilityLabel={tr('clientBooking.review.anonymous')}
       />
     </View>
   );

@@ -11,7 +11,7 @@ const screen = fs.readFileSync(path.join(root, 'src', 'screens', 'provider', 'In
 describe('Info Reg service sheet: Info Pack / Form tip', () => {
   it('uses the same tip and remembered key as My Profile, so it never shows twice', () => {
     expect(screen).toContain('tour={TOUR_KEYS.PROVIDER_SERVICE_PACK_TIP}');
-    expect(screen).toContain('title="Aftercare or questions before they come?"');
+    expect(screen).toContain("title={tr('providerProfile.ui.aftercareOrQuestionsBeforeTheyCome')}");
   });
 
   it('only shows when editing a full CERVICED profile', () => {

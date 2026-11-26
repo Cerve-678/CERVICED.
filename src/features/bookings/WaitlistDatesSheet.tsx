@@ -9,6 +9,8 @@ import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { placeInLineLabel } from './waitlist';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface WaitlistDatesSheetProps {
   place: MyWaitlistPlace | null;
@@ -26,6 +28,8 @@ interface WaitlistDatesSheetProps {
  * again moves them to the back.
  */
 export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeave }: WaitlistDatesSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
   const bottomInset = useSystemBottomInset();
@@ -75,7 +79,7 @@ export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeav
   return (
     <Modal visible={!!place} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel="Close" />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel={tr('common.close')} />
         <View style={[styles.sheet, { paddingBottom: 20 + bottomInset }]}>
           <View style={styles.grab} />
           {place && (
@@ -104,7 +108,7 @@ export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeav
                     accessibilityState={{ selected: mode === value }}
                   >
                     <Text style={[styles.segmentText, { color: mode === value ? P.onAccent : P.sub }]}>
-                      {value === 'any' ? 'Any day' : 'Date range'}
+                      {value === 'any' ? tr('clientBooking.waitlist.anyDay') : tr('clientBooking.waitlist.dateRange')}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -122,7 +126,7 @@ export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeav
                         activeOpacity={0.7}
                         accessibilityRole="button"
                       >
-                        <Text style={styles.dateLabel}>{which === 'from' ? 'From' : 'To'}</Text>
+                        <Text style={styles.dateLabel}>{which === 'from' ? tr('clientBooking.waitlist.from') : tr('clientBooking.waitlist.to')}</Text>
                         <Text style={[styles.dateValue, !value && { color: P.sub }]}>
                           {value ? formatShortDayDate(value) : which === 'from' ? 'Pick a date' : 'No end date'}
                         </Text>
@@ -148,7 +152,7 @@ export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeav
                 />
               )}
 
-              <Text style={styles.hint}>Changing your dates doesn't move you back in line.</Text>
+              <Text style={styles.hint}>{tr('clientBooking.waitlist.datesHint')}</Text>
               {error && <Text style={styles.error}>{error}</Text>}
 
               <TouchableOpacity
@@ -158,7 +162,7 @@ export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeav
                 activeOpacity={0.8}
                 accessibilityRole="button"
               >
-                {busy ? <ActivityIndicator color={P.onAccent} size="small" /> : <Text style={[styles.buttonText, { color: P.onAccent }]}>Save</Text>}
+                {busy ? <ActivityIndicator color={P.onAccent} size="small" /> : <Text style={[styles.buttonText, { color: P.onAccent }]}>{tr('common.save')}</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.lineButton]}
@@ -167,7 +171,7 @@ export function WaitlistDatesSheet({ place, busy, error, onClose, onSave, onLeav
                 activeOpacity={0.7}
                 accessibilityRole="button"
               >
-                <Text style={[styles.buttonText, { color: P.sub }]}>Leave this waitlist</Text>
+                <Text style={[styles.buttonText, { color: P.sub }]}>{tr('clientBooking.waitlist.leaveThis')}</Text>
               </TouchableOpacity>
             </>
           )}

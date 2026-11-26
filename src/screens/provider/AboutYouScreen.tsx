@@ -39,6 +39,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation, tr } from '../../i18n';
+import { CityMultiSelect } from '../../components/CityMultiSelect';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
@@ -59,6 +61,7 @@ import { toUserMessage } from '../../utils/userFacingError';
 export default function AboutYouScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const C = useBusinessPalette();
 
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -158,7 +161,7 @@ export default function AboutYouScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash(tr('providerProfile.common2.noProfile'), 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -192,7 +195,7 @@ export default function AboutYouScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'AboutYouScreen.save'), 'error');
+      flash(toUserMessage(e, tr('providerProfile.common2.saveFailed'), 'AboutYouScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -214,7 +217,7 @@ export default function AboutYouScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>About You</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.about.title')}</Text>
             <TouchableOpacity
               style={[s.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -233,7 +236,7 @@ export default function AboutYouScreen({ navigation }: any) {
             {toast && <Toast message={toast.message} type={toast.type} />}
 
             {travels && (
-              <Card title="Areas You Cover" sub="The towns and areas you travel to. Clients who filter Search by these places will find you.">
+              <Card title={t('providerProfile.ui.areasYouCover')} sub={t('providerProfile.ui.theTownsAndAreasYouTravel')}>
                 <AreasYouCoverPicker
                   value={serviceLocations}
                   onChange={setServiceLocations}
@@ -244,12 +247,12 @@ export default function AboutYouScreen({ navigation }: any) {
               </Card>
             )}
 
-            <Card title="I Work With" sub="Shown in Additional Information on your profile, so clients can see you work with people like them.">
-              <SectionLabel text="Clients" />
+            <Card title={t('providerProfile.ui.iWorkWith')} sub={t('providerProfile.ui.shownInAdditionalInformationOnYour')}>
+              <SectionLabel text={t('providerProfile.ui.clients')} />
               <ChipGroup options={CLIENTELE_OPTS} selected={clientele} onToggle={v => toggleChip(clientele, setClientele, v)} />
 
               <View style={{ height: 18 }} />
-              <SectionLabel text="Skin tones" />
+              <SectionLabel text={t('providerProfile.ui.skinTones')} />
               <TouchableOpacity
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
@@ -259,7 +262,7 @@ export default function AboutYouScreen({ navigation }: any) {
                 style={{ alignSelf: 'flex-start', marginTop: -4, marginBottom: 10 }}
               >
                 <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', color: C.accent }}>
-                  {skinTones.length === SKIN_TONES.length ? 'Clear all' : 'I work with all skin tones'}
+                  {skinTones.length === SKIN_TONES.length ? t('providerProfile.ui.clearAll') : t('providerProfile.ui.iWorkWithAllSkinTones')}
                 </Text>
               </TouchableOpacity>
               <ChipGroup options={SKIN_TONES} selected={skinTones} onToggle={v => toggleChip(skinTones, setSkinTones, v)} />
@@ -267,29 +270,29 @@ export default function AboutYouScreen({ navigation }: any) {
               {isHairProvider && (
                 <>
                   <View style={{ height: 18 }} />
-                  <SectionLabel text="Hair types" />
+                  <SectionLabel text={t('providerProfile.ui.hairTypes')} />
                   <ChipGroup options={HAIR_TYPES} selected={hairTypesCatered} onToggle={v => toggleChip(hairTypesCatered, setHairTypesCatered, v)} />
                   <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
-                    Clients filter by this in search. Leave all unselected if you cater to every hair type. You can set more specific hair types per service when editing that service.
+                    {t('providerProfile.services.hairTypesHint')}
                   </Text>
                 </>
               )}
             </Card>
 
-            <Card title="Credentials & Policies" sub="Builds trust with clients and helps them book with confidence.">
-              <Field label="Qualifications & Training" value={qualifications} onChange={setQualifications} placeholder="e.g. NVQ Level 3, VTCT, City & Guilds..." multiline />
-              <ToggleRow label="Professionally insured" sub="You hold valid professional indemnity insurance. Shown as your own declaration — Cerviced doesn't verify insurance." value={isInsured} onChange={setIsInsured} />
-              <ToggleRow label="DBS checked" sub="Important if you work with children or vulnerable adults. Shown as your own declaration — Cerviced doesn't verify DBS status." value={dbsChecked} onChange={setDbsChecked} />
-              <ToggleRow label="Online consultations available" sub="Clients can book a virtual consultation before their appointment" value={onlineConsult} onChange={setOnlineConsult} />
+            <Card title={t('providerProfile.about.credentials.title')} sub={t('providerProfile.about.credentials.sub')}>
+              <Field label={t('providerProfile.about.qualifications')} value={qualifications} onChange={setQualifications} placeholder={t('providerProfile.about.qualificationsPlaceholder')} multiline />
+              <ToggleRow label={t('providerProfile.about.insured')} sub="You hold valid professional indemnity insurance. Shown as your own declaration — Cerviced doesn't verify insurance." value={isInsured} onChange={setIsInsured} />
+              <ToggleRow label={t('providerProfile.about.dbs')} sub="Important if you work with children or vulnerable adults. Shown as your own declaration — Cerviced doesn't verify DBS status." value={dbsChecked} onChange={setDbsChecked} />
+              <ToggleRow label={t('providerProfile.about.onlineConsult')} sub={t('providerProfile.about.onlineConsultSub')} value={onlineConsult} onChange={setOnlineConsult} />
 
-              <SectionLabel text="Patch test policy" />
+              <SectionLabel text={t('providerProfile.about.patchTest')} />
               <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: C.sub, marginBottom: 8, marginTop: -6 }}>
-                Shown to clients before they book, so they know if a patch test is needed in advance.
+                {t('providerProfile.about.patchTestSub')}
               </Text>
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />
             </Card>
 
-            <Card title="Languages Spoken" sub="Clients often search for providers who speak their language.">
+            <Card title={t('providerProfile.about.languages.title')} sub={t('providerProfile.about.languages.sub')}>
               {/* Signup's "Other" chip lets a provider type a language that
                   isn't in LANGUAGE_OPTS. Appending any already-saved value
                   that the list doesn't cover keeps it visible and de-selectable
@@ -305,15 +308,15 @@ export default function AboutYouScreen({ navigation }: any) {
               />
               {showLanguagesOther && (
                 <Field
-                  label="Other language"
+                  label={t('providerProfile.about.otherLanguage')}
                   value={languagesOther}
                   onChange={setLanguagesOther}
-                  placeholder="Type a language..."
+                  placeholder={t('providerProfile.about.otherLanguagePlaceholder')}
                 />
               )}
             </Card>
 
-            <Card title="Accessibility" sub="Help clients with access needs find you.">
+            <Card title={t('providerProfile.about.accessibility.title')} sub={t('providerProfile.about.accessibility.sub')}>
               <ChipGroup options={ACCESSIBILITY_OPTS} selected={accessibility} onToggle={v => toggleChip(accessibility, setAccessibility, v)} />
             </Card>
 

@@ -8,14 +8,15 @@ import {
   saveNotificationPreferences,
   type NotificationPreferences,
 } from '../../services/databaseService';
+import { tr } from '../../i18n';
 
 const SECTIONS: NotificationPreferenceSection<NotificationPreferences>[] = [
   {
-    title: 'BOOKINGS',
+    get title() { return tr('achievements.group.bookings'); },
     rows: [
-      { key: 'bookingConfirm', icon: 'calendar-today', title: 'Booking Confirmed', subtitle: 'Instant confirmation alerts' },
-      { key: 'bookingReminder', icon: 'notifications', title: 'Appointment Reminders', subtitle: 'Before your confirmed appointments' },
-      { key: 'bookingUpdates', icon: 'sliders', title: 'Booking Updates', subtitle: 'Changes, cancellations' },
+      { key: 'bookingConfirm', icon: 'calendar-today', get title() { return tr('clientAccount.notifications.bookingConfirm'); }, get subtitle() { return tr('clientAccount.notifications.bookingConfirmSub'); } },
+      { key: 'bookingReminder', icon: 'notifications', get title() { return tr('clientAccount.notifications.reminders'); }, get subtitle() { return tr('clientAccount.notifications.remindersSub'); } },
+      { key: 'bookingUpdates', icon: 'sliders', get title() { return tr('clientAccount.notifications.updates'); }, get subtitle() { return tr('clientAccount.notifications.updatesSub'); } },
     ],
   },
   {
@@ -24,15 +25,15 @@ const SECTIONS: NotificationPreferenceSection<NotificationPreferences>[] = [
     // Maintenance setup). The 24h prep line rides on Appointment Reminders.
     title: 'BEAUTY MAINTENANCE',
     rows: [
-      { key: 'maintenanceReminders', icon: 'heart', title: 'Maintenance Reminders', subtitle: 'When something you track is due, and aftercare notes' },
+      { key: 'maintenanceReminders', icon: 'heart', get title() { return tr('clientAccount.notifications.maintenance'); }, get subtitle() { return tr('clientAccount.notifications.maintenanceSub'); } },
     ],
   },
   {
     title: 'DISCOVER',
     rows: [
-      { key: 'promotions', icon: 'local-offer', title: 'Offers & Promotions', subtitle: 'Deals from providers you\'ve booked. Providers you\'ve turned the bell on for always come through' },
-      { key: 'newProviders', icon: 'people', title: 'New Providers', subtitle: 'Professionals near you' },
-      { key: 'weeklySummary', icon: 'bar-chart', title: 'Weekly Summary', subtitle: 'Your beauty activity recap' },
+      { key: 'promotions', icon: 'local-offer', get title() { return tr('clientAccount.notifications.promotions'); }, get subtitle() { return tr('clientAccount.notifications.promotionsSub'); } },
+      { key: 'newProviders', icon: 'people', get title() { return tr('clientAccount.notifications.newProviders'); }, get subtitle() { return tr('clientAccount.notifications.newProvidersSub'); } },
+      { key: 'weeklySummary', icon: 'bar-chart', get title() { return tr('clientAccount.notifications.weekly'); }, get subtitle() { return tr('clientAccount.notifications.weeklySub'); } },
     ],
   },
 ];
