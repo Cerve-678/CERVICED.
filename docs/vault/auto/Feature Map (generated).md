@@ -114,7 +114,7 @@ Curated: [[Booking Flow]] · **492 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(585)_
 - `src/screens/client/CartScreen.tsx` _(576)_
 - `src/contexts/BookingContext.tsx` _(541)_
-- `src/screens/client/BookingDetailScreen.tsx` _(510)_
+- `src/screens/client/BookingDetailScreen.tsx` _(525)_
 - `src/screens/client/BookingsScreen.tsx` _(429)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(251)_
@@ -136,7 +136,7 @@ Curated: [[Booking Flow]] · **492 files**
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/services/database/infoPacks.ts` _(110)_
-- `src/i18n/catalogs/en/clientBooking.ts` _(108)_
+- `src/i18n/catalogs/en/clientBooking.ts` _(109)_
 - `src/types/booking.ts` _(108)_
 - `src/web/WebPaymentStep.tsx` _(107)_
 - … +462 more
@@ -247,7 +247,7 @@ Curated: [[Booking Flow]] · **129 files**
 Curated: [[Booking Flow]] · **307 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(368)_
 - `src/contexts/BookingContext.tsx` _(345)_
-- `src/screens/client/BookingDetailScreen.tsx` _(251)_
+- `src/screens/client/BookingDetailScreen.tsx` _(253)_
 - `src/screens/client/RescheduleScreen.tsx` _(213)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_

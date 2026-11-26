@@ -570,6 +570,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // the real enforcement, same relationship as isPastCancellationWindow
   // above — same calendar day as the appointment, and the appointment start
   // time must have already passed.
+  // Once the appointment's start time has passed, Cancel is gone: a client
+  // whose provider never came reports it instead (and is asked for a refund),
+  // rather than cancelling and paying the late-cancel charge.
+  const hasStarted = useMemo(() => {
+    if (!booking?.bookingDate || !booking.bookingTime) return false;
+    return Date.now() >= createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime();
+  }, [booking?.bookingDate, booking?.bookingTime]);
+
   const canMarkProviderNoShow = useMemo(() => {
     if (!booking || !booking.bookingDate || !booking.bookingTime) return false;
     if (booking.status !== BookingStatus.UPCOMING && booking.status !== BookingStatus.IN_PROGRESS) return false;
@@ -587,7 +595,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setIsLoading(true);
     try {
       await markProviderNoShow(booking.id);
-      setSuccessMessage(tr('clientBooking.detail.noShowReported'));
+      // Paid in the app: the report also opened a refund request
+      // (client_mark_provider_no_show), so show it under the booking.
+      const askedForRefund = refundScope === 'in_app';
+      if (askedForRefund) setRefundRequestsNonce(n => n + 1);
+      setSuccessMessage(askedForRefund
+        ? tr('clientBooking.detail.noShowReportedRefund', { provider: booking.providerName || 'Your provider' })
+        : tr('clientBooking.detail.noShowReported'));
       setSuccessIcon('✓');
       setShowSuccessModal(true);
     } catch (error: any) {
@@ -599,7 +613,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         ? error.message : null;
       Alert.alert(tr('clientBooking.detail.reportFailedTitle'), friendly ?? "We couldn't report this just now. Please try again.");
     } finally { setIsLoading(false); }
-  }, [booking, canMarkProviderNoShow, markProviderNoShow]);
+  }, [booking, canMarkProviderNoShow, markProviderNoShow, refundScope]);
 
   // Disputing a no-show the PROVIDER recorded against this client. The button
   // that opens this is gated on canDisputeNoShow; dispute_no_show() re-checks
@@ -1533,28 +1547,27 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             )}
             {isUpcoming && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
-                  <Text style={[st.cancelBtnText, { color: '#F44336' }]}>{tr('common.cancel')}</Text>
-                </TouchableOpacity>
+                {!hasStarted && (
+                  <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
+                    <Text style={[st.cancelBtnText, { color: '#F44336' }]}>{tr('common.cancel')}</Text>
+                  </TouchableOpacity>
+                )}
+                {/* After the start time, same day: in Cancel's place. The
+                    RPC re-checks the same day and time in UK time. */}
+                {canMarkProviderNoShow && (
+                  <TouchableOpacity
+                    style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(true); }}
+                    disabled={isLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>{tr('clientBooking.detail.providerNoShow')}</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); void handleReschedulePress(); }} activeOpacity={0.7}>
                   <Text style={[st.primaryBtnText, { color: C.onAccent }]}>{tr('clientBooking.detail.reschedule')}</Text>
                 </TouchableOpacity>
               </View>
-            )}
-            {/* "Provider didn't show up" — only once the appointment start
-                time has actually passed, same day, mirroring the provider's
-                own no_show button gating. Kept as its own row (not crowded
-                into the Cancel/Reschedule pair above) since it only appears
-                same-day and shouldn't be mistaken for a routine action. */}
-            {isUpcoming && canMarkProviderNoShow && (
-              <TouchableOpacity
-                style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(true); }}
-                disabled={isLoading}
-                activeOpacity={0.7}
-              >
-                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>{tr('clientBooking.detail.providerNoShow')}</Text>
-              </TouchableOpacity>
             )}
             {booking.isPendingReschedule && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -1781,7 +1794,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
               <Text style={[st.sheetTitle, { color: C.text }]}>{tr('clientBooking.detail.providerNoShowTitle')}</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>
-                {booking.providerName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone. Are you sure?
+                {refundScope === 'in_app'
+                  ? tr('clientBooking.detail.providerNoShowSubRefund', { provider: booking.providerName || 'Your provider' })
+                  : tr('clientBooking.detail.providerNoShowSub', { provider: booking.providerName || 'Your provider' })}
               </Text>
               <View style={st.sheetBtns}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(false); }} disabled={isLoading} activeOpacity={0.7}>

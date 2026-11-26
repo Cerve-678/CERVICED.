@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-26 (provider no show opens refund request)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126170000 | `provider_no_show_opens_refund_request` | **APPLIED 2026-11-26** on the user's "yep", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row: `client_mark_provider_no_show` opens a refund request for a booking paid in the app, and reads the day and start time in UK time. Applied straight after 160000. md5 guards on it and `request_booking_refund` matched. Dry run, plus a rolled-back check as a real client first (1 request opened, provider notified, nothing kept). Verified live: version recorded (live max); md5 `4e2e9809…`; authenticated can execute, anon can't. PR #823. |
+
 ### Applied 2026-11-26 (release payouts settles stuck fees)
 
 | Recorded version | Name | Verified live |
