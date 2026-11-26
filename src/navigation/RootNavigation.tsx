@@ -34,6 +34,8 @@ import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
 import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
 import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 import { useCircleEnabledSync } from '../stores/useCircleStore';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -43,6 +45,8 @@ const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>
 };
 
 export default function RootNavigation() {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
   // Faces of people you follow on provider cards: client hat, signed in only.
@@ -201,10 +205,10 @@ export default function RootNavigation() {
               two trees look alike on arrival, so direction is the only cue the
               user gets that the switch did what they expected. */}
           <Text style={[styles.switchFrom, { color: switchingDestinationTheme.sub }]}>
-            Leaving {switchingTo === 'provider' ? 'Client' : 'Provider'} Mode
+            {tr(switchingTo === 'provider' ? 'shared.modeSwitch.leavingClient' : 'shared.modeSwitch.leavingProvider')}
           </Text>
           <Text style={[styles.switchText, { color: switchingDestinationTheme.text }]}>
-            Switching to {switchingTo === 'provider' ? 'Provider' : 'Client'} Mode
+            {tr(switchingTo === 'provider' ? 'shared.modeSwitch.toProvider' : 'shared.modeSwitch.toClient')}
           </Text>
         </View>
       </View>

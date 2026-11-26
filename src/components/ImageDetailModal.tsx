@@ -38,6 +38,7 @@ import Icon from './IconLibrary';
 import { fonts, spacing } from '../constants/PlatformDimensions';
 import { buildMoreLikeThis } from '../features/explore/moreLikeThis';
 import { savedCarouselImageId } from '../utils/savedCarouselImageId';
+import { useTranslation } from '../i18n';
 
 
 
@@ -395,6 +396,7 @@ function ModalBody({
   handleViewProfile,
   handleBookNow,
 }: ModalBodyProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   // Measured per render, not captured at module load: the carousel's page
   // offsets and the photo box's height are both derived from it.
@@ -641,7 +643,7 @@ function ModalBody({
         }}
         activeOpacity={0.65}
         accessibilityRole="button"
-        accessibilityLabel={isSaved ? 'Remove from Favourites' : 'Save to Favourites'}
+        accessibilityLabel={isSaved ? t('discover.image.unfavourite') : t('discover.image.favourite')}
       >
         <BlurView
           intensity={60}
@@ -669,7 +671,7 @@ function ModalBody({
         }}
         activeOpacity={0.65}
         accessibilityRole="button"
-        accessibilityLabel="Add to a collection"
+        accessibilityLabel={t('discover.image.addToCollection')}
       >
         <BlurView
           intensity={60}
@@ -893,7 +895,7 @@ function ModalBody({
                     color={P.onAccent}
                   />
                   <Text style={[styles.bookNowText, { color: P.onAccent }]}>
-                    {isBookableService ? 'Book Now' : 'View Profile'}
+                    {isBookableService ? t('discover.image.bookNow') : t('discover.image.viewProfile')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -964,8 +966,8 @@ function ModalBody({
                 ]}
               >
                 {moreLikeThisIsFallback
-                  ? 'You Might Also Like'
-                  : 'More Like This'}
+                  ? t('discover.image.youMightLike')
+                  : t('discover.image.moreLikeThis')}
               </Text>
               <ScrollView
                 horizontal

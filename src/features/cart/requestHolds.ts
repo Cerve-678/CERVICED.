@@ -6,6 +6,7 @@
 
 import type { CheckoutHoldPlan as HoldPlan, RequestCardHold } from '../../services/databaseService';
 import { formatTime12 } from '../../utils/dateUtils';
+import { tr } from '../../i18n';
 
 type HoldStatus = Pick<RequestCardHold, 'serviceName' | 'state' | 'actionDeadline'>;
 
@@ -15,9 +16,9 @@ const hasHolds = (plan: HoldPlan | null): plan is HoldPlan => !!plan && plan.hel
 
 /** The payment sheet's main button. */
 export function payButtonLabel(plan: HoldPlan | null, totalAmount: number): string {
-  if (!hasHolds(plan)) return `Pay £${totalAmount.toFixed(2)}`;
-  if (plan.chargeNowPence <= 0) return `Hold ${money(plan.heldPence)}`;
-  return `Pay ${money(plan.chargeNowPence)} · Hold ${money(plan.heldPence)}`;
+  if (!hasHolds(plan)) return tr('cart.pay.amount', { amount: `£${totalAmount.toFixed(2)}` });
+  if (plan.chargeNowPence <= 0) return tr('cart.pay.holdAmount', { amount: money(plan.heldPence) });
+  return tr('cart.pay.payAndHold', { pay: money(plan.chargeNowPence), hold: money(plan.heldPence) });
 }
 
 /** The line above the button explaining the hold, or null when nothing is held. */
@@ -36,8 +37,7 @@ export function holdPlanNote(plan: HoldPlan | null): string | null {
 /** The success screen's message once the checkout has gone through. */
 export function checkoutSuccessMessage(plan: HoldPlan | null, totalAmount: number): string {
   if (!hasHolds(plan)) {
-    return `Payment of £${totalAmount.toFixed(2)} has been processed successfully. ` +
-      'Appointments have been booked and will show up in Bookings when confirmed by providers.';
+    return tr('cart.success.body', { amount: `£${totalAmount.toFixed(2)}` });
   }
   if (plan.chargeNowPence <= 0) {
     return `${money(plan.heldPence)} is held on your card, not taken. ` +

@@ -12,12 +12,14 @@ import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import { CartStackParamList } from '../../types';
+import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const CartStack = createNativeStackNavigator<CartStackParamList>();
 
 export default function CartNavigator() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <CartStack.Navigator
@@ -29,7 +31,7 @@ export default function CartNavigator() {
         headerTitleStyle: {
           color: theme.text,
         },
-        headerBackTitle: 'Back',
+        headerBackTitle: t('common.back'),
       }}
     >
       <CartStack.Screen
@@ -43,7 +45,7 @@ export default function CartNavigator() {
       <CartStack.Screen
         name="ProviderChat"
         component={ProviderChatScreen}
-        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: t('common.back') }}
       />
 
       <CartStack.Screen
@@ -53,9 +55,9 @@ export default function CartNavigator() {
         // blur above must not apply here: the profile's header is see-through
         // so the cover photo shows behind it.
         options={{
-          title: 'Provider Profile',
+          title: t('shared.nav.providerProfile'),
           presentation: 'card',
-          headerBackTitle: 'Cart',
+          headerBackTitle: t('shared.nav.cart'),
           headerBlurEffect: undefined,
           headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.text,
@@ -67,9 +69,9 @@ export default function CartNavigator() {
         name="Bookings"
         component={BookingsScreen}
         options={{
-          title: 'Track Appointment',
+          title: t('shared.nav.trackAppointment'),
           presentation: 'card',
-          headerBackTitle: 'Cart',
+          headerBackTitle: t('shared.nav.cart'),
           headerTransparent: false,
           headerBlurEffect: undefined,
           headerShadowVisible: false,
@@ -86,7 +88,7 @@ export default function CartNavigator() {
         name="ActivityCentre"
         component={ActivityCentreScreen}
         options={{
-          title: 'Activity Centre',
+          title: t('profile.forYou.activity.title'),
           presentation: 'card',
           headerTransparent: false,
           headerShadowVisible: false,
@@ -129,10 +131,10 @@ export default function CartNavigator() {
         name="Notifications"
         component={NotificationsScreen}
         options={{
-          title: 'Notifications',
+          title: t('shared.nav.notifications'),
           presentation: 'formSheet',
           headerShown: false,
-          headerBackTitle: 'Close',
+          headerBackTitle: t('common.close'),
         }}
       />
 

@@ -16,6 +16,8 @@ import {
   waitlistCardState,
   waitlistDatesLabel,
 } from './waitlist';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const HOLD_SECONDS = WAITLIST_HOLD_MINUTES * 60;
 const DISPLAY = 'BakbakOne-Regular';
@@ -56,6 +58,8 @@ interface WaitlistTicketProps {
 export function WaitlistTicket({
   place, nowMs, busy, service, onClose, onConfirmAndPay, onPass, onChangeDates, onLeave, onHoldEnded, children,
 }: WaitlistTicketProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
   const insets = useSafeAreaInsets();
@@ -80,13 +84,13 @@ export function WaitlistTicket({
     >
       <View style={[styles.screen, { paddingTop: topPad }]}>
         <View style={styles.header}>
-          <Text style={styles.cap}>{state === 'held' ? 'Held for you' : 'Waitlist'}</Text>
+          <Text style={styles.cap}>{state === 'held' ? tr('clientBooking.waitlist.heldForYou') : tr('clientBooking.waitlist.label')}</Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onClose(); }}
             hitSlop={12}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Close"
+            accessibilityLabel={tr('common.close')}
           >
             <Ionicons name="close" size={22} color={P.sub} />
           </TouchableOpacity>
@@ -98,7 +102,7 @@ export function WaitlistTicket({
               <View style={styles.ticket}>
                 <View style={styles.top}>
                   <HoldRing expiresAt={shown.offerExpiresAt} onEnd={onHoldEnded} />
-                  <Text style={styles.xl}>{shown.offeredDate ? formatShortDayDate(shown.offeredDate) : 'Your slot'}</Text>
+                  <Text style={styles.xl}>{shown.offeredDate ? formatShortDayDate(shown.offeredDate) : tr('clientBooking.waitlist.yourSlot')}</Text>
                   {!!heldTimeRangeLabel(shown.offeredTime, service?.durationMinutes ?? null) && (
                     <Text style={[styles.lg, { color: P.accentText }]}>
                       {heldTimeRangeLabel(shown.offeredTime, service?.durationMinutes ?? null)}
@@ -121,11 +125,11 @@ export function WaitlistTicket({
                 disabled={busy}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Confirm and pay"
+                accessibilityLabel={tr('clientBooking.waitlist.confirmPayA11y')}
               >
                 {busy
                   ? <ActivityIndicator color={P.onAccent} size="small" />
-                  : <Text style={[styles.buttonText, { color: P.onAccent }]}>Confirm & pay</Text>}
+                  : <Text style={[styles.buttonText, { color: P.onAccent }]}>{tr('clientBooking.waitlist.confirmPay')}</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.lineButton]}
@@ -134,7 +138,7 @@ export function WaitlistTicket({
                 activeOpacity={0.7}
                 accessibilityRole="button"
               >
-                <Text style={[styles.buttonText, { color: P.sub }]}>Pass it on</Text>
+                <Text style={[styles.buttonText, { color: P.sub }]}>{tr('clientBooking.waitlist.passOn')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -143,7 +147,7 @@ export function WaitlistTicket({
             <>
               <View style={styles.ticket}>
                 <View style={styles.top}>
-                  <Text style={styles.cap}>You're in line for</Text>
+                  <Text style={styles.cap}>{tr('clientBooking.waitlist.inLineFor')}</Text>
                   <Text style={styles.lg}>{shown.serviceName}</Text>
                   <Text style={styles.sub}>{shown.providerName}</Text>
                   {placeNumber(shown.placeInLine)}
@@ -163,7 +167,7 @@ export function WaitlistTicket({
                   activeOpacity={0.7}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.buttonText, { color: P.accentText }]}>Change dates</Text>
+                  <Text style={[styles.buttonText, { color: P.accentText }]}>{tr('clientBooking.waitlist.changeDates')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.button, styles.pairButton, styles.lineButton]}
@@ -171,9 +175,9 @@ export function WaitlistTicket({
                   disabled={busy}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`Leave the ${shown.serviceName} waitlist`}
+                  accessibilityLabel={tr('clientBooking.waitlist.leaveA11y', { service: shown.serviceName })}
                 >
-                  <Text style={[styles.buttonText, { color: P.sub }]}>Leave</Text>
+                  <Text style={[styles.buttonText, { color: P.sub }]}>{tr('clientBooking.waitlist.leaveButton')}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -205,12 +209,12 @@ export function WaitlistTicket({
 
   function placeNumber(n: number | null) {
     if (n == null || !Number.isFinite(n) || n < 1) {
-      return <Text style={[styles.lg, { marginTop: 10 }]}>In line</Text>;
+      return <Text style={[styles.lg, { marginTop: 10 }]}>{tr('clientBooking.waitlist.inLine')}</Text>;
     }
     const label = ordinalSuffix(Math.floor(n));
     const digits = label.replace(/\D+$/, '');
     return (
-      <Text style={styles.place} accessibilityLabel={`${label} in line`}>
+      <Text style={styles.place} accessibilityLabel={tr('clientBooking.waitlist.placeA11y', { place: label })}>
         {digits}<Text style={styles.placeSuffix}>{label.slice(digits.length)}</Text>
       </Text>
     );
@@ -236,6 +240,8 @@ export function WaitlistTicket({
  * the ring re-renders. `onEnd` fires once, when it reaches 0.
  */
 const HoldRing = memo(function HoldRing({ expiresAt, onEnd }: { expiresAt: string; onEnd: () => void }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const [left, setLeft] = useState(() => holdSecondsLeft(expiresAt, Date.now()));
   const onEndRef = useRef(onEnd);
@@ -262,7 +268,7 @@ const HoldRing = memo(function HoldRing({ expiresAt, onEnd }: { expiresAt: strin
   const circumference = 2 * Math.PI * r;
   const share = Math.min(1, left / HOLD_SECONDS);
   return (
-    <View style={ringStyles.wrap} accessibilityLabel={`${Math.ceil(left / 60)} minutes left`}>
+    <View style={ringStyles.wrap} accessibilityLabel={tr('clientBooking.waitlist.minutesLeft', { minutes: Math.ceil(left / 60) })}>
       <Svg width={size} height={size} style={ringStyles.svg}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={P.accentDim} strokeWidth={stroke} fill="none" />
         <Circle

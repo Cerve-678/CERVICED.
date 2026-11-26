@@ -11,6 +11,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -19,7 +21,7 @@ const PERKS: { icon: IconName; title: string }[] = [
   { icon: 'text-outline', title: 'Every font' },
   { icon: 'sparkles-outline', title: 'Every hero finish' },
   { icon: 'brush-outline', title: 'Make your own colours' },
-  { icon: 'ribbon-outline', title: 'Achievements' },
+  { icon: 'ribbon-outline', get title() { return tr('providerAccount.account.achievements.title'); } },
 ];
 
 interface FullCervicedLockedSheetProps {
@@ -32,6 +34,8 @@ interface FullCervicedLockedSheetProps {
 }
 
 export function FullCervicedLockedSheet({ visible, title, note, onClose, onSeeMore }: FullCervicedLockedSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const bottomInset = useSystemBottomInset();
 
@@ -75,7 +79,7 @@ export function FullCervicedLockedSheet({ visible, title, note, onClose, onSeeMo
             <Text style={[styles.primaryText, { color: P.onAccent }]}>See what full members get</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={onClose} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={[styles.secondaryText, { color: P.sub }]}>Not now</Text>
+            <Text style={[styles.secondaryText, { color: P.sub }]}>{tr('common.notNow')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

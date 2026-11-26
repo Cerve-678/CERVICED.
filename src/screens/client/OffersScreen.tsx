@@ -25,6 +25,7 @@ import { HomeStackParamList } from '../../navigation/types';
 import { forgetCachedReads, getActivePromotions } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import type { LogoFraming, PublicPromotionWithProvider } from '../../types/database';
+import { tr, useTranslation } from '../../i18n';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 interface Offer {
@@ -66,9 +67,9 @@ const OFFER_TABS = TABS.map(t => ({ key: t, label: t }));
 
 type SortKey = 'newest' | 'expiring' | 'discount';
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'expiring', label: 'Expiring Soon' },
-  { value: 'discount', label: 'Biggest Discount' },
+  { value: 'newest', get label() { return tr('discover.offers.sort.newest'); } },
+  { value: 'expiring', get label() { return tr('discover.offers.sort.expiring'); } },
+  { value: 'discount', get label() { return tr('discover.offers.sort.discount'); } },
 ];
 
 // ── Offer Card — back to the original horizontal list row (logo left, info
@@ -77,6 +78,8 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 interface OfferCardProps { offer: Offer; index: number; P: AppTheme; onPress: () => void }
 
 const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -141,7 +144,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
               </View>
             ) : null}
             {expDate ? (
-              <Text style={[styles.expiry, { color: P.sub }]}>Exp {expDate}</Text>
+              <Text style={[styles.expiry, { color: P.sub }]}>{tr('discover.offers.expires', { date: expDate })}</Text>
             ) : null}
           </View>
         </View>
@@ -155,6 +158,8 @@ OfferCard.displayName = 'OfferCard';
 type Props = NativeStackScreenProps<HomeStackParamList, 'Offers'>;
 
 export default function OffersScreen({ navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode, palette: P } = useTheme();
 
   const [rawPromotions, setRawPromotions] = useState<PublicPromotionWithProvider[]>([]);
@@ -217,7 +222,7 @@ export default function OffersScreen({ navigation }: Props) {
       headerShown: true,
       headerTransparent: false,
       headerBackVisible: true,
-      headerTitle: 'OFFERS',
+      headerTitle: tr('discover.offers.title'),
       headerTitleAlign: 'center',
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
@@ -281,8 +286,8 @@ export default function OffersScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Text style={[styles.emptyTitle, { color: P.text }]}>No offers right now</Text>
-            <Text style={[styles.emptySub, { color: P.sub }]}>Check back soon for new promotions</Text>
+            <Text style={[styles.emptyTitle, { color: P.text }]}>{tr('discover.offers.emptyTitle')}</Text>
+            <Text style={[styles.emptySub, { color: P.sub }]}>{tr('discover.offers.emptySub')}</Text>
           </View>
         }
       />
@@ -298,7 +303,7 @@ export default function OffersScreen({ navigation }: Props) {
           onPress={() => setSortModalVisible(false)}
         >
           <View style={[styles.sortSheet, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sortSheetTitle, { color: P.text }]}>Sort Offers</Text>
+            <Text style={[styles.sortSheetTitle, { color: P.text }]}>{tr('discover.offers.sortTitle')}</Text>
             {SORT_OPTIONS.map(opt => {
               const active = sortBy === opt.value;
               return (

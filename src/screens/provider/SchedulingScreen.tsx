@@ -67,6 +67,7 @@ import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { CalendarSyncCard } from '../../features/providers/CalendarSyncCard';
 import { useAuth } from '../../contexts/AuthContext';
+import { getLanguage } from '../../i18n/languageStore';
 
 // The two ways a provider can limit how far ahead clients book.
 type HorizonMode = 'rolling' | 'monthly';
@@ -416,11 +417,11 @@ export default function SchedulingScreen({ navigation }: any) {
                   onPress={() => { Haptics.selectionAsync().catch(() => {}); setReleasePickerOpen(true); }}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={tr('providerProfile.ui.releaseDayA11y', { day: release.day, time: releaseTimeLabel(release.time) })}
+                  accessibilityLabel={tr('providerProfile.ui.releaseDayA11y', { day: (getLanguage() === 'en' ? ordinalSuffix(release.day) : String(release.day)), time: releaseTimeLabel(release.time) })}
                 >
                   <Ionicons name="calendar-outline" size={15} color={C.accent} />
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={[st.releaseDayText, { color: C.text }]}>{tr('providerProfile.ui.releaseDay', { day: release.day, time: releaseTimeLabel(release.time) })}</Text>
+                    <Text style={[st.releaseDayText, { color: C.text }]}>{tr('providerProfile.ui.releaseDay', { day: (getLanguage() === 'en' ? ordinalSuffix(release.day) : String(release.day)), time: releaseTimeLabel(release.time) })}</Text>
                     {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
                     <Text style={[st.releaseDayHint, { color: C.sub }]}>
                       {t('providerProfile.ui.daysAfterThatAreGreyedOut')}

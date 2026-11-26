@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { tabBarClearance } from '../utils/tabBarGeometry';
 import { readableAbsoluteSheet } from '../constants/readableWidth';
+import { tr } from '../i18n';
 
 // The toast is anchored to the bottom edge, and the floating tab bar is an
 // overlay the Tab.Navigator draws on top of every nested screen — so a toast
@@ -355,7 +356,7 @@ export function useAppDialog() {
    *  Pass 'center' for a centred alert box instead of the default bottom sheet. */
   const showAlert = useCallback((title: string, message?: string, placement: DialogPlacement = 'sheet') => {
     runOnClose();
-    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons: [{ text: 'OK' }], visible: true, placement });
+    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons: [{ text: tr('common.ok') }], visible: true, placement });
   }, [runOnClose]);
 
   const dismissConfirm = useCallback(() => {

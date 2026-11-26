@@ -9,6 +9,8 @@ import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatTime12 } from '../utils/dateUtils';
 import { CircleStack } from './CircleStack';
+import { useTranslation } from '../i18n';
+import { tr } from '../i18n';
 
 // Colours come from useTheme().palette (hat-aware — client vs provider),
 // not a local literal copy. accentShadow mirrors the palette's accentDim.
@@ -489,6 +491,7 @@ function PillChip({
 
 export function Suggestions({ suggestions, onSuggestionPress, activeSuggestionId, indented = false, variant = 'list' }: SuggestionsProps) {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
 
   const visibleSuggestions = suggestions?.filter((suggestion) => suggestion.id !== activeSuggestionId) ?? [];
   if (visibleSuggestions.length === 0) return null;
@@ -503,7 +506,7 @@ export function Suggestions({ suggestions, onSuggestionPress, activeSuggestionId
   if (useRowLayout) {
     return (
       <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
-        <Text style={[styles.sectionLabel, { color: P.sub }]}>CHOOSE ONE</Text>
+        <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('clientAccount.becca.chooseOne').toUpperCase()}</Text>
         <View style={styles.pillRow}>
           {visibleSuggestions.map((suggestion) => (
             <PillChip key={suggestion.id} suggestion={suggestion} onPress={onSuggestionPress} />
@@ -515,7 +518,7 @@ export function Suggestions({ suggestions, onSuggestionPress, activeSuggestionId
 
   return (
     <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
-      <Text style={[styles.sectionLabel, { color: P.sub }]}>NEXT STEPS</Text>
+      <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('clientAccount.becca.nextSteps').toUpperCase()}</Text>
       <View style={styles.actionsCol}>
         {visibleSuggestions.map((suggestion) => (
           <ActionCard key={suggestion.id} suggestion={suggestion} onPress={onSuggestionPress} />
@@ -535,6 +538,7 @@ interface ProviderRecommendationsProps {
 
 export function ProviderRecommendations({ providers, onProviderPress, indented = true }: ProviderRecommendationsProps) {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
 
   if (!providers || providers.length === 0) return null;
 
@@ -545,7 +549,7 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
 
   return (
     <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
-      <Text style={[styles.sectionLabel, { color: P.accentText }]}>RECOMMENDED</Text>
+      <Text style={[styles.sectionLabel, { color: P.accentText }]}>{t('clientAccount.becca.recommended').toUpperCase()}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recommendationsScroll}>
         {providers.map((provider) => (
           <TouchableOpacity
@@ -851,13 +855,15 @@ interface AnswerPartsProps {
 
 /** The parts of an answer that sit above its text. */
 export function AnswerBefore({ answer, reveal = ANSWER_SHOWN, onProviderPress }: AnswerPartsProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const work = answer.work ?? [];
   let part: React.ReactNode = null;
   if (answer.layout === 'headline' && answer.headline && reveal.headline) {
     part = <HeadlineView headline={answer.headline} work={work} />;
   } else if (answer.layout === 'stepsThenCard' && work.length > 0) {
     part = reveal.folded
-      ? <WorkFold work={work} label="How I found these" />
+      ? <WorkFold work={work} label={tr('clientAccount.becca.howFoundThese')} />
       : <WorkSteps work={work} done={reveal.steps} />;
   } else if (answer.layout === 'cardFirst' && answer.card && reveal.rows > 0) {
     part = <CardView card={answer.card} rows={reveal.rows} {...(onProviderPress ? { onProviderPress } : {})} />;
@@ -868,12 +874,14 @@ export function AnswerBefore({ answer, reveal = ANSWER_SHOWN, onProviderPress }:
 
 /** The parts of an answer that sit below its text. */
 export function AnswerAfter({ answer, reveal = ANSWER_SHOWN, onProviderPress }: AnswerPartsProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const work = answer.work ?? [];
   let part: React.ReactNode = null;
   if (answer.layout !== 'cardFirst' && answer.card && reveal.rows > 0) {
     part = <CardView card={answer.card} rows={reveal.rows} {...(onProviderPress ? { onProviderPress } : {})} />;
   } else if (answer.layout === 'cardFirst' && work.length > 0 && reveal.rows >= (answer.card?.rows?.length ?? 0)) {
-    part = <WorkFold work={work} label="How I found this" outlined />;
+    part = <WorkFold work={work} label={tr('clientAccount.becca.howFoundThis')} outlined />;
   }
   if (!part) return null;
   return <View style={[styles.sectionWrap, styles.sectionWrapIndented]}>{part}</View>;
@@ -899,11 +907,12 @@ export function InspirationGallery({
   indented = true,
 }: InspirationGalleryProps) {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   if (items.length === 0) return null;
 
   return (
     <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
-      <Text style={[styles.sectionLabel, { color: P.accentText }]}>LOOKS TO EXPLORE</Text>
+      <Text style={[styles.sectionLabel, { color: P.accentText }]}>{t('clientAccount.becca.looksToExplore').toUpperCase()}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recommendationsScroll}>
         {items.map((item, index) => {
           const layout = MOODBOARD_LAYOUT[index % MOODBOARD_LAYOUT.length]!;
@@ -939,7 +948,7 @@ export function InspirationGallery({
             <View style={[styles.inspirationFit, { backgroundColor: P.iconBg }]}>
               <Ionicons name="sparkles" size={10} color={P.accentText} />
               <Text style={[styles.inspirationFitText, { color: P.accentText }]} numberOfLines={2}>
-                {item.whyItFits ?? 'A considered reference for your moodboard'}
+                {item.whyItFits ?? t('clientAccount.becca.moodboardFallback')}
               </Text>
             </View>
             {!!item.caption && (
@@ -963,13 +972,14 @@ const MOODBOARD_LAYOUT = [
 
 // ==================== THINKING INDICATOR ====================
 
-export function ThinkingIndicator({ label = "Thinking it through…" }: { label?: string }) {
+export function ThinkingIndicator({ label }: { label?: string }) {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   return (
     <View style={[styles.row, styles.assistantRow]}>
       <Mark size={22} />
       <View style={[styles.thinkingCard, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.accent }]}>
-        <Text style={[styles.thinkingLabel, { color: P.sub }]}>{label}</Text>
+        <Text style={[styles.thinkingLabel, { color: P.sub }]}>{label ?? t('clientAccount.becca.thinking')}</Text>
       </View>
     </View>
   );
@@ -995,10 +1005,11 @@ export function ChatInput({
   onImagePick,
   onStopTyping,
   isReplyTyping = false,
-  placeholder = 'Ask me anything...',
+  placeholder,
   hasImage = false,
 }: ChatInputProps) {
   const { palette: P } = useTheme();
+  const { t } = useTranslation();
   const canSend = !!value.trim() || hasImage;
 
   const handleImagePick = () => {
@@ -1036,7 +1047,7 @@ export function ChatInput({
           style={[styles.input, { color: P.text }]}
           value={value}
           onChangeText={onChangeText}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('clientAccount.becca.inputPlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           maxLength={500}
@@ -1051,7 +1062,7 @@ export function ChatInput({
           disabled={!isReplyTyping && !canSend}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={isReplyTyping ? "Stop Becca typing" : "Send message"}
+          accessibilityLabel={isReplyTyping ? t('clientAccount.becca.stopTyping') : t('clientAccount.becca.sendMessage')}
         >
           {isReplyTyping ? (
             <Ionicons name="stop" size={15} color={P.onAccent} />

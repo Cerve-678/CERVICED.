@@ -28,7 +28,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
       expect(source).toContain('toUserMessage(');
       // A failure must not be able to render the "No messages yet" copy.
       expect(source).toContain('loadError ? (');
-      expect(source).toContain("Couldn't load messages");
+      expect(source).toContain("tr('clientAccount.messages.loadFailed')");
     });
 
     it('gives the provider inbox the same treatment, not just the client half', () => {
