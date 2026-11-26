@@ -48,7 +48,7 @@ Curated: [[Availability & Slots]] · **298 files**
 - `src/screens/client/SearchScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(98)_
-- `src/services/becca/capabilities/client.ts` _(92)_
+- `src/services/becca/capabilities/client.ts` _(93)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/services/database/providers.ts` _(67)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(62)_
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **492 files**
 - … +462 more
 
 ## Notifications
-Curated: [[Notifications]] · **261 files**
+Curated: [[Notifications]] · **260 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(423)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -162,21 +162,21 @@ Curated: [[Notifications]] · **261 files**
 - `src/services/becca/capabilities/client.ts` _(48)_
 - `src/i18n/catalogs/de/shared.ts` _(47)_
 - `src/i18n/catalogs/pl/shared.ts` _(47)_
-- `src/i18n/catalogs/en/providerBusiness.ts` _(46)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
 - `supabase/notifications_cleanup_2026_08.sql` _(40)_
+- `src/i18n/catalogs/en/providerBusiness.ts` _(39)_
 - `supabase/fix_pending_booking_provider_reminder.sql` _(38)_
 - `src/screens/client/NotificationsSettingsScreen.tsx` _(37)_
-- `src/i18n/catalogs/fr/providerBusiness.ts` _(33)_
 - `supabase/waitlist_holds.sql` _(32)_
-- `src/i18n/catalogs/es/providerBusiness.ts` _(30)_
-- `src/i18n/catalogs/pl/providerBusiness.ts` _(29)_
+- `src/i18n/catalogs/fr/providerBusiness.ts` _(29)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(29)_
-- … +231 more
+- `supabase/phase1_schema.sql` _(29)_
+- `src/navigation/RootNavigation.tsx` _(28)_
+- … +230 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **125 files**
+Curated: [[Provider Onboarding & Go-Live]] · **127 files**
 - `src/features/providers/goLiveStatus.ts` _(89)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(72)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **125 files**
 - `src/services/database/bookings.ts` _(6)_
 - `src/services/database/notifications.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
-- … +95 more
+- … +97 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **129 files**

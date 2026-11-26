@@ -208,10 +208,10 @@ function resolveSpan(booking: ScheduleCheckBooking): Span | null {
  * fit your rules" findings. A fresh object each time: callers push these into
  * arrays they own.
  *
- * Deliberately not phrased as a problem. "This time is no longer available"
- * claims the schedule changed under a booking that was already taken, which is
- * the opposite of what happened here — the provider was asked for this exact
- * slot and said yes to being asked.
+ * Deliberately not phrased as a problem. Plain "Outside your hours" (the
+ * time_unavailable wording) reads as a fault, which is the opposite of what
+ * happened here — the provider was asked for this exact slot and said yes to
+ * being asked.
  */
 function emergencyIssue(): ScheduleIssue {
   return issue('emergency_request');

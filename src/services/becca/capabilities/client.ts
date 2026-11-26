@@ -1035,6 +1035,33 @@ const bookingHistory: Capability = {
 
 // ==================== DISCOVERY ====================
 
+/** A person who offers a service, as people name them in a search. */
+const PROVIDER_NOUN = String.raw`(?:techs?|artists?|providers?|salons?|stylists?|hairdressers?|barbers?|beauticians?|people|ones|faces)`;
+
+/**
+ * A ranking clause: "best", "top lash techs", "a good nail tech", "best
+ * reviewed". discover.find steps aside for it, because discover.top reads the
+ * service and does its own near-me reordering — so neither clause is lost.
+ * "Best price" / "best way to" / "good idea" are not rankings of people.
+ */
+const RATING_ASK_RE = new RegExp(
+  String.raw`\b(?:(?:top|best|highest|highly)[\s-]?rated|(?:best|well|highly)[\s-]?reviewed|good reviews` +
+    String.raw`|top \d+|top (?:\S+\s+){0,2}?${PROVIDER_NOUN}` +
+    String.raw`|(?:best|(?:any|a|really|very) good)\b(?!\s+(?:price|prices|deal|deals|value|way|ways|time|times|idea|ideas)\b))\b`,
+  "i",
+);
+
+/**
+ * A "who's new" clause: "any new lash techs", "anyone new doing lashes",
+ * "recently joined". Deliberately NOT a bare "new": "new nails" is a fresh
+ * set, "new nail art ideas" is inspiration, "any new messages" is the inbox.
+ */
+const NEW_ASK_RE = new RegExp(
+  String.raw`\b(?:newest|(?:just|recently|newly) joined|(?:anyone|anybody|someone|who's|whos|who is) new` +
+    String.raw`|new (?:on|to) (?:here|cerviced|the app)|new (?:\S+\s+){0,2}?${PROVIDER_NOUN})\b`,
+  "i",
+);
+
 /** "lashes", "men's grooming" — a category as it reads in a sentence. */
 function categoryWords(category: string): string {
   return CATEGORY_LABELS[category] ?? category.toLowerCase();
@@ -1110,8 +1137,19 @@ const findProviders: Capability = {
   // A rating clause hands it to discover.top the same way: "best rated near
   // me" after a nails search otherwise came back as nails-near-me with the
   // rating silently dropped. discover.top does its own nearby reordering.
-  excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look|top[\s-]?rated|best[\s-]?rated|highest[\s-]?rated)\b/i,
+  //
+  // A "who's new" clause goes the same way, to the same capability.
+  excludeWhen: new RegExp(
+    [
+      String.raw`\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b`,
+      RATING_ASK_RE.source,
+      NEW_ASK_RE.source,
+    ].join("|"),
+    "i",
+  ),
   needs: [{ kind: "service", required: true }],
+  // "lashes" on its own is a search for lash providers.
+  answersBare: "service",
   thinking: ({ entities, message }) => {
     const service = entities.service?.value;
     const steps = [`Searching providers for ${service ? categoryWords(service.category) : "beauty"}…`];
@@ -1122,7 +1160,13 @@ const findProviders: Capability = {
     if (steps.length < 3) steps.push("Putting the list together…");
     return steps;
   },
-  async run({ entities, rawMessage, clientArea }): Promise<CapabilityResult> {
+  async run(ctx): Promise<CapabilityResult> {
+    const { entities, rawMessage, clientArea } = ctx;
+    // "who can do lashes this saturday" — the day decides the answer, and a
+    // plain list would drop it. Dates are never carried between turns, so a
+    // date here is always one this message named. Same hand-off as
+    // discover.followup_day.
+    if (entities.date) return findAvailable.run(ctx);
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
@@ -1419,7 +1463,7 @@ const followUpPrice: Capability = {
     "what does it cost", "what do they usually cost", "rough price",
     // "Who's cheapest" is this answer drawn as a comparison.
     "cheapest", "who's cheapest", "whos cheapest", "who is cheapest", "most affordable",
-    "compare prices", "price comparison",
+    "compare prices", "price comparison", "best price", "best prices", "best value",
   ],
   // A pronoun means a specific provider is being asked about, and their real
   // price list beats a category average — discover.provider_services owns
@@ -2876,10 +2920,34 @@ const topRated: Capability = {
     "best rated", "top rated", "highest rated", "best providers", "who's the best",
     "whos the best", "the best", "any good", "new providers", "newest",
     "just joined", "trending", "popular", "well reviewed", "good reviews",
+    // Ranking words as people type them around a service: "best brows in
+    // london", "top lash techs", "a good nail tech", "best reviewed". Without
+    // these the message matched only on its service and got a price list.
+    "best", "best reviewed", "highly rated", "highly reviewed", "a good",
+    "really good", "five star", "5 star", "top 3", "top 5", "top 10",
+    "top techs", "top artists", "top salons", "top stylists", "top hairdressers",
+    "top barbers", "top * techs", "top * tech", "top * artists", "top * artist",
+    "top * providers", "top * salons", "top * stylists",
+    // "Who's new" the same way — never a bare "new" (see NEW_ASK_RE).
+    "anyone new", "anybody new", "someone new", "who's new", "whos new",
+    "who is new", "recently joined", "newly joined", "new on here",
+    "new to cerviced", "new techs", "new artists", "new salons", "new stylists",
+    "new hairdressers", "new barbers", "new * techs", "new * tech",
+    "new * artists", "new * artist", "new * providers", "new * salons",
   ],
-  async run({ rawMessage, clientArea }): Promise<CapabilityResult> {
-    const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
-    let rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
+  // "Best price", "the best way to look after my lashes", "is it a good
+  // idea" share the words but aren't asking who is best.
+  excludeWhen: /\b(?:best|good)\s+(?:price|prices|deal|deals|value|way|ways|time|times|idea|ideas)\b/i,
+  // "who's top rated in lashes" names the list as well as the ranking.
+  // discover.find hands every rating question over to this capability, so if
+  // the service isn't read HERE it is silently dropped and the client gets
+  // the best rated across everything instead.
+  needs: [{ kind: "service", required: false }],
+  async run({ rawMessage, clientArea, entities }): Promise<CapabilityResult> {
+    const wantsNew = NEW_ASK_RE.test(rawMessage);
+    const category = entities.service?.value.category;
+    const inService = category ? ` for ${categoryWords(category)}` : "";
+    let rows = wantsNew ? await getNewProviders(12, category) : await getTopRatedProviders(12, category);
 
     // "see who is near me top rated" is one question with two clauses, and
     // rating is the one that decides WHICH list. Distance then reorders it —
@@ -2898,20 +2966,20 @@ const topRated: Capability = {
         text:
           (wantsNew
             ? oneOf(
-              `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`,
-              `Fresh faces: **${rows.length}** new provider${rows.length !== 1 ? "s" : ""}.`,
+              `**${rows.length}** provider${rows.length !== 1 ? "s" : ""}${inService} recently joined:`,
+              `Fresh faces${inService}: **${rows.length}** new provider${rows.length !== 1 ? "s" : ""}.`,
             )
             : oneOf(
-              "Here are the top-rated providers right now:",
-              "These are the best reviewed on CERVICED at the moment:",
-              "The highest rated right now:",
+              `Here are the top-rated providers${inService} right now:`,
+              `These are the best reviewed${inService} on CERVICED at the moment:`,
+              `The highest rated${inService} right now:`,
             )) + proximityNote,
         card: {
           title: wantsNew ? "JUST JOINED" : "TOP RATED",
           meta: `${rows.length} provider${rows.length !== 1 ? "s" : ""}`,
           rows: rows.slice(0, 8).map(providerRow),
         },
-        work: [wantsNew ? "Found who joined most recently" : "Ranked providers by their reviews"],
+        work: [wantsNew ? `Found who joined most recently${inService}` : `Ranked providers${inService} by their reviews`],
         providers: rows.map(providerFromDb),
         suggestions: [
           askChip("free", "Who's free this week?", "Who's free this week?"),
@@ -2929,6 +2997,31 @@ const topRated: Capability = {
     //
     // Fall back to showing who IS here, and say plainly why ratings aren't
     // the sort — rather than dead-ending on an empty, chipless reply.
+    if (!wantsNew && category) {
+      // Same honesty as below, kept to the service that was asked about —
+      // falling back to everyone would drop "lashes" all over again.
+      const inCategory = await getProviders(category);
+      if (inCategory.length > 0) {
+        return {
+          text:
+            `No one${inService} has built up enough reviews yet for a top-rated list — it takes a few before that means anything.\n\n` +
+            `Here ${inCategory.length !== 1 ? "are" : "is"} who's on CERVICED${inService}:`,
+          providers: inCategory.slice(0, 12).map(providerFromDb),
+          suggestions: [
+            askChip("free", "Who's free this week?", "Who's free this week?"),
+            askChip("top", "Top rated overall", "Who are the best rated providers?"),
+          ],
+        };
+      }
+      return {
+        text: `There isn't anyone${inService} on CERVICED yet.`,
+        suggestions: [
+          askChip("top", "Top rated overall", "Who are the best rated providers?"),
+          navChip("explore", "Browse Explore", "Explore"),
+        ],
+      };
+    }
+
     if (!wantsNew) {
       const anyone = await getProviders();
       if (anyone.length > 0) {
@@ -2961,7 +3054,7 @@ const topRated: Capability = {
 
     return {
       text: wantsNew
-        ? "No one's joined recently — but there are still providers to browse."
+        ? `No one${inService} has joined recently — but there are still providers to browse.`
         : "I couldn't find anyone to show right now.",
       suggestions: [
         askChip("browse", "Show me everything", "Show me all services"),
@@ -3789,6 +3882,9 @@ const forMe: Capability = {
     "recommend something", "what should i book", "something for me",
     "surprise me", "what do you suggest", "suggest something",
     "based on what i like", "my usual", "the usual", "what do i usually",
+    // "Best FOR ME" asks what suits them, not who ranks highest overall —
+    // and outscores discover.top's bare "best" by being longer.
+    "best for me", "what suits me", "what would suit me",
   ],
   async run({ personal, userId }): Promise<CapabilityResult> {
     // What the client's Beauty Profile says suits them (hair type, goals,

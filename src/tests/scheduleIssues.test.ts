@@ -195,7 +195,7 @@ describe('findScheduleIssues — availability', () => {
 
   // An emergency request is a slot the client deliberately asked for through
   // the opt-in, and the provider chose to be asked. Telling them the time is
-  // "no longer available" describes a change that never happened, and the same
+  // "outside your hours" reads as a fault where there is none, and the same
   // goes for the day-off and blocked-date wording — so all three collapse into
   // one honest line.
   describe('emergency requests', () => {
@@ -239,7 +239,7 @@ describe('findScheduleIssues — availability', () => {
 
     it('leaves an ordinary booking untouched — same wording as before', () => {
       const m = findScheduleIssues([booking('a', '8:00 PM', '9:00 PM')], ctx());
-      expect(m.get('a')![0]!.label).toBe('This time is no longer available in your schedule');
+      expect(m.get('a')![0]!.label).toBe('Outside your hours');
     });
   });
 
