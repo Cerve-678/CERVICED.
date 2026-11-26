@@ -23,6 +23,8 @@ import {
 } from '../../constants/fullMembership';
 import { FullMemberConversion, type ConversionPhase } from './FullMemberConversion';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -46,6 +48,8 @@ interface BecomeFullMemberSheetProps {
 }
 
 export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const { enterFullMemberMode } = useAuth();
   const bottomInset = useSystemBottomInset();
@@ -118,7 +122,7 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
             <Text style={[styles.primaryText, { color: P.onAccent }]}>Become a full member</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={close} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={[styles.secondaryText, { color: P.sub }]}>Not now</Text>
+            <Text style={[styles.secondaryText, { color: P.sub }]}>{tr('common.notNow')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

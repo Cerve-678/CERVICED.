@@ -1,10 +1,12 @@
 import React from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
+import { useTranslation } from '../i18n';
 
 /** Uses bundled artwork and system UI so it can render before fonts or auth. */
 export default function AppLoadingScreen() {
+  const { t } = useTranslation();
   return (
-    <View style={styles.container} accessibilityLabel="Loading CERVICED" accessibilityRole="progressbar">
+    <View style={styles.container} accessibilityLabel={t('shared.appLoading.label')} accessibilityRole="progressbar">
       <Image source={require('../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
       <ActivityIndicator color="#34252E" size="small" />
     </View>

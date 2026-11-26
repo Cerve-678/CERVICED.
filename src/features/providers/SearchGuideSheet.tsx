@@ -8,6 +8,8 @@ import { BUSINESS_TYPE_META } from '../business-details/options';
 import { BUSINESS_TYPE_ICON } from './profilePresentation';
 import TabIcon from '../../components/TabIcon';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ── Availability colour/label — real status from get_providers_availability,
 // resolved asynchronously per-card (see providersWithAvailability in
@@ -22,8 +24,8 @@ import { readableSheet } from '../../constants/readableWidth';
 // 'available' || 'limited') already excludes both correctly; this only affects
 // the badge. Lives here so the guide shows exactly the badges the cards do. ──
 export const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: string; color: string }>> = {
-  available: { label: 'Slots Available', color: '#4CAF50' },
-  limited:   { label: 'Slots Limited',   color: '#FF9500' },
+  available: { get label() { return tr('discover.search.slotsAvailable'); }, color: '#4CAF50' },
+  limited:   { get label() { return tr('discover.search.slotsLimited'); },   color: '#FF9500' },
 };
 
 // get_providers_availability counts open start times over today + the next 6
@@ -75,6 +77,8 @@ interface Props {
  * guide can't describe a card differently from how it looks.
  */
 export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { height } = useWindowDimensions();
 
   return (
@@ -92,7 +96,7 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
           <View style={styles.header}>
             <Text style={[styles.title, { color: P.text }]}>WHAT THINGS MEAN</Text>
             <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={[styles.done, { color: P.accentText }]}>Done</Text>
+              <Text style={[styles.done, { color: P.accentText }]}>{tr('common.done')}</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -113,7 +117,7 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
               />
             ))}
 
-            <GuideSection title="Availability" P={P} />
+            <GuideSection title={tr('discover.search.pill.availability')} P={P} />
             {(['available', 'limited'] as const).map(status => {
               const info = AVAILABILITY_INFO[status]!;
               return (
@@ -159,7 +163,7 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
             <GuideRow
               P={P}
               mark={<Ionicons name="open-outline" size={18} color={P.text} />}
-              title="Books on their own page"
+              title={tr('discover.search.booksOwnPage')}
               body="This pro takes bookings on their own booking site, like Fresha. Booking opens their site, and you book and pay there, not in CERVICED."
             />
             <GuideRow
@@ -179,7 +183,7 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
             <GuideRow
               P={P}
               mark={<TabIcon name="sliders" size={16} color={P.text} />}
-              title="Filters"
+              title={tr('discover.home.filtersA11y')}
               body="The sliders icon at the top filters by price, distance, hair type and more. Its number is how many filters are on. Tap a chip to remove one."
             />
           </ScrollView>

@@ -2,6 +2,7 @@ import type { Ionicons } from '@expo/vector-icons';
 
 import { normalizeExternalBookingUrl } from './externalBookingLink';
 import type { ProviderProfileData } from './profileTypes';
+import { tr } from '../../i18n';
 
 export interface ProviderContactOption {
   key: string;
@@ -37,7 +38,7 @@ export function providerContactOptions(
     options.push({
       key: 'phone',
       icon: 'chatbubble-outline',
-      label: 'Text message',
+      label: tr('discover.profile.contactSheet.text'),
       detail: provider.phone,
       url: `sms:${provider.phone.replace(/\s/g, '')}`,
     });
@@ -55,7 +56,7 @@ export function providerContactOptions(
     options.push({
       key: 'email',
       icon: 'mail-outline',
-      label: 'Email',
+      label: tr('discover.profile.contactRow.email'),
       detail: provider.email,
       url: `mailto:${provider.email}`,
     });
@@ -76,7 +77,7 @@ export function providerContactOptions(
     options.push({
       key: 'website',
       icon: 'globe-outline',
-      label: 'Website',
+      label: tr('discover.profile.contactRow.website'),
       detail: provider.website.trim(),
       url: website,
     });

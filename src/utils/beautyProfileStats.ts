@@ -20,6 +20,7 @@
 //     price of a headline number a user can predict as they fill it in.
 
 import type { BeautyData, CategoryKey } from '../types/beautyProfile';
+import type { TranslationKey } from '../i18n/types';
 
 /** A single category's derived completeness. */
 export interface CategoryStats {
@@ -93,17 +94,22 @@ export const CATEGORY_ORDER: readonly CategoryKey[] = [
   'makeup', 'general', 'personalisation', 'consent',
 ] as const;
 
-export const CATEGORY_LABELS: Record<CategoryKey, string> = {
-  health:          'HEALTH & SAFETY',
-  skin:            'SKIN',
-  hair:            'HAIR',
-  nails:           'NAILS',
-  lashesBrows:     'LASHES & BROWS',
-  makeup:          'MAKEUP',
-  general:         'GENERAL',
-  personalisation: 'PERSONALISATION',
-  consent:         'CONSENT',
+const CATEGORY_LABEL_KEYS: Record<CategoryKey, TranslationKey> = {
+  health:          'beautyProfile.health.title',
+  skin:            'clientAccount.category.skin',
+  hair:            'clientAccount.category.hair',
+  nails:           'clientAccount.category.nails',
+  lashesBrows:     'clientAccount.category.lashesBrows',
+  makeup:          'clientAccount.category.makeup',
+  general:         'clientAccount.category.general',
+  personalisation: 'clientAccount.category.personalisation',
+  consent:         'clientAccount.category.consent',
 };
+
+/** A category's tile/heading label, upper-cased, in the current language. */
+export function categoryLabel(key: CategoryKey, t: (key: TranslationKey) => string): string {
+  return t(CATEGORY_LABEL_KEYS[key]).toUpperCase();
+}
 
 function computeCategory(key: CategoryKey, data: BeautyData): CategoryStats {
   const fields = CATEGORY_FIELDS[key];

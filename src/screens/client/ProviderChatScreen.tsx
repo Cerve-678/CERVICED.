@@ -45,6 +45,7 @@ import { toUserMessageAllowingDbGuard } from "../../utils/userFacingError";
 import { useAppDialog } from "../../components/AppDialog";
 import { useChatSafety } from "../../features/safety/useChatSafety";
 import { readableSheet } from '../../constants/readableWidth';
+import { useTranslation, tr } from "../../i18n";
 
 type Props = NativeStackScreenProps<HomeStackParamList, "ProviderChat">;
 
@@ -65,6 +66,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   // Opened from the Profile tab there is no tab bar to clear, only the home indicator.
   const tabBarHidden = useStackHidesTabBar();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -168,8 +170,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
         const raw = err instanceof Error ? err.message : String(err);
         setConversationError(
           raw.includes('self_conversation_not_allowed')
-            ? "This is your own provider profile, so there's no one on the other end of this thread."
-            : "We couldn't open this conversation. Please try again in a moment.",
+            ? tr('clientAccount.chat.selfConversation')
+            : tr('clientAccount.chat.openFailed'),
         );
       }
       setLoading(false);
@@ -227,13 +229,13 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     navigation.setOptions({
       title: providerName,
       headerShown: true,
-      headerBackTitle: "Back",
+      headerBackTitle: t('common.back'),
       headerRight: () => (
         <TouchableOpacity
           onPress={openChatMenu}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel={`Report or block ${providerName}`}
+          accessibilityLabel={tr('clientAccount.chat.reportBlockA11y', { name: providerName })}
         >
           <Ionicons name="ellipsis-horizontal" size={20} color={OP.text} />
         </TouchableOpacity>
@@ -284,7 +286,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       logger.error('[ProviderChat] send message failed:', err);
       // Message never reached the provider — put the text back so it isn't lost
       setInputText(text);
-      Alert.alert("Message not sent", toUserMessageAllowingDbGuard(err, "Check your connection and try again.", "ProviderChatScreen.sendMessage"));
+      Alert.alert(t('clientAccount.chat.messageNotSent'), toUserMessageAllowingDbGuard(err, "Check your connection and try again.", "ProviderChatScreen.sendMessage"));
     }
     setSending(false);
   }, [inputText, conversationId, userId, sending, postMessage]);
@@ -298,83 +300,83 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   const enquiryPrompts = [
     {
-      label: "Service question",
-      text: `Hi ${providerName}, I have a question about one of your services. Could you help?`,
+      label: t('clientAccount.chat.prompt.serviceQuestion'),
+      text: t('clientAccount.chat.promptText.serviceQuestion', { name: providerName }),
     },
     {
-      label: "Price & packages",
-      text: `Hi ${providerName}, could you tell me about your prices and any packages you offer?`,
+      label: t('clientAccount.chat.prompt.pricePackages'),
+      text: t('clientAccount.chat.promptText.pricePackages', { name: providerName }),
     },
     {
-      label: "Availability",
-      text: `Hi ${providerName}, what availability do you have coming up?`,
+      label: t('clientAccount.chat.prompt.availability'),
+      text: t('clientAccount.chat.promptText.availability', { name: providerName }),
     },
     {
-      label: "Before I book",
-      text: `Hi ${providerName}, is there anything I should know or do before booking?`,
+      label: t('clientAccount.chat.prompt.beforeBook'),
+      text: t('clientAccount.chat.promptText.beforeBook', { name: providerName }),
     },
     {
-      label: "Patch test",
-      text: `Hi ${providerName}, do I need a patch test or consultation before booking?`,
+      label: t('clientAccount.chat.prompt.patchTest'),
+      text: t('clientAccount.chat.promptText.patchTest', { name: providerName }),
     },
     {
-      label: isMobileProvider ? "Travel area" : "Location & access",
+      label: isMobileProvider ? t('clientAccount.chat.prompt.travelArea') : t('clientAccount.chat.prompt.locationAccess'),
       text: isMobileProvider
-        ? `Hi ${providerName}, do you cover my area and are there any travel fees?`
-        : `Hi ${providerName}, could you let me know about your location, parking, and access?`,
+        ? t('clientAccount.chat.promptText.travelArea', { name: providerName })
+        : t('clientAccount.chat.promptText.locationAccess', { name: providerName }),
     },
     {
-      label: "Suitable for me?",
-      text: `Hi ${providerName}, could you advise whether this service would be suitable for me?`,
+      label: t('clientAccount.chat.prompt.suitable'),
+      text: t('clientAccount.chat.promptText.suitable', { name: providerName }),
     },
     {
-      label: "General question",
-      text: `Hi ${providerName}, I have a quick question before I book.`,
+      label: t('clientAccount.chat.prompt.general'),
+      text: t('clientAccount.chat.promptText.general', { name: providerName }),
     },
   ];
 
   const conversationPrompts = [
     {
-      label: "Hello",
-      text: `Hi ${providerName}, hope you're well!`,
+      label: t('clientAccount.chat.prompt.hello'),
+      text: t('clientAccount.chat.promptText.hello', { name: providerName }),
     },
     {
-      label: "Booking details",
-      text: `Hi ${providerName}, could you confirm the details of my appointment?`,
+      label: t('clientAccount.chat.prompt.bookingDetails'),
+      text: t('clientAccount.chat.promptText.bookingDetails', { name: providerName }),
     },
     {
-      label: "Reschedule",
-      text: `Hi ${providerName}, would it be possible to reschedule my appointment?`,
+      label: t('clientAccount.chat.prompt.reschedule'),
+      text: t('clientAccount.chat.promptText.reschedule', { name: providerName }),
     },
     {
-      label: "Running late",
-      text: `Hi ${providerName}, I'm running a little late — sorry about that!`,
+      label: t('clientAccount.chat.prompt.runningLate'),
+      text: t('clientAccount.chat.promptText.runningLate', { name: providerName }),
     },
     {
-      label: "I've arrived",
-      text: `Hi ${providerName}, I've arrived. Please let me know when you're ready for me.`,
+      label: t('clientAccount.chat.prompt.arrived'),
+      text: t('clientAccount.chat.promptText.arrived', { name: providerName }),
     },
     {
-      label: isMobileProvider ? "Address & access" : "Location & access",
+      label: isMobileProvider ? t('clientAccount.chat.prompt.addressAccess') : t('clientAccount.chat.prompt.locationAccess'),
       text: isMobileProvider
-        ? `Hi ${providerName}, is there anything you need from me about my address or access?`
-        : `Hi ${providerName}, could you confirm the location, parking, or access details for my appointment?`,
+        ? t('clientAccount.chat.promptText.addressAccess', { name: providerName })
+        : t('clientAccount.chat.promptText.locationAccessBooking', { name: providerName }),
     },
     {
-      label: "Payment question",
-      text: `Hi ${providerName}, I have a quick question about payment for my appointment.`,
+      label: t('clientAccount.chat.prompt.payment'),
+      text: t('clientAccount.chat.promptText.payment', { name: providerName }),
     },
     {
-      label: "Cancel booking",
-      text: `Hi ${providerName}, I need to cancel my appointment. Could you let me know the next steps?`,
+      label: t('clientAccount.chat.prompt.cancelBooking'),
+      text: t('clientAccount.chat.promptText.cancelBooking', { name: providerName }),
     },
     {
-      label: "Aftercare",
-      text: `Hi ${providerName}, could you send me the aftercare advice when you have a moment?`,
+      label: t('clientAccount.chat.prompt.aftercare'),
+      text: t('clientAccount.chat.promptText.aftercare', { name: providerName }),
     },
     {
-      label: "Thank you",
-      text: `Thank you so much, ${providerName}!`,
+      label: t('clientAccount.chat.prompt.thankYou'),
+      text: t('clientAccount.chat.promptText.thankYou', { name: providerName }),
     },
   ];
 
@@ -429,8 +431,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       insertProviderNotification({
         provider_id: providerDbId,
         type: "new_message",
-        title: "Address received",
-        message: `A client sent their address for their ${selectedBooking.service_name_snapshot} appointment.`,
+        title: tr('clientAccount.chat.addressReceived'),
+        message: tr('clientAccount.chat.addressReceivedBody', { service: selectedBooking.service_name_snapshot }),
         priority: "medium",
         is_actionable: false,
         booking_id: selectedBooking.id,
@@ -438,7 +440,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       setShowAddressModal(false);
     } catch (err) {
       logger.error('[ProviderChat] send address failed:', err);
-      Alert.alert('Address not sent', "Check your connection and try again.");
+      Alert.alert(t('clientAccount.chat.addressNotSent'), t('clientAccount.chat.checkConnection'));
     }
     setSendingAddress(false);
   }, [addressText, selectedBooking, sendingAddress, postMessage, providerDbId]);
@@ -466,7 +468,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               activeOpacity={0.8}
               disabled={isUser}
               onLongPress={() => confirmReportMessage(item.id)}
-              accessibilityHint={isUser ? undefined : "Press and hold to report this message"}
+              accessibilityHint={isUser ? undefined : tr('clientAccount.chat.reportHint')}
               style={[
                 styles.bubble,
                 isUser
@@ -548,14 +550,14 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               ]}
             >
               <Text style={[styles.blockedText, { color: OP.sub }]}>
-                You blocked {providerName}. Neither of you can send messages here.
+                {tr('clientAccount.chat.blocked', { name: providerName })}
               </Text>
               <TouchableOpacity
                 onPress={unblock}
                 activeOpacity={0.75}
                 style={[styles.blockedBtn, { borderColor: OP.border }]}
               >
-                <Text style={[styles.blockedBtnText, { color: OP.accentText }]}>Unblock</Text>
+                <Text style={[styles.blockedBtnText, { color: OP.accentText }]}>{tr('clientAccount.chat.unblock')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -571,7 +573,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             >
               <Ionicons name="location-outline" size={14} color={OP.accentText} />
               <Text style={[styles.addressBtnText, { color: OP.accentText }]}>
-                Send my address
+                {t('clientAccount.chat.sendMyAddress')}
               </Text>
             </TouchableOpacity>
           )}
@@ -632,7 +634,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               ]}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="Message..."
+              placeholder={t('clientAccount.chat.messagePlaceholder')}
               placeholderTextColor={OP.sub}
               multiline
               maxLength={1000}
@@ -669,7 +671,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             <KeyboardDismissView style={styles.modalOverlay}>
               <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
                 <Text style={[styles.modalTitle, { color: OP.text }]}>
-                  Send your address
+                  {t('clientAccount.chat.sendYourAddress')}
                 </Text>
 
                 {loadingAddressBookings ? (
@@ -679,7 +681,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
                   />
                 ) : addressBookings.length === 0 ? (
                   <Text style={[styles.modalEmpty, { color: OP.sub }]}>
-                    No upcoming bookings with {providerName} yet.
+                    {tr('clientAccount.chat.noUpcoming', { name: providerName })}
                   </Text>
                 ) : (
                   <>
@@ -735,7 +737,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
                       ]}
                       value={addressText}
                       onChangeText={setAddressText}
-                      placeholder="Enter the address for this appointment"
+                      placeholder={t('clientAccount.chat.addressPlaceholder')}
                       placeholderTextColor={OP.sub}
                       multiline
                       editable={!!selectedBooking}
@@ -748,7 +750,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
                         activeOpacity={0.75}
                       >
                         <Text style={[styles.modalBtnText, { color: OP.text }]}>
-                          Cancel
+                          {t('common.cancel')}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -778,7 +780,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
                           <Text
                             style={[styles.modalBtnText, { color: OP.onAccent }]}
                           >
-                            Send
+                            {t('common.send')}
                           </Text>
                         )}
                       </TouchableOpacity>

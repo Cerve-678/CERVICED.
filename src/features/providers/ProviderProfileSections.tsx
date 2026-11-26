@@ -34,6 +34,7 @@ import { plateMarkEdges } from "./heroes/EmbossedHero";
 import { SectionDivider } from "./pageParts";
 import { normalizeExternalBookingUrl } from "./externalBookingLink";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
+import { tr, useTranslation } from '../../i18n';
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 /** The feature grid (Ledger) holds five: one big, four small. */
@@ -64,10 +65,12 @@ export const ProviderSpecialitiesSection = React.memo(function ProviderSpecialit
   textColor: string;
   accent: string;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   if (specialities.length === 0) return null;
   return (
     <View style={styles.plainSection}>
-      <Text style={[styles.plainTitle, { color: textColor }]}>Specialities</Text>
+      <Text style={[styles.plainTitle, { color: textColor }]}>{tr('discover.profile.specialities')}</Text>
       <View style={styles.chipRow}>
         {specialities.map(speciality => (
           <View
@@ -93,16 +96,18 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
   palette: SectionPalette;
   onSeeAll: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Latte: the section's band of the pour, and the ink that reads on it.
   const palette = usePourPalette(rawPalette, "reviews");
   const ink = sectionInk(palette);
   return (
     <PageSection section="reviews" palette={palette}>
       {loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: ink.sub }]}>Loading reviews…</Text>
+        <Text style={[styles.bodyText, { color: ink.sub }]}>{tr('discover.profile.loadingReviews')}</Text>
       ) : null}
       {!loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: ink.sub }]}>No reviews yet.</Text>
+        <Text style={[styles.bodyText, { color: ink.sub }]}>{tr('discover.profile.noReviews')}</Text>
       ) : null}
       {reviews.slice(0, 5).map(review => (
         <View key={review.id} style={[styles.review, { borderBottomColor: ink.separator }]}>
@@ -126,7 +131,7 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
         </View>
       ))}
       <TouchableOpacity style={styles.textButton} onPress={onSeeAll} activeOpacity={0.6}>
-        <Text style={[styles.textButtonLabel, { color: ink.text }]}>See All Reviews</Text>
+        <Text style={[styles.textButtonLabel, { color: ink.text }]}>{tr('discover.profile.seeAllReviews')}</Text>
       </TouchableOpacity>
     </PageSection>
   );
@@ -141,12 +146,14 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
   loading?: boolean;
   palette: SectionPalette;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Latte: the section's band of the pour, and the ink that reads on it.
   const palette = usePourPalette(rawPalette, "hours");
   if (loading) {
     return (
       <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }, palette.squareCards && styles.square]}>
-        <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
+        <Text style={[styles.cardTitle, { color: palette.text }]}>{tr('discover.profile.openingHours')}</Text>
         <View style={[styles.loadingLine, { backgroundColor: palette.separator }]} />
         <View style={[styles.loadingLine, styles.loadingLineShort, { backgroundColor: palette.separator }]} />
       </View>
@@ -170,7 +177,7 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
             {day.label}
           </Text>
           <Text style={[styles.hoursValue, { color: day.isOpen ? ink.text : ink.sub }]}>
-            {day.isOpen ? day.hours : "Closed"}
+            {day.isOpen ? day.hours : tr('discover.profile.closed')}
           </Text>
         </View>
       ))}
@@ -201,6 +208,8 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onOpenPublicLink: (url: string) => void;
   onGetInTouch: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Latte: the section's band of the pour, and the ink that reads on it.
   const palette = usePourPalette(rawPalette, "contact");
   const ink = sectionInk(palette);
@@ -209,13 +218,13 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   const websiteUrl = normalizeExternalBookingUrl(contact.website);
   const rows = ([
     contact.location
-      ? { label: "Location", value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
+      ? { label: tr('discover.profile.contactRow.location'), value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
       : null,
-    contact.phone ? { label: "Phone", value: "Message ›", url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
+    contact.phone ? { label: tr('discover.profile.contactRow.phone'), value: tr('discover.profile.contactAction.message'), url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
     contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
-    contact.email ? { label: "Email", value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
+    contact.email ? { label: tr('discover.profile.contactRow.email'), value: tr('discover.profile.contactAction.send'), url: `mailto:${contact.email}`, publicLink: false } : null,
     contact.instagram ? { label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
-    websiteUrl ? { label: "Website", value: "Visit ›", url: websiteUrl, publicLink: true } : null,
+    websiteUrl ? { label: tr('discover.profile.contactRow.website'), value: tr('discover.profile.contactAction.visit'), url: websiteUrl, publicLink: true } : null,
   ] as (ContactRow | null)[]).filter((row): row is ContactRow => row != null);
 
   return (
@@ -224,7 +233,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
         const content = (
           <>
             <Text style={[styles.hoursLabel, { color: ink.sub }]}>{row.label}</Text>
-            <Text style={[styles.contactValue, { color: ink.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
+            <Text style={[styles.contactValue, { color: ink.text }]} numberOfLines={row.label === tr('discover.profile.contactRow.location') ? 2 : 1}>{row.value}</Text>
           </>
         );
         return row.url ? (
@@ -247,7 +256,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
         onPress={onGetInTouch}
         activeOpacity={0.8}
       >
-        <Text style={styles.contactButtonText}>Get In Touch</Text>
+        <Text style={styles.contactButtonText}>{tr('discover.profile.getInTouch')}</Text>
       </TouchableOpacity>
     </PageSection>
   );
@@ -271,6 +280,8 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   palette: SectionPalette;
   onOpenImage: (images: { uri: string }[], index: number) => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Latte: the section's band of the pour, and the ink that reads on it.
   const palette = usePourPalette(rawPalette, "info");
   const venueImages = useMemo(
@@ -295,25 +306,25 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
       ))}
       {qualifications ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: ink.sub }]}>Qualifications</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>{tr('discover.profile.qualifications')}</Text>
           <Text style={[styles.infoText, { color: ink.text }]}>{qualifications}</Text>
         </View>
       ) : null}
       {goodToKnow ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: ink.sub }]}>Good to know</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>{tr('discover.profile.goodToKnow')}</Text>
           <Text style={[styles.infoText, { color: ink.text }]}>{goodToKnow}</Text>
         </View>
       ) : null}
       {howToGetThere ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: ink.sub }]}>How to get there</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>{tr('discover.profile.howToGetThere')}</Text>
           <Text style={[styles.infoText, { color: ink.text }]}>{howToGetThere}</Text>
         </View>
       ) : null}
       {venueItems.length > 0 ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: ink.sub }]}>Venue</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>{tr('discover.profile.venue')}</Text>
           <FlatList
             data={venueItems}
             horizontal
@@ -424,6 +435,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   onOpenImage: (images: { uri: string }[], index: number) => void;
   interactiveImages?: boolean;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Latte: the section's band of the pour, and the ink that reads on it.
   const palette = usePourPalette(rawPalette, "portfolio");
   const [showAll, setShowAll] = useState(false);
@@ -454,7 +467,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   if (loading && items.length === 0) {
     return (
       <View style={styles.portfolioSection}>
-        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>{tr('discover.profile.portfolio')}</Text>
         <View style={styles.columns}>
           {[0, 1].map(column => (
             <View key={column} style={[styles.loadingPortfolioTile, { backgroundColor: palette.separator }]} />
@@ -467,11 +480,11 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   if (items.length === 0 && loadError) {
     return (
       <View style={styles.portfolioSection}>
-        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
-        <Text style={[styles.portfolioLoadError, { color: palette.sub }]}>Work photos could not be loaded.</Text>
+        <Text style={[styles.plainTitle, { color: palette.text }]}>{tr('discover.profile.portfolio')}</Text>
+        <Text style={[styles.portfolioLoadError, { color: palette.sub }]}>{tr('discover.profile.portfolioFailed')}</Text>
         {onRetry ? (
-          <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry loading portfolio">
-            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>Try again</Text>
+          <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel={tr('discover.profile.portfolioRetryA11y')}>
+            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>{tr('common.tryAgain')}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -535,11 +548,11 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
             <PageSectionHeading section="portfolio" palette={palette} />
           </View>
         ) : (
-          <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+          <Text style={[styles.plainTitle, { color: palette.text }]}>{tr('discover.profile.portfolio')}</Text>
         )}
         {!swipe && items.length > (portfolioWall ? PORTFOLIO_WALL_LIMIT : feature ? FEATURE_PHOTO_LIMIT : capsules ? CAPSULE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
-            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
+            <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>{tr('common.seeAll')} {items.length}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -622,7 +635,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
               </TouchableOpacity>
             )}
           />
-          {items.length > 2 ? <Text style={[styles.swipeHint, { color: palette.sub }]}>Swipe for more</Text> : null}
+          {items.length > 2 ? <Text style={[styles.swipeHint, { color: palette.sub }]}>{tr('discover.profile.swipeForMore')}</Text> : null}
         </>
       ) : feature ? (
         <View style={styles.featureGrid}>
@@ -744,13 +757,13 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         <SafeAreaView style={[styles.modal, { backgroundColor: palette.background }]}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={[styles.modalTitle, { color: palette.text }]}>Portfolio</Text>
+              <Text style={[styles.modalTitle, { color: palette.text }]}>{tr('discover.profile.portfolio')}</Text>
               <Text style={[styles.modalSubtitle, { color: palette.sub }]}>{items.length} photos</Text>
             </View>
             <TouchableOpacity
               style={[styles.closeButton, { backgroundColor: palette.cardBackground }]}
               onPress={() => setShowAll(false)}
-              accessibilityLabel="Close portfolio"
+              accessibilityLabel={tr('discover.profile.closePortfolioA11y')}
             >
               <Ionicons name="close" size={22} color={palette.text} />
             </TouchableOpacity>

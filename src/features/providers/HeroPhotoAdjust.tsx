@@ -33,6 +33,8 @@ import {
   panHeroPhotoFrame,
 } from '../../utils/heroPhotoFrame';
 import { FramedPhoto } from './HeroPhoto';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const THUMB_HEIGHT = 64;
 const ZOOM_STEP = 0.25;
@@ -136,6 +138,8 @@ function HeroPhotoAdjustSheet({
   onCancel: () => void;
   onDone: (frame: HeroPhotoFrame | null) => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A1C';
   const [frame, setFrame] = useState<HeroPhotoFrame>(DEFAULT_HERO_PHOTO_FRAME);
@@ -231,7 +235,7 @@ function HeroPhotoAdjustSheet({
       <View style={[sheet.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
         <View style={sheet.topBar}>
           <TouchableOpacity onPress={onCancel} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button">
-            <Text style={sheet.cancel}>Cancel</Text>
+            <Text style={sheet.cancel}>{tr('common.cancel')}</Text>
           </TouchableOpacity>
           {progressLabel ? <Text style={sheet.progress}>{progressLabel}</Text> : null}
           <TouchableOpacity
@@ -278,7 +282,7 @@ function HeroPhotoAdjustSheet({
             disabled={isDefaultHeroPhotoFrame(frame)}
             accessibilityRole="button"
           >
-            <Text style={[sheet.resetText, isDefaultHeroPhotoFrame(frame) && sheet.resetOff]}>Reset</Text>
+            <Text style={[sheet.resetText, isDefaultHeroPhotoFrame(frame) && sheet.resetOff]}>{tr('discover.search.reset')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={sheet.control}
