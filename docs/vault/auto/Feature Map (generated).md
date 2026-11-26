@@ -48,7 +48,7 @@ Curated: [[Availability & Slots]] · **299 files**
 - `src/screens/client/SearchScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(98)_
-- `src/services/becca/capabilities/client.ts` _(92)_
+- `src/services/becca/capabilities/client.ts` _(93)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/contexts/BookingContext.tsx` _(76)_
 - `src/services/database/providers.ts` _(67)_
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **261 files**
 - … +231 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **125 files**
+Curated: [[Provider Onboarding & Go-Live]] · **127 files**
 - `src/features/providers/goLiveStatus.ts` _(89)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(72)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **125 files**
 - `src/services/database/bookings.ts` _(6)_
 - `src/services/database/notifications.ts` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
-- … +95 more
+- … +97 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **129 files**
