@@ -52,6 +52,7 @@ export const PROVIDER_PUSH_NAV: Record<string, string> = {
   automations: "Automations",
   payments: "Payments",
   policies: "Policies",
+  branding: "Branding",
 };
 
 export const PROVIDER_TAB_NAV: Record<string, { tab: string; screen: string }> = {
@@ -73,6 +74,8 @@ export const LINK_ONLY_PROVIDER_NAV = new Set([
   "messages",
   "conversation",
   "Notifications",
+  // Link-only pros have Branding too (their Home links to it).
+  "branding",
 ]);
 
 /** True only for a navigation action that BeccaScreen can actually fulfil. */

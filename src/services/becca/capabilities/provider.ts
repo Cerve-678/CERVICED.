@@ -43,6 +43,7 @@ import {
 import type { Capability, CapabilityResult } from "../types";
 import { navChip, askChip, dayLabel, money, oneOf } from "./shared";
 import { providerDestination } from "../providerNavigation";
+import { providerWebPageUrl } from "../../../utils/providerProfileLink";
 
 // Link-only providers (booking_mode 'external') take bookings on their own
 // booking site, so they only get capabilities marked `fitsLinkOnly`. Those
@@ -60,7 +61,7 @@ const appNavigation: Capability = {
   hat: "provider",
   describe: "Where do I set or change a business setting in the app",
   thinking: ["Finding the right setting…"],
-  phrases: ["where do i set", "where can i change", "how do i change", "how can i set", "take me to", "show me where", "payouts", "payout", "get paid", "bank details"],
+  phrases: ["where do i set", "where can i change", "how do i change", "how can i set", "take me to", "show me where", "payouts", "payout", "get paid", "bank details", "branding", "page style", "my logo"],
   fitsLinkOnly: true,
   async run({ rawMessage, linkOnly }): Promise<CapabilityResult> {
     const destination = providerDestination(rawMessage);
@@ -968,6 +969,46 @@ const myReach: Capability = {
   },
 };
 
+/**
+ * "share my profile link", "my qr code". The link is the one the QR sheet on
+ * My Profile prints and Share sends (providerWebPageUrl), so Becca can just
+ * give it rather than send them looking.
+ */
+const shareLink: Capability = {
+  id: "pv.share_link",
+  hat: "provider",
+  describe: "What's my page link to share",
+  thinking: ["Finding your page link…"],
+  phrases: [
+    "share my profile", "share my page", "share my link", "my profile link", "my page link",
+    "link to my page", "link to my profile", "my link", "my qr", "qr code", "my website link",
+  ],
+  // Link-only pros too: the website page supports them (Book opens their own
+  // booking site), so the link and its QR work. Their app has no My Profile,
+  // so for them Becca's reply is the place to get it.
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
+    const profile = await getMyProviderProfile();
+    if (!profile?.slug) {
+      return {
+        text: linkOnly
+          ? "I couldn't load your page link just now. Try again in a moment."
+          : "I couldn't load your page link just now. It's on My Profile — tap the QR button at the top.",
+      };
+    }
+    const link = providerWebPageUrl(profile.slug).replace(/^https:\/\/(www\.)?/, "");
+    return {
+      text:
+        `Your page link is **${link}**. ` +
+        (profile.has_gone_live
+          ? "It opens in any phone's browser, with or without the app."
+          : "It starts working once your profile is live.") +
+        (linkOnly ? "" : " To copy it or show your QR code, tap the QR button at the top of My Profile."),
+      suggestions: [askChip("branding", "Change how my page looks", "Change my branding")],
+    };
+  },
+};
+
 const myAddress: Capability = {
   id: "pv.address",
   hat: "provider",
@@ -1451,6 +1492,7 @@ export const PROVIDER_CAPABILITIES: Capability[] = [
   myReviews,
   myCapacity,
   myReach,
+  shareLink,
   myAddress,
   analytics,
   automations,
