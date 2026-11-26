@@ -70,7 +70,7 @@ serve(async (req) => {
       .select(
         'id, customer_email, provider_name_snapshot, service_name_snapshot, ' +
         'client_address, booking_date, booking_time, provider_id, ' +
-        'booking_ref, base_price, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request, declined_at',
+        'booking_ref, base_price, promo_discount, service_charge, deposit_amount, amount_paid, payment_type, payment_status, status, is_emergency_request, declined_at',
       )
       .eq('id', bookingId)
       .maybeSingle();
@@ -163,6 +163,7 @@ serve(async (req) => {
       location,
       reference: formatBookingRef(booking),
       basePrice: Number(booking.base_price) || 0,
+      promoDiscount: Number(booking.promo_discount) || 0,
       addOns: (addOns ?? []).map((a) => ({ name: a.name_snapshot ?? 'Add-on', price: Number(a.price_snapshot) || 0 })),
       serviceCharge: Number(booking.service_charge) || 0,
       depositAmount: Number(booking.deposit_amount) || 0,

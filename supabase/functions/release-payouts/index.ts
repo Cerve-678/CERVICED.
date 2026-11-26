@@ -1,7 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
-import { lapseFeePayRequests, retryDueFees } from '../_shared/feePayRequest.ts';
+import { lapseFeePayRequests, retryDueFees, settleStuckFees } from '../_shared/feePayRequest.ts';
+import { isPayoutOwed, PROVIDER_NO_SHOW_REFUND_REASON } from '../_shared/payableBooking.ts';
 import {
   classifyTransferFailure, describeTransferFailure, nextPayoutRetryAt, PAYOUT_MAX_ATTEMPTS,
 } from '../_shared/payoutRetry.ts';
@@ -48,10 +49,6 @@ const admin = createClient(
 // runs.
 const BATCH_LIMIT = 50;
 
-// Booking states in which the provider is genuinely owed their payout. Anything
-// else (cancelled, declined, rejected, still-pending-and-stale, on_hold) means
-// no money should move.
-const PAYABLE_BOOKING_STATUSES = ['confirmed', 'completed'];
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -93,6 +90,20 @@ Deno.serve(async (req: Request) => {
     if (requestError) throw requestError;
     const awaitingRefundDecision = new Set((openRequests ?? []).map(r => r.booking_id));
 
+    // A booking the client reported as a provider no-show is paid only once
+    // Cerviced has declined that refund request (isPayoutOwed). The latest
+    // such request per booking, for the whole batch in one query.
+    const { data: noShowRequests, error: noShowError } = dueBookingIds.length
+      ? await admin.from('refund_requests').select('booking_id, status, created_at')
+        .in('booking_id', dueBookingIds).eq('reason', PROVIDER_NO_SHOW_REFUND_REASON)
+        .order('created_at', { ascending: false })
+      : { data: [], error: null };
+    if (noShowError) throw noShowError;
+    const latestNoShowRequest = new Map<string, string>();
+    for (const r of noShowRequests ?? []) {
+      if (!latestNoShowRequest.has(r.booking_id)) latestNoShowRequest.set(r.booking_id, r.status);
+    }
+
     for (const row of due ?? []) {
       if (awaitingRefundDecision.has(row.booking_id)) { skipped++; continue; }
 
@@ -107,7 +118,7 @@ Deno.serve(async (req: Request) => {
         skipped++;
         continue;
       }
-      if (!booking || !PAYABLE_BOOKING_STATUSES.includes(booking.status)) {
+      if (!booking || !isPayoutOwed(booking.status, latestNoShowRequest.get(row.booking_id))) {
         // The booking was cancelled/declined (or never confirmed) — cancel the
         // held payout, nothing was ever transferred so there's nothing to claw
         // back. (Refunds of the client's money are the refund function's job.)
@@ -310,10 +321,13 @@ Deno.serve(async (req: Request) => {
     // Requests to pay a fee the saved card couldn't, past their 7 days.
     const lapsedFeeRequests = await lapseFeePayRequests(admin, stripe, BATCH_LIMIT)
       .catch((err) => { console.error(`[release-payouts] fee request lapse failed: ${String(err)}`); return -1; });
+    // Fee charges left at 'processing' when booking-fee stopped part-way.
+    const stuckFees = await settleStuckFees(admin, stripe, BATCH_LIMIT)
+      .catch((err) => { console.error(`[release-payouts] stuck fee settle failed: ${String(err)}`); return null; });
 
-    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} tips=${JSON.stringify(tips)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)}`);
+    console.log(`[release-payouts] done: transferred=${transferred} cancelled=${cancelled} failed=${failed} skipped=${skipped} considered=${(due ?? []).length} fees=${JSON.stringify(fees)} tips=${JSON.stringify(tips)} lapsedFeeRequests=${lapsedFeeRequests} feeRetries=${JSON.stringify(feeRetries)} stuckFees=${JSON.stringify(stuckFees)}`);
     return new Response(
-      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, tips, lapsedFeeRequests, feeRetries }),
+      JSON.stringify({ transferred, cancelled, failed, skipped, considered: (due ?? []).length, fees, tips, lapsedFeeRequests, feeRetries, stuckFees }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (err) {

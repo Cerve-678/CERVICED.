@@ -81,10 +81,10 @@ Curated: [[Payments]] · **256 files**
 - `src/components/ProviderStripePayments.tsx` _(126)_
 - `src/components/BookingSheet.tsx` _(118)_
 - `src/i18n/catalogs/en/providerBusiness.ts` _(116)_
+- `src/screens/client/BookingDetailScreen.tsx` _(110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
-- `src/screens/client/BookingDetailScreen.tsx` _(108)_
+- `src/features/bookings/receipt.ts` _(102)_
 - `src/components/MultiBookingSheet.tsx` _(99)_
-- `src/features/bookings/receipt.ts` _(98)_
 - `src/web/WebPaymentStep.tsx` _(97)_
 - `src/services/database/checkout.ts` _(91)_
 - `src/features/bookings/paymentPresentation.ts` _(85)_
@@ -95,7 +95,7 @@ Curated: [[Payments]] · **256 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(74)_
 - `src/services/bookingService.ts` _(73)_
 - `src/services/database/edgeFunctions.ts` _(61)_
-- `src/types/database.ts` _(59)_
+- `src/types/database.ts` _(60)_
 - `src/i18n/catalogs/en/cart.ts` _(56)_
 - `src/features/providers/goLiveStatus.ts` _(53)_
 - `src/utils/depositPolicy.ts` _(51)_
@@ -114,7 +114,7 @@ Curated: [[Booking Flow]] · **492 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(585)_
 - `src/screens/client/CartScreen.tsx` _(576)_
 - `src/contexts/BookingContext.tsx` _(541)_
-- `src/screens/client/BookingDetailScreen.tsx` _(510)_
+- `src/screens/client/BookingDetailScreen.tsx` _(525)_
 - `src/screens/client/BookingsScreen.tsx` _(429)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(251)_
@@ -136,7 +136,7 @@ Curated: [[Booking Flow]] · **492 files**
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/services/database/infoPacks.ts` _(110)_
-- `src/i18n/catalogs/en/clientBooking.ts` _(108)_
+- `src/i18n/catalogs/en/clientBooking.ts` _(109)_
 - `src/types/booking.ts` _(108)_
 - `src/web/WebPaymentStep.tsx` _(107)_
 - … +462 more
@@ -247,7 +247,7 @@ Curated: [[Booking Flow]] · **129 files**
 Curated: [[Booking Flow]] · **307 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(368)_
 - `src/contexts/BookingContext.tsx` _(345)_
-- `src/screens/client/BookingDetailScreen.tsx` _(251)_
+- `src/screens/client/BookingDetailScreen.tsx` _(253)_
 - `src/screens/client/RescheduleScreen.tsx` _(213)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
@@ -346,7 +346,7 @@ Curated: [[Services]] · **96 files**
 - … +66 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **137 files**
+Curated: [[Payments]] · **138 files**
 - `src/screens/client/CartScreen.tsx` _(571)_
 - `src/i18n/catalogs/en/cart.ts` _(283)_
 - `src/i18n/catalogs/pl/cart.ts` _(249)_
@@ -371,10 +371,10 @@ Curated: [[Payments]] · **137 files**
 - `src/features/cart/checkoutOutcome.ts` _(15)_
 - `src/services/database/checkout.ts` _(15)_
 - `src/components/MultiBookingSheet.tsx` _(14)_
+- `src/screens/client/BookingDetailScreen.tsx` _(14)_
 - `src/screens/client/BookingsScreen.tsx` _(14)_
 - `src/features/cart/checkoutIntent.ts` _(13)_
-- `src/screens/client/BookingDetailScreen.tsx` _(13)_
 - `src/web/ProviderWebPage.tsx` _(13)_
 - `src/features/cart/RequestHoldChecks.tsx` _(10)_
 - `src/features/cart/requestHolds.ts` _(9)_
-- … +107 more
+- … +108 more

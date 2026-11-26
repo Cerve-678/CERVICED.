@@ -795,6 +795,8 @@ export interface DbBooking {
   no_show_disputed_at?: string | null;
   refunded_amount?: number | null;
   policy_retained_amount?: number | null;
+  /** £ a promo code took off; base_price is stored after it (20261113100000). */
+  promo_discount?: number | null;
   /** Start of the appointment the client moved away from while already
    *  inside its cancellation window (migration 20261101130000). */
   late_reschedule_from?: string | null;
