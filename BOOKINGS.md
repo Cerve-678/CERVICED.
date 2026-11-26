@@ -189,49 +189,27 @@ which re-validates the overlap itself (SELECT-then-INSERT, backstopped by the
 DB constraint in §5) before inserting.
 
 ### Multi-service cart checkout
-`CartScreen.tsx`'s `handleCheckout` → review/summary modals → payment sheet →
-`BookingContext.createBookingsFromCart()` ([BookingContext.tsx:1093](src/contexts/BookingContext.tsx#L1093)),
-which loops the cart **sequentially**, calling `createBooking()` once per
-item (not a single transaction — see below for why that matters).
+`CartScreen.tsx`'s `handleCheckout` → review and summary sheets → **Confirm &
+Pay** → `prepare_checkout` (one call for the whole cart) → the Stripe payment
+sheet (`src/features/cart/StripePaymentSheet.tsx`).
 
-**Pre-payment conflict check**: `handleCheckout`
-([CartScreen.tsx:1176](src/screens/CartScreen.tsx#L1176)) calls
-`AvailabilityService.validateCartBookings()` before the payment sheet ever
-opens — catches (a) two cart items for the same provider that overlap each
-other, and (b) a cart item that's since been taken by someone else's booking
-in Supabase. This used to be a defined-but-never-called function; discovering
-a conflict used to happen mid-checkout, after the card was already authorised.
-
-**Partial failure handling**: if item 2 of 3 fails (slot taken, bookability
-rule changed since being added to cart, etc.), items 1 and 3 still persist.
-`BookingError` carries `succeededCartItemIds` **and** `succeededAmountPaid`
-so the caller knows exactly what to keep and what to actually charge for —
-see §4a. `group_booking_count`/`is_group_booking`/`group_booking_id` (stamped
-optimistically from the full cart size before any outcome is known) get
-corrected via `updateBookingGroupInfo()` ([databaseService.ts:1225](src/services/databaseService.ts#L1225))
-once the real outcome is known, so a booking that survives a 3-item partial
-failure doesn't keep claiming to be "1 of 3."
+`prepare_checkout` is where the booking is really made safe: it checks every
+item's time is still bookable, prices it from the provider's live service,
+add-ons, deposit policy and promo code, adds the platform fee, records the
+client's agreement, and holds each time as an `on_hold` row until payment.
+Any failure refuses the whole cart, with the database's own reason shown.
 
 ### 4a. Payment
 
-`StripePaymentModal` ([CartScreen.tsx:399](src/screens/CartScreen.tsx#L399)) —
-**not currently active** (`USE_STRIPE_PAYMENTS = false` at
-[CartScreen.tsx:51](src/screens/CartScreen.tsx#L51); the live path today is the
-mock `PaymentModal` that never touches Stripe). When enabled: manual-capture
-flow — `create-payment-intent` authorises only, `finalize-payment-intent`
-captures after the booking is confirmed to exist. One PaymentIntent covers
-the whole multi-service cart.
-
-- **All succeeded**: capture the full amount.
-- **All failed**: cancel the whole authorisation — client is never charged.
-- **Partial success**: capture *only* `succeededAmountPaid` (a Stripe partial
-  capture — the remainder releases automatically), verified server-side
-  against the sum of `amount_paid` for bookings actually carrying that
-  `payment_intent_id` ([finalize-payment-intent/index.ts:87-104](supabase/functions/finalize-payment-intent/index.ts#L87)) —
-  the edge function never trusts the client's claimed amount on its own. This
-  closes what used to be a real gap: any partial failure previously cancelled
-  the *entire* authorisation even when some bookings had already persisted
-  and were marked paid in the DB — a live, unpaid "paid" booking.
+Since 26 November 2026 this is the only route: the practice card form and the
+older `hold_cart_booking_slots` / `claim_cart_booking_slots` RPCs are gone
+(migration `20261126120000_checkout_only_through_payment`), so a client
+booking can't exist without a payment. `create-payment-intent` charges the
+server-priced amount for the checkout batch; `finalize-payment-intent` (or the
+Stripe webhook, or the `reconcile-checkouts` job if the app closed) turns the
+held rows into bookings once the payment has gone through, and refunds it if
+the time was lost meanwhile. Requests are held on the card and only charged
+if the provider accepts. Full detail: `docs/PAYMENTS_AND_LOGIC.md`.
 
 ### 4b. Fully booked
 
@@ -269,10 +247,9 @@ booked" off a network hiccup).
    confirmations too (any `UPDATE` of the scheduling columns re-triggers it).
    Violation surfaces as `23P01`.
 
-Both codes are mapped to the same friendly message ("that time was just
-taken") in `BookingContext.tsx`'s `createBookingsFromCart` catch
-([BookingContext.tsx:1453](src/contexts/BookingContext.tsx#L1453)) and in
-`RescheduleScreen.tsx`'s submit catch
+At checkout these surface through `prepare_checkout`'s refusal, which the
+Cart words as "that time was just taken" (`describeReserveFailure`); a
+reschedule maps them the same way in `RescheduleScreen.tsx`'s submit catch
 ([RescheduleScreen.tsx:166](src/screens/RescheduleScreen.tsx#L166)).
 
 **⚠️ Not yet applied to the live Supabase project** — both migration files

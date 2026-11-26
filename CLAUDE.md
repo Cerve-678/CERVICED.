@@ -129,11 +129,12 @@ terms. Do not have multiple agents edit the same feature or migration.
   (fees, holds, payouts, refunds, disputes, late/no-show fees). Any change to
   money logic updates it in the same change, including what is live vs only
   on a branch.
-- The in-app payment form (`CartScreen.tsx`'s `PaymentModal`) currently
-  collects raw card fields itself rather than tokenizing through a
-  PCI-DSS-compliant processor (Stripe/Adyen/etc.) — before this ever
-  handles real money, that has to change. Don't extend the current mock
-  flow as if it were production-ready payment handling.
+- A client booking is made only by paying for it: `prepare_checkout` holds
+  the times, and Stripe (`create-payment-intent` → `finalize-payment-intent`)
+  turns them into bookings. Card details only ever go to Stripe's own sheet.
+  The old practice card form and the hold/claim RPCs that let the app book
+  without a payment were removed on 2026-11-26 — don't reintroduce a route
+  that creates a client booking without a payment.
 
 ## Scalability
 
@@ -195,8 +196,8 @@ handling are not something to draft unilaterally as if they were ordinary
 engineering work — implement the specific wording/behavior the user directs,
 but flag anything that looks like a legal gap rather than silently
 "improving" legal copy on your own initiative. See `LEGAL-COMPLIANCE-NOTES.md`
-for the standing punch-list of known gaps (no Privacy Policy screen, mock
-payment flow, health-adjacent data handling, age-verification questions,
+for the standing punch-list of known gaps (no Privacy Policy screen,
+health-adjacent data handling, age-verification questions,
 etc.) — that file is not legal advice and hasn't been reviewed by a lawyer;
 treat it as things to raise, not things to consider resolved.
 
@@ -231,10 +232,9 @@ agent — these are the standing rules of thumb for every session.
   doesn't obviously fit one of these, ask where it should live rather than
   guessing.
 - **No parallel implementations of the same feature left coexisting
-  silently.** The old mock card-entry `PaymentModal` in `CartScreen.tsx`
-  alongside the newer real `stripeService.ts` / `create-payment-intent` path
-  is a known, deliberate mid-migration state (see auto-memory
-  `stripe-payment-intent-integration`), not a pattern to replicate elsewhere.
+  silently.** The practice card form that sat beside the real Stripe
+  checkout in `CartScreen.tsx` from August to November 2026 is the example:
+  it outlived its purpose and left a way to book without paying open.
   When rebuilding a feature, either finish removing the old path in the same
   change or say explicitly that the old path is a deliberate transition
   state — don't leave two versions coexisting silently with no note on why.

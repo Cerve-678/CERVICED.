@@ -167,8 +167,7 @@ export async function getProviderLocationsByDisplayNames(
   // with the WRONG provider's address and coordinates — a silent, permanent
   // error, since these get snapshotted onto the booking. So an ambiguous name
   // resolves to nothing instead: the booking falls back to the "pending"
-  // sentinel, which is recoverable where a wrong address is not. Prefer
-  // getProviderLocationsByIds when the caller has provider ids.
+  // sentinel, which is recoverable where a wrong address is not.
   const ambiguous = new Set<string>();
   for (const p of data) {
     if (p.latitude == null || p.longitude == null) continue;
@@ -190,37 +189,6 @@ export async function getProviderLocationsByDisplayNames(
       `[getProviderLocationsByDisplayNames] "${name}" matches multiple providers with coordinates — omitting rather than risk the wrong address`,
     );
     delete result[name];
-  }
-  return result;
-}
-
-/**
- * Location data keyed by provider id — the unambiguous form. Use this wherever
- * provider ids are available; display names are not unique (see above).
- */
-export async function getProviderLocationsByIds(
-  providerIds: string[],
-): Promise<Record<string, ProviderLocationData>> {
-  if (providerIds.length === 0) return {};
-
-  const { data, error } = await supabase
-    .from("providers")
-    .select("id, location_text, latitude, longitude, phone")
-    .in("id", providerIds);
-
-  if (error || !data) return {};
-
-  const result: Record<string, ProviderLocationData> = {};
-  for (const p of data) {
-    if (p.latitude == null || p.longitude == null) continue;
-    result[p.id] = {
-      address: p.location_text ?? ADDRESS_PENDING_PLACEHOLDER,
-      coordinates: {
-        latitude: Number(p.latitude),
-        longitude: Number(p.longitude),
-      },
-      phone: p.phone ?? PHONE_PENDING_PLACEHOLDER,
-    };
   }
   return result;
 }

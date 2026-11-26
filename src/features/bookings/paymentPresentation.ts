@@ -10,13 +10,17 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const servicePrice = booking.price || 0;
+  // A promo code's discount is already taken off price; the receipt lists the
+  // service at its full price with the discount as its own line.
+  const promoDiscount = Math.max(0, booking.promoDiscount ?? 0);
+  const listPrice = servicePrice + promoDiscount;
   const addOnsTotal = booking.addOns?.reduce((sum, addOn) => sum + (addOn.price || 0), 0) || 0;
   const subtotal = servicePrice + addOnsTotal;
   const serviceCharge = booking.serviceCharge ?? 0;
   const total = subtotal + serviceCharge;
   const paymentType = booking.paymentType || 'full';
   // What actually left the client's card at checkout. For a deposit booking
-  // this is deposit + platform fee (see BookingService.createAppointmentData),
+  // this is deposit + platform fee (prepare_checkout prices both),
   // which is why it must NOT be the number shown next to a "Deposit" label.
   const amountPaidAtCheckout = booking.amountPaid || 0;
   const depositAmount = booking.depositAmount || 0;
@@ -53,6 +57,8 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
 
   return {
     servicePrice,
+    promoDiscount,
+    listPrice,
     addOnsTotal,
     subtotal,
     serviceCharge,

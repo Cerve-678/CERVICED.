@@ -989,34 +989,6 @@ export interface RebookableService {
   addOns: { id: string; name: string; price: number; extraMinutes: number }[];
 }
 
-/** Resolve real `services.id` UUIDs for a provider's services by name.
- *
- *  Cart items store whatever id the screen that added them happened to have —
- *  usually the real UUID (`service.dbId`), but rebook/legacy paths can carry a
- *  local numeric or synthetic id instead. Writing that to `bookings.service_id`
- *  is impossible (it's a uuid FK), so those bookings used to land with a NULL
- *  service link: no per-service duration/buffer lookup, no waitlist matching,
- *  no per-service reporting. Resolving by name recovers the link instead of
- *  dropping it silently.
- *
- *  One query per provider (`.in()` over the names), never one per cart item. */
-export async function getServiceIdsByNames(
-  providerId: string,
-  serviceNames: string[],
-): Promise<Record<string, string>> {
-  if (serviceNames.length === 0) return {};
-  const { data, error } = await supabase
-    .from("services")
-    .select("id, name")
-    .eq("provider_id", providerId)
-    .eq("is_active", true)
-    .in("name", serviceNames);
-  if (error) throw error;
-  const out: Record<string, string> = {};
-  for (const row of data ?? []) out[row.name as string] = row.id as string;
-  return out;
-}
-
 /**
  * Re-resolve a past booking's service against live data, for "Book Again".
  *

@@ -28,11 +28,11 @@ import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/R
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
 import type { EmergencyRequest } from '../../contexts/CartContext';
-import { useBooking, AppointmentData , BookingError } from '../../contexts/BookingContext';
+import { BookingError } from '../../contexts/BookingContext';
 import { BookingService, DepositPolicy } from '../../services/bookingService';
 import { AvailabilityService, type BackToBackSlot } from '../../services/AvailabilityService';
 import type { CheckoutWaitResult } from '../../features/cart/checkoutOutcome';
-import { StripePaymentSheet, paymentSheetStyles, SAVED_CARDS_FRESH_MS } from '../../features/cart/StripePaymentSheet';
+import { StripePaymentSheet, SAVED_CARDS_FRESH_MS } from '../../features/cart/StripePaymentSheet';
 import {
   getProviderCheckoutMetadata,
   ProviderDepositPolicy,
@@ -62,12 +62,11 @@ import { BookingSheet, type BookingSheetResult } from '../../components/BookingS
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 
 import { logger } from '../../utils/logger';
-import { env } from '../../utils/env';
 import { formatDurationMinutes, formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { CART_ISSUE, describeReserveFailure, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
-import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
+import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg, priceChangedFrom } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { useTranslation, tr, localeForLanguage } from '../../i18n';
@@ -80,15 +79,13 @@ import { readableDialog } from '../../constants/readableWidth';
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
 // wallet payments still require a development build.
-const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
 
 // Read-model shape for a cart item's booking details — derived from the
 // CartItem itself (see bookingsByItemId in CartScreen), and the shape the
-// payment/review internals (BookingService.createAppointmentData, the order
-// review modal) already expect.
+// order review and the payment sheet's order lines read.
 interface ServiceBooking {
   selectedDate: string;
   selectedTime: string;
@@ -98,9 +95,10 @@ interface ServiceBooking {
    *  to accept (see CartItem.emergencyRequest). */
   emergencyRequest?: EmergencyRequest;
   /** This provider's actual deposit policy (fixed £ or %), when one was
-   *  fetched — carried through to BookingService.createAppointmentData so the
-   *  real amount is what gets written, not its legacy 20% fallback. Absent
-   *  only when providerDepositPolicies has nothing for this provider. */
+   *  fetched, so the deposit the cart shows is the real one rather than the
+   *  legacy 20% fallback. prepare_checkout prices the deposit itself from the
+   *  live policy. Absent only when providerDepositPolicies has nothing for
+   *  this provider. */
   depositPolicy?: DepositPolicy;
 }
 
@@ -292,18 +290,17 @@ function checkoutTotalsFrom(priced: EffectiveCartItem[]): { subtotal: number; fe
   return { subtotal, fee, total: subtotal + fee };
 }
 
-// Payment Modal Component
+// The payment sheet's props, as the Cart passes them.
 interface PaymentModalProps {
   isVisible: boolean;
   onClose: () => void;
   effectiveCartItems: EffectiveCartItem[];
   totalAmount: number;
-  /** Present only for the real Stripe route. Its amount and held bookings are
-   * already server-created before the payment sheet opens. */
+  /** What the summary showed, when the server's total differs from it. */
+  previousTotal?: number | null;
+  /** The server-prepared checkout. Its amount and held bookings are already
+   * created before the payment sheet opens. */
   checkoutBatchId?: string | null;
-  // paymentIntentId is only ever passed by StripePaymentModal — the mock
-  // PaymentModal never sets it, so it stays undefined and payment_intent_id
-  // on the booking stays null, same as before either modal existed.
   onPaymentSuccess: (paymentMethod: string, paymentIntentId?: string) => Promise<void>;
   onPaymentComplete: () => void;
   /** The card was approved but the checkout didn't simply book: refunded or
@@ -330,306 +327,6 @@ interface PaymentModalProps {
   onBookingFailed: (message: string) => void;
 }
 
-const PaymentModal: React.FC<PaymentModalProps> = memo(
-  ({
-    isVisible,
-    onClose,
-    effectiveCartItems,
-    totalAmount,
-    onPaymentSuccess,
-    onPaymentComplete,
-    onBookingFailed,
-  }) => {
-    const { theme, palette: P } = useTheme();
-    const { t } = useTranslation();
-    // Live inset, not the module-load snapshot: this sheet is inside a
-    // <Modal>, where the snapshot can be 0 and <SafeAreaView> is inert. See
-    // useSystemBottomInset's comment.
-    const bottomInset = useSystemBottomInset();
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
-      'card' | 'paypal' | 'apple' | 'google'
-    >('card');
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [cardDetails, setCardDetails] = useState({
-      number: '',
-      expiry: '',
-      cvc: '',
-      name: '',
-    });
-    const paymentMethods = [
-      { id: 'card', name: t('cart.mockPay.creditDebitCard'), icon: '💳' },
-      { id: 'paypal', name: 'PayPal', icon: '🅿️' },
-      { id: 'apple', name: 'Apple Pay', icon: '🍎' },
-      { id: 'google', name: 'Google Pay', icon: '🔵' },
-    ];
-
-    const processingRef = useRef(false);
-
-const handlePayment = useCallback(async () => {
-  const timestamp = () => new Date().toISOString().split('T')[1];
-
-  // ✅ CRITICAL: Prevent multiple simultaneous payment processing
-  if (processingRef.current) {
-    if (__DEV__) {
-      logger.log(`[${timestamp()}] Payment already processing - ignoring duplicate call`);
-    }
-    return;
-  }
-
-  processingRef.current = true;
-  if (__DEV__) {
-    logger.log(`\n${'='.repeat(60)}`);
-    logger.log(`[${timestamp()}] PAY BUTTON PRESSED`);
-    logger.log(`${'='.repeat(60)}\n`);
-  }
-
-  setIsProcessing(true);
-  try {
-    if (__DEV__) {
-      logger.log(`\n[${timestamp()}] Calling onPaymentSuccess...`);
-    }
-    const startTime = Date.now();
-    try {
-      await onPaymentSuccess(selectedPaymentMethod);
-      const duration = Date.now() - startTime;
-      if (__DEV__) {
-        logger.log(`[${timestamp()}] onPaymentSuccess completed in ${duration}ms`);
-      }
-    } catch (bookingError) {
-      const duration = Date.now() - startTime;
-      logger.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED after ${duration}ms:`, bookingError);
-      throw bookingError;
-    }
-
-    if (__DEV__) {
-      logger.log(`\n[${timestamp()}] Waiting 500ms for AsyncStorage to complete...`);
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-    if (__DEV__) {
-      logger.log(`[${timestamp()}] 500ms wait complete`);
-    }
-
-    if (__DEV__) {
-      logger.log(`\n[${timestamp()}] Calling onPaymentComplete (clearing cart)...`);
-    }
-    onPaymentComplete();
-    if (__DEV__) {
-      logger.log(`[${timestamp()}] Cart cleared successfully`);
-    }
-
-    if (__DEV__) {
-      logger.log(`\n${'='.repeat(60)}`);
-      logger.log(`[${timestamp()}] PAYMENT FLOW COMPLETE`);
-      logger.log(`${'='.repeat(60)}\n`);
-    }
-  } catch (error) {
-    logger.error(`\n${'='.repeat(60)}`);
-    logger.error(`❌ [${timestamp()}] PAYMENT ERROR`);
-    logger.error(`${'='.repeat(60)}`);
-    logger.error(`❌ [${timestamp()}] Error:`, error);
-    logger.error(`❌ [${timestamp()}] Error message:`, (error as Error).message);
-    logger.error(`❌ [${timestamp()}] Error stack:`, (error as Error).stack);
-    logger.error(`${'='.repeat(60)}\n`);
-
-    // Close the payment sheet first — its own DialogHost is nested inside
-    // this component's <Modal>, so showing the alert here without closing
-    // would leave the payment form visible behind/around it. The alert is
-    // shown via the parent's DialogHost instead, which survives the close.
-    onClose();
-    onBookingFailed(
-      error instanceof BookingError
-        ? error.message
-        : tr('cart.error.bookingNotCompleted')
-    );
-  } finally {
-    if (__DEV__) {
-      logger.log(`[${timestamp()}] Setting isProcessing to false`);
-    }
-    setIsProcessing(false);
-    processingRef.current = false; // ✅ Reset processing guard
-    if (__DEV__) {
-      logger.log(`[${timestamp()}] isProcessing set to false\n`);
-    }
-  }
-}, [selectedPaymentMethod, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed]);
-
-    const formatCardNumber = (text: string) => {
-      const cleaned = text.replace(/\s/g, '');
-      const formatted = cleaned.replace(/(.{4})/g, '$1 ').trim();
-      return formatted.substring(0, 19);
-    };
-
-    const formatExpiry = (text: string) => {
-      const cleaned = text.replace(/\D/g, '');
-      if (cleaned.length >= 2) {
-        return `${cleaned.substring(0, 2)}/${cleaned.substring(2, 4)}`;
-      }
-      return cleaned;
-    };
-
-    return (
-      <Modal visible={isVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent={true}>
-        <View style={paymentSheetStyles.paymentOverlay}>
-          <View style={[paymentSheetStyles.paymentModal, { backgroundColor: P.bg }]}>
-            <View style={[paymentSheetStyles.paymentModalContent, { paddingBottom: bottomInset }]}>
-              {/* Payment Header */}
-              <View style={[paymentSheetStyles.paymentHeader, { borderBottomColor: P.border }]}>
-                <Text style={[paymentSheetStyles.paymentTitle, { color: theme.text }]}>{t('cart.mockPay.title')}</Text>
-                <TouchableOpacity
-                  style={paymentSheetStyles.paymentCloseButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    onClose();
-                  }}
-                >
-                  <Text style={[paymentSheetStyles.paymentCloseText, { color: theme.text }]}>×</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={paymentSheetStyles.paymentContent} showsVerticalScrollIndicator={false}>
-                {/* Order Summary - UPDATED WITH BREAKDOWN */}
-                <View style={[paymentSheetStyles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <Text style={[paymentSheetStyles.orderSummaryTitle, { color: theme.text }]}>{t('cart.mockPay.orderSummary')}</Text>
-                  {effectiveCartItems.map(({ item, effectivePrice, isDeposit }, index) => (
-                    <View key={item.id} style={paymentSheetStyles.orderItem}>
-                      <Text style={[paymentSheetStyles.orderItemName, { color: theme.text }]}>
-                        {item.serviceName} #{item.serviceInstanceIndex || 1}
-                        {isDeposit && t('cart.mockPay.depositSuffix')}
-                      </Text>
-                      <Text style={[paymentSheetStyles.orderItemPrice, { color: theme.text }]}>£{effectivePrice.toFixed(2)}</Text>
-                    </View>
-                  ))}
-                  <View style={paymentSheetStyles.orderTotal}>
-                    <Text style={[paymentSheetStyles.orderTotalLabel, { color: theme.text }]}>
-                      {t('cart.total')}
-                    </Text>
-                    <Text style={[paymentSheetStyles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
-                  </View>
-                </View>
-
-                {/* Payment Methods - CLEAR TEXT COLORS */}
-                <View style={paymentSheetStyles.paymentMethods}>
-                  <Text style={[paymentSheetStyles.paymentMethodsTitle, { color: theme.text }]}>{t('cart.mockPay.paymentMethod')}</Text>
-                  {paymentMethods.map(method => (
-                    <TouchableOpacity
-                      key={method.id}
-                      style={[
-                        styles.paymentMethodItem,
-                        { backgroundColor: P.surface, borderColor: 'transparent' },
-                        selectedPaymentMethod === method.id && { borderColor: P.accent, backgroundColor: P.accentDim },
-                      ]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        setSelectedPaymentMethod(method.id as any);
-                      }}
-                    >
-                      <Text style={styles.paymentMethodIcon}>{method.icon}</Text>
-                      <Text style={[paymentSheetStyles.paymentMethodName, { color: theme.text }]}>{method.name}</Text>
-                      <View
-                        style={[
-                          styles.paymentMethodRadio,
-                          selectedPaymentMethod === method.id && { borderColor: P.accent },
-                        ]}
-                      >
-                        {selectedPaymentMethod === method.id && (
-                          <View style={[styles.paymentMethodRadioInner, { backgroundColor: P.accent }]} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Card Details (only show for card payment) */}
-                {selectedPaymentMethod === 'card' && (
-                  <View style={styles.cardDetails}>
-                    <Text style={[styles.cardDetailsTitle, { color: theme.text }]}>{t('cart.mockPay.cardDetails')}</Text>
-
-                    <TextInput
-                      style={[styles.cardInput, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                      placeholder={t('cart.mockPay.cardNumber')}
-                      placeholderTextColor={P.sub}
-                      value={cardDetails.number}
-                      onChangeText={text =>
-                        setCardDetails(prev => ({
-                          ...prev,
-                          number: formatCardNumber(text),
-                        }))
-                      }
-                      keyboardType="numeric"
-                      maxLength={19}
-                    />
-
-                    <View style={styles.cardRow}>
-                      <TextInput
-                        style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                        placeholder={t('cart.mockPay.expiry')}
-                        placeholderTextColor={P.sub}
-                        value={cardDetails.expiry}
-                        onChangeText={text =>
-                          setCardDetails(prev => ({
-                            ...prev,
-                            expiry: formatExpiry(text),
-                          }))
-                        }
-                        keyboardType="numeric"
-                        maxLength={5}
-                      />
-                      <TextInput
-                        style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                        placeholder={t('cart.mockPay.cvc')}
-                        placeholderTextColor={P.sub}
-                        value={cardDetails.cvc}
-                        onChangeText={text =>
-                          setCardDetails(prev => ({
-                            ...prev,
-                            cvc: text.replace(/\D/g, '').substring(0, 3),
-                          }))
-                        }
-                        keyboardType="numeric"
-                        maxLength={3}
-                      />
-                    </View>
-
-                    <TextInput
-                      style={[styles.cardInput, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
-                      placeholder={t('cart.mockPay.cardholderName')}
-                      placeholderTextColor={P.sub}
-                      value={cardDetails.name}
-                      onChangeText={text =>
-                        setCardDetails(prev => ({
-                          ...prev,
-                          name: text,
-                        }))
-                      }
-                    />
-                  </View>
-                )}
-              </ScrollView>
-
-              {/* Payment Button */}
-              <TouchableOpacity
-                style={[paymentSheetStyles.payButton, { backgroundColor: isProcessing ? P.accentDim : P.accent }]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  handlePayment();
-                }}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <ActivityIndicator color={P.onAccent} size="small" />
-                ) : (
-                  <Text style={[paymentSheetStyles.payButtonText, { color: P.onAccent }]}>{t('cart.pay.amount', { amount: `£${totalAmount.toFixed(2)}` })}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
-  }
-);
-
-PaymentModal.displayName = 'PaymentModal';
 
 /** The shared Stripe sheet, fed the cart's priced items as its order lines. */
 const CartStripePaymentSheet: React.FC<PaymentModalProps> = memo(({ effectiveCartItems, ...props }) => {
@@ -1071,7 +768,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                 <View style={styles.gchipInfo}>
                   <Text style={[styles.gchipName, { color: theme.text }]} numberOfLines={1}>
                     {item.serviceName}
-                    {b.isDepositOnly ? t('cart.mockPay.depositSuffix') : ''}
+                    {b.isDepositOnly ? t('cart.payment.depositSuffix') : ''}
                   </Text>
                   <Text style={[styles.gchipMeta, { color: theme.secondaryText }]} numberOfLines={1}>
                     {durationWithAddOns(item.duration, item.addOns)}
@@ -1463,7 +1160,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     clearCartError();
   }, [cartError, clearCartError, showAlert, t]);
 
-  const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
   const { user, updateUser, myProviderId, myProviderIdStatus } = useAuth();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
   // Checkout carries on after the checklist saves, by which time this render's
@@ -1503,6 +1199,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
+  // What the summary showed, when the server priced the checkout differently
+  // (a price changed after the service went in the cart). The payment sheet
+  // then says so; null when they agree.
+  const [priceChangedTotal, setPriceChangedTotal] = useState<number | null>(null);
   // The checkout that just went through, for the success screen: how much
   // was only held for requests, and any hold the client's bank wants checked.
   const [paidCheckout, setPaidCheckout] = useState<{ checkoutBatchId: string; plan: CheckoutHoldPlan | null } | null>(null);
@@ -1510,15 +1210,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Mirrors of the two outstanding-checkout ids, for the abandon path below:
   // it runs from a navigation listener and on unmount, neither of which can
   // read the state values a render closed over.
-  const holdBatchIdRef = useRef<string | null>(null);
   const serverCheckoutBatchIdRef = useRef<string | null>(null);
-  // True only while handlePaymentSuccess is converting the held rows into
-  // real bookings. Releasing during that window would DELETE the very rows
-  // claim_cart_booking_slots is mid-way through claiming, and the claim's
-  // fallback (a fresh client-side insert) has been RLS-blocked since
-  // 20260810180302 — so the booking wouldn't be re-created, it would just
-  // fail. Abandoning is therefore skipped while this is set.
-  const isClaimingRef = useRef(false);
   const paymentInFlightRef = useRef(false);
   // Moved on each time the client leaves the Cart and each time the payment
   // sheet opens (StripePaymentSheet getSheetOpenId). Set here, in the same
@@ -1539,29 +1231,22 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
    * closes: two abandoned holds were reproduced live on 2026-09-07
    * (11:30 and 12:30 on the same provider, neither ever released).
    *
-   * Best-effort by design: releaseCartCheckoutSlots never throws, and the
-   * expire_cart_holds() cron sweep remains the real backstop for the routes
+   * Best-effort by design: a failed cancel is only logged, and the
+   * process_stale_checkouts() job remains the real backstop for the routes
    * no client-side signal can reach (a crash, a force-quit, a dead network).
    */
   const abandonOutstandingCheckout = useCallback(() => {
-    if (isClaimingRef.current) return;
     // A payment already handed to Stripe is settled by the server
     // (reconcile-checkouts); cancelling here would release a card the client
     // has just approved and drop their booking.
     if (paymentInFlightRef.current) return;
-    const heldBatch = holdBatchIdRef.current;
-    if (heldBatch) {
-      holdBatchIdRef.current = null;
-      setHoldBatchId(null);
-      releaseCartCheckoutSlots(heldBatch);
-    }
     const serverBatch = serverCheckoutBatchIdRef.current;
     if (serverBatch) {
       serverCheckoutBatchIdRef.current = null;
       setServerCheckoutBatchId(null);
       cancelCheckout(serverBatch).catch(error => logger.error('Could not release secure checkout:', error));
     }
-  }, [releaseCartCheckoutSlots]);
+  }, []);
 
   // An RN Modal renders in a native overlay above whatever screen is
   // focused — it isn't scoped to "Cart is the visible screen," just to this
@@ -1597,7 +1282,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   bookings: Record<string, ServiceBooking>;
   // Frozen alongside items/bookings for the same reason: a checkout-metadata
   // refetch resolving between "Confirm & Pay" and the address actually being
-  // sent to createBookingsFromCart must not change which providers get the
+  // sent to prepare_checkout must not change which providers get the
   // client's address mid-checkout.
   mobileProviderNames: string[];
 }>({ items: [], bookings: {}, mobileProviderNames: [] });
@@ -1844,24 +1529,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
     return [...sections.values()];
   }, [checkoutRenderUnits, checkoutSnapshot]);
-  // Correlation id for the on_hold rows reserved when the user commits to
-  // payment (see holdCartBookingSlots below) — threaded through to
-  // handlePaymentSuccess so createBookingsFromCart can claim the same
-  // batch instead of inserting fresh rows. Null whenever no hold is
-  // currently outstanding (not yet created, already claimed, or released).
-  const [holdBatchId, setHoldBatchId] = useState<string | null>(null);
-  // Secure Stripe checkout owns a separate server batch. Kept distinct from
-  // the legacy hold batch while the mock checkout remains available in Expo
-  // Go and during the staged release.
+  // The server-prepared checkout the payment sheet is paying for (null when
+  // none is outstanding).
   const [serverCheckoutBatchId, setServerCheckoutBatchId] = useState<string | null>(null);
   // Kept in step with the refs abandonOutstandingCheckout reads. Mirrored
   // rather than assigned at each setState call site so a future one can't
   // quietly forget to, and leave a hold nothing knows how to release.
-  useEffect(() => { holdBatchIdRef.current = holdBatchId; }, [holdBatchId]);
   useEffect(() => { serverCheckoutBatchIdRef.current = serverCheckoutBatchId; }, [serverCheckoutBatchId]);
-  // True only while the "Confirm & Pay" tap's holdCartCheckoutSlots call is
-  // in flight — guards against a double-tap firing two hold batches for
-  // the same cart.
+  // True only while the "Confirm & Pay" tap is preparing the checkout —
+  // guards against a double-tap preparing two for the same cart.
   const [isReservingSlots, setIsReservingSlots] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   // Cart item id → what's wrong with it, flagged on that item's own card so
@@ -2324,10 +2000,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const bookingsByItemId = useMemo((): Record<string, ServiceBooking> => {
     const map: Record<string, ServiceBooking> = {};
     items.forEach(item => {
-      // The real per-provider deposit policy, when one was fetched — this is
-      // what BookingService.createAppointmentData actually books the deposit
-      // against. Without it, every deposit booking silently used the legacy
-      // 20% fallback regardless of what the card displayed.
+      // The real per-provider deposit policy, when one was fetched, so the
+      // deposit shown matches what prepare_checkout charges. Without it, the
+      // cart would show the legacy 20% fallback.
       const rawPolicy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
       const depositPolicy = toDepositPolicy(rawPolicy);
       // A provider can change their deposit rules after an item was already
@@ -2560,9 +2235,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // was resolved and stamped in at snapshot time (see bookingsByItemId
   // above). Re-reading live providerDepositPolicies/itemPromoDiscounts here
   // instead was the bug: a deposit-policy fetch resolving while the sheet
-  // was open could change what it showed mid-payment, independently of
-  // what BookingService.createAppointmentData actually charges from the
-  // same (unchanged) snapshot.
+  // was open could change what it showed mid-payment.
   const paymentSheetCartItems = useMemo(
     (): EffectiveCartItem[] => pricedCheckoutItems(checkoutSnapshot.items, checkoutSnapshot.bookings),
     [checkoutSnapshot],
@@ -2617,7 +2290,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const hasCartItems = items.length > 0;
   const signedInUserId = user?.id ?? null;
   useFocusEffect(useCallback(() => {
-    if (!USE_STRIPE_PAYMENTS || !hasCartItems || !signedInUserId) return;
+    if (!hasCartItems || !signedInUserId) return;
     listSavedCards({ maxAgeMs: SAVED_CARDS_FRESH_MS })
       // The sheet reads them again when it opens, and shows the form if that fails too.
       .catch(e => logger.warn('[checkout] could not read saved cards ahead of the sheet', e));
@@ -3049,6 +2722,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // frozenCheckoutTotals.total computes next render, rather than two
     // independent formulas that could drift apart under a future edit.
     setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
+    setPriceChangedTotal(null);
     setPaidCheckout(null);
 
     // Show review modal pre-filled with user data
@@ -3163,242 +2837,12 @@ handleCheckoutRef.current = handleCheckout;
     setShowBookingSummaryModal(true);
   }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, checkoutSnapshot, clientAddress]);
 
-const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIntentId?: string) => {
-  if (__DEV__) {
-    logger.log('═══════════════════════════════════════');
-    logger.log('PAYMENT SUCCESS - FUNCTION CALLED');
-    logger.log('═══════════════════════════════════════');
-  }
-
-  // Claiming has started: the held rows are about to become real bookings,
-  // so nothing may release them from under it. Cleared in the finally below,
-  // by which point the batch has either been claimed or reported as failed.
-  isClaimingRef.current = true;
-  try {
-    // The secure Stripe route has already finalised its server-owned holds in
-    // the Edge Function. Do not fall through to the legacy client insert
-    // path, which would duplicate the appointments.
-    if (USE_STRIPE_PAYMENTS && serverCheckoutBatchId) {
-      setServerCheckoutBatchId(null);
-      return;
-    }
-    // Step 0: Check snapshot
-    if (__DEV__) {
-      logger.log('STEP 0: Checking snapshot...');
-      logger.log('Snapshot items count:', checkoutSnapshot.items.length);
-      logger.log('Current items count:', items.length);
-    }
-    
-    const itemsToBook = checkoutSnapshot.items;
-    const bookingsData = checkoutSnapshot.bookings;
-
-    if (itemsToBook.length === 0) {
-      logger.error('CRITICAL: No items in snapshot!');
-      logger.error('Snapshot:', JSON.stringify(checkoutSnapshot, null, 2));
-      throw new Error('No items to book - snapshot is empty');
-    }
-
-    if (__DEV__) {
-      logger.log('STEP 0 COMPLETE - Items:', itemsToBook.map(i => i.serviceName));
-      logger.log('---');
-    }
-
-    // Step 1: Validate
-    if (__DEV__) {
-      logger.log('STEP 1: Validating bookings...');
-    }
-    try {
-      const validation = BookingService.validateBookings(itemsToBook, bookingsData);
-      if (__DEV__) {
-        logger.log('Validation result:', validation);
-      }
-
-      if (!validation.valid) {
-        logger.error('Validation failed:', validation.errors);
-        throw new Error('Validation failed: ' + validation.errors.join(', '));
-      }
-      if (__DEV__) {
-        logger.log('STEP 1 COMPLETE - Validation passed');
-      }
-    } catch (validationError) {
-      logger.error('STEP 1 FAILED:', validationError);
-      throw validationError;
-    }
-    if (__DEV__) {
-      logger.log('---');
-    }
-
-    // Step 2: Create appointment data
-    if (__DEV__) {
-      logger.log('STEP 2: Creating appointment data...');
-    }
-    let appointmentData: AppointmentData[];
-    try {
-      const customerInfo = confirmedCustomerInfo || {
-        name: user?.name || '',
-        email: user?.email || '',
-        phone: user?.phone || '',
-      };
-      appointmentData = BookingService.createAppointmentData(itemsToBook, bookingsData, customerInfo);
-      if (__DEV__) {
-        logger.log('Appointment data created:', appointmentData.length);
-        logger.log('Appointments:', JSON.stringify(appointmentData, null, 2));
-        logger.log('STEP 2 COMPLETE');
-      }
-    } catch (appointmentError) {
-      logger.error('STEP 2 FAILED:', appointmentError);
-      throw appointmentError;
-    }
-    if (__DEV__) {
-      logger.log('---');
-    }
-
-    // Stamp payment method + the real Stripe PaymentIntent id (when using
-    // StripePaymentModal — undefined/omitted for the mock PaymentModal) on
-    // every appointment entry. One PaymentIntent covers the whole checkout
-    // total, shared across every booking created from it (group checkout).
-    appointmentData = appointmentData.map(a => ({
-      ...a,
-      paymentMethod,
-      ...(paymentIntentId ? { paymentIntentId } : {}),
-    }));
-
-    // NOTE: the client's allergies/medical notes are deliberately NOT copied
-    // into `notes` here. This used to prepend a "Health info: ..." line to
-    // every booking's notes, which meant (a) the client's own booking detail
-    // showed text under "YOUR NOTES" that they never typed — often the only
-    // thing there, on a booking where they'd written nothing — and (b) the
-    // provider saw the same facts twice, since ProviderBookingDetailScreen
-    // already reads the live client profile and renders allergies and
-    // medical notes in its own "Health & Alerts" section (plus the alert
-    // strip at the top). Copying health-adjacent data into a free-text field
-    // also froze it at checkout time, so a client updating their allergies
-    // afterwards left a stale copy on the booking forever.
-
-    // Step 3: Create bookings IN CONTEXT
-    if (__DEV__) {
-      logger.log('STEP 3: Creating bookings in BookingContext...');
-      logger.log('About to call createBookingsFromCart with:');
-      logger.log('- Items:', itemsToBook.length);
-      logger.log('- Appointments:', appointmentData.length);
-    }
-    try {
-      // Pass the hold batch (if one is outstanding) so createBookingsFromCart
-      // claims the already-reserved on_hold rows instead of inserting fresh
-      // ones. holdBatchId is cleared unconditionally after this call — the
-      // batch is either now claimed, or claim found nothing live and every
-      // item fell back to a normal insert; either way there's nothing left
-      // to release.
-      // Scoped to the mobile providers in this cart, not the cart as a whole:
-      // `clientAddress` is seeded from the account's saved default whether or
-      // not anyone in the cart travels, so passing it unconditionally stamped
-      // the client's home address onto salon bookings too. Reads the FROZEN
-      // checkoutSnapshot.mobileProviderNames, not the live state — a
-      // checkout-metadata refetch resolving between "Confirm & Pay" and here
-      // must not change which providers actually receive the address.
-      const snapshotMobileProviderNames = checkoutSnapshot.mobileProviderNames;
-      await createBookingsFromCart(
-        itemsToBook,
-        appointmentData,
-        snapshotMobileProviderNames.length > 0 && clientAddress.trim()
-          ? {
-              address: clientAddress.trim(),
-              // From the account, not this screen: the area is picked once in
-              // Account > Your Address and inherited by every booking, the
-              // same way the saved address already is. Undefined when they
-              // have never picked one, and the DB derives a fallback.
-              area: user?.clientArea ?? null,
-              providerNames: snapshotMobileProviderNames,
-            }
-          : undefined,
-        holdBatchId ?? undefined,
-      );
-      setHoldBatchId(null);
-      if (__DEV__) {
-        logger.log('STEP 3 COMPLETE - createBookingsFromCart returned');
-      }
-    } catch (bookingError) {
-      setHoldBatchId(null);
-      logger.error('STEP 3 FAILED:', bookingError);
-      logger.error('Error details:', JSON.stringify(bookingError, null, 2));
-      throw bookingError;
-    }
-    if (__DEV__) {
-      logger.log('---');
-    }
-
-    // Step 4: Booking-request and payment-received notifications are now
-    // sent by createBookingsFromCart in BookingContext, using the real
-    // Supabase booking id (not the cart item id) and the real notifications
-    // table NotificationsScreen actually reads.
-    if (__DEV__) {
-      logger.log('STEP 5: Booking confirmations sent by createBookingsFromCart');
-      logger.log('---');
-
-      logger.log('═══════════════════════════════════════');
-      logger.log('ALL STEPS COMPLETE - PAYMENT SUCCESS FINISHED');
-      logger.log('═══════════════════════════════════════');
-    }
-    
-  } catch (error) {
-    // ── Consolidated booking-failure diagnostics (always-on) ─────────────
-    // logger.error survives release builds (see utils/logger), so this shows
-    // in a connected terminal / crash reporter even in production. Search the
-    // logs for "BOOKING FAILED" to find every failed checkout and its reason.
-    const isBookingErr = error instanceof BookingError;
-    const succeededIds = isBookingErr ? (error as BookingError).succeededCartItemIds : [];
-    const pgCode = (error as any)?.code;
-    logger.error('╔══════════════ BOOKING FAILED ══════════════');
-    logger.error('║ reason    :', error instanceof Error ? error.message : String(error));
-    logger.error('║ errorType :', isBookingErr ? 'BookingError' : ((error as any)?.name ?? typeof error));
-    if (pgCode) logger.error('║ pgCode    :', pgCode); // e.g. 23505 = slot taken, 42501 = RLS
-    logger.error('║ userId    :', user?.id ?? '(none)');
-    logger.error('║ paidTotal :', `£${paymentTotal?.toFixed?.(2) ?? '?'} via ${paymentMethod}`);
-    logger.error(
-      '║ items     :',
-      checkoutSnapshot.items.map(i => {
-        const apt = checkoutSnapshot.bookings[i.id];
-        return {
-          service: i.serviceName,
-          provider: i.providerDisplayName ?? i.providerName,
-          providerId: i.providerId ?? '(unresolved)',
-          date: apt?.selectedDate || '(none)',
-          time: apt?.selectedTime || '(none)',
-          booked: succeededIds.includes(i.id),
-        };
-      }),
-    );
-    if (isBookingErr) {
-      logger.error('║ partial   :', `${succeededIds.length}/${checkoutSnapshot.items.length} services booked`);
-    }
-    logger.error('║ stack     :', error instanceof Error ? error.stack : '(none)');
-    logger.error('╚═════════════════════════════════════════════');
-
-    // A multi-service checkout can partially succeed — clear only the
-    // services that actually booked, so the ones that failed stay in the
-    // cart for the client to retry without re-booking (and re-paying for)
-    // the ones that already went through. Whatever's left (didn't succeed)
-    // gets flagged so the client can see which item needs attention.
-    if (error instanceof BookingError) {
-      error.succeededCartItemIds.forEach(id => removeFromCart(id));
-      const failedIds = checkoutSnapshot.items
-        .map(i => i.id)
-        .filter(id => !error.succeededCartItemIds.includes(id));
-      // 23505 is the overlap constraint — someone else took the slot between
-      // the availability check and the insert. Anything else failed for a
-      // reason we can't attribute to the time, so don't tell the client to
-      // re-pick one.
-      const reason = pgCode === '23505' ? CART_ISSUE.takenWhilePaying : CART_ISSUE.bookingFailed;
-      setItemIssues(new Map(failedIds.map(id => [id, reason])));
-    }
-    // The caller (PaymentModal.handlePayment) owns showing the single
-    // "Booking Failed" alert and closing the payment sheet — this only needs
-    // to propagate the error up to it (after the diagnostics above).
-    throw error;
-  } finally {
-    isClaimingRef.current = false;
-  }
-}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, paymentTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress]);
+// The server finalised the checkout's held bookings when the payment went
+// through (finalize-payment-intent, or the webhook), so all that's left here
+// is forgetting the checkout the sheet was paying for.
+const handlePaymentSuccess = useCallback(async () => {
+  setServerCheckoutBatchId(null);
+}, []);
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
@@ -3895,16 +3339,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       // policy_accepted_at NULL — and a second attempt in the
                       // same session sent the FIRST attempt's leftover time.
                       // Both are now unrepresentable: the timestamp comes from
-                      // the database clock inside hold_cart_booking_slots(),
-                      // which also refuses the whole batch if the consent flags
-                      // below are absent. See
-                      // 20260827115930_consent_recorded_before_payment.sql.
-                      // Reserve every item's slot as an on_hold booking
-                      // BEFORE opening the payment sheet — closes the
-                      // window between "committed to paying" and
-                      // "booking actually inserted" that the claim RPC's
-                      // insert-time-only conflict check leaves open for
-                      // the whole payment-sheet interaction.
+                      // the database clock inside prepare_checkout(), which
+                      // also refuses the whole checkout if the consent flags
+                      // below are absent. prepare_checkout holds every item's
+                      // time BEFORE the payment sheet opens, so nobody can
+                      // take it while the client is paying.
                       //
                       // Not while the last payment is still going through (the
                       // client left the Cart mid-payment and came back): its
@@ -3916,102 +3355,82 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       }
                       setIsReservingSlots(true);
                       try {
-                        if (USE_STRIPE_PAYMENTS) {
-                          const intent = checkoutSnapshot.items.map(item => {
-                            const booking = checkoutSnapshot.bookings[item.id];
-                            if (!item.providerId || !booking?.selectedDate || !booking.selectedTime) {
-                              throw new Error(tr('cart.checkout.incomplete'));
-                            }
-                            // Reads the FROZEN snapshot, like the claim path — a
-                            // metadata refetch between "Confirm & Pay" and here
-                            // must not change which items carry the address.
-                            const isMobileItem = checkoutSnapshot.mobileProviderNames.includes(
-                              item.providerDisplayName ?? item.providerName,
-                            );
-                            // Built by the same helper the website uses, so
-                            // the two send prepare_checkout the same request.
-                            // The tick above is the one agreement: the Terms,
-                            // each provider's policy and any safety info.
-                            return buildCheckoutIntentItem({
-                              providerId: item.providerId,
-                              serviceId: item.serviceId,
-                              date: booking.selectedDate,
-                              time: booking.selectedTime,
-                              addOnIds: (item.addOns ?? []).map(addOn => addOn.id),
-                              useDeposit: Boolean(booking.isDepositOnly),
-                              notes: booking.notes,
-                              agreed: agreedToPolicy,
-                              policySnapshot: item.policySnapshot,
-                              mobileAddress: isMobileItem ? { address: clientAddress, area: user?.clientArea ?? null } : null,
-                              promoCode: item.appliedPromoCode ?? null,
-                              emergency: Boolean(booking.emergencyRequest),
-                              waitlistHoldId: item.waitlistHold?.bookingId ?? null,
-                            });
+                        const intent = checkoutSnapshot.items.map(item => {
+                          const booking = checkoutSnapshot.bookings[item.id];
+                          if (!item.providerId || !booking?.selectedDate || !booking.selectedTime) {
+                            throw new Error(tr('cart.checkout.incomplete'));
+                          }
+                          // Reads the FROZEN snapshot, like the claim path — a
+                          // metadata refetch between "Confirm & Pay" and here
+                          // must not change which items carry the address.
+                          const isMobileItem = checkoutSnapshot.mobileProviderNames.includes(
+                            item.providerDisplayName ?? item.providerName,
+                          );
+                          // Built by the same helper the website uses, so
+                          // the two send prepare_checkout the same request.
+                          // The tick above is the one agreement: the Terms,
+                          // each provider's policy and any safety info.
+                          return buildCheckoutIntentItem({
+                            providerId: item.providerId,
+                            serviceId: item.serviceId,
+                            date: booking.selectedDate,
+                            time: booking.selectedTime,
+                            addOnIds: (item.addOns ?? []).map(addOn => addOn.id),
+                            useDeposit: Boolean(booking.isDepositOnly),
+                            notes: booking.notes,
+                            agreed: agreedToPolicy,
+                            policySnapshot: item.policySnapshot,
+                            mobileAddress: isMobileItem ? { address: clientAddress, area: user?.clientArea ?? null } : null,
+                            promoCode: item.appliedPromoCode ?? null,
+                            emergency: Boolean(booking.emergencyRequest),
+                            waitlistHoldId: item.waitlistHold?.bookingId ?? null,
                           });
-                          // An earlier payment for these times that failed
-                          // with the app closed still holds them, and would
-                          // make this one say they're taken: cancel it first,
-                          // once the client says so.
-                          const earlier = await releaseEarlierPayments(
-                            intent.map(entry => ({ providerId: entry.provider_id, date: entry.booking_date, time: entry.booking_time })),
-                            {
-                              find: getMyEarlierCheckoutPayments,
-                              cancel: cancelPaymentIntent,
-                              // Closed first: CartScreen's DialogHost sits
-                              // behind this summary sheet, so a dialog raised
-                              // while it's up never shows. Any way of closing
-                              // the dialog other than "Pay here" keeps the
-                              // earlier payment.
-                              confirm: () => new Promise<boolean>(resolve => {
-                                setShowBookingSummaryModal(false);
-                                showConfirm(
-                                  "You're already paying for this time",
-                                  "You started paying for this time a few minutes ago, on this phone or another one. If you pay here, we'll stop that payment. You won't be charged twice.",
-                                  [
-                                    { text: 'Not now', style: 'cancel' },
-                                    { text: 'Pay here', onPress: () => resolve(true) },
-                                  ],
-                                  'sheet',
-                                  () => resolve(false),
-                                );
-                              }),
-                              onError: error => logger.error('[CartScreen] could not release an earlier payment', error),
-                            },
-                          );
-                          if (earlier === 'kept') return;
-                          if (earlier === 'still_paying') {
-                            setShowBookingSummaryModal(false);
-                            showAlert(tr('cart.pay.stillGoingTitle'), tr('cart.pay.stillGoing'));
-                            return;
-                          }
-                          const prepared = await prepareCheckout(intent);
-                          setServerCheckoutBatchId(prepared.checkoutBatchId);
-                          setPaymentTotal(prepared.amountDue);
-                        } else {
-                          // The older card-entry path books with
-                          // hold_cart_booking_slots, which knows nothing about a
-                          // held waitlist row and would clash with it.
-                          if (checkoutSnapshot.items.some(item => item.waitlistHold)) {
-                            throw new BookingError(tr('cart.checkout.waitlistCardOnly'));
-                          }
-                          console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
-                          const batchId = await holdCartCheckoutSlots(
-                            checkoutSnapshot.items,
-                            checkoutSnapshot.bookings,
-                            // Same single checkbox the Stripe branch above
-                            // sends as safety_ack — it can't be ticked while
-                            // a safety requirement is unread, so it answers
-                            // both questions.
-                            { policyAccepted: agreedToPolicy, safetyAcknowledged: agreedToPolicy }
-                          );
-                          console.log('[CartScreen] holdCartCheckoutSlots succeeded', batchId);
-                          setHoldBatchId(batchId);
+                        });
+                        // An earlier payment for these times that failed
+                        // with the app closed still holds them, and would
+                        // make this one say they're taken: cancel it first,
+                        // once the client says so.
+                        const earlier = await releaseEarlierPayments(
+                          intent.map(entry => ({ providerId: entry.provider_id, date: entry.booking_date, time: entry.booking_time })),
+                          {
+                            find: getMyEarlierCheckoutPayments,
+                            cancel: cancelPaymentIntent,
+                            // Closed first: CartScreen's DialogHost sits
+                            // behind this summary sheet, so a dialog raised
+                            // while it's up never shows. Any way of closing
+                            // the dialog other than "Pay here" keeps the
+                            // earlier payment.
+                            confirm: () => new Promise<boolean>(resolve => {
+                              setShowBookingSummaryModal(false);
+                              showConfirm(
+                                "You're already paying for this time",
+                                "You started paying for this time a few minutes ago, on this phone or another one. If you pay here, we'll stop that payment. You won't be charged twice.",
+                                [
+                                  { text: 'Not now', style: 'cancel' },
+                                  { text: 'Pay here', onPress: () => resolve(true) },
+                                ],
+                                'sheet',
+                                () => resolve(false),
+                              );
+                            }),
+                            onError: error => logger.error('[CartScreen] could not release an earlier payment', error),
+                          },
+                        );
+                        if (earlier === 'kept') return;
+                        if (earlier === 'still_paying') {
+                          setShowBookingSummaryModal(false);
+                          showAlert(tr('cart.pay.stillGoingTitle'), tr('cart.pay.stillGoing'));
+                          return;
                         }
+                        const prepared = await prepareCheckout(intent);
+                        setServerCheckoutBatchId(prepared.checkoutBatchId);
+                        setPaymentTotal(prepared.amountDue);
+                        setPriceChangedTotal(priceChangedFrom(frozenCheckoutTotals.total, prepared.amountDue));
                         setShowBookingSummaryModal(false);
                         paymentSheetOpenIdRef.current += 1;
                         setShowPaymentModal(true);
                       } catch (err) {
-                        logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
+                        logger.error('[CartScreen] prepareCheckout FAILED:', err);
                         // prepareCheckout() throws the raw Supabase PostgrestError
                         // rather than a BookingError. describeReserveFailure shows a
                         // DB guard's own words (P0001) and never raw Postgres text,
@@ -4214,21 +3633,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
           {/* Payment Modal - PASS EFFECTIVE ITEMS & TOTAL */}
           {(() => {
-            // The real Stripe route takes the sheet's order lines; the older
-            // card-entry modal still reads the cart items themselves.
-            const ActivePaymentModal: React.FC<PaymentModalProps> = USE_STRIPE_PAYMENTS ? CartStripePaymentSheet : PaymentModal;
             return (
-              <ActivePaymentModal
+              <CartStripePaymentSheet
                 isVisible={showPaymentModal}
                 onClose={() => {
                   // User backed out via the × close button without paying —
-                  // free the held slots immediately rather than making the
-                  // next client wait out the 5-minute TTL. Best-effort:
-                  // releaseCartCheckoutSlots never throws.
-                  if (holdBatchId) {
-                    releaseCartCheckoutSlots(holdBatchId);
-                    setHoldBatchId(null);
-                  }
+                  // free the held times now rather than making the next
+                  // client wait for them to expire.
                   if (serverCheckoutBatchId) {
                     cancelCheckout(serverCheckoutBatchId).catch(error => logger.error('Could not release secure checkout:', error));
                     setServerCheckoutBatchId(null);
@@ -4237,8 +3648,9 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 }}
                 effectiveCartItems={paymentSheetCartItems}
                 totalAmount={paymentTotal}
+                previousTotal={priceChangedTotal}
                 checkoutBatchId={serverCheckoutBatchId}
-                onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
+                onPaymentSuccess={handlePaymentSuccess}
                 onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}
                 onPaymentInFlight={inFlight => { paymentInFlightRef.current = inFlight; }}
                 getSheetOpenId={() => paymentSheetOpenIdRef.current}
@@ -4276,16 +3688,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   if (navigation.isFocused()) setShowPaymentSuccessModal(true);
                 }}
                 onBookingFailed={(message) => {
-                  // Booking failed after payment (or during) — the held
-                  // slots are either already claimed/converted by
-                  // createBookingsFromCart or still on_hold; releasing here
-                  // is a safe no-op for the former (release only matches
-                  // rows still status='on_hold') and correct cleanup for
-                  // the latter.
-                  if (holdBatchId) {
-                    releaseCartCheckoutSlots(holdBatchId);
-                    setHoldBatchId(null);
-                  }
+                  // The payment didn't go through: give the held times back.
                   if (serverCheckoutBatchId) {
                     cancelCheckout(serverCheckoutBatchId).catch(error => logger.error('Could not release secure checkout:', error));
                     setServerCheckoutBatchId(null);
@@ -4435,7 +3838,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         <Text style={[styles.pickerRowName, { color: theme.text }]} numberOfLines={1}>
                           {pItem.serviceName}
                           {isDuplicate ? ` #${pItem.serviceInstanceIndex ?? 1}` : ''}
-                          {b.isDepositOnly ? t('cart.mockPay.depositSuffix') : ''}
+                          {b.isDepositOnly ? t('cart.payment.depositSuffix') : ''}
                         </Text>
                         <Text
                           style={[

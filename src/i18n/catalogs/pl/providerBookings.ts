@@ -10,7 +10,7 @@ export const providerBookings: AreaCatalog<typeof en> = {
   "providerBookings.status.noShowTitle": "Nieobecność",
   "providerBookings.status.inProgressTitle": "W trakcie",
   "providerBookings.scheduleIssue.overlap": "Nakłada się na inną rezerwację",
-  "providerBookings.scheduleIssue.timeUnavailable": "Ta godzina nie jest już dostępna w Twoim grafiku",
+  "providerBookings.scheduleIssue.timeUnavailable": "Poza godzinami pracy",
   "providerBookings.scheduleIssue.notWorking": "W dniu, w którym nie pracujesz",
   "providerBookings.scheduleIssue.blockedDate": "W dniu, który został zablokowany",
   "providerBookings.scheduleIssue.unconfirmedPastStart": "Nadal niepotwierdzona, a godzina rozpoczęcia minęła",

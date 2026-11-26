@@ -40,30 +40,6 @@ export function calculatePlatformFeePence(chargedPence: number): number {
 }
 
 /**
- * Shares a checkout's fee across its bookings by what each is charged, in
- * whole pence, the way apply_checkout_platform_fee does: a booking charged
- * nothing gets nothing, every other share is rounded half up but never more
- * than what's left, and the last charged booking takes the remainder. The
- * shares always add up to the fee and are never negative. (The server orders
- * bookings by id, so which booking takes a stray penny can differ from the
- * app's order; the server's split is the one stored.)
- */
-export function splitPlatformFeePence(feePence: number, chargedPence: number[]): number[] {
-  const total = chargedPence.reduce((sum, p) => sum + Math.max(0, p), 0);
-  if (feePence <= 0 || total <= 0) return chargedPence.map(() => 0);
-  const lastCharged = chargedPence.reduce((last, p, i) => (p > 0 ? i : last), -1);
-  let allocated = 0;
-  return chargedPence.map((p, i) => {
-    if (p <= 0) return 0;
-    const share = i === lastCharged
-      ? feePence - allocated
-      : Math.min(Math.floor((2 * feePence * p + total) / (2 * total)), feePence - allocated);
-    allocated += share;
-    return share;
-  });
-}
-
-/**
  * Checkouts whose in-app total (fee included) is above this don't offer
  * PayPal: PayPal costs CERVICED about 3.1% + 40p, so with the fee capped at
  * £24.99 a larger PayPal payment loses money. Card, Apple Pay and Google Pay

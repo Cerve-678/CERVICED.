@@ -443,7 +443,7 @@ export async function getRefundRequestsForBooking(bookingId: string): Promise<Re
  *  cancelled the booking. Idempotent and a safe no-op when nothing was captured
  *  (e.g. Stripe not live) — it then just reports 'no_payment'. Throws on a hard
  *  failure so the caller can surface/log it; the cancel itself has already
- *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
+ *  succeeded regardless. */
 export async function applyCancellationRefund(
   bookingId: string,
 ): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible' | 'not_charged'> {
