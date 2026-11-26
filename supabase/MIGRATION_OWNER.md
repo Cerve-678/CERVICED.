@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-26 (release payouts settles stuck fees)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126160000 | `release_payouts_settles_stuck_fees` | **APPLIED 2026-11-26** on the user's "yep", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row: lets `process_due_payouts()` start a run for a fee row at `processing` for 15+ minutes. Applied straight after 150000. md5 guard matched. Dry run first. Verified live: version recorded; gate present (md5 `9aec160d…`); not executable by authenticated, executable by service_role; cron `release-due-payouts` still `*/15`. `release-payouts` deploy by the user. PR #820. |
+
 ### Applied 2026-11-26 (client bookings promo discount)
 
 | Recorded version | Name | Verified live |

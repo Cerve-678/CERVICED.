@@ -394,3 +394,101 @@ async function notifyClient(
   });
   if (error) console.error(`[feePayRequest] ${type} notification failed for ${fee.id}: ${String(error.message ?? error)}`);
 }
+
+/** How long a fee row may sit at 'processing' before it counts as stuck.
+ *  booking-fee finishes in seconds; anything older was left behind when the
+ *  function stopped part-way (a timeout, a crash, a lost connection). */
+export const STUCK_FEE_AFTER_MS = 15 * 60 * 1000;
+
+interface StuckFeeRow extends FeeRow {
+  payment_intent_id: string | null;
+  created_at: string;
+}
+
+/**
+ * Settle late / no-show / late-cancel fee rows left at 'processing'. A stuck
+ * row blocks the whole visit (no second fee can be charged), and if Stripe
+ * had already taken the money it is never paid out or refundable, because
+ * recordFeePaid only accepts a payment already bound to the row.
+ *
+ * For each one, Stripe decides:
+ * - the payment went through: bind it, record it, tell the client (they were
+ *   never told);
+ * - it's still going through: leave it for the next run;
+ * - anything else: cancel any payment still open so it can't go through
+ *   later, mark the row failed, and tell the provider nothing was taken.
+ * Run by release-payouts.
+ */
+export async function settleStuckFees(admin: SupabaseClient, stripe: Stripe, limit: number): Promise<{ charged: number; released: number }> {
+  const cutoff = new Date(Date.now() - STUCK_FEE_AFTER_MS).toISOString();
+  const { data: stuck, error } = await admin.from('booking_fee_charges')
+    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, payment_intent_id, created_at')
+    .eq('status', 'processing').lte('created_at', cutoff)
+    .order('created_at', { ascending: true }).limit(limit);
+  if (error) throw error;
+  let charged = 0;
+  let released = 0;
+  for (const fee of (stuck ?? []) as StuckFeeRow[]) {
+    try {
+      const outcome = await settleStuckFee(admin, stripe, fee);
+      if (outcome === 'charged') charged++;
+      if (outcome === 'released') released++;
+    } catch (err) {
+      console.error(`[feePayRequest] could not settle stuck fee ${fee.id}: ${String(err)}`);
+    }
+  }
+  return { charged, released };
+}
+
+/** This fee's own payment in Stripe, or null if none was ever made. Without a
+ *  bound id it lists the client's payments since the row was created (always
+ *  up to date, unlike Stripe search) and matches the fee's own id. */
+async function findFeeIntent(admin: SupabaseClient, stripe: Stripe, fee: StuckFeeRow): Promise<Stripe.PaymentIntent | null> {
+  if (fee.payment_intent_id) return await stripe.paymentIntents.retrieve(fee.payment_intent_id);
+  // booking-fee charges the customer behind the booking's own payment.
+  const { data: booking, error } = await admin.from('bookings').select('payment_intent_id').eq('id', fee.booking_id).maybeSingle();
+  if (error) throw error;
+  if (!booking?.payment_intent_id) return null;
+  const original = await stripe.paymentIntents.retrieve(booking.payment_intent_id);
+  const customerId = typeof original.customer === 'string' ? original.customer : original.customer?.id ?? null;
+  if (!customerId) return null;
+  const since = Math.floor(new Date(fee.created_at).getTime() / 1000) - 60;
+  for await (const intent of stripe.paymentIntents.list({ customer: customerId, created: { gte: since }, limit: 100 })) {
+    if (intent.metadata?.fee_charge_id === fee.id) return intent;
+  }
+  return null;
+}
+
+async function settleStuckFee(admin: SupabaseClient, stripe: Stripe, fee: StuckFeeRow): Promise<'charged' | 'released' | 'skipped'> {
+  const intent = await findFeeIntent(admin, stripe, fee);
+  if (intent?.status === 'processing') return 'skipped';
+
+  if (intent?.status === 'succeeded') {
+    if (intent.metadata?.fee_charge_id !== fee.id) return 'skipped';
+    if (!fee.payment_intent_id) {
+      const { error } = await admin.from('booking_fee_charges').update({ payment_intent_id: intent.id })
+        .eq('id', fee.id).eq('status', 'processing').is('payment_intent_id', null);
+      if (error) throw error;
+    }
+    if (await recordFeePaid(admin, stripe, fee.id, intent.id) !== 'processing') return 'skipped';
+    const { data: booking } = await admin.from('bookings').select('provider_name_snapshot, service_name_snapshot').eq('id', fee.booking_id).maybeSingle();
+    const providerName = booking?.provider_name_snapshot?.trim() || 'Your provider';
+    await notifyClient(admin, fee, 'fee_charged', `${pounds(fee.amount_pence)} ${feeLabel(fee.kind)} charged`,
+      `${providerName} charged the ${feeLabel(fee.kind)} you agreed to when booking${booking?.service_name_snapshot ? ` ${booking.service_name_snapshot}` : ''}. If you think it's wrong, you can dispute it within 7 days.`,
+      {});
+    return 'charged';
+  }
+
+  // Nothing was taken. Stop a payment still waiting (on the bank, say) so it
+  // can't go through after the row is closed.
+  if (intent && intent.status !== 'canceled') await stripe.paymentIntents.cancel(intent.id);
+  const { data: updated, error } = await admin.from('booking_fee_charges')
+    .update({ status: 'failed', failure_reason: 'stopped_before_charging' })
+    .eq('id', fee.id).eq('status', 'processing').select('id');
+  if (error) throw error;
+  if (!updated?.length) return 'skipped';
+  await notifyProvider(admin, fee, 'fee_payment_lapsed',
+    `${pounds(fee.amount_pence)} ${feeLabel(fee.kind)} wasn't charged`,
+    `We couldn't finish charging the ${feeLabel(fee.kind)}, so nothing was taken. You can charge it again from the booking while it's still within the time allowed.`);
+  return 'released';
+}
