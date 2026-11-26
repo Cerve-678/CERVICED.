@@ -84,7 +84,7 @@ CREATE OR REPLACE VIEW public.client_bookings WITH (security_invoker = true) AS
   WHERE b.status <> 'on_hold'::text;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261126130000', 'client_bookings_promo_discount')
+VALUES ('20261126150000', 'client_bookings_promo_discount')
 ON CONFLICT DO NOTHING;
 
 COMMIT;

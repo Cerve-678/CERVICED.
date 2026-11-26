@@ -270,7 +270,7 @@ that, putting it right means taking money back from Jo (section 2.8).
    provider's invoice and the confirmation email) list the service at its
    full price and the code as its own "Promo discount" line, with the total
    unchanged. That needs `client_bookings.promo_discount` (migration
-   `20261126130000_client_bookings_promo_discount`), a new app build for the
+   `20261126150000_client_bookings_promo_discount`), a new app build for the
    screen and PDF, and `send-booking-confirmation` deployed for the email.
    *Live since 13 November. Until
    migration
