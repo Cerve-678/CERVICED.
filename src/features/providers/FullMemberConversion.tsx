@@ -38,6 +38,8 @@ import {
   countLeftToGoLive,
   FULL_MEMBER_NOW_YOU_CAN,
 } from './conversionSteps';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export type ConversionPhase = 'working' | 'done' | 'failed';
 
@@ -70,6 +72,8 @@ interface ServerResult {
 }
 
 export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: FullMemberConversionProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const { becomeFullMember } = useAuth();
   const insets = useSafeAreaInsets();
@@ -192,7 +196,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
             <View style={styles.square}>
               <View style={styles.squareHead}>
                 <Text style={styles.squareKicker}>SWITCHING TO CERVICED</Text>
-                <Text style={styles.squareKicker}>{stepsDone >= total ? 'DONE' : `${stepsDone + 1} OF ${total}`}</Text>
+                <Text style={styles.squareKicker}>{stepsDone >= total ? tr('discover.page.done') : tr('discover.page.stepOf', { step: stepsDone + 1, total })}</Text>
               </View>
               <Animated.Text
                 style={[styles.lead, {
@@ -252,7 +256,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
         {phase === 'done' && (
           <>
             <Text style={styles.kicker}>YOU'RE A FULL MEMBER</Text>
-            <Text style={styles.title}>You can now</Text>
+            <Text style={styles.title}>{tr('discover.page.youCanNow')}</Text>
             <View style={styles.nowList}>
               {FULL_MEMBER_NOW_YOU_CAN.map(line => (
                 <View key={line} style={styles.step}>
@@ -264,7 +268,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
             {left !== null && left > 0 && (
               <View style={styles.leftRow}>
                 <Text style={styles.leftNumber}>{left}</Text>
-                <Text style={styles.leftWord}>{left === 1 ? 'thing to check to go live' : 'things to check to go live'}</Text>
+                <Text style={styles.leftWord}>{left === 1 ? tr('discover.page.thingToCheck') : tr('discover.page.thingsToCheck')}</Text>
               </View>
             )}
             {result?.status && (
@@ -281,7 +285,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
               activeOpacity={0.75}
               accessibilityRole="button"
             >
-              <Text style={styles.ctaText}>{isLive ? 'Go to Home' : 'Finish going live'}</Text>
+              <Text style={styles.ctaText}>{isLive ? tr('discover.page.goToHome') : tr('discover.page.finishGoingLive')}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -289,7 +293,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
         {phase === 'failed' && (
           <>
             <View style={styles.alert} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Ionicons name="alert" size={30} color={fg} /></View>
-            <Text style={styles.failTitle}>We couldn't finish switching you over.</Text>
+            <Text style={styles.failTitle}>{tr('discover.page.weCouldnTFinishSwitchingYou')}</Text>
             <Text style={styles.note}>{failure}</Text>
             <View style={styles.flex} />
             <TouchableOpacity
@@ -298,7 +302,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
               activeOpacity={0.75}
               accessibilityRole="button"
             >
-              <Text style={styles.ctaText}>Try again</Text>
+              <Text style={styles.ctaText}>{tr('common.tryAgain')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.ghost}
@@ -306,7 +310,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
               activeOpacity={0.55}
               accessibilityRole="button"
             >
-              <Text style={styles.ghostText}>Not now</Text>
+              <Text style={styles.ghostText}>{tr('common.notNow')}</Text>
             </TouchableOpacity>
           </>
         )}

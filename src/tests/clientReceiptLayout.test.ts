@@ -25,21 +25,21 @@ describe('client receipt layout', () => {
   it('puts Subtotal right under the add-ons, only when there are any', () => {
     const addOns = at('(booking.addOns ?? []).map(');
     const subtotal = at('{payment.addOnsTotal > 0 && (');
-    const fee = at('>Platform fee<');
+    const fee = at("{tr('clientBooking.detail.platformFee')}");
     expect(addOns).toBeLessThan(subtotal);
     expect(subtotal).toBeLessThan(fee);
   });
 
   it('lists the deposit under Total, next to Paid', () => {
-    const total = at('>Total<');
-    const deposit = at('>Deposit paid<');
-    const paid = at("'Paid (incl. fee)'");
+    const total = at("{tr('clientBooking.sheet.total')}");
+    const deposit = at("{tr('clientBooking.detail.depositPaid')}");
+    const paid = at("tr('clientBooking.detail.paidInclFee')");
     expect(total).toBeLessThan(deposit);
     expect(deposit).toBeLessThan(paid);
   });
 
   it('View Receipt has no icon', () => {
-    const button = src.slice(at('style={[st.receiptButton'), at("{showReceipt ? 'Hide' : 'View Receipt'}"));
+    const button = src.slice(at('style={[st.receiptButton'), at("{showReceipt ? tr('clientBooking.detail.hideReceipt') : tr('clientBooking.detail.viewReceipt')}"));
     expect(button).not.toContain('<Ionicons');
   });
 });

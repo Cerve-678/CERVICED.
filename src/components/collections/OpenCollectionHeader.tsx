@@ -7,6 +7,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useFolderPhotos } from '../../stores/useCollectionsStore';
 import type { ExploreCollection } from '../../types/collections';
 import { CollectionFolder } from './CollectionFolder';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface OpenCollectionHeaderProps {
   collection: ExploreCollection;
@@ -16,6 +18,8 @@ interface OpenCollectionHeaderProps {
 
 /** Top of the Favourites grid while one collection is open. */
 export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollectionHeaderProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const photos = useFolderPhotos(collection.itemIds);
   const count = collection.itemIds.length;
@@ -31,19 +35,19 @@ export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollect
           style={[styles.pill, { backgroundColor: P.surface }]}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="Back to all Favourites"
+          accessibilityLabel={tr('shared.newc.backToAllFavourites')}
         >
           <Ionicons name="chevron-back" size={16} color={P.text} />
-          <Text style={[styles.pillText, { color: P.text }]}>All Favourites</Text>
+          <Text style={[styles.pillText, { color: P.text }]}>{tr('shared.newc.allFavourites')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => { tap(); onEdit(); }}
           style={[styles.pill, { backgroundColor: P.surface }]}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={`Edit ${collection.name}`}
+          accessibilityLabel={tr('shared.newc2.editName', { name: collection.name })}
         >
-          <Text style={[styles.pillText, styles.editText, { color: P.text }]}>Edit</Text>
+          <Text style={[styles.pillText, styles.editText, { color: P.text }]}>{tr('common.edit')}</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.titleRow}>
@@ -58,7 +62,7 @@ export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollect
         <View style={styles.titleText}>
           <Text style={[styles.title, { color: P.text }]} numberOfLines={2}>{collection.name}</Text>
           <Text style={[styles.count, { color: P.sub }]}>
-            {count === 0 ? 'Empty' : count === 1 ? '1 look' : `${count} looks`}
+            {count === 0 ? tr('shared.newc.empty') : count === 1 ? tr('shared.newc.n1Look') : tr('shared.newc2.nLooks', { count })}
           </Text>
         </View>
       </View>

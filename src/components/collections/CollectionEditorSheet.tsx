@@ -7,6 +7,8 @@ import { COLLECTION_COLORS, type CollectionColor, type ExploreCollection } from 
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { CollectionForm } from './CollectionForm';
 import { CollectionSheetFrame } from './CollectionSheetFrame';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface CollectionEditorSheetProps {
   visible: boolean;
@@ -19,6 +21,8 @@ interface CollectionEditorSheetProps {
 
 /** Make a collection, or rename, recolour or delete one. */
 export function CollectionEditorSheet({ visible, collection, onClose, onDeleted }: CollectionEditorSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const create = useCollectionsStore(s => s.create);
   const update = useCollectionsStore(s => s.update);
@@ -43,7 +47,7 @@ export function CollectionEditorSheet({ visible, collection, onClose, onDeleted 
   const handleSave = useCallback(async () => {
     if (busy) return;
     if (!name.trim()) {
-      setError('Give your collection a name.');
+      setError(tr('shared.newc.giveYourCollectionAName'));
       return;
     }
     setBusy(true);
@@ -80,10 +84,10 @@ export function CollectionEditorSheet({ visible, collection, onClose, onDeleted 
   return (
     <CollectionSheetFrame
       visible={visible}
-      title={deleting ? `Delete ${collection.name}?` : collection ? 'Edit collection' : 'New collection'}
+      title={deleting ? tr('shared.newc2.deleteQ', { name: collection.name }) : collection ? tr('shared.newc2.editCollection') : 'New collection'}
       subtitle={
         deleting
-          ? 'Only the folder goes. Every look in it stays in your Favourites.'
+          ? tr('shared.newc.onlyTheFolderGoesEveryLook')
           : collection
             ? undefined
             : 'Heart a look in Explore, then add it here.'
@@ -99,7 +103,7 @@ export function CollectionEditorSheet({ visible, collection, onClose, onDeleted 
               style={[styles.button, { backgroundColor: P.surface }]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.buttonText, { color: P.text }]}>Keep it</Text>
+              <Text style={[styles.buttonText, { color: P.text }]}>{tr('shared.newc.keepIt')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleDelete}
@@ -110,7 +114,7 @@ export function CollectionEditorSheet({ visible, collection, onClose, onDeleted 
               {busy ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>Delete</Text>
+                <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>{tr('common.delete')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -138,13 +142,13 @@ export function CollectionEditorSheet({ visible, collection, onClose, onDeleted 
               {busy ? (
                 <ActivityIndicator color={P.onAccent} />
               ) : (
-                <Text style={[styles.buttonText, { color: P.onAccent }]}>{collection ? 'Save' : 'Make collection'}</Text>
+                <Text style={[styles.buttonText, { color: P.onAccent }]}>{collection ? tr('common.save') : tr('shared.newc.makeCollection')}</Text>
               )}
             </TouchableOpacity>
           </View>
           {collection && (
             <TouchableOpacity onPress={() => setConfirmingDelete(true)} style={styles.deleteLink} activeOpacity={0.7}>
-              <Text style={styles.deleteText}>Delete collection</Text>
+              <Text style={styles.deleteText}>{tr('shared.newc.deleteCollection')}</Text>
             </TouchableOpacity>
           )}
         </>

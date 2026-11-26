@@ -48,6 +48,8 @@ import { PagePattern, SectionDivider } from "../pageParts";
 import { isDarkColor } from "../../../constants/providerThemes";
 import type { ProviderProfileData } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 /** Matches the hero's lip: the sheet's rounded top corners. */
 const SHEET_LIP_RADIUS = 36;
@@ -143,6 +145,8 @@ export function ProviderPageSheet({
   onGetInTouch,
   onOpenImage,
 }: ProviderPageSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const {
     OP,
     pageStyle,
@@ -237,7 +241,7 @@ export function ProviderPageSheet({
               }}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={`Go to ${PAGE_SECTION_TITLES[key]}`}
+              accessibilityLabel={tr('discover.page.goToA11y', { name: PAGE_SECTION_TITLES[key] })}
             >
               <Text
                 style={[styles.jumpBarText, { color: onAccentInk(adaptiveAccentColor).text }]}
@@ -319,7 +323,7 @@ export function ProviderPageSheet({
                         { color: infoTab === "about" ? OP.text : OP.sub },
                       ]}
                     >
-                      About
+                      {tr('discover.profile.tab.about')}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -339,7 +343,7 @@ export function ProviderPageSheet({
                         { color: infoTab === "policy" ? OP.text : OP.sub },
                       ]}
                     >
-                      Policy
+                      {tr('discover.profile.tab.policy')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -350,7 +354,7 @@ export function ProviderPageSheet({
               <>
                 {!hasProviderPolicyInfo(provider) && (
                   <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                    Relevant Information
+                    {tr('discover.profile.relevantInfo')}
                   </Text>
                 )}
                 {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
@@ -436,7 +440,7 @@ export function ProviderPageSheet({
                         site, so CERVICED applies none of this. */}
                     {isLinkOnly && rows.length > 0 && (
                       <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
-                        These policies are handled on their booking site.
+                        {tr('discover.page.thesePoliciesAreHandledOnTheir')}
                       </Text>
                     )}
                   </View>
@@ -457,7 +461,7 @@ export function ProviderPageSheet({
                   styles.policyImageFab,
                   { backgroundColor: adaptiveAccentColor },
                 ]}
-                accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
+                accessibilityLabel={policyPages.length > 1 ? tr('discover.page.viewPolicyPagesA11y', { count: policyPages.length }) : tr('discover.profile.viewFullPolicyA11y')}
                 accessibilityRole="button"
               >
                 <Ionicons
@@ -515,7 +519,7 @@ export function ProviderPageSheet({
                 const footer = (ink: { text: string; sub: string }) =>
                   isLinkOnly && rows.length > 0 ? (
                     <Text style={[styles.policyHandledNote, { color: ink.sub }]}>
-                      These policies are handled on their booking site.
+                      {tr('discover.page.thesePoliciesAreHandledOnTheir')}
                     </Text>
                   ) : null;
                 if (pageStyle.policies === "band") {
@@ -560,7 +564,7 @@ export function ProviderPageSheet({
       >
         {pageStyle.heading === "plain" ? (
           <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
-            Services
+            {tr('discover.profile.services')}
           </Text>
         ) : (
           <>
@@ -579,7 +583,7 @@ export function ProviderPageSheet({
 
         {!takingBookings && closureReason ? (
           <Text style={{ color: OP.sub, fontSize: 13, marginBottom: 10 }}>
-            Not taking bookings: {closureReason.toLowerCase()}
+            {tr('discover.page.notTakingBookings2')} {closureReason.toLowerCase()}
           </Text>
         ) : null}
 

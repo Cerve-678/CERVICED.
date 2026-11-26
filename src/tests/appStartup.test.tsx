@@ -29,7 +29,11 @@ jest.mock('../contexts/ThemeContext', () => ({
   ThemeProvider: ({ children }: any) => children,
   useTheme: () => ({ isDarkMode: false }),
 }));
-jest.mock('../contexts/DisplaySettingsContext', () => ({ DisplaySettingsProvider: ({ children }: any) => children }));
+jest.mock('../contexts/DisplaySettingsContext', () => ({
+  DisplaySettingsProvider: ({ children }: any) => children,
+  // The loading screen's text is translated; outside a provider it reads English.
+  useOptionalLanguage: () => null,
+}));
 jest.mock('../contexts/RegistrationContext', () => ({ RegistrationProvider: ({ children }: any) => children }));
 jest.mock('../contexts/FontContext', () => ({ FontProvider: ({ children }: any) => children }));
 jest.mock('../contexts/CartContext', () => ({ CartProvider: ({ children }: any) => children }));

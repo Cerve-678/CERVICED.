@@ -6,6 +6,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useFolderPhotos } from '../../stores/useCollectionsStore';
 import type { ExploreCollection } from '../../types/collections';
 import { CollectionFolder, type FolderPaperRect } from './CollectionFolder';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const FOLDER_WIDTH = 138;
 
@@ -21,21 +23,23 @@ interface CollectionsRowProps {
 
 /** The swipeable row of jelly folders at the top of Explore → Favourites. */
 export function CollectionsRow({ collections, onOpen, onEdit, onNew, inset }: CollectionsRowProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
 
   return (
     <View style={styles.wrap}>
       <View style={[styles.header, { paddingHorizontal: inset }]}>
-        <Text style={[styles.title, { color: P.text }]}>Collections</Text>
+        <Text style={[styles.title, { color: P.text }]}>{tr('shared.newc.collections')}</Text>
         <TouchableOpacity
           onPress={() => { tap(); onNew(); }}
           style={[styles.newPill, { backgroundColor: P.surface }]}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="New collection"
+          accessibilityLabel={tr('shared.newc.newCollection')}
         >
           <Ionicons name="add" size={16} color={P.text} />
-          <Text style={[styles.newText, { color: P.text }]}>New</Text>
+          <Text style={[styles.newText, { color: P.text }]}>{tr('common.new')}</Text>
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -53,8 +57,8 @@ export function CollectionsRow({ collections, onOpen, onEdit, onNew, inset }: Co
             activeOpacity={0.7}
           >
             <Ionicons name="folder-open-outline" size={26} color={P.sub} />
-            <Text style={[styles.ghostTitle, { color: P.text }]}>Start a collection</Text>
-            <Text style={[styles.ghostSub, { color: P.sub }]}>Sort your looks into folders</Text>
+            <Text style={[styles.ghostTitle, { color: P.text }]}>{tr('shared.newc.startACollection')}</Text>
+            <Text style={[styles.ghostSub, { color: P.sub }]}>{tr('shared.newc.sortYourLooksIntoFolders')}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

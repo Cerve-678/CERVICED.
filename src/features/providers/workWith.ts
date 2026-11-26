@@ -6,6 +6,7 @@
 import { SKIN_TONES } from '../../constants/skinTones';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { splitProductsUsed } from '../business-details/productBrands';
+import { tr } from '../../i18n/translate';
 
 export type ChipGroup = { label: string; chips: string[] };
 
@@ -28,13 +29,13 @@ export function workWithGroups(provider: {
 }): ChipGroup[] {
   const groups: ChipGroup[] = [];
   if (provider.clientele.length > 0) {
-    groups.push({ label: 'Works with', chips: [...provider.clientele] });
+    groups.push({ label: tr('discover.page.worksWith'), chips: [...provider.clientele] });
   }
   if (provider.skinTonesCatered.length > 0) {
-    groups.push({ label: 'Skin tones', chips: inOrder(provider.skinTonesCatered, SKIN_TONES, 'All skin tones') });
+    groups.push({ label: tr('discover.page.skinTones'), chips: inOrder(provider.skinTonesCatered, SKIN_TONES, 'All skin tones') });
   }
   if (provider.hairTypesCatered.length > 0) {
-    groups.push({ label: 'Hair types', chips: inOrder(provider.hairTypesCatered, HAIR_TYPES, 'All hair types') });
+    groups.push({ label: tr('discover.page.hairTypes'), chips: inOrder(provider.hairTypesCatered, HAIR_TYPES, 'All hair types') });
   }
   return groups;
 }
@@ -50,5 +51,5 @@ export function productsGroup(provider: {
     ...(provider.veganCrueltyFree ? ['Vegan & cruelty-free'] : []),
     ...splitProductsUsed(provider.productsUsed),
   ];
-  return chips.length > 0 ? { label: 'Products', chips } : null;
+  return chips.length > 0 ? { label: tr('discover.page.products'), chips } : null;
 }

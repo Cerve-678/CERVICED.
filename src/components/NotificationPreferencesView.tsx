@@ -17,6 +17,8 @@ import { ThemedBackground } from './ThemedBackground';
 import Icon from './IconLibrary';
 import { toUserMessage } from '../utils/userFacingError';
 import { reportError } from '../utils/logger';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 export interface NotificationPreferenceRow<T> {
   key: keyof T & string;
@@ -98,6 +100,8 @@ const ToggleRow = ({ icon, title, subtitle, value, onToggle, palette: P }: Toggl
 export default function NotificationPreferencesView<T extends { [K in keyof T]: boolean }>({
   navigation, initial, load: loadPrefs, save, sections, alwaysOn, logTag,
 }: Props<T>) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -214,9 +218,9 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
           <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: P.text }]}>Notifications</Text>
+        <Text style={[styles.title, { color: P.text }]}>{tr('profile.pref.notifications.title')}</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          Choose what you hear from us
+          {tr('shared.newc.chooseWhatYouHearFromUs')}
         </Text>
 
         {loadState === 'loading' && (
@@ -230,16 +234,16 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
             would read them as their own saved choices. */}
         {loadState === 'error' && (
           <View style={[styles.stateBlock, styles.errorBlock, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.errorTitle, { color: P.text }]}>Settings unavailable</Text>
+            <Text style={[styles.errorTitle, { color: P.text }]}>{tr('shared.newc.settingsUnavailable')}</Text>
             <Text style={[styles.errorBody, { color: P.sub }]}>
-              {loadError} We haven't changed anything — your existing preferences are still in place.
+              {loadError} {tr('shared.newc.weHavenTChangedAnythingYour')}
             </Text>
             <TouchableOpacity
               onPress={load}
               activeOpacity={0.7}
               style={[styles.retryBtn, { borderColor: P.border }]}
             >
-              <Text style={[styles.retryBtnText, { color: P.accentText }]}>Try again</Text>
+              <Text style={[styles.retryBtnText, { color: P.accentText }]}>{tr('common.tryAgain')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -250,7 +254,7 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
               <>
                 <Text style={[styles.section, { color: P.accentText }]}>{alwaysOn.title}</Text>
                 {alwaysOn.rows.map(row => (
-                  <StaticRow key={row.title} row={row} label="Always on" palette={P} />
+                  <StaticRow key={row.title} row={row} label={tr('shared.newc.alwaysOn')} palette={P} />
                 ))}
                 <Text style={[styles.sectionNote, { color: P.sub }]}>{alwaysOn.note}</Text>
               </>
@@ -276,15 +280,15 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
             {saveError ? (
               <View style={styles.saveFailed}>
                 <Text style={[styles.saveFailedText, { color: P.text }]}>
-                  {saveError} Your last change hasn't been applied yet.
+                  {saveError} {tr('shared.newc.yourLastChangeHasnTBeen')}
                 </Text>
                 <TouchableOpacity onPress={retrySave} activeOpacity={0.7}>
-                  <Text style={[styles.saveRetryText, { color: P.accentText }]}>Retry</Text>
+                  <Text style={[styles.saveRetryText, { color: P.accentText }]}>{tr('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <Text style={[styles.note, { color: P.sub }]}>
-                {saving ? 'Saving…' : 'Preferences saved automatically.'}
+                {saving ? tr('common.saving') : tr('shared.newc.preferencesSavedAutomatically')}
               </Text>
             )}
           </>

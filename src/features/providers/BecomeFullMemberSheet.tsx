@@ -23,21 +23,23 @@ import {
 } from '../../constants/fullMembership';
 import { FullMemberConversion, type ConversionPhase } from './FullMemberConversion';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const NOT_LIVE = '#B07A3C';
 
 const CHANGES: { icon: IconName; title: string; body: string; warn?: boolean }[] = [
-  { icon: 'unlink-outline', title: 'Your booking link goes', body: 'Clients book and pay you in CERVICED instead.' },
+  { icon: 'unlink-outline', get title() { return tr('discover.page.yourBookingLinkGoes'); }, get body() { return tr('discover.page.clientsBookAndPayYouIn'); } },
   {
     icon: 'eye-off-outline',
-    title: "You come off CERVICED until you go live again",
-    body: "Clients can't find you while you add your services and prices, business address and booking policies.",
+    get title() { return tr('discover.page.youComeOffCervicedUntilYou'); },
+    get body() { return tr('discover.page.clientsCanTFindYouWhile'); },
     warn: true,
   },
-  { icon: 'arrow-forward', title: "It's one way", body: "You can't switch back to your own link in the app." },
-  { icon: 'checkmark', title: "Everything you've built stays", body: 'Your logo, About, hours, portfolio, messages and saves.' },
+  { icon: 'arrow-forward', get title() { return tr('discover.page.itSOneWay'); }, get body() { return tr('discover.page.youCanTSwitchBackTo'); } },
+  { icon: 'checkmark', get title() { return tr('discover.page.everythingYouVeBuiltStays'); }, get body() { return tr('discover.page.yourLogoAboutHoursPortfolioMessages'); } },
 ];
 
 interface BecomeFullMemberSheetProps {
@@ -46,6 +48,8 @@ interface BecomeFullMemberSheetProps {
 }
 
 export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberSheetProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const { enterFullMemberMode } = useAuth();
   const bottomInset = useSystemBottomInset();
@@ -84,7 +88,7 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
           <View style={[styles.grabber, { backgroundColor: P.border }]} />
 
           <Text style={[styles.kicker, { color: P.sub }]}>TAKE BOOKINGS ON CERVICED</Text>
-          <Text style={[styles.title, { color: P.text }]}>Become a full member</Text>
+          <Text style={[styles.title, { color: P.text }]}>{tr('discover.page.becomeFullMember')}</Text>
 
           <View style={[styles.offer, { backgroundColor: P.accent }]}>
             <Text style={[styles.offerNumber, { color: P.onAccent }]}>{FULL_MEMBER_FREE_MONTHS}</Text>
@@ -118,7 +122,7 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
             <Text style={[styles.primaryText, { color: P.onAccent }]}>Become a full member</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={close} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={[styles.secondaryText, { color: P.sub }]}>Not now</Text>
+            <Text style={[styles.secondaryText, { color: P.sub }]}>{tr('common.notNow')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

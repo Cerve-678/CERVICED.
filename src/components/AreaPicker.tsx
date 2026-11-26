@@ -15,6 +15,7 @@ import { CITY_AREA_NAMES, COUNTY_TOWNS, getCityAreaData, searchPlaces, type Plac
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { samePlace } from '../utils/providerCity';
 import { readableSheet } from '../constants/readableWidth';
+import { tr, useTranslation } from '../i18n';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
@@ -82,6 +83,8 @@ export default function AreaPicker({
   picked,
   renderTrigger,
 }: AreaPickerProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const covering = variant === 'cover';
   const isPicked = (place: string) => !!picked?.some(p => samePlace(p, place));
   const bottomInset = useSystemBottomInset();
@@ -256,7 +259,7 @@ export default function AreaPicker({
             {match.region.includes(match.town) ? match.region : `${match.region} · ${match.town}`}
           </Text>
         ) : match.kind === 'county' ? (
-          <Text style={styles.matchWhere}>County</Text>
+          <Text style={styles.matchWhere}>{tr('discover.area.county')}</Text>
         ) : null}
       </View>
       {match.kind === 'area'
@@ -279,7 +282,7 @@ export default function AreaPicker({
   // Already on the list: a tick instead of the usual chevron.
   const rowEnd = (place: string, chevronColor: string) =>
     isPicked(place)
-      ? <Ionicons name="checkmark-circle" size={19} color={accentColor} accessibilityLabel="Already added" />
+      ? <Ionicons name="checkmark-circle" size={19} color={accentColor} accessibilityLabel={tr('discover.area.alreadyAdded')} />
       : <Ionicons name="chevron-forward" size={17} color={chevronColor} />;
 
   return (
@@ -291,7 +294,7 @@ export default function AreaPicker({
           disabled={disabled}
           activeOpacity={0.75}
           accessibilityRole="button"
-          accessibilityLabel="Choose your area"
+          accessibilityLabel={tr('discover.area.chooseA11y')}
         >
           <Ionicons name="map-outline" size={20} color={accentColor} />
           <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
@@ -313,7 +316,7 @@ export default function AreaPicker({
                   <TouchableOpacity
                     onPress={back}
                     hitSlop={12}
-                    accessibilityLabel="Go back a step"
+                    accessibilityLabel={tr('discover.area.backA11y')}
                     style={styles.backBtn}
                   >
                     <Ionicons name="chevron-back" size={20} color="#1C1C1E" />
@@ -324,7 +327,7 @@ export default function AreaPicker({
                   <Text style={styles.subtitle}>{subtitle}</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel="Close area picker">
+              <TouchableOpacity onPress={close} hitSlop={12} accessibilityLabel={tr('discover.area.closeA11y')}>
                 <Ionicons name="close" size={24} color="#1C1C1E" />
               </TouchableOpacity>
             </View>
@@ -335,7 +338,7 @@ export default function AreaPicker({
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search a town or area, like Stoke Newington"
+                  placeholder={tr('discover.area.searchPlaceholder')}
                   placeholderTextColor="#8B8B95"
                   style={styles.input}
                   autoCapitalize="words"
@@ -349,7 +352,7 @@ export default function AreaPicker({
                 <TextInput
                   value={freeText}
                   onChangeText={setFreeText}
-                  placeholder={city === OTHER_CITY ? 'e.g. North West London' : 'e.g. Chinatown'}
+                  placeholder={city === OTHER_CITY ? tr('discover.area.examplePlace') : tr('discover.area.exampleArea')}
                   placeholderTextColor="#8B8B95"
                   style={styles.freeInput}
                   autoCapitalize="words"
@@ -366,13 +369,13 @@ export default function AreaPicker({
                 >
                   <Text style={styles.confirmBtnText}>
                     {freeTyped && !exactly(freeMatches, freeTyped)
-                      ? `Use "${freeTyped}"`
-                      : covering ? 'Add this place' : 'Use this area'}
+                      ? tr('discover.area.useTyped', { place: freeTyped })
+                      : covering ? tr('discover.area.addPlace') : tr('discover.area.useThis')}
                   </Text>
                 </TouchableOpacity>
                 {freeMatches.length > 0 ? (
                   <View>
-                    <Text style={styles.matchHeading}>Did you mean</Text>
+                    <Text style={styles.matchHeading}>{tr('discover.area.didYouMean')}</Text>
                     {freeMatches.map(matchRow)}
                   </View>
                 ) : null}
@@ -386,7 +389,7 @@ export default function AreaPicker({
                     activeOpacity={0.85}
                   >
                     <Ionicons name="create-outline" size={17} color={accentColor} />
-                    <Text style={[styles.otherRowText, { color: accentColor }]}>Other city…</Text>
+                    <Text style={[styles.otherRowText, { color: accentColor }]}>{tr('discover.area.otherCity')}</Text>
                   </TouchableOpacity>
                 )}
 
@@ -407,7 +410,7 @@ export default function AreaPicker({
                 {step === 'city' && !!typed && !exactly(matches, typed) ? (
                   <TouchableOpacity style={[styles.otherRow, { borderColor: accentColor }]} onPress={useTypedPlace} activeOpacity={0.85}>
                     <Ionicons name="add-circle-outline" size={17} color={accentColor} />
-                    <Text style={[styles.otherRowText, { color: accentColor }]}>Use "{typed}"</Text>
+                    <Text style={[styles.otherRowText, { color: accentColor }]}>{tr('discover.area.useTyped', { place: typed })}</Text>
                   </TouchableOpacity>
                 ) : null}
 
@@ -425,11 +428,11 @@ export default function AreaPicker({
                     onPress={pickWholeTown}
                     activeOpacity={0.5}
                     accessibilityRole="button"
-                    accessibilityLabel={`All of ${city}`}
+                    accessibilityLabel={tr('discover.area.allOf', { place: city })}
                   >
                     <View style={styles.wholeTownText}>
-                      <Text style={[styles.rowText, styles.wholeTownTitle, { color: accentColor }]}>All of {city}</Text>
-                      <Text style={styles.wholeTownSub}>Every area in {city}</Text>
+                      <Text style={[styles.rowText, styles.wholeTownTitle, { color: accentColor }]}>{tr('discover.area.allOf', { place: city })}</Text>
+                      <Text style={styles.wholeTownSub}>{tr('discover.area.everyAreaIn', { place: city })}</Text>
                     </View>
                     {rowEnd(city, accentColor)}
                   </TouchableOpacity>
@@ -461,7 +464,7 @@ export default function AreaPicker({
                       activeOpacity={0.85}
                     >
                       <Ionicons name="create-outline" size={17} color={accentColor} />
-                      <Text style={[styles.otherRowText, { color: accentColor }]}>Other…</Text>
+                      <Text style={[styles.otherRowText, { color: accentColor }]}>{tr('discover.area.otherOption')}</Text>
                     </TouchableOpacity>
                   </>
                 )}

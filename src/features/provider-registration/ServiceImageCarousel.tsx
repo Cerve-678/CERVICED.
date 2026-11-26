@@ -11,6 +11,7 @@ import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import type { ServiceImageDraft } from '../../services/providerRegistrationService';
+import { useTranslation } from '../../i18n';
 
 interface ServiceImageCarouselProps {
   images: ServiceImageDraft[];
@@ -45,6 +46,7 @@ export function ServiceImageCarousel({
   size = 80,
   styles,
 }: ServiceImageCarouselProps) {
+  const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const pitch = size + GAP;
@@ -250,7 +252,7 @@ export function ServiceImageCarousel({
               </TouchableOpacity>
               {index === 0 && dragIndex == null && (
                 <View style={styles.coverBadge}>
-                  <Text style={styles.coverBadgeText}>Cover</Text>
+                  <Text style={styles.coverBadgeText}>{t('providerSetup.images.cover')}</Text>
                 </View>
               )}
             </Animated.View>
@@ -267,12 +269,12 @@ export function ServiceImageCarousel({
           activeOpacity={0.7}
         >
           <Text style={styles.addImageIcon}>+</Text>
-          <Text style={styles.addImageText}>Add</Text>
+          <Text style={styles.addImageText}>{t('providerSetup.images.add')}</Text>
         </TouchableOpacity>
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Hold a photo to drag it — the first one leads your service.
+          {t('providerSetup.ui.holdAPhotoToDragIt')}
         </Text>
       )}
       {images.length > 0 && (

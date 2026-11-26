@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from '../../i18n';
 
 interface RequiredLabelProps {
   children: React.ReactNode;
@@ -21,6 +22,7 @@ interface RequiredLabelProps {
  *  still-needed flag for the continuous-document layout (which has no hub to
  *  collect those warnings on). */
 export function RequiredLabel({ children, required, missing, labelStyle, styles }: RequiredLabelProps) {
+  const { t } = useTranslation();
   const label = (
     <Text style={labelStyle ?? styles.inputLabel}>
       {children}
@@ -31,7 +33,7 @@ export function RequiredLabel({ children, required, missing, labelStyle, styles 
   return (
     <View style={styles.docFieldRow}>
       {label}
-      <Text style={styles.docFieldFlag}>Required</Text>
+      <Text style={styles.docFieldFlag}>{t('providerSetup.required')}</Text>
     </View>
   );
 }

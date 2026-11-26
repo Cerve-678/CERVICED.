@@ -11,6 +11,8 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LogoCircle } from './FramedLogo';
 import type { LogoFraming } from '../types/database';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 interface Props {
   uri: string | null | undefined;
@@ -25,6 +27,8 @@ interface Props {
 const MAX_SIZE = 360;
 
 export function LogoZoomViewer({ uri, framing, visible, onClose, accessibilityName }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { width } = useWindowDimensions();
   const size = Math.min(width * 0.78, MAX_SIZE);
   const scale = useRef(new Animated.Value(0.6)).current;
@@ -60,7 +64,7 @@ export function LogoZoomViewer({ uri, framing, visible, onClose, accessibilityNa
         style={StyleSheet.absoluteFill}
         onPress={close}
         accessibilityRole="button"
-        accessibilityLabel={`${accessibilityName} logo. Tap to close`}
+        accessibilityLabel={tr('shared.newc2.logoClose', { name: accessibilityName })}
       >
         {/* Half blurred: the profile still reads behind it. */}
         <BlurView intensity={30} tint="default" style={StyleSheet.absoluteFill} />

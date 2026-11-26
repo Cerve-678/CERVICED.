@@ -24,12 +24,15 @@ import {
   type DeviceCalendar,
   type DiaryEvent,
 } from '../../services/deviceCalendarService';
-import { DAY_NAMES_ABBREV, DAY_NAMES_FULL, MONTH_NAMES_ABBREV, formatDurationMinutes } from '../../utils/dateUtils';
+import { dayName, monthName, formatDurationMinutes } from '../../utils/dateUtils';
+import type { UseTranslation } from '../../i18n/useTranslation';
 import type { DbProviderAvailability } from '../../types/database';
 import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type DashboardWeekDay } from './diaryDays';
 import { compactTime } from './linkOnlyDashboard';
 import { CalendarChooserSheet } from './CalendarChooserSheet';
 import { logger } from '../../utils/logger';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface DiaryPalette {
   card: string;
@@ -53,23 +56,24 @@ function weekRangeLabel(week: readonly DashboardWeekDay[]): string {
   const first = week[0]?.date;
   const last = week[week.length - 1]?.date;
   if (!first || !last) return '';
-  const firstMonth = MONTH_NAMES_ABBREV[first.getMonth()];
-  const lastMonth = MONTH_NAMES_ABBREV[last.getMonth()];
+  const firstMonth = monthName(first.getMonth(), 'short');
+  const lastMonth = monthName(last.getMonth(), 'short');
   return firstMonth === lastMonth
     ? `${first.getDate()}–${last.getDate()} ${lastMonth}`
     : `${first.getDate()} ${firstMonth} – ${last.getDate()} ${lastMonth}`;
 }
 
-function daySummary(day: DashboardWeekDay): string {
-  if (day.events.length === 0) return day.closed ? 'Closed' : '';
+function daySummary(day: DashboardWeekDay, t: UseTranslation['t'], tp: UseTranslation['tp']): string {
+  if (day.events.length === 0) return day.closed ? t('providerBookings.diary.closed') : '';
   const minutes = day.events.reduce((sum, event) => sum + diaryEventMinutes(event), 0);
-  const count = `${day.events.length} appointment${day.events.length === 1 ? '' : 's'}`;
+  const count = tp('providerBookings.diary.appointments', day.events.length);
   return minutes > 0 ? `${count} · ${formatDurationMinutes(minutes)}` : count;
 }
 
 /** `hours` — their weekly opening hours, so closed days read "Closed" rather
  *  than "Free all day". */
 export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbProviderAvailability[] }) {
+  const { t, tp } = useTranslation();
   const styles = useMemo(() => createStyles(P), [P]);
   const [phase, setPhase] = useState<Phase>('loading');
   const [events, setEvents] = useState<DiaryEvent[]>([]);
@@ -139,8 +143,8 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
       {connected ? (
         <View style={styles.headerRow}>
           <View style={styles.eventText}>
-            <Text style={styles.title}>Your week</Text>
-            <Text style={styles.headerSub}>{weekRangeLabel(week)} · from your phone calendar</Text>
+            <Text style={styles.title}>{t('providerBookings.diary.title')}</Text>
+            <Text style={styles.headerSub}>{t('providerBookings.diary.subtitle', { range: weekRangeLabel(week) })}</Text>
           </View>
           {/* A bordered pill with an icon, not bare text, so it reads as a
               button at a glance (owner's call, 2026-10-19). */}
@@ -150,18 +154,18 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Choose calendars"
+            accessibilityLabel={t('providerBookings.diary.chooseCalendarsA11y')}
           >
             <Ionicons name="calendar-outline" size={14} color={P.accent} />
-            <Text style={styles.link}>Calendars</Text>
+            <Text style={styles.link}>{t('providerBookings.diary.calendars')}</Text>
             <Ionicons name="chevron-down" size={12} color={P.accent} />
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.headerRow}>
           <Ionicons name="calendar-outline" size={22} color={P.accent} />
-          <Text style={[styles.title, styles.eventText]}>Connect your calendar</Text>
-          <Text style={styles.free}>Free</Text>
+          <Text style={[styles.title, styles.eventText]}>{t('providerBookings.diary.connectTitle')}</Text>
+          <Text style={styles.free}>{t('common.free')}</Text>
         </View>
       )}
 
@@ -170,10 +174,10 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
       {phase === 'disconnected' && (
         <>
           <Text style={styles.body}>
-            See your appointments here. We read the calendars on your phone — iPhone Calendar, and Google if it's added to your phone — and nothing leaves your device.
+            {t('providerBookings.diary.connectBody')}
           </Text>
           <TouchableOpacity style={styles.button} onPress={openChooser} activeOpacity={0.85}>
-            <Text style={styles.buttonText}>Connect</Text>
+            <Text style={styles.buttonText}>{t('providerBookings.diary.connect')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -181,19 +185,19 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
       {phase === 'denied' && (
         <>
           <Text style={styles.body}>
-            CERVICED doesn't have access to your calendar. You can turn it on in your phone's Settings.
+            {t('providerBookings.diary.deniedBody')}
           </Text>
           <TouchableOpacity style={styles.button} onPress={() => { void Linking.openSettings(); }} activeOpacity={0.85}>
-            <Text style={styles.buttonText}>Open Settings</Text>
+            <Text style={styles.buttonText}>{t('providerBookings.diary.openSettings')}</Text>
           </TouchableOpacity>
         </>
       )}
 
       {phase === 'failed' && (
         <>
-          <Text style={styles.body}>Couldn't read your calendar just now.</Text>
+          <Text style={styles.body}>{t('providerBookings.diary.failed')}</Text>
           <TouchableOpacity style={styles.button} onPress={() => { void load(); }} activeOpacity={0.85}>
-            <Text style={styles.buttonText}>Try again</Text>
+            <Text style={styles.buttonText}>{t('common.tryAgain')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -208,11 +212,15 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
                 key={day.ymd}
                 style={[styles.dayLine, isToday ? styles.todayLine : index > 1 ? styles.lineDivider : null]}
                 accessible
-                accessibilityLabel={`${DAY_NAMES_FULL[day.date.getDay()]} ${day.date.getDate()}: ${daySummary(day) || 'free all day'}`}
+                accessibilityLabel={t('providerBookings.diary.dayA11y', {
+                  day: dayName(day.date.getDay()),
+                  date: day.date.getDate(),
+                  summary: daySummary(day, t, tp) || t('providerBookings.diary.freeAllDayA11y'),
+                })}
               >
                 <View style={styles.dayCol}>
                   <Text style={[styles.dayName, isToday && styles.todayName]}>
-                    {isToday ? 'TODAY' : DAY_NAMES_ABBREV[day.date.getDay()]?.toUpperCase()}
+                    {isToday ? t('common.date.today').toUpperCase() : dayName(day.date.getDay(), 'short').toUpperCase()}
                   </Text>
                   <Text style={[styles.dayNum, day.closed && day.events.length === 0 && styles.closedNum]}>{day.date.getDate()}</Text>
                 </View>
@@ -223,7 +231,7 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
                       style={[styles.chip, { backgroundColor: isToday ? P.card : P.surface }]}
                     >
                       <Text style={styles.chipText} numberOfLines={1}>
-                        {event.allDay ? 'All day' : compactTime(event.start) ?? ''} {event.title}
+                        {event.allDay ? t('providerBookings.diary.allDay') : compactTime(event.start) ?? ''} {event.title}
                       </Text>
                     </View>
                   ))}
@@ -233,10 +241,10 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
                     </View>
                   )}
                   {day.events.length === 0 && (day.closed ? (
-                    <Text style={styles.closedText}>Closed</Text>
+                    <Text style={styles.closedText}>{t('providerBookings.diary.closed')}</Text>
                   ) : (
                     <View style={styles.freeChip}>
-                      <Text style={styles.freeText}>Free all day</Text>
+                      <Text style={styles.freeText}>{t('providerBookings.diary.freeAllDay')}</Text>
                     </View>
                   ))}
                 </View>
@@ -255,9 +263,9 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
         onSave={saveChoice}
         onClose={() => setChooserOpen(false)}
         onDisconnect={phase === 'connected' ? disconnect : undefined}
-        body="Choose the ones your bookings land in. This stays on this phone."
-        saveLabel="Show these"
-        disconnectLabel="Disconnect on this phone"
+        body={t('providerBookings.diary.chooserBody')}
+        saveLabel={t('providerBookings.diary.showThese')}
+        disconnectLabel={t('providerBookings.diary.disconnect')}
       />
     </View>
   );

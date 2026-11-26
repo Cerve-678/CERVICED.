@@ -8,6 +8,8 @@ import { StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hexToHsv, hsvToHex, parseHexInput, type Hsv } from '../utils/color';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 const SQUARE_HEIGHT = 168;
 const HUE_BAR_HEIGHT = 24;
@@ -32,6 +34,8 @@ const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 const ColourWheelPicker: React.FC<ColourWheelPickerProps> = ({
   value, onChange, onDraggingChange, textColor, subColor, borderColor,
 }) => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // HSV is kept here rather than re-derived from the hex each render: at
   // black or grey the hex has no hue, so deriving it would snap the hue bar
   // back to red the moment the shade thumb touches an edge.
@@ -97,7 +101,7 @@ const ColourWheelPicker: React.FC<ColourWheelPickerProps> = ({
         <View
           style={[styles.square, { backgroundColor: pureHue, borderColor }]}
           onLayout={(e: LayoutChangeEvent) => setSquareWidth(e.nativeEvent.layout.width)}
-          accessibilityLabel="Shade: drag across for more colour, down for darker"
+          accessibilityLabel={tr('shared.newc.shadeDragAcrossForMoreColour')}
         >
           <LinearGradient colors={['#FFFFFF', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['rgba(0,0,0,0)', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
@@ -121,7 +125,7 @@ const ColourWheelPicker: React.FC<ColourWheelPickerProps> = ({
         <View
           style={[styles.hueBar, { borderColor }]}
           onLayout={(e: LayoutChangeEvent) => setBarWidth(e.nativeEvent.layout.width)}
-          accessibilityLabel="Colour: drag along to change the colour"
+          accessibilityLabel={tr('shared.newc.colourDragAlongToChangeThe')}
         >
           <LinearGradient colors={HUE_STOPS} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, styles.hueFill]} />
           {barWidth > 0 && (
@@ -147,7 +151,7 @@ const ColourWheelPicker: React.FC<ColourWheelPickerProps> = ({
           placeholder="#D98BA6"
           placeholderTextColor={subColor}
           style={[styles.hexInput, { color: textColor, borderColor }]}
-          accessibilityLabel="Hex colour code"
+          accessibilityLabel={tr('shared.newc.hexColourCode')}
         />
       </View>
     </View>

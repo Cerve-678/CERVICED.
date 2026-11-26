@@ -38,6 +38,8 @@ import {
 } from '../../features/bookings/ActivityLive';
 import type { HomeStackParamList } from '../../navigation/types';
 import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const ALL_CLEAR = 'Nothing waiting. All quiet.';
 const PILL_MAX_MESSAGES = 6;
@@ -46,6 +48,8 @@ const PILL_MAX_MESSAGES = 6;
 type Props = { navigation: NativeStackNavigationProp<HomeStackParamList, 'ActivityCentre'> };
 
 export default function ActivityCentreScreen({ navigation }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P, isDarkMode } = useTheme();
   const bottomGap = useSystemBottomInset() + 24;
   const { showAlert, DialogHost } = useAppDialog();
@@ -97,13 +101,13 @@ export default function ActivityCentreScreen({ navigation }: Props) {
           // place the "slot opened" notification opens.
           navigation.navigate('ProviderProfile', { providerId: direct.provider_id, source: 'activity', openWaitlistHoldId: target.bookingId });
         } else {
-          showAlert('This slot has gone', `Its ${WAITLIST_HOLD_MINUTES} minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from Bookings.`);
+          showAlert(tr('shared.newc.thisSlotHasGone'), tr('shared.newc2.slotRanOut', { minutes: WAITLIST_HOLD_MINUTES }));
           void refresh();
         }
       })
       .catch((error: unknown) => {
         logger.error('[ActivityCentre] waitlist hold lookup failed', error);
-        showAlert("Couldn't open this", 'Please try again in a moment.');
+        showAlert(tr('shared.newc.couldnTOpenThis'), tr('shared.reportProblem.failed.fallback'));
       });
   }, [navigation, showAlert, refresh]);
 
@@ -184,10 +188,10 @@ export default function ActivityCentreScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
       >
-        <Text style={[st.subtitle, { color: P.sub }]}>What's waiting on you, and what you're waiting on</Text>
+        <Text style={[st.subtitle, { color: P.sub }]}>{tr('shared.newc.whatSWaitingOnYouAnd')}</Text>
 
         {failed && (
-          <Text style={[st.notice, { color: P.sub }]}>Couldn't check for updates just now. Pull down to try again.</Text>
+          <Text style={[st.notice, { color: P.sub }]}>{tr('shared.newc.couldnTCheckForUpdatesJust')}</Text>
         )}
 
         {(!loaded && empty) || reduceMotion === null ? (
@@ -199,9 +203,9 @@ export default function ActivityCentreScreen({ navigation }: Props) {
               <>
                 <View style={st.empty}>
                   <LiveDot pulse="waiting" animate={animate} size={18} />
-                  <Text style={[st.emptyTitle, { color: P.text }]}>You're all caught up</Text>
+                  <Text style={[st.emptyTitle, { color: P.text }]}>{tr('shared.newc.youReAllCaughtUp')}</Text>
                   <Text style={[st.emptyBody, { color: P.sub }]}>
-                    Refunds, reschedules, forms to fill in and anything else to do with your bookings will show up here.
+                    {tr('shared.newc.refundsReschedulesFormsToFillIn')}
                   </Text>
                 </View>
                 <View style={st.doneAfterEmpty}>{doneSection()}</View>

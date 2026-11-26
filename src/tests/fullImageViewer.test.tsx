@@ -52,7 +52,8 @@ describe('both places a client opens the policy image', () => {
 
   it.each(['ProviderProfileScreen.tsx', 'BookingDetailScreen.tsx'])('%s uses the scrolling viewer', file => {
     expect(read(file)).toContain('<FullImageViewer');
-    expect(read(file)).toContain('label="Policy document"');
+    // English literal, or the translated label once the screen is translated.
+    expect(read(file)).toMatch(/label=("Policy document"|\{t?r?\('[\w.]*policyDocument'\)\})/);
   });
 
   it('no longer opens it in the photo carousel, which fits it to one screen', () => {

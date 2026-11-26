@@ -3,6 +3,8 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, Vie
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface CollectionSheetFrameProps {
   visible: boolean;
@@ -14,12 +16,14 @@ interface CollectionSheetFrameProps {
 
 /** The bottom sheet both collection sheets share: scrim, handle, title. */
 export function CollectionSheetFrame({ visible, title, subtitle, onClose, children }: CollectionSheetFrameProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { palette: P } = useTheme();
   const bottomInset = useSystemBottomInset();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
+        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel={tr('common.close')} />
         <View style={[styles.sheet, { backgroundColor: P.bg, paddingBottom: bottomInset + 16 }]}>
           <View style={[styles.handle, { backgroundColor: P.border }]} />
           <Text style={[styles.title, { color: P.text }]}>{title}</Text>

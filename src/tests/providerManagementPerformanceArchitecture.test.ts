@@ -106,7 +106,7 @@ describe('provider management performance contracts', () => {
     expect(source).toContain('Issue a refund');
     // The way out stays on screen: "Cancel", or "Go back" once the provider
     // has tapped the refund button and is confirming.
-    expect(source).toContain(`{confirming ? 'Go back' : 'Cancel'}</Text>`);
+    expect(source).toContain("{confirming ? tr('shared.newc2.goBack') : tr('common.cancel')}</Text>");
   });
 
   it('saves the full weekly schedule through one atomic RPC', () => {

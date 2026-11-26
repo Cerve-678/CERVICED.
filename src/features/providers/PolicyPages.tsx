@@ -47,6 +47,8 @@ import {
   WaveEdge,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ── Edge colours ─────────────────────────────────────────────────────────────
 
@@ -140,6 +142,8 @@ export function PolicyPagesInline({
   palette: PageStylePalette;
   onOpen: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { width } = useWindowDimensions();
   const sheet = palette.background;
   const ink = sheetInk(sheet);
@@ -182,10 +186,10 @@ export function PolicyPagesInline({
         onPress={onOpen}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel="Read the policy up close"
+        accessibilityLabel={tr('discover.page.readThePolicyUpClose')}
       >
         <Ionicons name="expand-outline" size={16} color={ink.text} />
-        <Text style={[styles.readCloserText, { color: ink.text }]}>Tap to read up close</Text>
+        <Text style={[styles.readCloserText, { color: ink.text }]}>{tr('discover.page.tapToReadUpClose')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -213,6 +217,8 @@ export function PolicyPagesCompact({
   /** Opens every page in the zoomable reader (the button). */
   onOpenAll: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   if (urls.length === 0) return null;
   const ink = sheetInk(palette.background);
   const pageCount = urls.length === 1 ? "1 page" : `${urls.length} pages`;
@@ -231,13 +237,13 @@ export function PolicyPagesCompact({
               }}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={urls.length === 1 ? "Open their policy" : `Open policy page ${index + 1} of ${urls.length}`}
+              accessibilityLabel={urls.length === 1 ? tr('discover.page.openTheirPolicy') : tr('discover.page.openPolicyPageA11y', { n: index + 1, total: urls.length })}
             >
               <View style={[styles.thumb, { borderColor: ink.border }]}>
                 <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" transition={0} />
               </View>
               <Text style={[styles.thumbLabel, { color: ink.sub }]} numberOfLines={1}>
-                {urls.length === 1 ? "Policy" : `Page ${index + 1}`}
+                {urls.length === 1 ? tr('discover.profile.tab.policy') : tr('discover.page.pageN', { n: index + 1 })}
               </Text>
             </TouchableOpacity>
           ))}
@@ -251,10 +257,10 @@ export function PolicyPagesCompact({
           }}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={`Read my policy, ${pageCount}`}
+          accessibilityLabel={tr('discover.page.readMyPolicyA11y', { pages: pageCount })}
         >
           <Ionicons name="document-text-outline" size={18} color={ink.text} />
-          <Text style={[styles.readButtonText, { color: ink.text }]}>Read my policy</Text>
+          <Text style={[styles.readButtonText, { color: ink.text }]}>{tr('discover.page.readMyPolicy')}</Text>
           <Text style={[styles.readButtonCount, { color: ink.sub }]}>{pageCount}</Text>
           <Ionicons name="chevron-forward" size={16} color={ink.sub} />
         </TouchableOpacity>
@@ -304,6 +310,8 @@ export function PolicyPagesShowcase({
   onOpenPage: (index: number) => void;
   onOpenAll: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const [current, setCurrent] = useState(0);
   if (urls.length === 0) return null;
@@ -319,10 +327,10 @@ export function PolicyPagesShowcase({
       onPress={onOpenAll}
       activeOpacity={0.8}
       accessibilityRole="button"
-      accessibilityLabel="Read the full policy"
+      accessibilityLabel={tr('discover.page.readTheFullPolicy')}
     >
       <Ionicons name="document-text-outline" size={16} color={ink.text} />
-      <Text style={[styles.readCloserText, { color: ink.text }]}>Read the full policy</Text>
+      <Text style={[styles.readCloserText, { color: ink.text }]}>{tr('discover.page.readTheFullPolicy')}</Text>
     </TouchableOpacity>
   );
 
@@ -372,7 +380,7 @@ export function PolicyPagesShowcase({
           ))}
         </ScrollView>
         {urls.length > 1 ? (
-          <View style={styles.dots} accessible accessibilityLabel={`Page ${current + 1} of ${urls.length}`}>
+          <View style={styles.dots} accessible accessibilityLabel={tr('discover.page.pageOfA11y', { n: current + 1, total: urls.length })}>
             {urls.map((url, index) => (
               <View key={url} style={[styles.dot, { backgroundColor: ink.text, opacity: index === current ? 1 : 0.25 }]} />
             ))}
@@ -390,7 +398,7 @@ export function PolicyPagesShowcase({
         activeOpacity={0.9}
         onPress={() => onOpenPage(0)}
         accessibilityRole="button"
-        accessibilityLabel={urls.length > 1 ? `Open their policy, ${urls.length} pages` : "Open their policy"}
+        accessibilityLabel={urls.length > 1 ? tr('discover.page.openTheirPolicyPages', { count: urls.length }) : tr('discover.page.openTheirPolicy')}
         style={styles.fan}
       >
         {order.map(i => {
@@ -411,7 +419,7 @@ export function PolicyPagesShowcase({
           );
         })}
         <Text style={[styles.fanCaption, { color: ink.sub }]}>
-          {urls.length > 1 ? `${urls.length} pages · Tap to read` : "Tap to read"}
+          {urls.length > 1 ? tr('discover.page.pagesTapToRead', { count: urls.length }) : tr('discover.page.tapToRead')}
         </Text>
       </TouchableOpacity>
     );
@@ -424,7 +432,7 @@ export function PolicyPagesShowcase({
           activeOpacity={0.94}
           onPress={onOpenAll}
           accessibilityRole="imagebutton"
-          accessibilityLabel="The top of their policy. Tap to read it all"
+          accessibilityLabel={tr('discover.page.theTopOfTheirPolicyTap')}
           style={[styles.peek, { width }]}
         >
           <SizedPage uri={first} width={width} background={edgeOf(first)} />
@@ -474,6 +482,8 @@ export function PolicyStoryRings({
   sheet: string;
   onOpen: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const first = urls[0];
   if (!first) return null;
   const ink = sheetInk(sheet);
@@ -487,14 +497,14 @@ export function PolicyStoryRings({
         }}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel={urls.length === 1 ? "Open their policy" : `Open their policy, ${urls.length} pages`}
+        accessibilityLabel={urls.length === 1 ? tr('discover.page.openTheirPolicy') : tr('discover.page.openTheirPolicyPages', { count: urls.length })}
       >
         <LinearGradient colors={[accent, blend(accent, "#FFFFFF", 0.5)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ring}>
           <View style={[styles.ringInner, { borderColor: sheet }]}>
             <Image source={{ uri: first }} style={styles.ringImage} contentFit="cover" contentPosition="top" transition={0} />
           </View>
         </LinearGradient>
-        <Text style={[styles.ringLabel, { color: ink.text }]} numberOfLines={1}>Policy</Text>
+        <Text style={[styles.ringLabel, { color: ink.text }]} numberOfLines={1}>{tr('discover.profile.tab.policy')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -549,6 +559,8 @@ function StoryBody({
   onClose: () => void;
   onZoom: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(Math.min(startIndex, Math.max(urls.length - 1, 0)));
   const url = urls[index];
@@ -580,26 +592,26 @@ function StoryBody({
           onPress={onClose}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Close the policy"
+          accessibilityLabel={tr('discover.page.closeThePolicy')}
         >
           <Ionicons name="close" size={26} color={ink.text} />
         </TouchableOpacity>
       </View>
 
       <View style={[styles.storyStage, { top: insets.top + 62, bottom: insets.bottom + 84 }]}>
-        <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="contain" transition={0} accessibilityLabel={urls.length > 1 ? `Policy page ${index + 1} of ${urls.length}` : "Policy page"} />
+        <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="contain" transition={0} accessibilityLabel={urls.length > 1 ? tr('discover.page.policyPageOf', { n: index + 1, total: urls.length }) : tr('discover.page.policyPage')} />
         <Pressable
           style={styles.tapBack}
           onPress={() => go(-1)}
           accessibilityRole="button"
-          accessibilityLabel="Previous page"
+          accessibilityLabel={tr('discover.page.previousPage')}
           disabled={index === 0}
         />
         <Pressable
           style={styles.tapNext}
           onPress={() => go(1)}
           accessibilityRole="button"
-          accessibilityLabel={index === urls.length - 1 ? "Close the policy" : "Next page"}
+          accessibilityLabel={index === urls.length - 1 ? tr('discover.page.closeThePolicy') : tr('discover.page.nextPage')}
         />
       </View>
 
@@ -609,10 +621,10 @@ function StoryBody({
           onPress={onZoom}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel="Zoom in to read the small print"
+          accessibilityLabel={tr('discover.page.zoomInToReadTheSmall')}
         >
           <Ionicons name="expand-outline" size={16} color={ink.text} />
-          <Text style={[styles.storyButtonText, { color: ink.text }]}>Zoom</Text>
+          <Text style={[styles.storyButtonText, { color: ink.text }]}>{tr('discover.page.zoom')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.storyButton, styles.storyButtonSolid, { backgroundColor: ink.text }]}
@@ -620,7 +632,7 @@ function StoryBody({
           activeOpacity={0.8}
           accessibilityRole="button"
         >
-          <Text style={[styles.storyButtonText, { color: edge.top }]}>Done</Text>
+          <Text style={[styles.storyButtonText, { color: edge.top }]}>{tr('common.done')}</Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>

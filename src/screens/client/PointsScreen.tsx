@@ -22,13 +22,15 @@ import {
 } from '../../services/databaseService';
 import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 const EARN_WAYS = [
-  { icon: 'event-available', label: 'Complete a Booking', points: '+2 pts', desc: 'Every completed appointment' },
-  { icon: 'star', label: 'Leave a Review', points: '+2 pts', desc: 'After each booking' },
-  { icon: 'auto-awesome', label: 'First Review', points: '+50 pts', desc: 'One-time bonus for your first review' },
-  { icon: 'emoji-events', label: 'First Booking', points: '+100 pts', desc: 'One-time welcome bonus' },
-  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday' },
+  { icon: 'event-available', get label() { return tr('clientAccount.points.earn.booking'); }, points: '+2 pts', desc: 'Every completed appointment' },
+  { icon: 'star', get label() { return tr('clientAccount.points.earn.review'); }, points: '+2 pts', desc: 'After each booking' },
+  { icon: 'auto-awesome', get label() { return tr('clientAccount.points.earn.firstReview'); }, points: '+50 pts', desc: 'One-time bonus for your first review' },
+  { icon: 'emoji-events', get label() { return tr('clientAccount.points.earn.firstBooking'); }, points: '+100 pts', desc: 'One-time welcome bonus' },
+  { icon: 'cake', get label() { return tr('clientAccount.points.earn.birthday'); }, points: '+50 pts', desc: 'On your birthday' },
 ];
 
 const REASON_LABEL: Record<ClientPointsReason, string> = {
@@ -42,6 +44,8 @@ const REASON_LABEL: Record<ClientPointsReason, string> = {
 };
 
 export default function PointsScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -92,9 +96,9 @@ export default function PointsScreen({ navigation }: any) {
           <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: P.text }]}>Rewards</Text>
+        <Text style={[styles.title, { color: P.text }]}>{tr('clientAccount.points.title')}</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          Earn points for every booking and interaction
+          {tr('clientAccount.points.subtitle')}
         </Text>
 
         {/* Balance card */}
@@ -108,10 +112,10 @@ export default function PointsScreen({ navigation }: any) {
           ) : (
             <Text style={[styles.balanceNum, { color: P.text }]}>{balance.toLocaleString()}</Text>
           )}
-          {!loading && <Text style={[styles.balancePts, { color: P.accentText }]}>points</Text>}
+          {!loading && <Text style={[styles.balancePts, { color: P.accentText }]}>{tr('clientAccount.points.pointsUnit')}</Text>}
           <Text style={[styles.balanceHint, { color: P.sub }]}>
             {loadError
-              ? "Couldn't load your balance — pull to refresh in a moment"
+              ? tr('clientAccount.points.balanceError')
               : !loading && balance === 0
                 ? 'Make your first booking to start earning'
                 : ' '}
@@ -140,7 +144,7 @@ export default function PointsScreen({ navigation }: any) {
         <Text style={[styles.section, { color: P.accentText, marginTop: 24 }]}>RECENT ACTIVITY</Text>
         {history.length === 0 ? (
           <Text style={[styles.rowDesc, { color: P.sub, marginBottom: 8 }]}>
-            {loadError ? 'Couldn’t load your activity right now.' : 'No activity yet.'}
+            {loadError ? tr('clientAccount.points.activityError') : tr('clientAccount.points.noActivity')}
           </Text>
         ) : (
           history.map(entry => (

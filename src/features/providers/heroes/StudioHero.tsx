@@ -20,6 +20,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 import { EmbossedText } from "./EmbossedHero";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 /** Words drawn in the script rather than the caps, wherever they fall. */
 const JOINING_WORDS = new Set(["&", "and", "the", "by", "of", "with", "at", "for", "in", "x"]);
@@ -80,6 +82,8 @@ export function StudioHero({
    *  elsewhere), and then there's no button. */
   onBookNow?: (() => void) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // The bar is always a deep shade of the accent, so the pale caps read on it.
   const bar = isDarkColor(accent) ? blend(accent, "#000000", 0.25) : blend(accent, "#000000", 0.5);
   const blush = blend(accent, "#FFFFFF", 0.72);
@@ -119,7 +123,7 @@ export function StudioHero({
               onPress={onBookNow}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Book now. Go to services"
+              accessibilityLabel={tr('discover.page.bookNowGoToServices')}
             >
               <Text style={[styles.bookNowText, { color: blush }]}>BOOK NOW</Text>
             </TouchableOpacity>

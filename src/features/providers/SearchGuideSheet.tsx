@@ -8,6 +8,8 @@ import { BUSINESS_TYPE_META } from '../business-details/options';
 import { BUSINESS_TYPE_ICON } from './profilePresentation';
 import TabIcon from '../../components/TabIcon';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ── Availability colour/label — real status from get_providers_availability,
 // resolved asynchronously per-card (see providersWithAvailability in
@@ -22,8 +24,8 @@ import { readableSheet } from '../../constants/readableWidth';
 // 'available' || 'limited') already excludes both correctly; this only affects
 // the badge. Lives here so the guide shows exactly the badges the cards do. ──
 export const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: string; color: string }>> = {
-  available: { label: 'Slots Available', color: '#4CAF50' },
-  limited:   { label: 'Slots Limited',   color: '#FF9500' },
+  available: { get label() { return tr('discover.search.slotsAvailable'); }, color: '#4CAF50' },
+  limited:   { get label() { return tr('discover.search.slotsLimited'); },   color: '#FF9500' },
 };
 
 // get_providers_availability counts open start times over today + the next 6
@@ -75,6 +77,8 @@ interface Props {
  * guide can't describe a card differently from how it looks.
  */
 export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { height } = useWindowDimensions();
 
   return (
@@ -87,12 +91,12 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
       {/* Sibling tap-to-dismiss overlay, never a parent of the sheet, so the
           list scrolls on the first drag (same as the Search filter sheet). */}
       <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close guide" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={tr('discover.page.closeGuide')} />
         <View style={[styles.sheet, { backgroundColor: P.card, borderColor: P.border, paddingBottom: Math.max(20, bottomInset + 16) }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: P.text }]}>WHAT THINGS MEAN</Text>
             <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={[styles.done, { color: P.accentText }]}>Done</Text>
+              <Text style={[styles.done, { color: P.accentText }]}>{tr('common.done')}</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -101,8 +105,8 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
             showsVerticalScrollIndicator={false}
             bounces
           >
-            <GuideSection title="Where it happens" P={P} />
-            <Text style={[styles.lead, { color: P.sub }]}>The small icon after the price and place.</Text>
+            <GuideSection title={tr('discover.page.whereItHappens')} P={P} />
+            <Text style={[styles.lead, { color: P.sub }]}>{tr('discover.page.theSmallIconAfterThePrice')}</Text>
             {BUSINESS_TYPES.map(type => (
               <GuideRow
                 key={type}
@@ -113,7 +117,7 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
               />
             ))}
 
-            <GuideSection title="Availability" P={P} />
+            <GuideSection title={tr('discover.search.pill.availability')} P={P} />
             {(['available', 'limited'] as const).map(status => {
               const info = AVAILABILITY_INFO[status]!;
               return (
@@ -133,54 +137,54 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
             <GuideRow
               P={P}
               mark={<Text style={[styles.markText, { color: P.sub }]}>–</Text>}
-              title="No badge"
-              body="No open times this week, or they haven't set their hours yet. Their profile shows what's free."
+              title={tr('discover.page.noBadge')}
+              body={tr('discover.page.noOpenTimesThisWeekOr')}
             />
 
-            <GuideSection title="On each card" P={P} />
+            <GuideSection title={tr('discover.page.onEachCard')} P={P} />
             <GuideRow
               P={P}
               mark={<Text style={styles.star}>★</Text>}
               title="4.8 (12)"
-              body="Their average rating, and how many reviews it comes from."
+              body={tr('discover.page.theirAverageRatingAndHowMany')}
             />
             <GuideRow
               P={P}
               mark={<Text style={[styles.markText, { color: P.text }]}>£</Text>}
               title="£25–£60"
-              body="From their cheapest service to their most expensive."
+              body={tr('discover.page.fromTheirCheapestServiceToTheir')}
             />
             <GuideRow
               P={P}
               mark={<Text style={[styles.markText, styles.underlined, { color: P.text }]}>Aa</Text>}
-              title="Underlined words"
-              body="Their specialities: the things they're known for."
+              title={tr('discover.page.underlinedWords')}
+              body={tr('discover.page.theirSpecialitiesTheThingsTheyRe')}
             />
             <GuideRow
               P={P}
               mark={<Ionicons name="open-outline" size={18} color={P.text} />}
-              title="Books on their own page"
-              body="This pro takes bookings on their own booking site, like Fresha. Booking opens their site, and you book and pay there, not in CERVICED."
+              title={tr('discover.search.booksOwnPage')}
+              body={tr('discover.page.thisProTakesBookingsOnTheir')}
             />
             <GuideRow
               P={P}
               mark={<Text style={[styles.eyebrow, { color: P.sub }]}>SERVICE</Text>}
-              title="Service cards"
-              body="One service that matches what you typed, with the matching words highlighted. Tap the name at the bottom to see who offers it."
+              title={tr('discover.page.serviceCards')}
+              body={tr('discover.page.oneServiceThatMatchesWhatYou')}
             />
 
-            <GuideSection title="Search tips" P={P} />
+            <GuideSection title={tr('discover.page.searchTips')} P={P} />
             <GuideRow
               P={P}
               mark={<TabIcon name="magnifying-glass" size={16} color={P.text} />}
-              title="Add a place or a budget"
-              body={'Try "braids in Leeds" or "nails under £40". Typos are fine; we\'ll show what we searched for instead.'}
+              title={tr('discover.page.addAPlaceOrABudget')}
+              body={tr('discover.page.tryBraidsInLeedsOrNails')}
             />
             <GuideRow
               P={P}
               mark={<TabIcon name="sliders" size={16} color={P.text} />}
-              title="Filters"
-              body="The sliders icon at the top filters by price, distance, hair type and more. Its number is how many filters are on. Tap a chip to remove one."
+              title={tr('discover.home.filtersA11y')}
+              body={tr('discover.page.theSlidersIconAtTheTop')}
             />
           </ScrollView>
         </View>

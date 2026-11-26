@@ -2,6 +2,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { logger, reportError } from '../utils/logger';
+import { useTranslation } from '../i18n';
 
 interface Props {
   children: ReactNode;
@@ -60,36 +61,54 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <View style={styles.container}>
-          <View style={styles.card}>
-            <Text style={styles.heading}>Something went wrong</Text>
-            <Text style={styles.body}>This section couldn't load.</Text>
-
-            {__DEV__ && this.state.error && (
-              <View style={styles.debugBox}>
-                <Text style={styles.debugText}>{this.state.error.toString()}</Text>
-                {this.state.errorInfo && (
-                  <Text style={styles.stackText}>{this.state.errorInfo.componentStack}</Text>
-                )}
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={this.handleReset}
-              activeOpacity={0.75}
-              accessibilityLabel="Try Again"
-              accessibilityRole="button"
-            >
-              <Text style={styles.retryText}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <DefaultFallback
+          error={this.state.error}
+          errorInfo={this.state.errorInfo}
+          onRetry={this.handleReset}
+        />
       );
     }
 
     return this.props.children;
   }
+}
+
+// The default fallback is a function component so it can use useTranslation()
+// (a class can't call hooks). It works outside DisplaySettingsProvider too —
+// the root boundary sits above it — by reading the language store.
+function DefaultFallback({ error, errorInfo, onRetry }: {
+  error: Error | undefined;
+  errorInfo: ErrorInfo | undefined;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.heading}>{t('common.somethingWentWrong')}</Text>
+        <Text style={styles.body}>{t('shared.errorBoundary.body')}</Text>
+
+        {__DEV__ && error && (
+          <View style={styles.debugBox}>
+            <Text style={styles.debugText}>{error.toString()}</Text>
+            {errorInfo && (
+              <Text style={styles.stackText}>{errorInfo.componentStack}</Text>
+            )}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={onRetry}
+          activeOpacity={0.75}
+          accessibilityLabel={t('shared.errorBoundary.tryAgain')}
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryText}>{t('shared.errorBoundary.tryAgain')}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

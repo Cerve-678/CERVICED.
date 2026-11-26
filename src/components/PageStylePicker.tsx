@@ -20,6 +20,8 @@ import { capsuleTones } from '../features/providers/heroes/CapsuleHero';
 import { latteInk, latteShade } from '../features/providers/heroes/LatteHero';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 import { PagePattern } from '../features/providers/pageParts';
+import { tr } from '../i18n';
+import { useTranslation } from '../i18n';
 
 interface Props {
   value: PageStyleKey;
@@ -95,10 +97,10 @@ export default function PageStylePicker({
 }
 
 const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
-  classic: { text: 'Services' },
+  classic: { get text() { return tr('shared.newc.services'); } },
   cover: { text: 'services' },
-  arch: { lead: 'The', text: 'Services' },
-  framed: { text: 'Services' },
+  arch: { lead: 'The', get text() { return tr('shared.newc.services'); } },
+  framed: { get text() { return tr('shared.newc.services'); } },
   scrapbook: { lead: 'THE', text: 'services' },
   spa: { text: 'SERVICES' },
   glossy: { text: 'services' },
@@ -106,48 +108,48 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   heritage: { lead: 'The', text: 'SERVICES' },
   duet: { lead: 'The', text: 'SERVICES' },
   groovy: { text: 'the services' },
-  gallery: { text: 'The Services' },
+  gallery: { get text() { return tr('shared.newc.theServices'); } },
   apothecary: { text: 'THE SERVICES' },
   snapshot: { text: 'THE SERVICES' },
-  signature: { lead: '03', text: 'The Services' },
+  signature: { lead: '03', get text() { return tr('shared.newc.theServices'); } },
   quiet: { text: 'THE SERVICES' },
   sheer: { text: 'THE SERVICES' },
   embossed: { text: 'THE SERVICES' },
   callingCard: { text: 'THE SERVICES' },
-  boutique: { text: 'The Services' },
+  boutique: { get text() { return tr('shared.newc.theServices'); } },
   gazette: { text: 'THE SERVICES' },
-  novel: { lead: 'CHAPTER III', text: 'The Services' },
+  novel: { lead: 'CHAPTER III', get text() { return tr('shared.newc.theServices'); } },
   studio: { lead: 'the', text: 'SERVICES' },
   lounge: { text: 'THE SERVICES' },
   softFocus: { text: 'THE SERVICES' },
   hush: { text: 'SERVICES' },
   stripes: { text: 'SERVICES' },
-  bow: { text: 'The Services' },
-  pure: { text: 'Services' },
-  grid: { lead: '03', text: 'Services' },
+  bow: { get text() { return tr('shared.newc.theServices'); } },
+  pure: { get text() { return tr('shared.newc.services'); } },
+  grid: { lead: '03', get text() { return tr('shared.newc.services'); } },
   slate: { text: 'SERVICES' },
   halo: { text: 'SERVICES' },
-  custom: { text: 'Services' },
-  posy: { lead: 'the', text: 'Services' },
-  riviera: { text: 'Services' },
-  noir: { text: 'Services' },
-  muse: { lead: 'the', text: 'Services' },
-  retreat: { text: 'Services' },
-  bonbon: { text: 'Services' },
-  ledger: { text: 'Services' },
-  portfolio: { text: 'Services' },
-  atelier: { text: 'Services' },
-  pinboard: { text: 'Services' },
-  poster: { lead: 'The', text: 'Services' },
-  hibiscus: { lead: 'The', text: 'Services' },
-  storefront: { lead: 'The', text: 'Services' },
+  custom: { get text() { return tr('shared.newc.services'); } },
+  posy: { lead: 'the', get text() { return tr('shared.newc.services'); } },
+  riviera: { get text() { return tr('shared.newc.services'); } },
+  noir: { get text() { return tr('shared.newc.services'); } },
+  muse: { lead: 'the', get text() { return tr('shared.newc.services'); } },
+  retreat: { get text() { return tr('shared.newc.services'); } },
+  bonbon: { get text() { return tr('shared.newc.services'); } },
+  ledger: { get text() { return tr('shared.newc.services'); } },
+  portfolio: { get text() { return tr('shared.newc.services'); } },
+  atelier: { get text() { return tr('shared.newc.services'); } },
+  pinboard: { get text() { return tr('shared.newc.services'); } },
+  poster: { lead: 'The', get text() { return tr('shared.newc.services'); } },
+  hibiscus: { lead: 'The', get text() { return tr('shared.newc.services'); } },
+  storefront: { lead: 'The', get text() { return tr('shared.newc.services'); } },
   orbit: { text: 'S E R V I C E S' },
   typeblock: { text: 'SERVICES' },
   filmstrip: { lead: '03', text: 'SERVICES' },
   neon: { text: 'services' },
   capsule: { text: 'services' },
   moodboard: { text: 'THE SERVICES' },
-  latte: { text: 'Services' },
+  latte: { get text() { return tr('shared.newc.services'); } },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -166,6 +168,8 @@ function MiniProfile({
   cardColour: string;
   backgroundImage: string | null;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   // Sheer: on the profile the veil runs down the whole page and every section
   // sits on dark glass (veilPageTheme), so the thumbnail draws it that way too,
   // not as a dark top over a pale page.
@@ -414,7 +418,7 @@ function MiniProfile({
       case 'dotCaps':
         return (
           <Text style={[mini.dotLight, { color: ink }]} numberOfLines={1}>
-            {heading.lead} <Text style={mini.dotBold}><Text style={{ color: accent }}>.</Text>{heading.text}</Text>
+            {heading.lead} <Text style={mini.dotBold}><Text style={{ color: accent }}>{tr('shared.becca.hero.greetingAfter')}</Text>{heading.text}</Text>
           </Text>
         );
       case 'italicCaps':
@@ -744,7 +748,7 @@ function MiniProfile({
                 <View style={{ flex: 1, height: 37, backgroundColor: blend(accent, '#FFFFFF', 0.7) }} />
               </View>
             </View>
-            <Text style={{ color: ink, fontFamily: 'TenorSans_400Regular', fontSize: 11, marginTop: 6 }}>Your Name</Text>
+            <Text style={{ color: ink, fontFamily: 'TenorSans_400Regular', fontSize: 11, marginTop: 6 }}>{tr('shared.newc.yourName')}</Text>
           </View>
         ) : style.hero === 'posterCover' ? (
           // Poster: a pill, the name in two-tone caps, a taped print.
@@ -764,7 +768,7 @@ function MiniProfile({
         ) : style.hero === 'neonSign' ? (
           // Neon: the name lit up in script on a dark wall, a tube under it.
           <View style={[mini.neonWall, { backgroundColor: neonWallColour(heroColours[0] ?? '#1A1119') }]}>
-            <Text style={[mini.neonName, { color: neonColours(accent).tube, textShadowColor: neonColours(accent).glow }]}>Name</Text>
+            <Text style={[mini.neonName, { color: neonColours(accent).tube, textShadowColor: neonColours(accent).glow }]}>{tr('shared.newc.name')}</Text>
             <View style={[mini.neonTube, { backgroundColor: neonColours(accent).tube }]} />
           </View>
         ) : style.hero === 'collage' ? (
@@ -833,7 +837,7 @@ function MiniProfile({
             </View>
             <View style={mini.pinIdentity}>
               <View style={mini.pinLogo}>{logo}</View>
-              <Text style={[mini.pinName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }]} numberOfLines={1}>Name</Text>
+              <Text style={[mini.pinName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             </View>
           </View>
         ) : style.hero === 'atelierLetterhead' ? (
@@ -843,7 +847,7 @@ function MiniProfile({
               <View style={{ width: 28, height: 2, backgroundColor: withAlpha(accent, 0.8) }} />
               <View style={mini.smallLogo}>{logo}</View>
             </View>
-            <Text style={{ fontFamily: 'Bellefair-Regular', fontSize: 21, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>Atelier</Text>
+            <Text style={{ fontFamily: 'Bellefair-Regular', fontSize: 21, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>{tr('shared.newc.atelier')}</Text>
             <View style={{ height: 1, backgroundColor: withAlpha(isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E', 0.6) }} />
           </View>
         ) : style.hero === 'portfolioFront' ? (
@@ -853,13 +857,13 @@ function MiniProfile({
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 }}>
               <View style={mini.smallLogo}>{logo}</View>
-              <Text style={{ fontFamily: 'GildaDisplay-Regular', fontSize: 13, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>Name</Text>
+              <Text style={{ fontFamily: 'GildaDisplay-Regular', fontSize: 13, color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             </View>
           </View>
         ) : style.hero === 'cover' ? (
           <>
             <View style={[mini.coverLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
-            <Text style={mini.coverName} numberOfLines={1}>Name</Text>
+            <Text style={mini.coverName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             <View style={mini.pillRow}>
               <View style={mini.pill} />
               <View style={mini.pill} />
@@ -868,7 +872,7 @@ function MiniProfile({
         ) : style.hero === 'masthead' ? (
           // Arch: the name on top, the arched logo beside the About.
           <>
-            <Text style={mini.mastName} numberOfLines={1}>Name</Text>
+            <Text style={mini.mastName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             <View style={mini.sideRow}>
               <View style={mini.smallLogo}>{logo}</View>
               <View style={mini.sideLines}>
@@ -882,7 +886,7 @@ function MiniProfile({
           <View style={mini.sideRow}>
             <View style={mini.smallLogo}>{logo}</View>
             <View style={mini.sideLines}>
-              <Text style={mini.sideName} numberOfLines={1}>Name</Text>
+              <Text style={mini.sideName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
               <View style={mini.heroBar} />
               <View style={[mini.heroBar, mini.heroBarShort]} />
             </View>
@@ -892,7 +896,7 @@ function MiniProfile({
           <View style={[mini.sideRow, mini.appRow]}>
             <View style={mini.smallLogo}>{logo}</View>
             <View style={mini.sideLinesLeft}>
-              <Text style={mini.appName} numberOfLines={1}>Name</Text>
+              <Text style={mini.appName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
               <View style={[mini.heroBar, mini.heroBarShort]} />
             </View>
           </View>
@@ -900,12 +904,12 @@ function MiniProfile({
           // Retreat: their photo in an arched window, the name under it.
           <View style={mini.archWindowHero}>
             <View style={[mini.archWindow, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]} />
-            <Text style={mini.archWindowName} numberOfLines={1}>Name</Text>
+            <Text style={mini.archWindowName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
           </View>
         ) : style.hero === 'colourBlock' ? (
           // Riviera: the name in a fat italic on a block of the accent, the logo over its corner.
           <View style={[mini.colourBlock, { backgroundColor: accent }]}>
-            <Text style={[mini.colourBlockName, { color: isDarkColor(accent) ? '#FFFFFF' : '#1A1512' }]} numberOfLines={1}>Name</Text>
+            <Text style={[mini.colourBlockName, { color: isDarkColor(accent) ? '#FFFFFF' : '#1A1512' }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             <View style={mini.colourBlockLogo}>{logo}</View>
           </View>
         ) : style.hero === 'split' ? (
@@ -914,7 +918,7 @@ function MiniProfile({
             <View style={[mini.splitPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]} />
             <View style={mini.splitSide}>
               <View style={mini.smallLogo}>{logo}</View>
-              <Text style={mini.splitName} numberOfLines={1}>Name</Text>
+              <Text style={mini.splitName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             </View>
           </View>
         ) : style.hero === 'gridHeader' ? (
@@ -922,7 +926,7 @@ function MiniProfile({
           <View style={mini.gridHero}>
             <View style={[mini.sideRow, mini.gridHeroTop]}>
               <View style={mini.smallLogo}>{logo}</View>
-              <Text style={mini.appName} numberOfLines={1}>Name</Text>
+              <Text style={mini.appName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             </View>
             <View style={mini.gridHeroFoot}>
               <View style={[mini.heroBar, mini.heroBarShort]} />
@@ -931,7 +935,7 @@ function MiniProfile({
         ) : style.hero === 'slateHeader' ? (
           <View style={mini.slateHero}>
             <View style={mini.slateHeroRow}>
-              <Text style={[mini.slateHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+              <Text style={[mini.slateHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
               <View style={mini.smallLogo}>{logo}</View>
             </View>
             <View style={[mini.slateHeroRule, { backgroundColor: accent }]} />
@@ -940,7 +944,7 @@ function MiniProfile({
         ) : style.hero === 'haloHeader' ? (
           <View style={mini.haloHero}>
             <View style={[mini.haloHeroRing, { borderColor: withAlpha(accent, 0.8) }]}>{logo}</View>
-            <Text style={[mini.haloHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+            <Text style={[mini.haloHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
           </View>
         ) : style.hero === 'spa' ? (
           // Spa: a quiet line, the name spaced out, the ringed logo.
@@ -952,8 +956,8 @@ function MiniProfile({
           // Editorial: the name left in light and bold, a tilted card right.
           <View style={mini.sideRow}>
             <View style={mini.sideLinesLeft}>
-              <Text style={mini.edLight} numberOfLines={1}>Name</Text>
-              <Text style={mini.edBold} numberOfLines={1}>NAME<Text style={{ color: blend(accent, '#FFFFFF', 0.5) }}>.</Text></Text>
+              <Text style={mini.edLight} numberOfLines={1}>{tr('shared.newc.name')}</Text>
+              <Text style={mini.edBold} numberOfLines={1}>NAME<Text style={{ color: blend(accent, '#FFFFFF', 0.5) }}>{tr('shared.becca.hero.greetingAfter')}</Text></Text>
             </View>
             <View style={mini.smallLogo}>{logo}</View>
           </View>
@@ -964,7 +968,7 @@ function MiniProfile({
           // Duet: a welcome card in their card colour.
           <View style={[mini.welcome, { backgroundColor: cardColour }]}>
             <View style={[mini.welcomeLogo, { borderColor: accent }]} />
-            <Text style={[mini.duetScript, { color: accent }]} numberOfLines={1}>Name</Text>
+            <Text style={[mini.duetScript, { color: accent }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
           </View>
         ) : style.hero === 'groovy' ? (
           // Groovy: the name on a tilted pill.
@@ -973,7 +977,7 @@ function MiniProfile({
           </View>
         ) : style.hero === 'exhibition' ? (
           <View style={mini.sideRow}>
-            <Text style={mini.galleryName} numberOfLines={2}>Name</Text>
+            <Text style={mini.galleryName} numberOfLines={2}>{tr('shared.newc.name')}</Text>
             <View style={mini.smallLogo}>{logo}</View>
           </View>
         ) : style.hero === 'labelCard' ? (
@@ -1001,7 +1005,7 @@ function MiniProfile({
           // Signature: the ringed logo on the left, the signed name beside it.
           <View style={mini.signedRow}>
             {logo}
-            <Text style={mini.signedName} numberOfLines={1}>Name</Text>
+            <Text style={mini.signedName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
           </View>
         ) : style.hero === 'quietBand' ? (
           <View style={mini.quietBand}>
@@ -1030,7 +1034,7 @@ function MiniProfile({
             <View style={mini.callingCard}>
               <View style={[mini.callingClip, { backgroundColor: accent }]} />
               {logo}
-              <Text style={[mini.callingName, { color: blend(accent, '#000000', 0.4) }]} numberOfLines={1}>Name</Text>
+              <Text style={[mini.callingName, { color: blend(accent, '#000000', 0.4) }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             </View>
           </>
         ) : style.hero === 'productPage' ? (
@@ -1038,7 +1042,7 @@ function MiniProfile({
           <View style={mini.productWrap}>
             <View style={[mini.productPhoto, { backgroundColor: accent }]}>{logo}</View>
             <View style={[mini.productPanel, { backgroundColor: cardColour }]}>
-              <Text style={[mini.productTitle, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+              <Text style={[mini.productTitle, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             </View>
           </View>
         ) : style.hero === 'gazette' ? (
@@ -1099,19 +1103,19 @@ function MiniProfile({
               <View style={[mini.bowRibbon, { backgroundColor: ribbonColours(accent).satin }]} />
             </View>
             <View style={mini.bowKnot}><BowGlyph width={22} accent={accent} /></View>
-            <Text style={mini.bowName} numberOfLines={1}>Name</Text>
+            <Text style={mini.bowName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
           </View>
         ) : style.hero === 'titlePage' ? (
           // Novel: a title page, the logo ringed, the name in old type over an ornament.
           <>
             <View style={[mini.doubleRing, { borderColor: blend(accent, '#FFFFFF', 0.4) }]}>{logo}</View>
-            <Text style={mini.titlePageName} numberOfLines={1}>Name</Text>
+            <Text style={mini.titlePageName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
             <View style={[mini.titlePageRule, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
           </>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
-            <Text style={mini.posterName} numberOfLines={1}>Name</Text>
+            <Text style={mini.posterName} numberOfLines={1}>{tr('shared.newc.name')}</Text>
           </>
         ) : logo}
       </LinearGradient>
@@ -1122,7 +1126,7 @@ function MiniProfile({
         ) : null}
         {style.heading === 'legend' ? (
           <View style={[mini.legendBox, { borderColor: withAlpha(accent, 0.6) }]}>
-            <Text style={[mini.legend, { color: accent, backgroundColor: sheet }]}>Services</Text>
+            <Text style={[mini.legend, { color: accent, backgroundColor: sheet }]}>{tr('shared.newc.services')}</Text>
             <View style={[mini.bar, { backgroundColor: line, marginTop: 6 }]} />
             <View style={[mini.bar, mini.barShort, { backgroundColor: line }]} />
           </View>

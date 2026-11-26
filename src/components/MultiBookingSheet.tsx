@@ -62,6 +62,7 @@ import { AddOnPickerModal } from './AddOnPickerModal';
 import { durationWithAddOns, type ChosenAddOn } from '../features/bookings/addOnTime';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { readableSheet } from '../constants/readableWidth';
+import { localeForLanguage, tr, useTranslation } from '../i18n';
 
 /** Mirrors the single-service sheet's three shared steps. Add-ons are no
  *  longer a step here at all — they're decided per-service at selection
@@ -160,12 +161,12 @@ const parse12h = (t: string): number => {
 const formatDuration = (totalMin: number): string => {
   const hrs = Math.floor(totalMin / 60);
   const mins = totalMin % 60;
-  if (hrs === 0) return `${mins}min`;
-  return mins === 0 ? `${hrs}hr` : `${hrs}hr ${mins}min`;
+  if (hrs === 0) return tr('clientBooking.duration.minutes', { mins });
+  return mins === 0 ? tr('clientBooking.duration.hours', { hrs }) : tr('clientBooking.duration.hoursMinutes', { hrs, mins });
 };
 
 const formatShortDate = (dateStr: string): string =>
-  new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {
+  new Date(dateStr + 'T12:00:00').toLocaleDateString(localeForLanguage(), {
     weekday: 'short', day: 'numeric', month: 'short',
   });
 
@@ -183,6 +184,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 }) => {
   const sheetBackground = backgroundColor;
   const bottomInset = useSystemBottomInset();
+  const { t, tp } = useTranslation();
   const tokens = useMemo(
     () => buildThemeTokens(sheetBackground, sheetBackground, adaptiveAccentColor, sheetBackground),
     [sheetBackground, adaptiveAccentColor]
@@ -518,13 +520,13 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     // Checked on "when" (where it's fixable) AND "confirm" (where it's
     // committed), since a schedule can be invalidated after moving past it.
     if (step === 'when' || step === 'confirm') {
-      if (!scheduleReady) return 'Choose a date for each service';
+      if (!scheduleReady) return t('clientBooking.multi.chooseDateEach');
     }
     // Fixable right here on "confirm", so unlike scheduling this one disables
     // the button rather than routing back to an earlier step.
-    if (step === 'confirm' && providerTermsGateUnmet) return 'Agree to the Terms & Conditions';
+    if (step === 'confirm' && providerTermsGateUnmet) return t('clientBooking.sheet.agreeToTerms');
     return null;
-  }, [step, scheduleReady, providerTermsGateUnmet]);
+  }, [step, scheduleReady, providerTermsGateUnmet, t]);
 
   // A scheduling blocker on confirm keeps the button tappable and routes back
   // to "when" — what needs fixing lives on an earlier step, so disabling it
@@ -672,10 +674,10 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
               )}
               <View style={{ flex: 1 }}>
                 <Text style={[styles.headerTitle, { color: tokens.text }]}>
-                  Book {services.length} Service{services.length === 1 ? '' : 's'}
+                  {tp('clientBooking.multi.title', services.length)}
                 </Text>
                 <Text style={[styles.headerSubtitle, { color: tokens.sub }]}>
-                  £{servicesTotal.toFixed(2)} total
+                  {t('clientBooking.multi.subtitleTotal', { amount: `£${servicesTotal.toFixed(2)}` })}
                 </Text>
               </View>
               <TouchableOpacity
@@ -698,11 +700,11 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
               {step === 'when' && (
               <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>When works for you?</Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>{t('clientBooking.sheet.question.when')}</Text>
 
               <View style={styles.section}>
                 <View style={styles.summaryHeaderRow}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Services</Text>
+                  <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>{t('clientBooking.multi.services')}</Text>
                   {services.length > 1 && (
                     <TouchableOpacity
                       onPress={() => {
@@ -723,7 +725,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     >
                       <Ionicons name="calendar-outline" size={14} color={adaptiveAccentColor} />
                       <Text style={[styles.separateToggleText, { color: adaptiveAccentColor }]}>
-                        {separateSelectMode ? 'Select' : 'Schedule Separately'}
+                        {separateSelectMode ? t('common.select') : t('clientBooking.multi.scheduleSeparately')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -752,7 +754,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.serviceName, { color: tokens.text }]}>{service.name}</Text>
                           <Text style={[styles.serviceMeta, { color: tokens.sub }]}>
-                            {lengthOf(service)}{isSeparate ? ' • Scheduled separately' : ''}
+                            {lengthOf(service)}{isSeparate ? ` • ${tr('clientBooking.multi.separately')}` : ''}
                           </Text>
                         </View>
                         <Text style={[styles.servicePrice, { color: adaptiveAccentColor }]}>£{service.price}</Text>
@@ -785,7 +787,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                             style={styles.editAddOnsLink}
                           >
                             <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>
-                              {selected.length > 0 ? 'Edit add-ons' : 'Add extras'}
+                              {selected.length > 0 ? t('clientBooking.multi.editAddOns') : t('clientBooking.multi.addExtras')}
                             </Text>
                           </TouchableOpacity>
                         </>
@@ -799,8 +801,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 <View style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: tokens.text }]}>
                     {groupServices.length === services.length
-                      ? 'Date & Time'
-                      : `Date & Time — ${groupServices.length} Service${groupServices.length > 1 ? 's' : ''} Together`}
+                      ? t('clientBooking.sheet.dateTime')
+                      : tp('clientBooking.multi.dateTimeTogether', groupServices.length)}
                   </Text>
                   {/* Chain-aware: the times offered are starts where EVERY
                       grouped service still fits back-to-back, not where the
@@ -821,7 +823,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     <View style={styles.resolvingRow}>
                       <ActivityIndicator size="small" color={adaptiveAccentColor} />
                       <Text style={[styles.resolvingText, { color: tokens.sub }]}>
-                        Checking availability for all {groupServices.length} services…
+                        {t('clientBooking.multi.checkingAll', { count: groupServices.length })}
                       </Text>
                     </View>
                   )}
@@ -830,7 +832,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   )}
                   {groupChainStatus === 'not-found' && (
                     <Text style={[styles.notFoundText, { color: tokens.sub }]}>
-                      That day doesn't have room for all {groupServices.length} services back-to-back — try another date, or mark one "Schedule separately" above.
+                      {t('clientBooking.multi.noRoom', { count: groupServices.length })}
                     </Text>
                   )}
                 </View>
@@ -840,17 +842,17 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 const key = serviceKeyOf(service);
                 return (
                   <View style={styles.section} key={key}>
-                    <Text style={[styles.sectionTitle, { color: tokens.text }]}>Date & Time — {service.name}</Text>
+                    <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.sheet.dateTimeFor', { service: service.name })}</Text>
                     {resolvingSeparate[key] && (
                       <View style={styles.resolvingRow}>
                         <ActivityIndicator size="small" color={adaptiveAccentColor} />
-                        <Text style={[styles.resolvingText, { color: tokens.sub }]}>Finding the earliest available time…</Text>
+                        <Text style={[styles.resolvingText, { color: tokens.sub }]}>{t('clientBooking.multi.findingEarliest')}</Text>
                       </View>
                     )}
                     <ModernBeautyCalendar
                       selectedDate={separateDates[key] ?? ''}
                       onDateSelect={d => handleSeparateDate(key, d)}
-                      onTimeSelect={(t, reasons) => handleSeparateTime(key, service.name, t, reasons)}
+                      onTimeSelect={(time, reasons) => handleSeparateTime(key, service.name, time, reasons)}
                       selectedTime={separateTimes[key] ?? ''}
                       allowRequests={EMERGENCY_BOOKINGS_ENABLED}
                       providerLabel={providerDisplayName}
@@ -871,25 +873,25 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
               {step === 'pay' && (
               <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>How would you like to pay?</Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>{t('clientBooking.sheet.question.pay')}</Text>
 
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Notes</Text>
+                <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.multi.notes')}</Text>
                 <TextInput
                   style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Add special requests, allergies, or preferences..."
+                  placeholder={t('clientBooking.sheet.notes.placeholder')}
                   placeholderTextColor={tokens.sub}
                   multiline
                   numberOfLines={4}
                   maxLength={500}
                 />
-                <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
+                <Text style={[styles.characterCount, { color: tokens.sub }]}>{t('clientBooking.sheet.notes.count', { count: notes.length, max: 500 })}</Text>
               </View>
 
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
+                <Text style={[styles.sectionTitle, { color: tokens.text }]}>{t('clientBooking.sheet.payment')}</Text>
                 <View style={styles.paymentButtons}>
                   {showFullPaymentOption && (
                     <TouchableOpacity
@@ -901,7 +903,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       onPress={() => setIsDepositOnly(false)}
                     >
                       <Text style={[styles.paymentOptionText, { color: tokens.sub }, !isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
-                        Pay Full Amount
+                        {t('clientBooking.sheet.payFull')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -919,9 +921,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
                         {depositPolicy
                           ? depositPolicy.depositType === 'fixed'
-                            ? `Pay Deposit (£${depositPolicy.depositAmount})`
-                            : `Pay Deposit (${depositPolicy.depositAmount}%)`
-                          : 'Pay Deposit (20%)'}
+                            ? t('clientBooking.sheet.payDepositAmount', { amount: `£${depositPolicy.depositAmount}` })
+                            : t('clientBooking.sheet.payDepositPercent', { percent: depositPolicy.depositAmount })
+                          : t('clientBooking.sheet.payDepositPercent', { percent: 20 })}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -931,17 +933,17 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     a missing choice, not as the provider's policy. */}
                 {!showFullPaymentOption && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
-                    This provider requires a deposit to book — paying in full isn't available for this service.
+                    {t('clientBooking.sheet.depositRequired')}
                   </Text>
                 )}
                 {showFullPaymentOption && depositPolicy?.depositAvailable === false && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
-                    This provider doesn't take deposits — the full amount is paid when you book.
+                    {t('clientBooking.sheet.noDeposits')}
                   </Text>
                 )}
                 {isDepositOnly && (
                   <Text style={[styles.depositRemainingText, { color: tokens.sub }]}>
-                    Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
+                    {t('clientBooking.sheet.remainingPayAtAppointment', { amount: `£${BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)}` })}
                   </Text>
                 )}
                 {/* The provider's own "Note to clients" from Payments, in their words. */}
@@ -954,15 +956,15 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
               {step === 'confirm' && (
               <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Does this look right?</Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>{t('clientBooking.sheet.question.confirm')}</Text>
 
               <View style={styles.section}>
                 <View style={styles.summaryHeaderRow}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Booking Summary</Text>
+                  <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>{t('clientBooking.sheet.summary')}</Text>
                   {/* The confirm step is where a mistake gets noticed, so it
                       offers a way back to the step that owns it. */}
                   <TouchableOpacity onPress={() => goToStep('when')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change time</Text>
+                    <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>{t('clientBooking.sheet.changeTime')}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -989,17 +991,17 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       <View style={[styles.summaryGroupBadge, { backgroundColor: adaptiveAccentColor }]}>
                         <Ionicons name="link" size={12} color="#FFFFFF" />
                         <Text style={styles.summaryGroupBadgeText}>
-                          GROUP BOOKING · {groupServices.length}
+                          {t('clientBooking.multi.groupBadge', { count: groupServices.length }).toUpperCase()}
                         </Text>
                       </View>
                     </View>
                     <Text style={[styles.summaryGroupSubtitle, { color: tokens.text }]}>
-                      {groupServices.length} services back-to-back
+                      {t('clientBooking.multi.backToBack', { count: groupServices.length })}
                     </Text>
                     <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
                       {groupDate && groupRangeText
                         ? `${formatShortDate(groupDate)} · ${groupRangeText}`
-                        : 'Not scheduled yet'}
+                        : t('clientBooking.sheet.notScheduled')}
                     </Text>
 
                     <View style={[styles.summaryGroupRule, { backgroundColor: withAlpha(adaptiveAccentColor, 0.35) }]} />
@@ -1018,8 +1020,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                               and the separately-scheduled block below. */}
                           {addOnsTotal > 0 && (
                             <Text style={[styles.summaryAddOnLine, { color: tokens.text }]} numberOfLines={2}>
-                              + {addOnsForService.length} add-on{addOnsForService.length === 1 ? '' : 's'} (£
-                              {addOnsTotal.toFixed(2)}): {addOnsForService.map(a => a.name).join(', ')}
+                              {tp('clientBooking.multi.addOnsLine', addOnsForService.length, { total: `£${addOnsTotal.toFixed(2)}`, names: addOnsForService.map(a => a.name).join(', ') })}
                             </Text>
                           )}
                         </View>
@@ -1030,7 +1031,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                         rather than only contributing to the grand total. */}
                     <View style={[styles.summaryGroupRule, { backgroundColor: withAlpha(adaptiveAccentColor, 0.35) }]} />
                     <View style={styles.summaryItemRow}>
-                      <Text style={[styles.summaryGroupTotalLabel, { color: tokens.sub }]}>Group total</Text>
+                      <Text style={[styles.summaryGroupTotalLabel, { color: tokens.sub }]}>{t('clientBooking.multi.groupTotal')}</Text>
                       <Text style={[styles.summaryGroupTotalValue, { color: tokens.text }]}>
                         £{groupServices
                           .reduce((sum, s) => {
@@ -1051,8 +1052,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   const addOnsTotal = addOnsForService.reduce((s, a) => s + a.price, 0);
                   const soloDateTimeText =
                     groupDate && groupChainStatus === 'found' && groupSchedule?.[0]?.time
-                      ? `${formatShortDate(groupDate)} at ${groupSchedule[0].time}`
-                      : 'Not scheduled yet';
+                      ? t('clientBooking.sheet.dateAtTime', { date: formatShortDate(groupDate), time: groupSchedule[0].time })
+                      : t('clientBooking.sheet.notScheduled');
                   return (
                     <View key={key}>
                       <View style={styles.summaryItemRow}>
@@ -1064,8 +1065,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       </View>
                       {addOnsTotal > 0 && (
                         <Text style={[styles.summaryAddOnLine, { color: tokens.text }]} numberOfLines={2}>
-                          + {addOnsForService.length} add-on{addOnsForService.length === 1 ? '' : 's'} (£
-                          {addOnsTotal.toFixed(2)}): {addOnsForService.map(a => a.name).join(', ')}
+                          {tp('clientBooking.multi.addOnsLine', addOnsForService.length, { total: `£${addOnsTotal.toFixed(2)}`, names: addOnsForService.map(a => a.name).join(', ') })}
                         </Text>
                       )}
                     </View>
@@ -1077,14 +1077,14 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     shared day, so the summary reflects that per-item. */}
                 {separateServicesList.length > 0 && groupServices.length > 0 && (
                   <Text style={[styles.summarySeparateHeaderText, { color: tokens.sub }]}>
-                    Scheduled separately
+                    {t('clientBooking.multi.scheduledSeparately')}
                   </Text>
                 )}
                 {separateServicesList.map(service => {
                   const key = serviceKeyOf(service);
                   const d = separateDates[key];
-                  const t = separateTimes[key];
-                  const dateTimeText = d && t ? `${formatShortDate(d)} at ${t}` : 'Not scheduled yet';
+                  const time = separateTimes[key];
+                  const dateTimeText = d && time ? t('clientBooking.sheet.dateAtTime', { date: formatShortDate(d), time }) : t('clientBooking.sheet.notScheduled');
                   const addOnsForService = addOnsByService[key] ?? [];
                   const addOnsTotal = addOnsForService.reduce((s, a) => s + a.price, 0);
                   return (
@@ -1098,8 +1098,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       </View>
                       {addOnsTotal > 0 && (
                         <Text style={[styles.summaryAddOnLine, { color: tokens.text }]} numberOfLines={2}>
-                          + {addOnsForService.length} add-on{addOnsForService.length === 1 ? '' : 's'} (£
-                          {addOnsTotal.toFixed(2)}): {addOnsForService.map(a => a.name).join(', ')}
+                          {tp('clientBooking.multi.addOnsLine', addOnsForService.length, { total: `£${addOnsTotal.toFixed(2)}`, names: addOnsForService.map(a => a.name).join(', ') })}
                         </Text>
                       )}
                     </View>
@@ -1124,7 +1123,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
-                      Read {providerDisplayName}'s Terms &amp; Conditions
+                      {t('clientBooking.sheet.terms.read', { provider: providerDisplayName })}
                     </Text>
                   </TouchableOpacity>
 
@@ -1137,7 +1136,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     activeOpacity={0.7}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: agreedToProviderTerms }}
-                    accessibilityLabel={`I agree to ${providerDisplayName}'s Terms and Conditions`}
+                    accessibilityLabel={t('clientBooking.sheet.terms.agreeA11y', { provider: providerDisplayName })}
                   >
                     <View
                       style={[
@@ -1149,7 +1148,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       {agreedToProviderTerms && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
                     </View>
                     <Text style={[styles.providerTermsAgreeText, { color: tokens.text }]}>
-                      I agree to {providerDisplayName}'s Terms &amp; Conditions
+                      {t('clientBooking.sheet.terms.agree', { provider: providerDisplayName })}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1170,7 +1169,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
               {step !== 'when' && (
                 <View style={styles.totalRow}>
                   <Text style={[styles.totalLabel, { color: tokens.text }]}>
-                    {isDepositOnly ? 'Deposit due now' : 'Total'}
+                    {isDepositOnly ? t('clientBooking.sheet.depositDueNow') : t('clientBooking.sheet.total')}
                   </Text>
                   <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
                 </View>
@@ -1189,12 +1188,12 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
               >
                 <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
                   {schedulingFixableElsewhere
-                    ? 'Choose a date for each service'
+                    ? t('clientBooking.multi.chooseDateEach')
                     : stepBlocker
                     ? stepBlocker
                     : step === 'confirm'
-                    ? `Book All ${services.length} Service${services.length === 1 ? '' : 's'}`
-                    : 'Continue'}
+                    ? tp('clientBooking.multi.bookAll', services.length)
+                    : t('common.continue')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1264,13 +1263,13 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
-                  {providerTerms?.title ?? 'Terms & Conditions'}
+                  {providerTerms?.title ?? t('clientBooking.sheet.terms.title')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowProviderTerms(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Close terms"
+                  accessibilityLabel={t('clientBooking.sheet.terms.closeA11y')}
                 >
                   <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
                 </TouchableOpacity>
@@ -1280,7 +1279,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   {providerTerms?.body ?? ''}
                 </Text>
                 <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
-                  Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                  {t('clientBooking.sheet.terms.footnote', { provider: providerDisplayName })}
                 </Text>
               </ScrollView>
             </SafeAreaView>
@@ -1302,13 +1301,13 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
             <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
               <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
                 <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
-                  Emergency Booking Policy
+                  {t('clientBooking.sheet.emergencyPolicy.title')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowEmergencyPolicy(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Close emergency booking policy"
+                  accessibilityLabel={t('clientBooking.sheet.emergencyPolicy.closeA11y')}
                 >
                   <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
                 </TouchableOpacity>
@@ -1318,7 +1317,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   {emergencyPolicyText}
                 </Text>
                 <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
-                  Written by {providerDisplayName}, for times outside their normal availability.
+                  {t('clientBooking.sheet.emergencyPolicy.footnote', { provider: providerDisplayName })}
                 </Text>
               </ScrollView>
             </SafeAreaView>
