@@ -21,7 +21,17 @@ import { reportError } from './logger';
  */
 export const SAME_PASSWORD_MESSAGE = 'Your new password needs to be different from your current one.';
 
+/**
+ * The database's language filter (`refuse_blocked_language`, migration
+ * 20261125170000) refuses slurs and abuse in messages, reviews, names,
+ * descriptions and announcements. Matched first, so a screen that only uses
+ * `toUserMessage` still tells the person what to fix instead of "try again".
+ */
+export const BLOCKED_LANGUAGE_MESSAGE =
+  "This includes language that isn't allowed on CERVICED. Please change it and try again.";
+
 const FRIENDLY_PATTERNS: { test: RegExp; message: string }[] = [
+  { test: /language that isn.t allowed on CERVICED/i, message: BLOCKED_LANGUAGE_MESSAGE },
   { test: /network|fetch failed|timeout|offline|connect/i,
     message: 'No internet connection. Please check your network and try again.' },
   { test: /rate limit|too many/i,

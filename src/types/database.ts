@@ -1,5 +1,6 @@
 // Auto-generated Supabase database types for CERVICED
 // Keep in sync with supabase/phase1_schema.sql
+import type { ServiceTypeKey } from '../constants/serviceTypes';
 
 export type Json =
   | string
@@ -73,15 +74,29 @@ export type NotificationType =
   | "no_show"
   | "provider_no_show"
   | "payment_success"
+  /** A checkout whose card was approved but which didn't book: cancelled before it
+   *  was taken, or refunded because the time had gone (record_checkout_outcome). */
+  | "payment_not_completed"
   | "cancellation_settled"
   | "fee_charged"
   | "fee_disputed"
   | "fee_dispute_resolved"
   | "fee_payment_requested"
   | "fee_paid_by_client"
+  | "tip_received"
   | "fee_payment_lapsed"
+  /** Provider owes money a take-back couldn't recover, and when some is taken from a payout. */
+  | "payout_debt_recorded"
+  | "payout_debt_recovered"
   | "refund_requested"
   | "refund_request_updated"
+  /** Money went back to the client, from any refund on a booking or a late/no-show fee
+   *  (notify_client_of_refund / notify_client_of_fee_refund triggers). */
+  | "payment_refunded"
+  /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */
+  | "payout_failed"
+  /** One-off notice that Terms people already accepted have changed (send_terms_updated_notice). */
+  | "terms_updated"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"
@@ -107,7 +122,7 @@ export type NotificationType =
   | "post_appt_check_in" // provider's automated post-appointment check-in (client-facing)
   | "rebooking_nudge" // "it's been a while" nudge to rebook (client-facing)
   | "daily_recap" // provider's automated today's-schedule summary (provider-facing)
-  | "schedule_fully_booked" // provider's whole calendar has no openings in their alert window (provider-facing)
+  | "schedule_fully_booked" // every slot the provider has opened is booked; opens their certificate (provider-facing)
   | "pending_booking_reminder" // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
   | "points_earned" // client earned loyalty points (client-facing)
   /** Beauty Maintenance: something the client tracks is due. Generic copy;
@@ -115,7 +130,13 @@ export type NotificationType =
   | "maintenance_due"
   /** Beauty Maintenance: the completed booking's provider wrote aftercare
    *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
-  | "aftercare_available";
+  | "aftercare_available"
+  /** Provider: a daily count of the people who saved them. Never names. */
+  | "provider_saved"
+  /** Client: someone asked to follow their private account. metadata.follower_id says who. */
+  | "follow_request"
+  /** Provider: a client joined their waitlist. metadata.waitlist_id says which entry. */
+  | "waitlist_joined";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -136,6 +157,45 @@ export type TransactionType =
   | "remaining"
   | "tip"
   | "refund";
+
+// ── Hero photo framing ───────────────────────────────────
+
+/** How a portfolio photo sits in a page style's hero
+ *  (`portfolio_items.hero_frame`). `zoom` multiplies the size at which the
+ *  photo just covers its slot (1 to 3). `x`/`y` move it as a fraction of how far
+ *  it can move in that slot (-1 to 1, 0 centred), so one frame shows the same
+ *  part of the photo in every style's slot, whatever its shape. */
+export interface HeroPhotoFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+// ── Logo framing ─────────────────────────────────────────
+
+/** How the logo sits in one Home card: `zoom` multiplies the size at which
+ *  the logo just fills the card (1 = fills it, as with no framing; below 1
+ *  shows more of it, down to the whole logo); `x`/`y` move the logo's centre
+ *  from the card's centre, as a fraction of the card's width/height. */
+export interface LogoCardFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+/** The provider's per-shape logo framing (`providers.logo_framing`).
+ *  `imageRatio` is the logo image's width ÷ height, which the frames are
+ *  relative to. A missing shape means "fill and centre", the default. */
+export interface LogoFraming {
+  imageRatio: number;
+  small?: LogoCardFrame;
+  large?: LogoCardFrame;
+  /** The round profile logo, wherever the app draws the logo as a circle. */
+  circle?: LogoCardFrame;
+}
+
+/** The shapes a logo is framed for: the two Home cards and the circle. */
+export type LogoCardSlot = 'small' | 'large' | 'circle';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -182,6 +242,7 @@ export interface DbUser {
   languages_spoken: string[] | null;
   specialties: string[] | null;
   price_range: "budget" | "mid" | "premium" | "luxury" | null;
+  price_bands: string[];
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
   is_verified: boolean;
@@ -213,11 +274,22 @@ export interface DbProvider {
   service_categories: ServiceCategory[];
   custom_service_type: string | null;
   location_text: string | null;
+  /** Public "How to get there" for the profile — stations, parking,
+   *  landmarks. Never door codes: those are provider_private_details
+   *  .how_to_get_there, released with the address. */
+  public_directions: string | null;
+  /** The provider's own profile sections (Key Information, FAQs, Aftercare,
+   *  Disclaimer, Custom sections) from Policies & Info. Public. Read through
+   *  normalizeOwnSections in features/providers/ownSections.ts. */
+  profile_sections: Record<string, unknown> | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
   slots_text: string | null;
   logo_url: string | null;
+  /** Per-card framing for the small and large Home cards. Null = every card
+   *  fills and centres the logo. */
+  logo_framing: LogoFraming | null;
   gradient: string[] | null;
   accent_color: string | null;
   background_image_url: string | null;
@@ -267,9 +339,11 @@ export interface DbProvider {
   booking_policies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     rescheduleNote?: string;
     /** 'full_only' | 'client_choice' | 'deposit_required' — the provider's
      *  three-way deposit choice, edited on PaymentsScreen. Read it through
@@ -293,6 +367,11 @@ export interface DbProvider {
     noShowGraceMinutes?: string;
     /** Stamped onto every new booking, shown to clients in booking details. */
     bookingInstructions?: string;
+    /** Written policies shown on the profile; neither affects booking or payment. */
+    travelPolicy?: string;
+    /** Kept whenever the client cancels, even in good time. Frozen per booking. */
+    depositNonRefundable?: boolean;
+    emergencyBookingPolicy?: string;
     /** Optional photo of a fuller policy document, shown to clients via a
      *  pop-up on their profile view (see ProviderProfileScreen). */
     policyImageUrl?: string;
@@ -325,6 +404,7 @@ export interface DbProvider {
   technique_tags: string[] | null;
   inclusive_flags: string[] | null;
   price_tier: "budget" | "mid" | "premium" | "luxury" | null;
+  price_bands: string[];
   team_size: "solo" | "small_team" | "large_team" | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
@@ -351,13 +431,16 @@ export interface DbProvider {
   qualifications: string | null;
   is_insured_self_declared: boolean;
   dbs_checked_self_declared: boolean;
-  travel_radius: string | null;
   clientele: string[] | null;
   // Provider-level hair types catered to (HAIR_TYPES vocabulary — Straight,
   // Wavy, Curly, Coily, 4A, 4B, 4C). NULL/empty = caters to all. This is what
   // the client Search "Hair Type" filter matches on; services.hair_types_
   // suitable below is the narrower per-service refinement.
   hair_types_catered: string[] | null;
+  // Provider-level skin tones worked with (SKIN_TONES vocabulary), asked in
+  // About You's I Work With card. NULL/empty = not stated — unlike hair types,
+  // never read as "all". services.skin_tones_suitable is the per-service one.
+  skin_tones_catered: string[] | null;
   availability_windows: string[] | null;
   accepts_new_clients: "yes" | "waitlist" | "no" | null;
   walk_ins_welcome: boolean;
@@ -396,6 +479,8 @@ export interface DbProvider {
     postApptCheckIn?: boolean;
     birthdayGreeting?: boolean;
     waitlistEnabled?: boolean;
+    /** Close the schedule when it fills. Only acted on with waitlistEnabled false. */
+    autoCloseWhenFull?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
     /** Daily 07:00 provider recap push. Read by
@@ -410,15 +495,15 @@ export interface DbProvider {
      *  notify_cron.sql) to notify provider_follows rows with
      *  notify_enabled = TRUE on that day each month. Unset = never fires. */
     scheduleReleaseDay?: number;
+    /** 'HH:MM', UK time, when the release day opens next month. Unset = 9am.
+     *  Read by provider_last_bookable_date() and the release-nudge cron. */
+    scheduleReleaseTime?: string;
   } | null;
-  // Cooldown guard for process_provider_fully_booked_alerts() (provider_
-  // fully_booked_alert.sql) — read-only from the app, written only by that
-  // cron job. Fixed weekly check for now, not provider-configurable.
-  fully_booked_alert_last_sent_at: string | null;
   // Claimable-profile fields (supabase/claimable_provider_profiles.sql).
   // is_claimed=false rows are imported placeholders with no owner yet —
   // see searchUnclaimedProviders/getUnclaimedProviderDetail in
-  // databaseService.ts and the claim flow in ClaimProviderScreen.tsx.
+  // databaseService.ts, the claim flow in ClaimProviderScreen.tsx, and
+  // provider_claim_requests (20261024100000) for how a claim is approved.
   is_claimed: boolean;
   source: "self_signup" | "scraped" | null;
   created_at: string;
@@ -457,6 +542,11 @@ export interface DbService {
   // NULL = no override. before defaults to 0; after inherits providers.buffer_mins.
   buffer_before_mins: number | null;
   buffer_after_mins: number | null;
+  /** Latest time of day this service can start, 'HH:MM:SS' as Postgres
+   *  returns a time. NULL = any time within working hours. Enforced by
+   *  enforce_booking_bookability; AvailabilityService mirrors it. Optional
+   *  because only the owner's own catalogue reads select it. */
+  latest_start_time?: string | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -481,13 +571,8 @@ export interface DbService {
   audience: "women" | "men" | "kids" | "everyone" | null;
   // Context
   aftercare_notes: string | null;
-  service_type:
-    | "treatment"
-    | "enhancement"
-    | "maintenance"
-    | "restorative"
-    | "consultation"
-    | null;
+  // Limited by services_service_type_check; the list is in constants/serviceTypes.
+  service_type: ServiceTypeKey | null;
   // Only populated by queries that explicitly join service_add_ons (e.g.
   // getMyProviderServices) — most service reads leave it undefined.
   add_ons?: DbServiceAddOn[];
@@ -511,6 +596,10 @@ export interface DbServiceImage {
   fit: 'cover' | 'contain';
 }
 
+/** One service's copy of a provider add-on. Since universal add-ons
+ *  (20261105223541) these rows are DERIVED from provider_add_ons by
+ *  sync_provider_add_on_links(): never write them directly. Their ids are
+ *  what carts, checkout and booking_add_ons reference. */
 export interface DbServiceAddOn {
   id: string;
   service_id: string;
@@ -518,6 +607,34 @@ export interface DbServiceAddOn {
   price: number;
   description: string | null;
   is_active: boolean;
+  /** Minutes this add-on adds to the appointment. 0 = no extra time. */
+  extra_minutes: number;
+  provider_add_on_id: string | null;
+}
+
+/** Which services a provider add-on goes on. 'services' = only the ones
+ *  ticked by hand (included_service_ids). */
+export type ProviderAddOnAppliesTo = 'all' | 'categories' | 'services';
+
+/** An add-on as the provider made it, once, for all their services. Read by
+ *  its owner only; saved through replace_provider_add_ons(). */
+export interface DbProviderAddOn {
+  id: string;
+  provider_id: string;
+  name: string;
+  price: number;
+  description: string | null;
+  extra_minutes: number;
+  /** false = paused: hidden from clients on every service. */
+  is_active: boolean;
+  applies_to: ProviderAddOnAppliesTo;
+  /** services.category_name values, for applies_to = 'categories'. */
+  category_names: string[];
+  /** Ticked on these services even though the rule doesn't cover them. */
+  included_service_ids: string[];
+  /** Unticked on these services even though the rule covers them. */
+  excluded_service_ids: string[];
+  sort_order: number;
 }
 
 export interface DbProviderAvailability {
@@ -571,6 +688,8 @@ export interface DbPortfolioItem {
   price: number | null;
   aspect_ratio: number;
   is_featured: boolean;
+  /** How it sits in the hero; null = centred, unzoomed. */
+  hero_frame: HeroPhotoFrame | null;
   created_at: string;
   // Enriched discovery tags — personalised Explore feed
   vibe_tags: string[] | null;
@@ -578,6 +697,15 @@ export interface DbPortfolioItem {
   trend_names: string[] | null;
   hair_type_shown: string | null;
   skin_tone_shown: "fair" | "light" | "medium" | "tan" | "deep" | "rich" | null;
+}
+
+/** booking_venue_details: the provider's private venue for one booking.
+ *  Readable only by that booking's provider (RLS); clients get it through
+ *  client_bookings once released. */
+export interface DbBookingVenue {
+  address: string | null;
+  directions: string | null;
+  coordinates: { lat: number; lng: number } | null;
 }
 
 export interface DbBooking {
@@ -589,6 +717,11 @@ export interface DbBooking {
   booking_date: string; // 'YYYY-MM-DD'
   booking_time: string; // 'HH:MM:SS'
   end_time: string | null;
+  /** 'YYYY-MM-DDTHH:MM:SS', padded with the booking's own buffers by the
+   *  compute_booking_effective_range trigger. bookings_no_overlap compares
+   *  these, not the raw times. Optional: only `select('*')` reads carry it. */
+  effective_start?: string | null;
+  effective_end?: string | null;
   notes: string | null;
   booking_instructions: string | null;
   payment_type: PaymentType;
@@ -614,9 +747,24 @@ export interface DbBooking {
   service_name_snapshot: string;
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
-  provider_address_snapshot: string | null;
+  /** Set on an on_hold row: a cart checkout's 5 minutes, or a waitlist
+   *  hold's 15. Optional because client_bookings never returns on_hold rows. */
+  hold_expires_at?: string | null;
+  /** The waitlist entry a hold (and the booking it becomes) came from. */
+  waitlist_entry_id?: string | null;
+  // The provider's private venue is NOT on the bookings table (migration
+  // 20261108180000): it lives in booking_venue_details, which clients can't
+  // read. These three are client_bookings VIEW columns, null until the
+  // address is released. A provider's own read embeds booking_venue_details
+  // instead; mapDbBookingToConfirmed reads whichever is present.
+  provider_address_snapshot?: string | null;
+  /** Private venue access instructions, release-gated with the address. */
+  provider_directions_snapshot?: string | null;
+  provider_coordinates?: { lat: number; lng: number } | null;
+  /** Provider-side embed of the booking's venue. To-one, but read defensively
+   *  as either shape, like booking_client_addresses. */
+  booking_venue_details?: DbBookingVenue | DbBookingVenue[] | null;
   provider_phone_snapshot: string | null;
-  provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -642,7 +790,18 @@ export interface DbBooking {
   no_show_disputed_at?: string | null;
   refunded_amount?: number | null;
   policy_retained_amount?: number | null;
+  /** Start of the appointment the client moved away from while already
+   *  inside its cancellation window (migration 20261101130000). */
+  late_reschedule_from?: string | null;
+  /** client_bookings only: booked after that rule went live, so it applies. */
+  late_reschedule_rule_applies?: boolean | null;
+  /** client_bookings only: booked after the five-day refund-request limit
+   *  went live (migration 20261113190000), so it applies. */
+  refund_request_window_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
+  /** A request declined by the provider or expired unanswered — see
+   *  20261110200000_booking_request_declined_at.sql. */
+  declined_at?: string | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
   // Client intent — feeds search personalisation and Becca context
@@ -704,6 +863,7 @@ export interface DbBookingRescheduleRequest {
   // Optional decline reason — set by reject_reschedule_request (provider
   // decline) and surfaced to the client via the trigger-owned notification.
   response_note?: string | null;
+  cancel_if_declined?: boolean;
   // Set on every sibling row a provider_initiate_group_reschedule() call
   // wrote together — see supabase/fix_group_booking_reschedule.sql. Absent
   // (null) for an ordinary single-booking reschedule request.
@@ -722,6 +882,10 @@ export interface DbReview {
   comment: string | null;
   tip_amount: number | null;
   created_at: string;
+  /** The client chose to review anonymously. The database then hides who
+   *  wrote it from everyone but the client themself, the provider included:
+   *  see supabase/migrations/20261108230000_anonymous_reviews.sql. */
+  is_anonymous: boolean;
 }
 
 export interface DbNotification {
@@ -786,6 +950,7 @@ export interface PublicPromotionWithProvider extends ClientPromotion {
   providers?: {
     display_name: string | null;
     logo_url: string | null;
+    logo_framing?: LogoFraming | null;
     slug: string | null;
   } | null;
 }
@@ -872,8 +1037,11 @@ export type ProviderWithServices = Pick<
   | "service_categories"
   | "custom_service_type"
   | "location_text"
+  | "public_directions"
+  | "profile_sections"
   | "about_text"
   | "logo_url"
+  | "logo_framing"
   | "gradient"
   | "accent_color"
   | "background_image_url"
@@ -904,15 +1072,16 @@ export type ProviderWithServices = Pick<
   | "walk_ins_welcome"
   | "group_bookings_available"
   | "vegan_cruelty_free"
-  | "travel_radius"
   | "products_used"
+  | "clientele"
+  | "skin_tones_catered"
   | "hair_types_catered"
   | "preferred_payment_methods"
 > & {
   /** Only the automation flags needed by the public profile UI. */
   automation_settings: Pick<
     NonNullable<DbProvider["automation_settings"]>,
-    "scheduleReleaseDay" | "waitlistEnabled"
+    "scheduleReleaseDay" | "scheduleReleaseTime" | "waitlistEnabled"
   > | null;
   services: (Pick<
     DbService,
@@ -940,7 +1109,7 @@ export type ProviderWithServices = Pick<
     >[];
     add_ons: Pick<
       DbServiceAddOn,
-      "id" | "name" | "price" | "description" | "is_active"
+      "id" | "name" | "price" | "description" | "is_active" | "extra_minutes"
     >[];
   })[];
   specialties: Pick<DbProviderSpecialty, "specialty">[];
@@ -954,6 +1123,7 @@ export type PublicProviderSummary = Pick<
   | 'display_name'
   | 'service_category'
   | 'logo_url'
+  | 'logo_framing'
   | 'location_text'
   | 'service_locations'
   | 'latitude'
@@ -961,6 +1131,7 @@ export type PublicProviderSummary = Pick<
   | 'rating'
   | 'review_count'
   | 'price_tier'
+  | 'price_bands'
   | 'business_type'
   | 'walk_ins_welcome'
   | 'group_bookings_available'
@@ -993,13 +1164,16 @@ export interface DbProviderDailyStat {
   book_taps: number;
   search_appearances: number;
   instagram_taps: number;
+  /** Clients who asked this link-only provider to take bookings on CERVICED. */
+  join_nudges: number;
 }
 
 export type ProviderStatKind =
   | 'profile_view'
   | 'book_tap'
   | 'search_appearance'
-  | 'instagram_tap';
+  | 'instagram_tap'
+  | 'join_nudge';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {
@@ -1010,6 +1184,7 @@ export interface PortfolioItemWithProvider extends DbPortfolioItem {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
@@ -1034,6 +1209,7 @@ export interface DiscoverServiceWithProvider {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
@@ -1047,16 +1223,31 @@ export interface BookingWithAddOns extends DbBooking {
 }
 
 /** Review with user name — used by ProviderProfileScreen */
-export interface ReviewWithUser extends DbReview {
+/**
+ * A review as the provider it is about sees it. On an anonymous review the
+ * database blanks everything that leads back to the client: who wrote it, and
+ * the booking, service and tip that would name them.
+ */
+export interface ReviewWithUser
+  extends Omit<DbReview, "user_id" | "booking_id" | "service_id" | "tip_amount"> {
+  user_id: string | null;
+  booking_id: string | null;
+  service_id: string | null;
+  tip_amount: number | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 
-/** Public review payload: deliberately excludes booking and payment linkage. */
+/** Public review payload: deliberately excludes booking and payment linkage,
+ *  and the reviewer entirely on an anonymous review. */
 export interface PublicReviewWithUser
   extends Pick<
     DbReview,
-    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
+    "id" | "provider_id" | "rating" | "comment" | "created_at" | "is_anonymous"
   > {
+  /** null on an anonymous review. */
+  user_id: string | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 

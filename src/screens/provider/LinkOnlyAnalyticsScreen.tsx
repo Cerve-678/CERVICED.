@@ -51,7 +51,7 @@ const PERIODS: { key: LinkOnlyPeriod; labelKey: TranslationKey }[] = [
   { key: 'all', labelKey: 'providerProfile.analytics.period.all' },
 ];
 
-/** The four counters sit in one row (design Concept B, chosen 2026-10-19). */
+/** Compact, evenly sized tiles; the final nudge tile wraps naturally on phones. */
 const TILE_COLUMNS = 4;
 
 export default function LinkOnlyAnalyticsScreen() {
@@ -110,11 +110,12 @@ export default function LinkOnlyAnalyticsScreen() {
   const ratio = bookTapRatio(totals);
 
   const tiles = useMemo<{ label: string; value: number; icon: IoniconName; color: string }[]>(() => [
-    { label: t('providerProfile.analytics.tile.views'),     value: totals.profileViews,      icon: 'eye',            color: CHART.blue },
-    { label: t('providerProfile.analytics.tile.search'),    value: totals.searchAppearances, icon: 'search',         color: CHART.teal },
+    { label: t('providerProfile.analytics.tile.views'),  value: totals.profileViews,      icon: 'eye',            color: CHART.blue },
+    { label: t('providerProfile.analytics.tile.search'),      value: totals.searchAppearances, icon: 'search',         color: CHART.teal },
     { label: t('providerProfile.analytics.tile.instagram'), value: totals.instagramTaps,     icon: 'logo-instagram', color: CHART.pink },
-    { label: t('providerProfile.analytics.tile.saves'),     value: saves ?? 0,               icon: 'bookmark',       color: accent },
-  ], [totals, saves, accent, t]);
+    { label: t('providerProfile.analytics.tile.saves'),          value: saves ?? 0,               icon: 'bookmark',       color: accent },
+    { label: t('providerProfile.ui.joinNudges'),    value: totals.joinNudges,        icon: 'megaphone',      color: CHART.amber },
+  ], [totals, saves, accent]);
 
   return (
     <ThemedBackground style={styles.flex}>

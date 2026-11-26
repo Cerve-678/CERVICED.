@@ -25,7 +25,7 @@ export const darkTheme = {
   accent:       '#AF9197',
   accentText:   '#AF9197',
   accentDim:    'rgba(175,145,151,0.10)',
-  onAccent:     '#FFFFFF',              // text/icon drawn on a solid accent fill — white still reads fine on dusty rose
+  onAccent:     '#1A1815',              // text/icon drawn on a solid accent fill — white is only about 3:1 on dusty rose, so it's dark here
   secondary:    '#AF9197',
   secondaryText:'#AF9197',
   ice:          '#FFFFFF',

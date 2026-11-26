@@ -1,4 +1,6 @@
+import { providerRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   View,
   Text,
@@ -26,27 +28,30 @@ import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
 import { canDisputeNoShow, PaymentStatus, type RefundRequest } from '../../types/booking';
-import { passRefundRequestOn } from '../../features/bookings/bookingSupportRequest';
+import { composePassOnReason, PASS_ON_REASONS, passRefundRequestOn, type PassOnReason } from '../../features/bookings/bookingSupportRequest';
 import { isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
-import { newRequestId } from '../../utils/requestId';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
+import { dueByLabel, isOverdue } from '../../features/intake-forms/formDeadline';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { useAppDialog } from '../../components/AppDialog';
-import { getRescheduleBlock, getStaleRequestBlock } from '../../utils/rescheduleBlockedReason';
+import { getRescheduleBlock, getStaleRequestBlock, PROVIDER_STARTED_BLOCK } from '../../utils/rescheduleBlockedReason';
 import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
 import {
   getActiveRescheduleRequest,
   respondToRescheduleRequest,
   rejectRescheduleRequest,
   upsertProviderRescheduleRequest,
-  getClientBeautyProfile,
+  getClientBeautyProfileForBooking,
   getClientBookingHistory,
-  getIntakeFormByBooking,
+  getIntakeFormsByBooking,
   getInfoPacksByBooking,
+  getProviderFormLibrary,
+  sendLibraryFormToClient,
   getProviderAddressPolicy,
   releaseBookingAddress,
   getMyProviderFullAddress,
@@ -59,35 +64,41 @@ import {
   updateGroupBookingStatus,
   providerCancelGroupBooking,
   providerInitiateGroupReschedule,
-  getProviderServiceCategoryByUserId,
   getOrCreateConversation,
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
   getServiceDurationsByIds,
-  refundProviderBooking,
-  getProviderRefundState,
-  type ProviderRefundState,
   getRefundRequestsForBooking,
+  getHeldPayoutPence,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
+  LibraryForm,
   BookingInfoPack,
   ProviderInfoPackRow,
   ProviderAddressPolicy,
+  getProviderBookingTip,
 } from '../../services/databaseService';
-import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
+import { formatTipAmount, providerTipNote, type ProviderBookingTip } from '../../features/provider-bookings/tipPresentation';
+import type { DbBooking, DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
-import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate } from '../../utils/dateUtils';
+import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate, formatDayOrdinalShortMonth } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
-import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
-import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
-import { describeRefundOutcome, describeSettlementTiming } from '../../features/bookings/paymentPresentation';
+import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS, isDeclinedRequest } from '../../features/bookings/statusPresentation';
+import { describeRefundOutcome } from '../../features/bookings/paymentPresentation';
+import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '../../components/IssueRefundSheet';
 import { formatBookingRef } from '../../features/bookings/presentation';
+import { formsNotYetSent, packsNotYetSent } from '../../features/info-packs/infoPackLogic';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
+import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
+import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
+import { closeWithinTab } from '../../navigation/closeWithinTab';
+import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -96,7 +107,7 @@ const LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -108,7 +119,7 @@ const DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -131,26 +142,6 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
   week_before:       'Sends 1 week before',
 };
 
-// Why a refund is being issued. A refund isn't one thing — it can settle a
-// cancellation, a client dispute, or something that went wrong with a service
-// that already happened — so the provider picks the reason before any money
-// moves, and it's recorded on the refund for later reference.
-const REFUND_REASONS = [
-  'Appointment cancelled',
-  'Client complaint',
-  'Issue with the service',
-  'Goodwill gesture',
-  'Other',
-] as const;
-
-// Issue Refund sheet: what goes back to the client vs what the provider keeps.
-const REFUND_GREEN = { light: '#2F7D55', dark: '#6CC79A' };
-const REFUND_KEEP = { light: '#A0603A', dark: '#D9A27E' };
-const formatPence = (p: number) => `£${(p / 100).toFixed(2)}`;
-/** 'full' = everything back (fee included); 'custom' = an amount out of the
- *  provider's share — the only option once their policy has settled a
- *  client's cancellation. */
-type RefundMode = 'full' | 'custom';
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { user, hatState } = useAuth();
@@ -159,6 +150,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
+  // No bottom nav on a booking, from any tab, as on the client's booking
+  // details (owner, 2026-11-24).
+  useHideTabBar();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   // Deliberately NOT wired to BookingContext: that cache is the client hat's
   // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
@@ -177,8 +171,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     passedProviderBooking?.clientUserId ?? null
   );
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
-  const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
+  // A tip the client paid in the app after the appointment (booking_tips).
+  const [tip, setTip] = useState<ProviderBookingTip | null>(null);
+  // Forms & packs on this booking. 'error' is kept apart from "none sent" so
+  // the section never suggests sending something that may already be there.
+  const [intakeForms, setIntakeForms] = useState<IntakeForm[]>([]);
+  const [formsState, setFormsState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
+  const [packsState, setPacksState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [libraryForms, setLibraryForms] = useState<LibraryForm[]>([]);
+  const [libraryState, setLibraryState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [sendingItemId, setSendingItemId] = useState<string | null>(null);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
   // Whether the request lookup has come back. An old reschedule notification
@@ -228,6 +231,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [initInputError, setInitInputError] = useState('');
   const [initSent, setInitSent] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
+  const [cancelIfDeclined, setCancelIfDeclined] = useState(false);
+  const [offerNote, setOfferNote] = useState('');
 
   // Group reschedule-initiate: provider picks ONE new day for the whole
   // group; ModernBeautyCalendar (fed groupSlotResolver below) only offers
@@ -241,34 +246,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
-  // Refund: a reason must be picked before money moves — a refund can mean a
-  // cancellation, a dispute, or a service issue, and that distinction matters
-  // (especially once a booking is already completed). The optional note is
-  // appended to the selected reason and recorded on the Stripe refund.
-  const [showRefundModal, setShowRefundModal] = useState(false);
-  const [refundReason, setRefundReason] = useState<string | null>(null);
-  const [refundNote, setRefundNote] = useState('');
-  const refundFormScrollRef = useRef<ScrollView>(null);
-  const [refundBusy, setRefundBusy] = useState(false);
-  // What the sheet shows comes from the server (getProviderRefundState); the
-  // refund-payment function re-derives every figure when the refund is made.
-  const [refundState, setRefundState] = useState<ProviderRefundState | null>(null);
-  const [refundStateError, setRefundStateError] = useState(false);
-  const [refundMode, setRefundMode] = useState<RefundMode>('full');
-  // After a policy settlement the sheet is a summary first; a partial refund
-  // on top is opt-in, behind its own row.
-  const [refundPartialOpen, setRefundPartialOpen] = useState(false);
-  const [refundAmountText, setRefundAmountText] = useState('');
-  // One per sheet opening: a double tap or retry reuses it, so Stripe returns
-  // the first refund instead of making a second.
-  const refundRequestId = useRef<string>(newRequestId());
+  // Refund: the sheet owns its own form state and is mounted only while open.
+  const [refundOpen, setRefundOpen] = useState(false);
   // The client's own refund request, if they made one (refund_requests) —
-  // distinct from refundRequestId above, which is the idempotency key for a
-  // refund this provider issues. Issuing any refund closes it server-side.
+  // distinct from the idempotency key IssueRefundSheet uses for a refund this
+  // provider issues. Issuing any refund closes it server-side.
   const [clientRefundRequest, setClientRefundRequest] = useState<RefundRequest | null>(null);
+  // The provider's payout for this booking while the request holds it back.
+  const [refundHoldPence, setRefundHoldPence] = useState<number | null>(null);
   const [clientRefundNonce, setClientRefundNonce] = useState(0);
   const [showPassOnModal, setShowPassOnModal] = useState(false);
   const [passOnNote, setPassOnNote] = useState('');
+  const [passOnReason, setPassOnReason] = useState<PassOnReason | null>(null);
+  const passOnText = composePassOnReason(passOnReason, passOnNote);
   const [passOnBusy, setPassOnBusy] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
@@ -288,15 +278,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [addressReleasedAt, setAddressReleasedAt] = useState<string | null>(null);
   const [releasingAddress, setReleasingAddress] = useState(false);
 
-  const [providerServiceCategory, setProviderServiceCategory] = useState<ServiceCategory | null>(null);
   const [clientHistoryVisible, setClientHistoryVisible] = useState(false);
   const [clientHistoryBookings, setClientHistoryBookings] = useState<DbBooking[]>([]);
   const [clientHistoryLoading, setClientHistoryLoading] = useState(false);
   const [profileExpanded, setProfileExpanded] = useState(false);
 
   const [providerInfoPacks, setProviderInfoPacks] = useState<ProviderInfoPackRow[]>([]);
-  const [showInfoPackPicker, setShowInfoPackPicker] = useState(false);
-  const [isAttachingInfoPack, setIsAttachingInfoPack] = useState(false);
+  const [providerPacksState, setProviderPacksState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   // ProviderBookingHistoryScreen already collapses group siblings into one
   // card and passes them here directly (groupSiblings param) — no refetch
@@ -415,10 +403,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       .then(s => { setAddressSettings(s); setAddressSettingsLoaded(true); })
       .catch((err) => {
         logger.error('[ProviderBookingDetail] address policy load failed:', err);
-        // Mark it answered anyway. Holding the row forever on a failed fetch
-        // is worse than falling back to what the booking itself says, and the
-        // fallback is only reached for a provider whose business_type we could
-        // not read at all.
+        // Mark it answered anyway, so the row stops waiting. With no settings
+        // the Location row shows "—", never an address.
         setAddressSettingsLoaded(true);
       });
   }, [passedProviderBooking?.providerId, fetchedBooking?.providerId]);
@@ -439,43 +425,45 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, [bookingId, clientUserId]);
 
   useEffect(() => {
-    if (!clientUserId) return;
-    getClientBeautyProfile(clientUserId)
-      .then(p => {
-        setClientProfile(p);
-        // Auto-expand if allergies or medical notes are present
-        if (p && (p.allergies.length > 0 || p.medicalNotes)) {
-          setProfileExpanded(true);
-        }
-      })
-      .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
-  }, [clientUserId]);
-
-  useEffect(() => {
     if (!bookingId) return;
-    getIntakeFormByBooking(bookingId)
-      .then(f => setIntakeForm(f))
-      .catch((err) => logger.error('[ProviderBookingDetail] intake form load failed:', err));
-    getInfoPacksByBooking(bookingId)
-      .then(p => setBookingInfoPacks(p))
-      .catch((err) => logger.error('[ProviderBookingDetail] info packs load failed:', err));
+    let active = true;
+    getProviderBookingTip(bookingId)
+      .then(next => { if (active) setTip(next); })
+      // No tip row is the honest fallback; the money is still recorded server-side.
+      .catch((err) => logger.error('[ProviderBookingDetail] tip load failed:', err));
+    return () => { active = false; };
   }, [bookingId]);
 
-  // Fetch current provider's service category + available info packs once on mount
+  const loadSentItems = useCallback(() => {
+    if (!bookingId) return;
+    setFormsState('loading');
+    setPacksState('loading');
+    getIntakeFormsByBooking(bookingId)
+      .then(f => { setIntakeForms(f); setFormsState('ready'); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] intake forms load failed:', err); setFormsState('error'); });
+    getInfoPacksByBooking(bookingId)
+      .then(p => { setBookingInfoPacks(p); setPacksState('ready'); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] info packs load failed:', err); setPacksState('error'); });
+  }, [bookingId]);
+
+  useEffect(() => { loadSentItems(); }, [loadSentItems]);
+
+  // The provider's own info packs and form library — what this booking could
+  // be sent. Independent reads; one failing doesn't hide the rest.
   useEffect(() => {
-    (async () => {
-      try {
-        if (!user) return;
-        const [category, packs] = await Promise.all([
-          getProviderServiceCategoryByUserId(user.id),
-          getProviderInfoPacksByUserId(user.id),
-        ]);
-        if (category) setProviderServiceCategory(category as ServiceCategory);
-        setProviderInfoPacks(packs);
-      } catch (err) {
-        logger.error('[ProviderBookingDetail] provider category / info pack load failed:', err);
-      }
-    })();
+    if (!user) return;
+    let alive = true;
+    Promise.allSettled([
+      getProviderInfoPacksByUserId(user.id),
+      getProviderFormLibrary(),
+    ]).then(([packs, forms]) => {
+      if (!alive) return;
+      if (packs.status === 'fulfilled') { setProviderInfoPacks(packs.value); setProviderPacksState('ready'); }
+      else { logger.error('[ProviderBookingDetail] provider info packs load failed:', packs.reason); setProviderPacksState('error'); }
+      if (forms.status === 'fulfilled') { setLibraryForms(forms.value); setLibraryState('ready'); }
+      else { logger.error('[ProviderBookingDetail] form library load failed:', forms.reason); setLibraryState('error'); }
+    });
+    return () => { alive = false; };
   }, [user]);
 
   const baseBooking = passedProviderBooking ?? fetchedBooking;
@@ -494,17 +482,76 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     } as ConfirmedBooking;
   }, [baseBooking, liveBookingOverrides]);
 
-  // Packs scoped to specific services (service_names non-empty) only make
-  // sense for a booking that's actually one of those services — an
-  // "ALL SERVICES" pack (empty service_names) still applies to every
-  // booking. Without this filter the picker offered every pack the provider
-  // has ever created, including ones for services unrelated to this booking.
-  const relevantInfoPacks = useMemo(() => {
-    const name = booking?.serviceName;
-    return providerInfoPacks.filter(
-      pack => pack.service_names.length === 0 || (!!name && pack.service_names.includes(name)),
-    );
-  }, [providerInfoPacks, booking?.serviceName]);
+  // Per booking, not per client: the server returns only the fields the
+  // booked service's category gets (plus the safety fields), and only once
+  // this provider has accepted the booking. Reloads when the status changes,
+  // so accepting on this screen brings the profile in, and declining or a
+  // cancellation takes it away. null = not shared, not "nothing on file".
+  const bookingStatus = booking?.status;
+  useEffect(() => {
+    if (!clientUserId || !bookingId) return;
+    let active = true;
+    getClientBeautyProfileForBooking(bookingId)
+      .then(p => {
+        if (!active) return;
+        setClientProfile(p);
+        // Auto-expand if allergies or medical notes are present
+        if (p && (p.allergies.length > 0 || p.medicalNotes)) {
+          setProfileExpanded(true);
+        }
+      })
+      .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
+    return () => { active = false; };
+  }, [clientUserId, bookingId, bookingStatus]);
+
+  // What this booking still hasn't been sent, from the provider's own packs
+  // and forms that cover its service (an empty service list = every service).
+  const missingPacks = useMemo(
+    () => packsNotYetSent(providerInfoPacks, bookingInfoPacks.map(p => p.infoPackId), booking?.serviceName),
+    [providerInfoPacks, bookingInfoPacks, booking?.serviceName],
+  );
+  const missingForms = useMemo(
+    () => formsNotYetSent(libraryForms.filter(f => !f.isTerms), intakeForms, booking?.serviceName),
+    [libraryForms, intakeForms, booking?.serviceName],
+  );
+  const hasPackForService = useMemo(
+    () => providerInfoPacks.some(p => p.service_names.length === 0 || (!!booking?.serviceName && p.service_names.includes(booking.serviceName))),
+    [providerInfoPacks, booking?.serviceName],
+  );
+  const hasFormForService = useMemo(
+    () => libraryForms.some(f => !f.isTerms && (f.serviceNames.length === 0 || (!!booking?.serviceName && f.serviceNames.includes(booking.serviceName)))),
+    [libraryForms, booking?.serviceName],
+  );
+
+  const sendMissingPack = useCallback(async (pack: ProviderInfoPackRow) => {
+    if (!bookingId || sendingItemId) return;
+    setSendingItemId(pack.id);
+    try {
+      await attachInfoPackToBooking(bookingId, pack.id);
+      setBookingInfoPacks(await getInfoPacksByBooking(bookingId));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e) {
+      // Let the DB's own guard through ("This booking was cancelled...").
+      Alert.alert('Info pack not sent', toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
+    } finally {
+      setSendingItemId(null);
+    }
+  }, [bookingId, sendingItemId]);
+
+  const sendMissingForm = useCallback(async (form: LibraryForm) => {
+    if (!bookingId || !clientUserId || sendingItemId) return;
+    setSendingItemId(form.id);
+    try {
+      const sent = await sendLibraryFormToClient(form.id, bookingId, clientUserId);
+      setIntakeForms(prev => [...prev, sent]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e) {
+      logger.error('[ProviderBookingDetail] send form failed:', e);
+      Alert.alert('Form not sent', 'Could not send that form. Please try again.');
+    } finally {
+      setSendingItemId(null);
+    }
+  }, [bookingId, clientUserId, sendingItemId]);
 
   useEffect(() => {
     // Multi-service booking is gated off (MULTI_SERVICE_BOOKING_ENABLED): don't
@@ -606,12 +653,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!initSlotDate || !booking?.providerId) { setInitSuggestedTimes([]); setInitSelectedTimes([]); return; }
     let cancelled = false;
     setInitLoadingTimes(true);
-    AvailabilityService.getAvailableSlotTimes(booking.providerId, initSlotDate)
+    // The booking's service, so its latest start is respected. The client's
+    // accept is refused by the server for a time past it anyway.
+    AvailabilityService.getAvailableSlotTimes(booking.providerId, initSlotDate, undefined, booking.serviceId || undefined)
       .then(slots => { if (!cancelled) { setInitSuggestedTimes(slots); setInitSelectedTimes([]); } })
       .catch((err) => { logger.error('[ProviderBookingDetail] available slots load failed:', err); if (!cancelled) setInitSuggestedTimes([]); })
       .finally(() => { if (!cancelled) setInitLoadingTimes(false); });
     return () => { cancelled = true; };
-  }, [initSlotDate, booking?.providerId]);
+  }, [initSlotDate, booking?.providerId, booking?.serviceId]);
 
   const toggleInitTime = useCallback((time: string) => {
     setInitSelectedTimes(prev => prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]);
@@ -658,29 +707,41 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     // scope for hooks declared above it) directly off dbReschedule state —
     // same condition, same meaning: a still-pending client request.
     const respondingToClientRequest = dbReschedule?.status === 'pending';
+    const note = offerNote.trim();
     try {
       if (respondingToClientRequest) {
-        await respondToRescheduleRequest(booking.id, initRescheduleSlots, sendApology ? apologyText : undefined);
-        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots } : prev);
+        const responseNote = [sendApology ? apologyText.trim() : '', note].filter(Boolean).join('\n\n') || undefined;
+        await respondToRescheduleRequest(booking.id, initRescheduleSlots, responseNote, cancelIfDeclined);
+        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, cancel_if_declined: cancelIfDeclined, response_note: responseNote ?? null } : prev);
       } else {
         await upsertProviderRescheduleRequest({
           booking_id: booking.id,
           proposed_slots: initRescheduleSlots,
+          cancel_if_declined: cancelIfDeclined,
+          note,
         });
-        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider' } : {
+        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider', cancel_if_declined: cancelIfDeclined, response_note: note || null } : {
           id: '', booking_id: booking.id, requested_by: 'provider', original_date: booking.bookingDate,
           original_time: booking.bookingTime, requested_dates: [], provider_available_slots: initRescheduleSlots,
-          status: 'provider_responded', reschedule_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          status: 'provider_responded', reschedule_count: 0, cancel_if_declined: cancelIfDeclined, response_note: note || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         });
       }
       setInitSent(true);
     } catch (err) {
       logger.error('[ProviderBookingDetail] send reschedule response failed:', err);
-      setInitInputError(respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
+      // A DB guard (P0001) is written for the provider, e.g. the appointment
+      // started while this sheet was open; show it as it is.
+      setInitInputError(err instanceof Error && (err.message.startsWith('Cancel if declined is not available yet') || err.message.startsWith('Reschedule notes are not available yet'))
+        ? err.message
+        : toUserMessageAllowingDbGuard(
+            err,
+            respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.',
+            'ProviderBookingDetail.sendReschedule',
+          ));
     } finally {
       setInitLoading(false);
     }
-  }, [initRescheduleSlots, booking, dbReschedule?.status, sendApology, apologyText]);
+  }, [initRescheduleSlots, booking, dbReschedule?.status, sendApology, apologyText, cancelIfDeclined, offerNote]);
 
   const closeInitRescheduleModal = useCallback(() => {
     setShowInitRescheduleModal(false);
@@ -688,6 +749,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitSuggestedTimes([]); setInitSelectedTimes([]); setInitCustomTimePickerVisible(false);
     setInitInputError(''); setInitSent(false);
     setSendApology(false);
+    setCancelIfDeclined(false);
+    setOfferNote('');
   }, []);
 
   // Decline a client's reschedule request outright — no alternative times
@@ -896,12 +959,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const isMobileProvider = addressSettings?.business_type === 'mobile';
   // Until getProviderAddressPolicy answers, this screen does not know whose
   // address the venue is. Rendering anything in the meantime picks the
-  // non-mobile branch by default and falls through to `booking.address` —
-  // which on a mobile booking is provider_address_snapshot, i.e. the
-  // provider's OWN private street address, stamped on every row by
-  // claim_cart_booking_slots(). It flashed up as the appointment's Location
-  // and then vanished when the policy arrived and the row switched to
-  // "Waiting for client's address". Hold the row rather than guess.
+  // non-mobile branch by default, which flashed the wrong status up as the
+  // appointment's Location before the row switched to "Waiting for client's
+  // address". Hold the row rather than guess.
   const addressKnown = addressSettingsLoaded;
   const hasClientAddress = !!booking?.clientAddress?.trim();
 
@@ -1035,11 +1095,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     void clientRefundNonce;
     if (!bookingId) return undefined;
     let active = true;
-    getRefundRequestsForBooking(bookingId)
-      .then(rows => {
+    // The held payout only matters alongside an open request, but both are
+    // one-row reads, so they go together.
+    Promise.all([getRefundRequestsForBooking(bookingId), getHeldPayoutPence(bookingId)])
+      .then(([rows, heldPence]) => {
         if (!active) return;
         const open = rows.find(isRefundRequestOpen) ?? null;
         setClientRefundRequest(open);
+        setRefundHoldPence(open ? heldPence : null);
       })
       // The request is safe server-side and the notification has it; without
       // the card the provider can still refund from the ⋯ sheet.
@@ -1048,12 +1111,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, [bookingId, clientRefundNonce]);
 
   const submitPassOn = useCallback(async () => {
-    if (!booking || !clientRefundRequest || !passOnNote.trim() || passOnBusy) return;
+    if (!booking || !clientRefundRequest || !passOnText || passOnBusy) return;
     setPassOnBusy(true);
     try {
-      const { ticketNumber } = await passRefundRequestOn(booking, clientRefundRequest, passOnNote, activeMode);
+      const { ticketNumber } = await passRefundRequestOn(booking, clientRefundRequest, passOnText, activeMode);
       setShowPassOnModal(false);
       setPassOnNote('');
+      setPassOnReason(null);
       setClientRefundNonce(n => n + 1);
       showAlert(
         'Passed to Cerviced',
@@ -1071,96 +1135,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     } finally {
       setPassOnBusy(false);
     }
-  }, [booking, clientRefundRequest, passOnNote, passOnBusy, activeMode, showAlert]);
+  }, [booking, clientRefundRequest, passOnText, passOnBusy, activeMode, showAlert]);
 
   // Issue a refund through the same Stripe-backed path the Payments screen
-  // uses (refundProviderBooking -> refund-payment edge function). This returns
-  // the client's money; it deliberately does NOT cancel the appointment —
-  // cancelling is the separate action below. Opening the sheet resets it and
-  // loads what is left to refund; the money only moves from submitRefund.
-  const loadRefundState = useCallback(async (bookingId: string) => {
-    setRefundState(null);
-    setRefundStateError(false);
-    try {
-      const state = await getProviderRefundState(bookingId);
-      setRefundState(state);
-      setRefundMode(state.policySettlement || state.anyRefunded ? 'custom' : 'full');
-    } catch (err) {
-      logger.error('[ProviderBookingDetail] refund state failed to load:', err);
-      setRefundStateError(true);
-    }
-  }, []);
+  // uses (IssueRefundSheet -> refund-payment edge function). This returns the
+  // client's money, and can optionally cancel the appointment too.
+  const handleRefund = useCallback(() => { if (booking) setRefundOpen(true); }, [booking]);
 
-  const handleRefund = useCallback(() => {
-    if (!booking) return;
-    setRefundReason(null);
-    setRefundNote('');
-    setRefundAmountText('');
-    setRefundPartialOpen(false);
-    refundRequestId.current = newRequestId();
-    setShowRefundModal(true);
-    void loadRefundState(booking.id);
-  }, [booking, loadRefundState]);
-
-  // The amount this refund would move, in pence, plus any reason it can't go.
-  // Mirrors supabase/functions/_shared/refundPlan.ts for display only.
-  const refundPreview = useMemo(() => {
-    if (!refundState) return { refundPence: 0, keepPence: 0, error: null as string | null };
-    const held = refundState.heldPence;
-    if (refundMode === 'full') return { refundPence: held, keepPence: 0, error: null };
-    const typed = refundAmountText.trim();
-    const pence = Math.round(Number(typed) * 100);
-    if (!typed) return { refundPence: 0, keepPence: held, error: null };
-    if (!Number.isFinite(pence) || pence <= 0) return { refundPence: 0, keepPence: held, error: 'Enter an amount above £0.00.' };
-    if (pence > held) return { refundPence: 0, keepPence: held, error: `You can refund at most ${formatPence(held)}.` };
-    return { refundPence: pence, keepPence: held - pence, error: null };
-  }, [refundState, refundMode, refundAmountText]);
-
-  const submitRefund = useCallback(async () => {
-    if (!booking || !refundReason || refundBusy || !refundState) return;
-    if (refundPreview.error || refundPreview.refundPence <= 0) return;
-    setRefundBusy(true);
-    try {
-      const note = refundNote.trim();
-      const reason = note ? `${refundReason} — ${note}` : refundReason;
-      const isFull = refundMode === 'full';
-      // Throws on failure (see refundProviderBooking).
-      const completed = await refundProviderBooking({
-        bookingId: booking.id,
-        reason,
-        ...(isFull ? {} : { amountPence: refundPreview.refundPence }),
-        requestId: refundRequestId.current,
-      });
-      setLiveBookingOverrides(prev => ({
-        ...(prev ?? {}),
-        paymentStatus: !completed
-          ? PaymentStatus.REFUND_PENDING
-          : isFull ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
-      }));
-      setShowRefundModal(false);
-      refundRequestId.current = newRequestId();
-      // The bookings trigger has closed the client's request, if there was one.
-      setClientRefundNonce(n => n + 1);
-      const who = booking.customerName?.split(' ')[0] || 'your client';
-      showAlert(
-        completed ? 'Refund issued' : 'Refund processing',
-        completed
-          ? `${isFull ? `${who} is being refunded in full` : `${formatPence(refundPreview.refundPence)} is on its way back to ${who}`}. Their bank may take a few days to show it.`
-          : 'Stripe is still processing the refund. Check again shortly.',
-      );
-    } catch (err) {
-      showAlert(
-        'Refund failed',
-        // refund-payment's 409 messages are written for the provider ("You can
-        // refund at most £20.00."); anything else falls back to the generic copy.
-        err instanceof Error && /^(You can|Enter an|There is nothing|This booking has|A refund for)/.test(err.message)
-          ? err.message
-          : toUserMessage(err, 'The refund could not be confirmed. Refresh before trying again.', 'ProviderBookingDetail.refund'),
-      );
-    } finally {
-      setRefundBusy(false);
-    }
-  }, [booking, refundReason, refundNote, refundBusy, refundState, refundPreview, refundMode, showAlert]);
+  const handleRefunded = useCallback(({ completed, isFull, title, message }: RefundIssued) => {
+    setLiveBookingOverrides(prev => ({
+      ...(prev ?? {}),
+      paymentStatus: !completed
+        ? PaymentStatus.REFUND_PENDING
+        : isFull ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
+    }));
+    setRefundOpen(false);
+    // The bookings trigger has closed the client's request, if there was one.
+    setClientRefundNonce(n => n + 1);
+    showAlert(title, message);
+  }, [showAlert]);
 
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
@@ -1260,7 +1253,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }
 
   // Provider-side in-progress actions use the same purple as Booking History.
-  const statusColor = booking.status === BookingStatus.IN_PROGRESS
+  const statusColor = dbReschedule?.status === 'pending' || dbReschedule?.status === 'provider_responded'
+    ? '#FF9500'
+    : booking.status === BookingStatus.IN_PROGRESS
     ? PROVIDER_IN_PROGRESS_PURPLE
     : BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
 
@@ -1281,6 +1276,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const isApptToday = booking.bookingDate === dateToYMD(new Date());
   const apptStartPassed = !!apptStart && apptStart.getTime() < Date.now();
   const pendingExpired = isPendingConfirmation && apptStartPassed;
+  // When this request is declined automatically if it isn't answered.
+  const requestDeadline = isPendingConfirmation && apptStart && booking.createdAt
+    ? requestAnswerDeadline(new Date(booking.createdAt), apptStart)
+    : null;
 
   const totalPrice = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -1294,6 +1293,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const timeRange = booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime
     ? `${booking.bookingTime} – ${booking.endTime}`
     : booking.bookingTime || '—';
+  // The receipt's headline: "Thursday 3rd Oct · 2:00 PM – 4:00 PM".
+  const receiptWhen = booking.bookingDate
+    ? `${formatDayOrdinalShortMonth(booking.bookingDate)} · ${timeRange}`
+    : timeRange;
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1301,7 +1304,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         {/* ── Calendar-style header ── */}
         <View style={styles.header}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => closeWithinTab(navigation)}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[styles.iconBtn, { backgroundColor: P.surface }]}
           >
@@ -1367,11 +1370,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.receiptHeader}>
                 <Text style={[styles.receiptBrand, { color: P.text }]}>CERVICED</Text>
                 <Text style={[styles.receiptSubBrand, { color: P.sub }]}>Booking Receipt</Text>
-                <Text style={[styles.receiptTime, { color: P.sub }]}>{timeRange}</Text>
+                <Text style={[styles.receiptTime, { color: P.sub }]}>{receiptWhen}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                    {BOOKING_STATUS_LABELS[booking.status]}{isPending ? '  ·  Reschedule Requested' : ''}
+                    {isDeclinedRequest(booking) ? 'Declined' : BOOKING_STATUS_LABELS[booking.status]}{dbReschedule?.status === 'provider_responded'
+                      ? '  ·  Reschedule Offer Pending'
+                      : isPending ? '  ·  Reschedule Requested' : ''}
                   </Text>
                 </View>
                 {/* Money after the fact, in one plain line: "Refund issued ·
@@ -1424,6 +1429,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {!!clientRefundRequest.message && (
                       <Text style={{ color: P.sub, fontSize: 13, lineHeight: 18 }}>“{clientRefundRequest.message}”</Text>
                     )}
+                    {refundHoldPence != null && refundHoldPence > 0 && (
+                      <Text style={{ color: P.text, fontSize: 12, lineHeight: 17 }}>
+                        Your £{(refundHoldPence / 100).toFixed(2)} for this booking is on hold until this is settled.
+                      </Text>
+                    )}
                     {withCerviced ? (
                       <Text style={{ color: P.sub, fontSize: 12, lineHeight: 17 }}>
                         You passed this to Cerviced. We'll review it against your policy and let you both know.
@@ -1436,12 +1446,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             onPress={handleRefund}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.refundAskBtnText, { color: '#FFFFFF' }]}>Issue a refund</Text>
+                            <Text style={[styles.refundAskBtnText, { color: P.onAccent }]}>Issue a refund</Text>
                           </TouchableOpacity>
                         )}
                         <TouchableOpacity
                           style={[styles.refundAskBtn, { backgroundColor: P.card, borderColor: P.border }]}
-                          onPress={() => { setPassOnNote(''); setShowPassOnModal(true); }}
+                          onPress={() => { setPassOnNote(''); setPassOnReason(null); setShowPassOnModal(true); }}
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.refundAskBtnText, { color: P.text }]}>Pass to Cerviced</Text>
@@ -1559,8 +1569,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 ) : (
                 <>
                 {/* Three distinct states, where there used to be two.
-                    'always' isn't handled here at all — the address is simply
-                    part of the booking.
+                    'always' just says it's shared — the provider never sees
+                    their own address read back to them here.
 
                     Only a MANUAL policy gets a button. Every timed policy is
                     a statement of fact, not an action: the server releases it
@@ -1602,9 +1612,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       last
                     />
                   )
-                ) : booking.address ? (
-                  <Row label="Location" value={booking.address} textColor={P.text} divColor={rowDiv} last />
-                ) : null}
+                ) : addressPolicy === 'always' ? (
+                  <Row
+                    label="Location"
+                    value="Shared with client automatically"
+                    textColor={P.text}
+                    valueColor="#34C759"
+                    divColor={rowDiv}
+                    last
+                  />
+                ) : (
+                  // Never booking.address: on the provider's side that is
+                  // their OWN address (provider_address_snapshot), which they
+                  // already know, and on a mobile booking it is not where the
+                  // appointment happens at all (user, 2026-11-08). The row
+                  // only reports what happened to it.
+                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                )}
                 </>
                 )}
               </View>
@@ -1742,7 +1766,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       onPress={handleOpenChat}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.contactBtnText, { color: '#FFFFFF' }]}>Message</Text>
+                      <Text style={[styles.contactBtnText, { color: P.onAccent }]}>Message</Text>
                     </TouchableOpacity>
                     {booking.customerPhone ? (
                       <TouchableOpacity
@@ -1760,14 +1784,24 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Perforated divider ── */}
               <Perf color={perf} notch={P.bg} edge={cardBorder} />
 
+              {/* ── CLIENT PROFILE, not yet shared: a request. The server only
+                    shares the profile once the provider accepts, so say that
+                    rather than show nothing (or an empty profile, which would
+                    read as "no allergies"). ── */}
+              {!clientProfile && isPendingConfirmation && (
+                <>
+                  <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: P.sub }]}>CLIENT PROFILE</Text>
+                    <Text style={[styles.tipNote, { color: P.sub, marginTop: 0 }]}>
+                      Shared with you once you accept this booking, including any allergies or medical notes.
+                    </Text>
+                  </View>
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
+                </>
+              )}
+
               {/* ── CLIENT PROFILE section ── */}
               {clientProfile && (() => {
-                // Determine which fields to show; fall back to all if category unknown
-                const relevantFields = providerServiceCategory
-                  ? SERVICE_PROFILE_FIELDS[providerServiceCategory]
-                  : undefined;
-                const show = (field: keyof ClientBeautyProfile) =>
-                  !relevantFields || relevantFields.includes(field);
                 const hasCritical = clientProfile.allergies.length > 0 || !!clientProfile.medicalNotes;
                 return (
                   <>
@@ -1794,246 +1828,179 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           color={P.sub}
                         />
                       </TouchableOpacity>
-                      {profileExpanded && (() => {
-                        const catLabel = (label: string) => (
-                          <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 1.2, color: P.sub, opacity: 0.6, marginTop: 14, marginBottom: 6, textTransform: 'uppercase' }}>
-                            {label}
-                          </Text>
-                        );
-                        const chipRow = (items: string[], color?: string) => (
-                          <View style={styles.profileChips}>
-                            {items.map((item, i) => (
-                              <View key={i} style={[styles.profileChip, {
-                                backgroundColor: color ? color + '18' : P.surface,
-                                borderColor: color ? color + '44' : isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.10)',
-                              }]}>
-                                <Text style={[styles.profileChipText, { color: color ?? P.text }]}>{item}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        );
-
-                        const s = (f: keyof ClientBeautyProfile) => show(f);
-                        const CR = (items: string[], color?: string) => chipRow(items, color);
-
-                        const hasSkin = (s('skinType') && clientProfile.skinType) || (s('skinTone') && clientProfile.skinTone) || (s('skinConcerns') && clientProfile.skinConcerns.length > 0) || (s('sensitiveAreas') && clientProfile.sensitiveAreas.length > 0);
-                        const hasHair = (s('hairType') && clientProfile.hairType) || (s('scalpCondition') && clientProfile.scalpCondition) || (s('hairGoals') && clientProfile.hairGoals.length > 0) || (s('treatmentHistory') && clientProfile.treatmentHistory.length > 0);
-                        const hasNails = (s('nailLength') && clientProfile.nailLength) || (s('nailShape') && clientProfile.nailShape);
-                        const hasLashesBrows = (s('lashStyle') && clientProfile.lashStyle) || (s('lashStatus') && clientProfile.lashStatus) || (s('browStyle') && clientProfile.browStyle) || (s('browCondition') && clientProfile.browCondition);
-                        const hasMakeup = (s('makeupCoverage') && clientProfile.makeupCoverage) || (s('makeupFinish') && clientProfile.makeupFinish) || (s('makeupEyes') && clientProfile.makeupEyes) || (s('makeupLips') && clientProfile.makeupLips);
-                        const hasStyle = s('styleVibe') && clientProfile.styleVibe;
-                        const hasAlerts = (s('allergies') && clientProfile.allergies.length > 0) || (s('medicalNotes') && clientProfile.medicalNotes);
-
-                        return (
-                          <>
-                            {/* ── HEALTH & ALERTS (always first) ── */}
-                            {hasAlerts && catLabel('Health & Alerts')}
-                            {s('allergies') && clientProfile.allergies.length > 0 && (
-                              <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                <Text style={[styles.rowLabel, { color: '#FF9500' }]}>⚠ Allergies</Text>
-                                {CR(clientProfile.allergies, '#FF9500')}
-                              </View>
-                            )}
-                            {s('medicalNotes') && clientProfile.medicalNotes ? (
-                              <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                <Text style={[styles.rowLabel, { color: '#FF3B30' }]}>⚕ Medical notes</Text>
-                                <Text style={[styles.rowValue, { color: P.text, flex: 1, textAlign: 'left', marginLeft: 8 }]}>{clientProfile.medicalNotes}</Text>
-                              </View>
-                            ) : null}
-
-                            {/* ── SKIN ── */}
-                            {hasSkin && (
-                              <>
-                                {catLabel('Skin')}
-                                {s('skinType') && clientProfile.skinType ? <Row label="Skin type" value={clientProfile.skinType} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('skinTone') && clientProfile.skinTone ? <Row label="Skin tone" value={clientProfile.skinTone} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('skinConcerns') && clientProfile.skinConcerns.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Skin concerns</Text>
-                                    {CR(clientProfile.skinConcerns)}
-                                  </View>
-                                )}
-                                {s('sensitiveAreas') && clientProfile.sensitiveAreas.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Sensitive areas</Text>
-                                    {CR(clientProfile.sensitiveAreas)}
-                                  </View>
-                                )}
-                              </>
-                            )}
-
-                            {/* ── HAIR ── */}
-                            {hasHair && (
-                              <>
-                                {catLabel('Hair')}
-                                {s('hairType') && clientProfile.hairType ? <Row label="Hair type" value={clientProfile.hairType} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('scalpCondition') && clientProfile.scalpCondition ? <Row label="Scalp condition" value={clientProfile.scalpCondition} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('treatmentHistory') && clientProfile.treatmentHistory.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Treatment history</Text>
-                                    {CR(clientProfile.treatmentHistory)}
-                                  </View>
-                                )}
-                                {s('hairGoals') && clientProfile.hairGoals.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Hair goals</Text>
-                                    {CR(clientProfile.hairGoals)}
-                                  </View>
-                                )}
-                              </>
-                            )}
-
-                            {/* ── NAILS ── */}
-                            {hasNails && (
-                              <>
-                                {catLabel('Nails')}
-                                {s('nailLength') && clientProfile.nailLength ? <Row label="Preferred length" value={clientProfile.nailLength} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('nailShape') && clientProfile.nailShape ? <Row label="Preferred shape" value={clientProfile.nailShape} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── LASHES & BROWS ── */}
-                            {hasLashesBrows && (
-                              <>
-                                {catLabel('Lashes & Brows')}
-                                {s('lashStyle') && clientProfile.lashStyle ? <Row label="Lash style" value={clientProfile.lashStyle} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('lashStatus') && clientProfile.lashStatus ? <Row label="Lash status" value={clientProfile.lashStatus} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('browStyle') && clientProfile.browStyle ? <Row label="Brow style" value={clientProfile.browStyle} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('browCondition') && clientProfile.browCondition ? <Row label="Brow condition" value={clientProfile.browCondition} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── MAKEUP ── */}
-                            {hasMakeup && (
-                              <>
-                                {catLabel('Makeup')}
-                                {s('makeupCoverage') && clientProfile.makeupCoverage ? <Row label="Coverage" value={clientProfile.makeupCoverage} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('makeupFinish') && clientProfile.makeupFinish ? <Row label="Finish" value={clientProfile.makeupFinish} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('makeupEyes') && clientProfile.makeupEyes ? <Row label="Eye style" value={clientProfile.makeupEyes} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('makeupLips') && clientProfile.makeupLips ? <Row label="Lip preference" value={clientProfile.makeupLips} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── STYLE ── */}
-                            {hasStyle && (
-                              <>
-                                {catLabel('Style')}
-                                <Row label="Style vibe" value={clientProfile.styleVibe!} textColor={P.text} divColor={rowDiv} />
-                              </>
-                            )}
-
-                            {/* ── CONSENT ── */}
-                            {catLabel('Consent')}
-                            {s('photographyConsent') && (
-                              <Row
-                                label="Photography consent"
-                                value={clientProfile.photographyConsent ? 'Yes' : 'No'}
-                                textColor={P.text} divColor={rowDiv} last
-                                valueColor={clientProfile.photographyConsent ? '#34C759' : '#FF3B30'}
-                              />
-                            )}
-                          </>
-                        );
-                      })()}
+                      {profileExpanded && (
+                        <ClientBeautyProfileDetails
+                          profile={clientProfile}
+                          text={P.text}
+                          sub={P.sub}
+                          surface={P.surface}
+                          divider={rowDiv}
+                          isDark={isDarkMode}
+                        />
+                      )}
                     </View>
                     <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   </>
                 );
               })()}
 
-              {/* ── FORMS & PACKS section — receiving area only, no creation here.
-                    Forms/packs are built in their own screens and auto-send. ── */}
-              <View style={styles.section}>
-                <View style={styles.intakeFormHeader}>
-                  <Text style={[styles.sectionLabel, { color: P.sub }]}>FORMS & PACKS</Text>
-                </View>
-                {intakeForm ? (
-                  <TouchableOpacity
-                    style={[styles.intakeFormCard, {
-                      backgroundColor: intakeForm.status === 'completed' ? '#34C759' + '12' : '#FF9500' + '12',
-                      borderColor: intakeForm.status === 'completed' ? '#34C759' + '44' : '#FF9500' + '44',
-                    }]}
-                    onPress={() => navigation.navigate('ProviderIntakeForm', {
-                      bookingId: booking!.id,
-                      clientUserId: clientUserId ?? '',
-                      serviceName: booking!.serviceName,
-                      formId: intakeForm.id,
-                    })}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.intakeFormCardInner}>
-                      <Text style={[styles.intakeFormTitle, { color: P.text }]}>{intakeForm.title}</Text>
-                      <View style={[styles.intakeFormStatus, {
-                        backgroundColor: intakeForm.status === 'completed' ? '#34C759' + '22' : '#FF9500' + '22',
-                      }]}>
-                        <Text style={[styles.intakeFormStatusText, {
-                          color: intakeForm.status === 'completed' ? '#34C759' : '#FF9500',
-                        }]}>
-                          {intakeForm.status === 'completed' ? 'Received' : 'Sent'}
-                        </Text>
-                      </View>
+              {/* ── FORMS & PACKS — what this booking has been sent, whether the
+                    client has done/read it, and anything that covers its service
+                    but hasn't gone yet. Forms and packs are written in their own
+                    screens; this only sends them. ── */}
+              {(() => {
+                const status = booking!.status;
+                const stillAhead = status === BookingStatus.PENDING || status === BookingStatus.UPCOMING;
+                const canSendPacks = !!clientUserId
+                  && status !== BookingStatus.CANCELLED
+                  && status !== BookingStatus.NO_SHOW
+                  && status !== BookingStatus.PROVIDER_NO_SHOW;
+                const canSendForms = !!clientUserId && stillAhead;
+                const service = booking!.serviceName || 'this service';
+                const loading = formsState === 'loading' || packsState === 'loading';
+                const nothingAtAll = intakeForms.length === 0 && bookingInfoPacks.length === 0;
+                const green = '#34C759';
+                const amber = '#FF9500';
+                const statusCard = (done: boolean, tone: string) => ({
+                  backgroundColor: done ? tone + '12' : P.card,
+                  borderColor: done ? tone + '44' : P.border,
+                });
+                const suggestRow = (key: string, icon: 'clipboard-outline' | 'document-text-outline', title: string, sub: string, action: string, onPress: () => void, busy: boolean) => (
+                  <View key={key} style={[styles.suggestRow, { borderColor: P.border }]}>
+                    <Ionicons name={icon} size={15} color={P.sub} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{title}</Text>
+                      <Text style={[styles.intakeFormSub, { color: P.sub, marginTop: 1 }]}>{sub}</Text>
                     </View>
-                    <Text style={[styles.intakeFormSub, { color: P.sub }]}>
-                      {intakeForm.status === 'completed'
-                        ? 'Client responses received — tap to view'
-                        : 'Sent to client — waiting to receive'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
-                    {booking!.status === BookingStatus.CANCELLED
-                      ? 'No form on this booking. It was cancelled, so nothing more will be sent.'
-                      : 'No form on this booking — forms linked to this service send automatically.'}
-                  </Text>
-                )}
-
-                {/* Info packs sent with this booking + read receipts */}
-                {bookingInfoPacks.map(pack => (
-                  <View
-                    key={pack.id}
-                    style={[styles.intakeFormCard, {
-                      marginTop: 8,
-                      backgroundColor: pack.viewedAt ? '#34C759' + '12' : P.card,
-                      borderColor: pack.viewedAt ? '#34C759' + '44' : P.border,
-                    }]}
-                  >
-                    <View style={styles.intakeFormCardInner}>
-                      <View style={styles.packTitleRow}>
-                        <Ionicons name="document-text-outline" size={15} color={P.accent} />
-                        <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
-                      </View>
-                      <View style={[styles.intakeFormStatus, {
-                        backgroundColor: pack.viewedAt ? '#34C759' + '22' : P.sub + '22',
-                      }]}>
-                        <Text style={[styles.intakeFormStatusText, {
-                          color: pack.viewedAt ? '#34C759' : P.sub,
-                        }]}>
-                          {pack.viewedAt ? 'Read' : 'Not read'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.intakeFormSub, { color: P.sub }]}>
-                      {pack.viewedAt
-                        ? 'Client has read this info pack'
-                        : 'Sent to client — not read yet'}
-                    </Text>
+                    <TouchableOpacity
+                      onPress={onPress}
+                      disabled={!!sendingItemId}
+                      style={[styles.suggestBtn, { backgroundColor: P.accent + '1A', opacity: sendingItemId && !busy ? 0.5 : 1 }]}
+                      activeOpacity={0.75}
+                    >
+                      {busy
+                        ? <ActivityIndicator size="small" color={P.accent} />
+                        : <Text style={[styles.suggestBtnText, { color: P.accent }]}>{action}</Text>}
+                    </TouchableOpacity>
                   </View>
-                ))}
+                );
 
-                {/* Send Info Pack — not on a cancelled booking; there's no
-                    appointment left to prepare for. attach_info_pack_to_booking
-                    refuses it server-side too. */}
-                {booking!.status !== BookingStatus.CANCELLED && (
-                  <TouchableOpacity
-                    style={[styles.sendInfoPackBtn, { borderColor: P.border }]}
-                    onPress={() => setShowInfoPackPicker(true)}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="document-text-outline" size={15} color={P.accent} style={{ marginRight: 6 }} />
-                    <Text style={[styles.sendInfoPackText, { color: P.accent }]}>Send Info Pack</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                return (
+                  <View style={styles.section}>
+                    <View style={styles.intakeFormHeader}>
+                      <Text style={[styles.sectionLabel, { color: P.sub }]}>FORMS & PACKS</Text>
+                    </View>
+
+                    {/* Forms sent, with whether the client has answered */}
+                    {intakeForms.map(form => {
+                      const done = form.status === 'completed';
+                      return (
+                        <TouchableOpacity
+                          key={form.id}
+                          style={[styles.intakeFormCard, statusCard(done, green), { marginBottom: 8 }, !done && { borderColor: amber + '44', backgroundColor: amber + '10' }]}
+                          onPress={() => navigation.navigate('ProviderIntakeForm', {
+                            bookingId: booking!.id,
+                            clientUserId: clientUserId ?? '',
+                            serviceName: booking!.serviceName,
+                            formId: form.id,
+                          })}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.intakeFormCardInner}>
+                            <View style={styles.packTitleRow}>
+                              <Ionicons name="clipboard-outline" size={15} color={P.accent} />
+                              <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{form.title}</Text>
+                            </View>
+                            <View style={[styles.intakeFormStatus, { backgroundColor: (done ? green : amber) + '22' }]}>
+                              <Text style={[styles.intakeFormStatusText, { color: done ? green : amber }]}>{done ? 'Answered' : 'Waiting'}</Text>
+                            </View>
+                          </View>
+                          <Text style={[styles.intakeFormSub, { color: P.sub }]}>
+                            {done
+                              ? `Answered${form.completedAt ? ` ${formatShortDayDate(new Date(form.completedAt))}` : ''} · tap to see the answers`
+                              : isOverdue(form.dueAt, form.status, Date.now())
+                                ? `Sent ${formatShortDayDate(new Date(form.sentAt))} · was due ${dueByLabel(form.dueAt)}`
+                                : `Sent ${formatShortDayDate(new Date(form.sentAt))} · ${form.dueAt ? `due ${dueByLabel(form.dueAt)}` : 'not answered yet'}`}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {/* Packs sent, with read receipts */}
+                    {bookingInfoPacks.map(pack => (
+                      <View key={pack.id} style={[styles.intakeFormCard, statusCard(!!pack.viewedAt, green), { marginBottom: 8 }]}>
+                        <View style={styles.intakeFormCardInner}>
+                          <View style={styles.packTitleRow}>
+                            <Ionicons name="document-text-outline" size={15} color={P.accent} />
+                            <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
+                          </View>
+                          <View style={[styles.intakeFormStatus, { backgroundColor: pack.viewedAt ? green + '22' : P.sub + '22' }]}>
+                            <Text style={[styles.intakeFormStatusText, { color: pack.viewedAt ? green : P.sub }]}>{pack.viewedAt ? 'Read' : 'Not read'}</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.intakeFormSub, { color: P.sub }]}>
+                          {pack.viewedAt
+                            ? `Read ${formatShortDayDate(new Date(pack.viewedAt))}`
+                            : `Sent ${formatShortDayDate(new Date(pack.createdAt))} · not opened yet`}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {loading && nothingAtAll && (
+                      <ActivityIndicator size="small" color={P.sub} style={{ alignSelf: 'flex-start', marginVertical: 6 }} />
+                    )}
+
+                    {(formsState === 'error' || packsState === 'error') && (
+                      <TouchableOpacity onPress={loadSentItems} activeOpacity={0.7} style={{ marginBottom: 8 }}>
+                        <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
+                          Couldn't check what's been sent. <Text style={{ color: P.accent, fontWeight: '700' }}>Try again</Text>
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Not sent yet: forms and packs that cover this service */}
+                    {formsState === 'ready' && libraryState === 'ready' && canSendForms && missingForms.map(form =>
+                      suggestRow(`form-${form.id}`, 'clipboard-outline', form.title, `Form for ${service} · not sent yet`, 'Send', () => { void sendMissingForm(form); }, sendingItemId === form.id),
+                    )}
+                    {packsState === 'ready' && providerPacksState === 'ready' && canSendPacks && missingPacks.map(pack =>
+                      suggestRow(`pack-${pack.id}`, 'document-text-outline', pack.title, `Info pack for ${service} · not sent yet`, 'Send', () => { void sendMissingPack(pack); }, sendingItemId === pack.id),
+                    )}
+
+                    {/* Nothing covers this service at all */}
+                    {/* Shown as long as the pack line is (canSendPacks), not only
+                        while forms can still be sent: it tells the provider no
+                        form covers this service, which stays true after the day. */}
+                    {formsState === 'ready' && libraryState === 'ready' && canSendPacks && intakeForms.length === 0 && !hasFormForService && (
+                      <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
+                        <Ionicons name="clipboard-outline" size={15} color={P.sub} />
+                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No form covers {service} yet.</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('ProviderIntakeForm')} activeOpacity={0.7} hitSlop={8}>
+                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>Create one</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    {packsState === 'ready' && providerPacksState === 'ready' && canSendPacks && bookingInfoPacks.length === 0 && !hasPackForService && (
+                      <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
+                        <Ionicons name="document-text-outline" size={15} color={P.sub} />
+                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No info pack covers {service} yet.</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('InfoPacks')} activeOpacity={0.7} hitSlop={8}>
+                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>Create one</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {!loading && nothingAtAll && !canSendPacks && (
+                      <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
+                        {status === BookingStatus.CANCELLED
+                          ? 'Nothing was sent, and nothing more will be. This booking was cancelled.'
+                          : !clientUserId
+                            ? "This client doesn't have a CERVICED account, so forms and packs can't be sent to them."
+                            : 'Nothing was sent for this booking.'}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} notch={P.bg} edge={cardBorder} />
@@ -2052,13 +2019,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     provider is never owed that fee, so this row shows the
                     provider's own cut: the full service price when paid in
                     full, or just the deposit (fee-free at source) otherwise. */}
-                {(booking.amountPaid ?? 0) > 0 && (
+                {(booking.amountPaid ?? 0) > 0 && booking.paymentStatus !== PaymentStatus.NOT_CHARGED && (
                   <Row
-                    label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
+                    label={booking.paymentStatus === PaymentStatus.AUTHORISED
+                      // A request's payment is held on the client's card and
+                      // only taken when you accept it.
+                      ? (booking.paymentType === 'deposit' ? 'Deposit held, taken only if you accept' : 'Payment held, taken only if you accept')
+                      : booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
                     value={`£${(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
-                    valueColor="#34C759"
+                    valueColor={booking.paymentStatus === PaymentStatus.AUTHORISED ? P.sub : '#34C759'}
                     bold
                   />
                 )}
@@ -2084,6 +2055,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Text style={[styles.totalLabel, { color: P.text }]}>TOTAL</Text>
                   <Text style={[styles.totalValue, { color: P.text }]}>£{totalPrice.toFixed(2)}</Text>
                 </View>
+
+                {/* A tip is its own card payment after the appointment, so it
+                    sits under the total rather than being added into it. */}
+                {tip && (
+                  <View style={styles.tipBlock}>
+                    <Row
+                      label="Tip from client"
+                      value={formatTipAmount(tip)}
+                      textColor={P.text}
+                      divColor={rowDiv}
+                      valueColor="#34C759"
+                      bold
+                      last
+                    />
+                    <Text style={[styles.tipNote, { color: P.sub }]}>{providerTipNote(tip)}</Text>
+                  </View>
+                )}
               </View>
 
               {/* ── Reschedule section ── */}
@@ -2092,11 +2080,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: '#FF9500' }]}>
-                      {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : 'RESCHEDULE · RESPONDED'}
+                      {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : dbReschedule.requested_by === 'provider' ? 'RESCHEDULE OFFER PENDING' : 'RESCHEDULE · RESPONDED'}
                     </Text>
                     <Text style={[styles.rescheduleNote, { color: P.sub }]}>
                       Requested {formatBookingDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
                     </Text>
+                    {/* Whose turn it is and until when. updated_at moves when
+                        the provider offers times, which is when the client's
+                        window starts (same anchor the expiry cron uses). */}
+                    {(() => {
+                      const by = rescheduleReplyBy(dbReschedule.updated_at);
+                      if (!by) return null;
+                      return (
+                        <Text style={[styles.rescheduleNote, { color: '#FF9500', fontWeight: '600' }]}>
+                          {dbReschedule.status === 'pending'
+                            ? `Reply by ${by}, or the booking stays as it is.`
+                            : `${booking?.customerName ?? 'The client'} has until ${by} to choose, or the booking stays as it is.`}
+                        </Text>
+                      );
+                    })()}
                     {(dbReschedule.requested_dates ?? []).map((date: string, i: number) => {
                       const requestedTime = dbReschedule.requested_times?.[i];
                       return (
@@ -2111,6 +2113,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {dbReschedule.status === 'provider_responded' && (dbReschedule.provider_available_slots ?? []).length > 0 && (
                       <View style={{ marginTop: 8 }}>
                         <Text style={[styles.rescheduleNote, { color: P.text + '77', marginBottom: 6 }]}>Your offered slots:</Text>
+                        <Text style={[styles.rescheduleNote, { color: P.sub, marginBottom: 6 }]}>
+                          {dbReschedule.cancel_if_declined
+                            ? 'If the client declines, this booking will be cancelled and any payment refunded in full.'
+                            : 'If the client declines, their original booking time stays in place.'}
+                        </Text>
+                        {!!dbReschedule.response_note && (
+                          <Text style={[styles.rescheduleNote, { color: P.text, marginBottom: 8 }]}>Your note: {dbReschedule.response_note}</Text>
+                        )}
                         {(dbReschedule.provider_available_slots ?? []).map((slot, i) => (
                           <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
                             <Ionicons name="checkmark-circle" size={14} color="#34C759" />
@@ -2121,7 +2131,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         ))}
                       </View>
                     )}
-                    {canRespondToReschedule && (
+                    {canRespondToReschedule && !apptStartPassed && (
                       <TouchableOpacity
                         style={[styles.respondBtn, { backgroundColor: '#FF9500' }]}
                         onPress={() => setShowInitRescheduleModal(true)}
@@ -2129,6 +2139,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       >
                         <Text style={styles.respondBtnText}>Respond to Reschedule</Text>
                       </TouchableOpacity>
+                    )}
+                    {/* After the start the server refuses new times (see
+                        PROVIDER_STARTED_BLOCK), so offer the way forward instead. */}
+                    {canRespondToReschedule && apptStartPassed && (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={[styles.rescheduleNote, { color: P.sub }]}>{PROVIDER_STARTED_BLOCK.message}</Text>
+                        {!!clientUserId && (
+                          <TouchableOpacity onPress={handleOpenChat} activeOpacity={0.7} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+                            <Text style={[styles.rescheduleNote, { color: P.accent, fontWeight: '600' }]}>Message the client</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
                 </>
@@ -2175,7 +2197,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 This request's appointment time has passed — it can no longer be confirmed.
               </Text>
             ) : (
-              <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+              <>
+                {requestDeadline && (
+                  <Text
+                    style={{
+                      textAlign: 'center',
+                      fontSize: 13,
+                      lineHeight: 18,
+                      color: requestDeadline.urgent ? '#FF9500' : P.sub,
+                      fontWeight: requestDeadline.urgent ? '600' : '400',
+                      marginBottom: 10,
+                    }}
+                  >
+                    {providerRequestNote(requestDeadline, undefined, booking.paymentStatus === PaymentStatus.AUTHORISED)}
+                  </Text>
+                )}
+                <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+              </>
             )}
             <ActionButton color="#FF3B30" label="Decline Booking" onPress={handleDecline} ghost />
           </View>
@@ -2184,7 +2222,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           <View style={styles.actions}>
             {booking.status === BookingStatus.UPCOMING && (
               isApptToday ? (
-                <ActionButton color={P.accent} label="Start Appointment" onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
+                <ActionButton color={P.accent} label="Start Appointment" textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
               ) : (
                 <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, marginBottom: 10 }}>
                   {apptStartPassed
@@ -2194,7 +2232,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )
             )}
             {booking.status === BookingStatus.IN_PROGRESS && (
-              <ActionButton color={P.accent} label="Mark Complete" onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
+              <ActionButton color={P.accent} label="Mark Complete" textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
             )}
             <View style={styles.secondaryActions}>
               {/* Mirrors provider_update_booking_status()'s server-side no_show
@@ -2228,6 +2266,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             colors={{ card: P.card, text: P.text, sub: P.sub, border: P.border, accent: P.accent, onAccent: P.ice }}
             showConfirm={showConfirm}
             showAlert={showAlert}
+            // Just the charge button here; refunds and disputes are on the
+            // booking's payment in Payments & payouts.
+            bookingPage
           />
         )}
 
@@ -2359,7 +2400,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
                   {dbReschedule?.status === 'rejected'
                     ? 'The client has been notified. Their original appointment time stands.'
-                    : `${booking?.customerName ?? 'The client'} has been notified and can choose from your proposed times.`}
+                    : `${booking?.customerName ?? 'The client'} has been notified and has ${RESCHEDULE_REPLY_MINUTES} minutes to choose one of your times. If they don't, the booking stays as it is.`}
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
@@ -2444,6 +2485,34 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </>
                 )}
 
+                <TouchableOpacity
+                  style={[styles.apologyToggle, { backgroundColor: P.card, borderColor: P.border, marginBottom: 14 }]}
+                  onPress={() => setCancelIfDeclined(v => !v)}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: cancelIfDeclined }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.apologyCheck, { backgroundColor: cancelIfDeclined ? '#FF3B30' : 'transparent', borderColor: cancelIfDeclined ? '#FF3B30' : P.border }]}>
+                    {cancelIfDeclined && <Ionicons name="checkmark" size={12} color="#fff" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.apologyToggleText, { color: P.text }]}>Cancel if declined</Text>
+                    <Text style={[styles.rescheduleNote, { color: P.sub, marginTop: 4 }]}>If the client declines these times, cancel the original booking and refund any payment in full.</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <Text style={[styles.inputLabel, { color: P.text + '77' }]}>NOTE TO CLIENT (OPTIONAL)</Text>
+                <TextInput
+                  style={[styles.respondInput, { color: P.text, borderColor: P.border, backgroundColor: P.card, marginBottom: 14 }]}
+                  value={offerNote}
+                  onChangeText={setOfferNote}
+                  placeholder="Add context for the new time"
+                  placeholderTextColor={P.sub}
+                  multiline
+                  maxLength={500}
+                  accessibilityLabel="Note to client about reschedule offer"
+                />
+
                 {/* Date picker */}
                 <Text style={[styles.inputLabel, { color: P.text + '77' }]}>DATE</Text>
                 <TouchableOpacity
@@ -2503,7 +2572,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         style={[styles.timeChip, initSelectedTimes.includes(t) && { backgroundColor: P.accent }]}
                         onPress={() => toggleInitTime(t)}
                       >
-                        <Text style={[styles.timeChipText, { color: initSelectedTimes.includes(t) ? '#fff' : P.text }]}>{formatTime12(t)}</Text>
+                        <Text style={[styles.timeChipText, { color: initSelectedTimes.includes(t) ? P.onAccent : P.text }]}>{formatTime12(t)}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -2665,7 +2734,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={styles.sentIcon}>✓</Text>
                 <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed dates for all {groupSiblings.length} services.
+                  {booking?.customerName ?? 'The client'} has been notified and has {RESCHEDULE_REPLY_MINUTES} minutes to choose from your proposed dates for all {groupSiblings.length} services. If they don't, the bookings stay as they are.
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
@@ -2921,8 +2990,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       </Modal>
 
       {/* ── Pass a client's refund request to Cerviced ──────────────────
-          Never a final "no" from the provider: Cerviced decides, so the
-          reason is required and goes to support (not to the client). */}
+          Never a final "no" from the provider: Cerviced decides, so a
+          reason is required (picked, plus an optional note; 'Other' needs
+          the note) and goes to support, not to the client. */}
       <Modal
         visible={showPassOnModal}
         transparent statusBarTranslucent navigationBarTranslucent
@@ -2953,6 +3023,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <Text style={{ color: P.text, fontSize: 13, lineHeight: 18 }}>
                 Not refunding this? Tell Cerviced why. We'll review it against your policy and let you and the client know. Your reason goes to Cerviced, not to the client.
               </Text>
+              <Text style={[styles.passOnHeading, { color: P.sub }]}>WHY YOU'RE NOT REFUNDING</Text>
+              <View style={styles.passOnChips}>
+                {PASS_ON_REASONS.map(r => {
+                  const selected = passOnReason === r;
+                  return (
+                    <TouchableOpacity
+                      key={r}
+                      activeOpacity={0.7}
+                      disabled={passOnBusy}
+                      onPress={() => setPassOnReason(r)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      style={[styles.passOnChip, { backgroundColor: selected ? P.iconBg : P.card, borderColor: selected ? P.accent : P.border }]}
+                    >
+                      <Text style={{ color: P.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{r}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               <TextInput
                 style={[styles.respondInput, {
                   color: P.text,
@@ -2962,7 +3051,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   textAlignVertical: 'top',
                   marginTop: 12,
                 }]}
-                placeholder="Why you're not refunding (required)"
+                placeholder={passOnReason === 'Other' ? 'Tell Cerviced why (required)' : 'Anything else Cerviced should know (optional)'}
                 placeholderTextColor={P.text + '44'}
                 value={passOnNote}
                 onChangeText={setPassOnNote}
@@ -2973,14 +3062,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </ScrollView>
             <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
               <TouchableOpacity
-                style={[styles.refundCta, { backgroundColor: P.accent }, !passOnNote.trim() && { opacity: 0.5 }]}
+                style={[styles.refundCta, { backgroundColor: P.accent }, !passOnText && { opacity: 0.5 }]}
                 activeOpacity={0.8}
-                disabled={!passOnNote.trim() || passOnBusy}
+                disabled={!passOnText || passOnBusy}
                 onPress={submitPassOn}
               >
                 {passOnBusy
-                  ? <ActivityIndicator size="small" color="#FFFFFF" />
-                  : <Text style={styles.refundCtaText}>Pass to Cerviced</Text>}
+                  ? <ActivityIndicator size="small" color={P.onAccent} />
+                  : <Text style={[styles.refundCtaText, { color: P.onAccent }]}>Pass to Cerviced</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -2988,285 +3077,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Issue Refund sheet ──────────────────────────────────────────
-          Amounts are the provider's own share — the platform fee is never
-          shown (it isn't theirs). When the client's late cancellation was
-          already settled by the provider's policy, that is shown as done and
-          the only choices are refunding MORE on top: never "apply the policy"
-          again. A reason is required before money moves. Issuing a refund
-          does NOT cancel the appointment; that's the separate Cancel action. */}
-      <Modal
-        visible={showRefundModal}
-        transparent statusBarTranslucent navigationBarTranslucent
-        animationType="fade"
-        onRequestClose={() => { if (!refundBusy) setShowRefundModal(false); }}
-      >
-        {/* Keep the form above the keyboard and scroll focused fields into view. */}
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <TouchableOpacity
-            style={[styles.refundOverlay, StyleSheet.absoluteFill]}
-            activeOpacity={1}
-            onPress={() => { if (!refundBusy) setShowRefundModal(false); }}
-          />
-          <View style={[styles.refundSheet, { backgroundColor: P.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={[styles.moreSheetHandle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)' }]} />
-            <ScrollView ref={refundFormScrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12 }}>
-              <View style={styles.refundHead}>
-                <View style={[styles.refundHeadIcon, { backgroundColor: P.iconBg }]}>
-                  <Ionicons name="arrow-undo-outline" size={20} color={P.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.refundTitle, { color: P.text }]}>Issue a refund</Text>
-                  <Text style={{ color: P.sub, fontSize: 13 }} numberOfLines={1}>
-                    {booking.customerName || 'Client'} · {booking.serviceName || 'Booking'}
-                  </Text>
-                </View>
-              </View>
-
-              {refundStateError ? (
-                <View style={[styles.refundCard, { backgroundColor: P.card }]}>
-                  <Text style={{ color: P.text, fontSize: 14 }}>Couldn't load this booking's payment.</Text>
-                  <TouchableOpacity onPress={() => loadRefundState(booking.id)} activeOpacity={0.7} style={{ marginTop: 8 }}>
-                    <Text style={{ color: P.accent, fontWeight: '600' }}>Try again</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : !refundState ? (
-                <ActivityIndicator color={P.accent} style={{ marginVertical: 32 }} />
-              ) : (() => {
-                const green = isDarkMode ? REFUND_GREEN.dark : REFUND_GREEN.light;
-                const keep = isDarkMode ? REFUND_KEEP.dark : REFUND_KEEP.light;
-                const first = booking.customerName?.split(' ')[0] || 'the client';
-                const held = refundState.heldPence;
-                const settled = refundState.policySettlement;
-                const modes: RefundMode[] = refundState.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
-                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours) : null;
-                const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
-                  full: {
-                    title: 'Full refund',
-                    sub: refundState.paidAs === 'deposit'
-                      ? `The deposit ${first} paid in app, less anything already refunded`
-                      : `Everything ${first} paid that hasn't come back yet`,
-                    value: formatPence(held),
-                  },
-                  custom: { title: 'Partial refund', sub: 'Choose an amount', value: '' },
-                };
-                const total = Math.max(held, 1);
-                return (
-                  <>
-                    <View style={[styles.refundCard, { backgroundColor: P.card }]}>
-                      <View style={styles.refundRowBetween}>
-                        <Text style={{ color: P.text, fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>{booking.serviceName || 'Booking'}</Text>
-                        <Text style={[styles.refundAmount, { color: P.text }]}>{formatPence(refundState.sharePence)}</Text>
-                      </View>
-                      <Text style={{ color: P.sub, fontSize: 12, marginTop: 2 }}>
-                        {refundState.paidAs === 'deposit'
-                          ? `Deposit paid in app · booking price ${formatPence(refundState.bookingPricePence)}`
-                          : 'Paid in full in app'}
-                      </Text>
-                      {refundState.paidAs === 'deposit' && (
-                        <Text style={{ color: P.sub, fontSize: 12, marginTop: 4 }}>
-                          Only the deposit went through CERVICED, so only the deposit can be refunded here.
-                        </Text>
-                      )}
-                      {settled && (
-                        <View style={[styles.refundSettled, { backgroundColor: green + '1A' }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="shield-checkmark-outline" size={15} color={green} />
-                            <Text style={{ color: green, fontWeight: '700', fontSize: 13 }}>Your policy was applied automatically</Text>
-                          </View>
-                          {!!timing && <Text style={{ color: P.text, fontSize: 13 }}>{timing}</Text>}
-                          {settled.refundedToClientPence > 0 && (
-                            <View style={styles.refundRowBetween}>
-                              <Text style={{ color: P.text, fontSize: 13 }}>Refunded to {first}</Text>
-                              <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(settled.refundedToClientPence)}</Text>
-                            </View>
-                          )}
-                          <View style={styles.refundRowBetween}>
-                            <Text style={{ color: P.text, fontSize: 13 }}>You kept{settled.keptIsDeposit ? ' (deposit)' : ''}</Text>
-                            <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(settled.providerKeptPence)}</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-
-                    {held <= 0 ? (
-                      <Text style={{ color: P.sub, fontSize: 14, marginTop: 16 }}>There's nothing left of your share to refund on this booking.</Text>
-                    ) : (
-                      <>
-                        {settled ? (
-                          refundPartialOpen ? (
-                            <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>PARTIAL REFUND</Text>
-                          ) : (
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              onPress={() => { setRefundMode('custom'); setRefundPartialOpen(true); }}
-                              style={[styles.refundReasonRow, { backgroundColor: P.card, borderColor: P.border, marginTop: 16 }]}
-                            >
-                              <Ionicons name="add-circle-outline" size={18} color={P.accent} />
-                              <View style={styles.refundReasonTextBlock}>
-                                <Text style={[styles.refundReasonLabel, { color: P.text }]}>Give a partial refund</Text>
-                                <Text style={[styles.refundReasonSub, { color: P.sub }]}>Optional · up to {formatPence(held)}</Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
-                            </TouchableOpacity>
-                          )
-                        ) : (
-                        <>
-                        <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>HOW MUCH TO REFUND</Text>
-                        {modes.map(m => {
-                          const selected = refundMode === m;
-                          return (
-                            <TouchableOpacity
-                              key={m}
-                              activeOpacity={0.7}
-                              disabled={refundBusy}
-                              onPress={() => setRefundMode(m)}
-                              style={[styles.refundReasonRow, {
-                                backgroundColor: P.card,
-                                borderColor: selected ? P.accent : P.border,
-                              }]}
-                            >
-                              <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={18} color={selected ? P.accent : P.text + '55'} />
-                              <View style={styles.refundReasonTextBlock}>
-                                <Text style={[styles.refundReasonLabel, { color: P.text }]}>{optionCopy[m].title}</Text>
-                                <Text style={[styles.refundReasonSub, { color: P.sub }]}>{optionCopy[m].sub}</Text>
-                              </View>
-                              {!!optionCopy[m].value && <Text style={{ color: P.text, fontWeight: '700', fontSize: 14 }}>{optionCopy[m].value}</Text>}
-                            </TouchableOpacity>
-                          );
-                        })}
-                        </>
-                        )}
-                        {(!settled || refundPartialOpen) && (
-                        <>
-                        {refundMode === 'custom' && (
-                          <>
-                            <View style={[styles.refundAmountInputRow, { backgroundColor: P.card, borderColor: P.accent }]}>
-                              <Text style={[styles.refundAmount, { color: P.sub }]}>£</Text>
-                              <TextInput
-                                style={[styles.refundAmountInput, { color: P.text }]}
-                                value={refundAmountText}
-                                onChangeText={t => setRefundAmountText(t.replace(/[^0-9.]/g, ''))}
-                                onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
-                                keyboardType="decimal-pad"
-                                placeholder="0.00"
-                                placeholderTextColor={P.text + '44'}
-                                editable={!refundBusy}
-                                autoFocus
-                              />
-                              <Text style={{ color: P.sub, fontSize: 12 }}>max {formatPence(held)}</Text>
-                            </View>
-                            {!!refundPreview.error && <Text style={styles.refundError}>{refundPreview.error}</Text>}
-                          </>
-                        )}
-
-                        <View style={[styles.refundSplit, { backgroundColor: P.card, borderColor: P.border }]}>
-                          <View style={[styles.refundBar, { backgroundColor: P.surface }]}>
-                            <View style={{ flex: refundPreview.refundPence / total, backgroundColor: green }} />
-                            <View style={{ flex: refundPreview.keepPence / total, backgroundColor: keep }} />
-                          </View>
-                          <View style={{ padding: 12, gap: 6 }}>
-                            <View style={styles.refundRowBetween}>
-                              <Text style={{ color: P.text, fontSize: 13 }}><Text style={{ color: green }}>■ </Text>Back to {first}</Text>
-                              <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(refundPreview.refundPence)}</Text>
-                            </View>
-                            <View style={styles.refundRowBetween}>
-                              <Text style={{ color: P.text, fontSize: 13 }}><Text style={{ color: keep }}>■ </Text>You keep</Text>
-                              <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(refundPreview.keepPence)}</Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <Text style={[styles.refundReasonHeading, { color: P.sub, marginTop: 18 }]}>REASON</Text>
-                        <View style={styles.refundChips}>
-                          {REFUND_REASONS.map(r => {
-                            const selected = refundReason === r;
-                            return (
-                              <TouchableOpacity
-                                key={r}
-                                activeOpacity={0.7}
-                                disabled={refundBusy}
-                                onPress={() => setRefundReason(r)}
-                                style={[styles.refundChip, {
-                                  backgroundColor: selected ? P.iconBg : P.card,
-                                  borderColor: selected ? P.accent : P.border,
-                                }]}
-                              >
-                                <Text style={{ color: P.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{r}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                        <TextInput
-                          style={[styles.respondInput, {
-                            color: P.text,
-                            backgroundColor: P.card,
-                            borderColor: P.border,
-                            minHeight: 56,
-                            textAlignVertical: 'top',
-                            marginTop: 10,
-                          }]}
-                          placeholder={refundReason === 'Other' ? 'Add a note (required)' : 'Add a note (optional)'}
-                          placeholderTextColor={P.text + '44'}
-                          value={refundNote}
-                          onChangeText={setRefundNote}
-                          onFocus={() => setTimeout(() => refundFormScrollRef.current?.scrollToEnd({ animated: true }), 120)}
-                          multiline
-                          maxLength={500}
-                          editable={!refundBusy}
-                        />
-                        <Text style={{ color: P.sub, fontSize: 12 }}>This doesn't cancel the appointment. Banks usually take 5–10 working days to show a refund.</Text>
-                        </>
-                        )}
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </ScrollView>
-            {(() => {
-              const canSubmit = !!refundState && refundState.heldPence > 0 && !!refundReason
-                && !(refundReason === 'Other' && !refundNote.trim())
-                && !refundPreview.error && refundPreview.refundPence > 0;
-              const first = booking.customerName?.split(' ')[0] || 'client';
-              const label = refundMode === 'full' ? `Refund ${first} in full` : `Refund ${formatPence(refundPreview.refundPence)} to ${first}`;
-              // Nothing to submit until they opt into a partial refund (or
-              // there's nothing left to refund): the sheet is just the summary.
-              if (refundState && (refundState.heldPence <= 0 || (refundState.policySettlement && !refundPartialOpen))) {
-                return (
-                  <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
-                    <TouchableOpacity style={[styles.refundCta, { backgroundColor: P.accent }]} activeOpacity={0.8} onPress={() => setShowRefundModal(false)}>
-                      <Text style={styles.refundCtaText}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
-              return (
-                <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
-                  <TouchableOpacity
-                    style={[styles.refundCta, { backgroundColor: P.accent, opacity: canSubmit ? 1 : 0.4 }]}
-                    activeOpacity={0.8}
-                    disabled={!canSubmit || refundBusy}
-                    onPress={submitRefund}
-                  >
-                    {refundBusy
-                      ? <ActivityIndicator size="small" color="#FFFFFF" />
-                      : <Text style={styles.refundCtaText}>{refundState && refundState.heldPence > 0 && !refundReason ? 'Choose a reason' : label}</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ alignItems: 'center', padding: 8 }} disabled={refundBusy} onPress={() => setShowRefundModal(false)} activeOpacity={0.7}>
-                    <Text style={{ color: P.sub, fontSize: 14 }}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
-          </View>
-        </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {refundOpen && booking && (
+        <IssueRefundSheet
+          booking={{ id: booking.id, customerName: booking.customerName, serviceName: booking.serviceName }}
+          palette={P}
+          isDarkMode={isDarkMode}
+          onClose={() => setRefundOpen(false)}
+          onRefunded={handleRefunded}
+          onCancelAppointment={booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.PENDING ? () => cancelBooking(booking.id) : undefined}
+        />
+      )}
 
       {/* ── Confirm/decline dialog ── */}
       <Modal
@@ -3339,94 +3159,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         )}
       </Modal>
 
-      {/* ── Info Pack Picker Modal ──────────────────────────────────────────── */}
-      <Modal
-        visible={showInfoPackPicker}
-        transparent statusBarTranslucent navigationBarTranslucent
-        animationType="fade"
-        onRequestClose={() => setShowInfoPackPicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
-            <Text style={[styles.respondModalTitle, { color: P.text }]}>Send Info Pack</Text>
-            <Text style={[styles.respondModalSub, { color: P.sub, marginBottom: 12 }]}>
-              Choose a pack to send to the client for this booking.
-            </Text>
-
-            {relevantInfoPacks.length === 0 ? (
-              <Text style={[styles.respondModalSub, { color: P.sub, textAlign: 'center', marginVertical: 24 }]}>
-                {providerInfoPacks.length === 0
-                  ? 'No info packs yet — create them in your Info Packs settings.'
-                  : 'No info packs match this booking’s service.'}
-              </Text>
-            ) : (
-              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-                {relevantInfoPacks.map(pack => {
-                  const alreadySent = bookingInfoPacks.some(bp => bp.infoPackId === pack.id);
-                  return (
-                    <TouchableOpacity
-                      key={pack.id}
-                      disabled={alreadySent || isAttachingInfoPack}
-                      onPress={async () => {
-                        if (!bookingId) return;
-                        setIsAttachingInfoPack(true);
-                        try {
-                          await attachInfoPackToBooking(bookingId, pack.id);
-                          const updated = await getInfoPacksByBooking(bookingId);
-                          setBookingInfoPacks(updated);
-                          setShowInfoPackPicker(false);
-                        } catch (e) {
-                          // Let the DB's own guard through ("This booking was cancelled...").
-                          Alert.alert('Info pack not sent', toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
-                        } finally {
-                          setIsAttachingInfoPack(false);
-                        }
-                      }}
-                      style={[
-                        styles.intakeFormCard,
-                        {
-                          marginBottom: 8,
-                          backgroundColor: alreadySent ? '#34C759' + '12' : P.surface,
-                          borderColor: alreadySent ? '#34C759' + '44' : P.border,
-                          opacity: alreadySent || isAttachingInfoPack ? 0.6 : 1,
-                        },
-                      ]}
-                      activeOpacity={0.75}
-                    >
-                      <View style={styles.intakeFormCardInner}>
-                        <View style={styles.packTitleRow}>
-                          <Ionicons name="document-text-outline" size={15} color={P.accent} />
-                          <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
-                        </View>
-                        {alreadySent && (
-                          <View style={[styles.intakeFormStatus, { backgroundColor: '#34C759' + '22' }]}>
-                            <Text style={[styles.intakeFormStatusText, { color: '#34C759' }]}>Sent</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[styles.intakeFormSub, { color: P.sub }]}>
-                        {pack.service_names.length === 0 ? 'All services' : pack.service_names.join(', ')}
-                      </Text>
-                      <Text style={[styles.intakeFormSub, { color: P.sub }]} numberOfLines={2}>
-                        {pack.content}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-
-            <View style={[styles.respondModalActions, { marginTop: 16 }]}>
-              <TouchableOpacity
-                style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]}
-                onPress={() => setShowInfoPackPicker(false)}
-              >
-                <Text style={[styles.respondModalBtnText, { color: P.text }]}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
       <DialogHost />
     </View>
   );
@@ -3503,11 +3235,14 @@ function ActionButton({
   label,
   onPress,
   ghost,
+  textColor,
 }: {
   color: string;
   label: string;
   onPress: () => void;
   ghost?: boolean;
+  /** For a solid fill that white doesn't read on, such as the dark accent. */
+  textColor?: string;
 }) {
   return (
     <TouchableOpacity
@@ -3526,7 +3261,7 @@ function ActionButton({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Text style={[styles.actionBtnText, ghost && { color }]}>{label}</Text>
+      <Text style={[styles.actionBtnText, !!textColor && { color: textColor }, ghost && { color }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -3927,6 +3662,8 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',
   },
+  tipBlock: { marginTop: 14 },
+  tipNote: { fontSize: 12, lineHeight: 17, marginTop: 4 },
 
   // ── Completion banner ──
   completionBanner: {
@@ -3960,6 +3697,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 10,
   },
+  // Same chip and heading as IssueRefundSheet's REASON row.
+  passOnHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
+  passOnChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  passOnChip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
   slotChip: {
     paddingVertical: 9,
     paddingHorizontal: 13,
@@ -4084,51 +3825,12 @@ const styles = StyleSheet.create({
   refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
-  refundCard: { borderRadius: 16, padding: 14 },
-  refundRowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  refundAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 20 },
-  refundSettled: { marginTop: 10, borderRadius: 12, padding: 10, gap: 4 },
-  refundAmountInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 },
-  refundAmountInput: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 22, paddingVertical: 2 },
-  refundError: { color: '#E5484D', fontSize: 12, marginBottom: 4, marginLeft: 2 },
-  refundSplit: { marginTop: 10, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  refundBar: { flexDirection: 'row', height: 8 },
-  refundChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  refundChip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
   refundFoot: { paddingHorizontal: 18, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 2 },
   refundCta: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   refundCtaText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
   refundAskCard: { marginHorizontal: 18, marginTop: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
   refundAskBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: 'center' },
   refundAskBtnText: { fontWeight: '700', fontSize: 13 },
-  refundReasonHeading: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  refundReasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  refundReasonTextBlock: {
-    flex: 1,
-  },
-  refundReasonLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  refundReasonSub: {
-    fontSize: 12,
-    marginTop: 1,
-  },
   datePickBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4152,7 +3854,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  pickerSheet: {
+  pickerSheet: { ...readableSheet,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -4398,7 +4100,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  dialog: {
+  dialog: { ...readableDialog,
     width: '100%',
     borderRadius: 14,
     overflow: 'hidden',
@@ -4428,31 +4130,6 @@ const styles = StyleSheet.create({
   dialogBtnText: {
     fontSize: 17,
     fontWeight: '400',
-  },
-
-  // ── Client profile chips ──
-  profileChipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-    gap: 8,
-  },
-  profileChips: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'flex-end',
-  },
-  profileChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  profileChipText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
 
   // ── Notes section ──
@@ -4524,25 +4201,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: 'italic',
   },
-  sendInfoPackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
   packTitleRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  sendInfoPackText: {
+  // A form or pack that covers this service but hasn't been sent: dashed,
+  // so it reads as "not here yet" next to the solid sent cards.
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  suggestRowEmpty: {
+    paddingVertical: 12,
+  },
+  suggestBtn: {
+    minWidth: 64,
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 100,
+  },
+  suggestBtnText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '700',
   },
 });
 

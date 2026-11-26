@@ -5,8 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  StatusBar,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
@@ -66,7 +66,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
@@ -121,7 +121,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <SettingsOption
               icon="chat-dots"
               title={t('providerProfile.businessProfile.comms.title')}
-              subtitle={t('providerProfile.businessProfile.comms.sub')}
+              subtitle={t('providerProfile.ui.howBookedClientsContactYouAnd')}
               onPress={() => navigation.navigate('Communications')}
               P={P}
             />

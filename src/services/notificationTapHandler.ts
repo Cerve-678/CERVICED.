@@ -11,6 +11,7 @@ import { requestMode } from '../navigation/modeController';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { markNotificationRead, getProviderBasicById } from './databaseService';
 import { logger } from '../utils/logger';
+import { REVIEW_PROMPT_TYPES } from '../features/notifications/notificationPresentation';
 
 export interface NotificationTapData {
   type?: string;
@@ -39,13 +40,25 @@ const BOOKING_TYPES = new Set([
   'fee_dispute_resolved',
   'fee_payment_requested',
   'fee_paid_by_client',
+  // A client tipped after the appointment: opens that booking, where the
+  // provider sees the tip and when it's paid out.
+  'tip_received',
   'fee_payment_lapsed',
+  'payout_debt_recorded',
+  'payout_debt_recovered',
   'refund_requested',
   'refund_request_updated',
+  // Any refund the client got back, whoever issued it: opens that booking.
+  'payment_refunded',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',
   'review_request',
+  // The provider's automated "how are you getting on?" the day after. Opens
+  // that appointment with the review form ready (BookingsScreen skips the
+  // form if it's already been reviewed), which is something the client can
+  // actually do from here — the provider's profile wasn't.
+  'post_appt_check_in',
   'reschedule_request',
   'reschedule_response',
   'reschedule_provider_response',
@@ -62,10 +75,9 @@ const BOOKING_TYPES = new Set([
   'intake_form_received',
   'info_pack_received',
   'address_released',
-  // Carries a real booking_id when it's a time-boxed hold (waitlist_holds.sql)
-  // — same booking-detail deep link as everything else here. Falls through to
-  // openNotifications() below via the !booking_id guard for the older
-  // booking_id-less notifications this same type can also cover.
+  // Carries the hold's booking_id when a slot is held for the client. Bookings
+  // shows a held slot at the top, or "this slot has gone" if the hold has
+  // ended since (20261113210000). Notices with no booking are routed above.
   'waitlist_slot_available',
 ]);
 
@@ -127,6 +139,31 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Waitlist notices with no booking ─────────────────────────────────────────
+  // "Your held slot has gone" and "Taken off a waitlist" (client), "X didn't
+  // take…" and "Waitlist exhausted" (provider): the hold row is deleted when it
+  // ends, so there's no booking to open. Each side's waitlist is where the
+  // next step is: Rejoin in Bookings, or offer the slot from the to-do list.
+  // A client joined the provider's waitlist: it's on their To Do tab.
+  if (type === 'waitlist_joined') {
+    if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
+    else openNotifications();
+    return;
+  }
+
+  // A slot held for the client: their ticket with its countdown opens on the
+  // provider's page, where Confirm & pay sends it to the Cart.
+  if (type === 'waitlist_slot_available' && booking_id && !isProvider && provider_id) {
+    navigateNested('Home', 'ProviderProfile', { providerId: provider_id, source: 'notification', openWaitlistHoldId: booking_id });
+    return;
+  }
+
+  if (type === 'waitlist_slot_available' && !booking_id) {
+    if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
+    else navigateNested('Home', 'Bookings', {});
+    return;
+  }
+
   // ── Booking-related types ───────────────────────────────────────────────────
   if (BOOKING_TYPES.has(type)) {
     const openReschedule =
@@ -151,10 +188,25 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
         openReschedule,
         // Matches the in-app list: "Rate Now" must land on the rating form,
         // not on the booking with the rating control left to be found.
-        openReview: type === 'review_request',
+        openReview: REVIEW_PROMPT_TYPES.has(type),
         highlightBookingId: booking_id,
       });
     }
+    return;
+  }
+
+  // ── Terms changed (both hats) ────────────────────────────────────────────────
+  // Only a notice: the app doesn't open the Terms; they're on cerviced.co/legal.
+  if (type === 'terms_updated') {
+    openNotifications();
+    return;
+  }
+
+  // ── Failed payout (provider-only) ────────────────────────────────────────────
+  // The fix is on Payments (Stripe account, bank details), not on the booking.
+  if (type === 'payout_failed') {
+    if (isProvider) navigateNested('ProviderHome', 'Payments');
+    else openNotifications();
     return;
   }
 
@@ -162,6 +214,18 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   if (type === 'intake_form_reminder' || type === 'intake_form_completed') {
     if (isProvider && booking_id) {
       navigateNested('ProviderHome', 'BookingDetail', { bookingId: booking_id });
+    } else {
+      openNotifications();
+    }
+    return;
+  }
+
+  // ── Fully booked (provider) ──────────────────────────────────────────────────
+  // The certificate shows on the provider's own profile, the root of the
+  // MyServices tab, the next time it opens.
+  if (type === 'schedule_fully_booked') {
+    if (isProvider) {
+      navigateTab('MyServices');
     } else {
       openNotifications();
     }
@@ -244,14 +308,24 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Follow request (client-only) ────────────────────────────────────────────
+  // Accept / Decline are in Your circle, in the Profile tab's stack.
+  if (type === 'follow_request') {
+    if (isProvider) {
+      openNotifications();
+      return;
+    }
+    navigateNested('Profile', 'Circle');
+    return;
+  }
+
   // ── Provider-destination types ───────────────────────────────────────────────
   // These point at a provider rather than a booking. Client-only: a provider
   // deep-linked into ProviderProfile would land in the client navigator.
   if (
     type === 'new_provider' ||
     type === 'announcement' ||
-    type === 'birthday_greeting' ||
-    type === 'post_appt_check_in'
+    type === 'birthday_greeting'
   ) {
     if (!isProvider && provider_id) {
       navigateNested('Home', 'ProviderProfile', { providerId: provider_id, source: 'notification' });
@@ -275,7 +349,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   }
 
   // ── Everything else → Notifications screen ───────────────────────────────────
-  // (promotion, daily_recap, schedule_fully_booked, etc.) Either they have no
+  // (promotion, daily_recap, etc.) Either they have no
   // specific destination, or the in-app handler covers them.
   openNotifications();
 }

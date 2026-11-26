@@ -2,9 +2,24 @@
  * About You — the "can clients trust you, and can they physically reach you"
  * third of what used to be the single 671-line Business Details screen.
  *
- * Scope: credentials & policies (qualifications, insurance, DBS, patch test,
- * online consultations), where you're based (cities covered + travel radius),
- * languages, and accessibility.
+ * Scope: a mobile provider's "Areas you cover", who you work with
+ * (clientele, skin tones, and — for hair providers — hair types), credentials
+ * & policies (qualifications, insurance, DBS, patch test, online
+ * consultations), languages, and accessibility.
+ *
+ * "I Work With" is the only editor of clientele, skin_tones_catered and
+ * hair_types_catered (it moved here from Services & Pricing). Clients see it
+ * in Additional Information on the profile. hair_types_catered is
+ * also what the client Search "Hair Type" filter matches on.
+ *
+ * "Areas you cover" writes providers.service_locations, which Search's City
+ * filter matches alongside location_text (src/utils/providerCity.ts). This is
+ * its only editor for an existing provider: Edit Profile (InfoRegScreen) no
+ * longer shows or saves it, so the two screens can't overwrite each other.
+ * "Where you're based" (location_text) stays in Edit Profile; it's read here
+ * only to suggest a first town. How far a mobile provider travels is said
+ * once, in Policies → Travel; travel_radius is no longer read or written by
+ * the app.
  *
  * Two things worth knowing before editing:
  *
@@ -16,7 +31,8 @@
  *    say so deliberately — never re-word these to imply platform verification.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,8 +50,11 @@ import {
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  LANGUAGE_OPTS, ACCESSIBILITY_OPTS, PATCH_OPTS,
+  LANGUAGE_OPTS, ACCESSIBILITY_OPTS, PATCH_OPTS, CLIENTELE_OPTS, providerTravelsToClient,
 } from '../../features/business-details/options';
+import { SKIN_TONES } from '../../constants/skinTones';
+import { HAIR_TYPES } from '../../constants/hairTypes';
+import AreasYouCoverPicker from '../../components/AreasYouCoverPicker';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 
@@ -47,14 +66,27 @@ export default function AboutYouScreen({ navigation }: any) {
 
   const [providerId, setProviderId] = useState<string | null>(null);
 
+  // Areas you cover — mobile providers only (they travel, so where they're
+  // based isn't where they work). Other types never see it and never write it.
+  const [travels, setTravels]                 = useState(false);
+  const [basedIn, setBasedIn]                 = useState('');
+  const [serviceLocations, setServiceLocations] = useState<string[]>([]);
+
+  // I Work With. Empty skin tones / hair types = not stated, saved as NULL.
+  const [clientele, setClientele]           = useState<string[]>([]);
+  const [skinTones, setSkinTones]           = useState<string[]>([]);
+  const [hairTypesCatered, setHairTypesCatered] = useState<string[]>([]);
+  // Hair types only mean something to a hair provider, so only they are
+  // asked, and only they write the column — anyone else would save [] over a
+  // value they were never shown.
+  const [isHairProvider, setIsHairProvider] = useState(false);
+
   const [qualifications, setQualifications] = useState('');
   const [isInsured, setIsInsured]           = useState(false);
   const [dbsChecked, setDbsChecked]         = useState(false);
   const [onlineConsult, setOnlineConsult]   = useState(false);
   const [patchTest, setPatchTest]           = useState('');
 
-  const [citiesCovered, setCitiesCovered]   = useState<string[]>([]);
-  const [travelRadius, setTravelRadius]     = useState('');
   const [languages, setLanguages]           = useState<string[]>([]);
   const [languagesOther, setLanguagesOther] = useState('');
   const [accessibility, setAccessibility]   = useState<string[]>([]);
@@ -86,13 +118,21 @@ export default function AboutYouScreen({ navigation }: any) {
         const providerData = await getMyProviderProfile();
         if (providerData) {
           setProviderId(providerData.id ?? null);
+          setTravels(providerTravelsToClient(providerData.business_type ?? null));
+          setBasedIn(providerData.location_text ?? '');
+          setServiceLocations(providerData.service_locations ?? []);
+          setClientele(providerData.clientele ?? []);
+          setSkinTones(providerData.skin_tones_catered ?? []);
+          setHairTypesCatered(providerData.hair_types_catered ?? []);
+          setIsHairProvider(
+            providerData.service_category === 'HAIR'
+              || (providerData.service_categories ?? []).includes('HAIR'),
+          );
           setQualifications(providerData.qualifications ?? '');
           setIsInsured(providerData.is_insured_self_declared ?? false);
           setDbsChecked(providerData.dbs_checked_self_declared ?? false);
           setOnlineConsult(providerData.online_consultations_available ?? false);
           setPatchTest(providerData.patch_test_policy ?? '');
-          setCitiesCovered(providerData.service_locations ?? []);
-          setTravelRadius(providerData.travel_radius ?? '');
           setLanguages(providerData.languages_spoken ?? []);
           // accessibility_notes is a single TEXT column, so the chip list is
           // joined/split with '|' at the save/load boundary rather than
@@ -135,16 +175,21 @@ export default function AboutYouScreen({ navigation }: any) {
         : languages.filter(l => l !== 'Other');
 
       await updateProviderContactDetails(providerId, {
+        clientele,
+        skin_tones_catered: skinTones.length ? skinTones : null,
+        ...(isHairProvider
+          ? { hair_types_catered: hairTypesCatered.length ? hairTypesCatered : null }
+          : {}),
         qualifications: qualifications.trim() || null,
         is_insured_self_declared: isInsured,
         dbs_checked_self_declared: dbsChecked,
         online_consultations_available: onlineConsult,
         // '' would violate providers_patch_test_policy_check — clear with null.
         patch_test_policy: (patchTest as 'always' | 'new_clients' | 'optional' | 'not_needed') || null,
-        service_locations: citiesCovered,
-        travel_radius: travelRadius.trim() || null,
         languages_spoken: finalLanguages,
         accessibility_notes: accessibility.length ? accessibility.join('|') : null,
+        // Removing every chip saves an empty list on purpose.
+        ...(travels ? { service_locations: serviceLocations } : {}),
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -168,7 +213,7 @@ export default function AboutYouScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
@@ -190,10 +235,54 @@ export default function AboutYouScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
+            {travels && (
+              <Card title={t('providerProfile.ui.areasYouCover')} sub={t('providerProfile.ui.theTownsAndAreasYouTravel')}>
+                <AreasYouCoverPicker
+                  value={serviceLocations}
+                  onChange={setServiceLocations}
+                  basedIn={basedIn}
+                  accentColor={C.accent}
+                  palette={C}
+                />
+              </Card>
+            )}
+
+            <Card title={t('providerProfile.ui.iWorkWith')} sub={t('providerProfile.ui.shownInAdditionalInformationOnYour')}>
+              <SectionLabel text={t('providerProfile.ui.clients')} />
+              <ChipGroup options={CLIENTELE_OPTS} selected={clientele} onToggle={v => toggleChip(clientele, setClientele, v)} />
+
+              <View style={{ height: 18 }} />
+              <SectionLabel text={t('providerProfile.ui.skinTones')} />
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSkinTones(skinTones.length === SKIN_TONES.length ? [] : [...SKIN_TONES]);
+                }}
+                activeOpacity={0.7}
+                style={{ alignSelf: 'flex-start', marginTop: -4, marginBottom: 10 }}
+              >
+                <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', color: C.accent }}>
+                  {skinTones.length === SKIN_TONES.length ? t('providerProfile.ui.clearAll') : t('providerProfile.ui.iWorkWithAllSkinTones')}
+                </Text>
+              </TouchableOpacity>
+              <ChipGroup options={SKIN_TONES} selected={skinTones} onToggle={v => toggleChip(skinTones, setSkinTones, v)} />
+
+              {isHairProvider && (
+                <>
+                  <View style={{ height: 18 }} />
+                  <SectionLabel text={t('providerProfile.ui.hairTypes')} />
+                  <ChipGroup options={HAIR_TYPES} selected={hairTypesCatered} onToggle={v => toggleChip(hairTypesCatered, setHairTypesCatered, v)} />
+                  <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
+                    {t('providerProfile.services.hairTypesHint')}
+                  </Text>
+                </>
+              )}
+            </Card>
+
             <Card title={t('providerProfile.about.credentials.title')} sub={t('providerProfile.about.credentials.sub')}>
               <Field label={t('providerProfile.about.qualifications')} value={qualifications} onChange={setQualifications} placeholder={t('providerProfile.about.qualificationsPlaceholder')} multiline />
-              <ToggleRow label={t('providerProfile.about.insured')} sub={t('providerProfile.about.insuredSub')} value={isInsured} onChange={setIsInsured} />
-              <ToggleRow label={t('providerProfile.about.dbs')} sub={t('providerProfile.about.dbsSub')} value={dbsChecked} onChange={setDbsChecked} />
+              <ToggleRow label={t('providerProfile.about.insured')} sub="You hold valid professional indemnity insurance. Shown as your own declaration — Cerviced doesn't verify insurance." value={isInsured} onChange={setIsInsured} />
+              <ToggleRow label={t('providerProfile.about.dbs')} sub="Important if you work with children or vulnerable adults. Shown as your own declaration — Cerviced doesn't verify DBS status." value={dbsChecked} onChange={setDbsChecked} />
               <ToggleRow label={t('providerProfile.about.onlineConsult')} sub={t('providerProfile.about.onlineConsultSub')} value={onlineConsult} onChange={setOnlineConsult} />
 
               <SectionLabel text={t('providerProfile.about.patchTest')} />
@@ -201,26 +290,6 @@ export default function AboutYouScreen({ navigation }: any) {
                 {t('providerProfile.about.patchTestSub')}
               </Text>
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />
-            </Card>
-
-            {/* Cities covered, not a single base location — this writes
-                service_locations, the same list the client Search "City"
-                filter reads, so every city selected here is one a client can
-                actually filter by. */}
-            <Card title={t('providerProfile.about.based.title')} sub={t('providerProfile.about.based.sub')}>
-              {/* The shared searchable city finder — same component signup
-                  (Step 4), InfoRegScreen and the client Search "City" filter
-                  all use, so a city always means the same thing on both
-                  sides. A flat 60-chip grid was the wrong shape for a list
-                  this long. */}
-              <CityMultiSelect
-                selected={citiesCovered}
-                onChange={setCitiesCovered}
-                palette={C}
-                placeholder={t('providerProfile.about.citiesPlaceholder')}
-              />
-              <View style={{ height: 18 }} />
-              <Field label={t('providerProfile.about.travelRadius')} value={travelRadius} onChange={setTravelRadius} placeholder={t('providerProfile.about.travelRadiusPlaceholder')} note={t('providerProfile.about.travelRadiusNote')} />
             </Card>
 
             <Card title={t('providerProfile.about.languages.title')} sub={t('providerProfile.about.languages.sub')}>

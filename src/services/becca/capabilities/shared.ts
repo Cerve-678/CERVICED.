@@ -5,15 +5,58 @@
 // the previous implementation hardcoded `$` in a £ app.
 
 import type { ChatSuggestion } from "../types";
+import type { EntityBag } from "../types";
 import type { Provider } from "../../ProviderDataService";
 import type { DbProvider } from "../../../types/database";
 import { getProviderIdByDisplayName } from "../../databaseService";
 import { resolveClientLocation } from "../../clientLocationService";
 import { getDistanceKm } from "../../../utils/distance";
+import { CATEGORY_LABELS } from "../serviceCatalogue";
+import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV, toLocalDate } from "../../../utils/dateUtils";
 
 /** GBP. This app is £ — never format money any other way. */
 export function money(amount: number): string {
   return `£${amount.toFixed(2).replace(/\.00$/, "")}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Loading-step wording (Capability.thinking)
+
+/** The service the turn is about, as words: "volume lashes", "nails". */
+export function serviceWords(entities: EntityBag, fallback: string): string {
+  const service = entities.service?.value;
+  if (!service) return fallback;
+  return service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
+}
+
+/** The provider the turn is about — named outright, or behind the booking. */
+export function providerWords(entities: EntityBag, fallback: string): string {
+  return entities.provider?.value.displayName ?? entities.booking?.value.providerName ?? fallback;
+}
+
+/**
+ * One of several wordings of the same answer, so Becca doesn't say a thing
+ * the same way every time. Every wording must carry the same facts; only the
+ * phrasing around them may differ.
+ */
+export function oneOf(...wordings: string[]): string {
+  return wordings[Math.floor(Math.random() * wordings.length)] ?? wordings[0] ?? "";
+}
+
+/**
+ * A date the way Becca says it: "Mon 10 Nov". Words, not "10/11/2026" — a
+ * numeric date reads as a form field, and is ambiguous across regions. Never
+ * "Today"/"Tomorrow", so "on ${dayLabel(x)}" always reads right; pair it with
+ * relativeDayLabel where a relative day is wanted.
+ */
+export function dayLabel(ymd: string): string {
+  const date = toLocalDate(ymd);
+  return `${DAY_NAMES_ABBREV[date.getDay()] ?? ""} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()] ?? ""}`.trim();
+}
+
+/** "Lola’s", "James’". */
+export function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}’` : `${name}’s`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -84,13 +127,16 @@ export function providerFromDb(
   p: Pick<
     DbProvider,
     'slug' | 'display_name' | 'service_category' | 'logo_url' | 'location_text'
-  >,
+  > & Partial<Pick<DbProvider, 'logo_framing' | 'id'>>,
 ): Provider {
   return {
     id: p.slug,
+    // The real providers.id, for the "people you follow" faces on the card.
+    ...(p.id ? { providerId: p.id } : {}),
     name: p.display_name,
     service: p.service_category as Provider["service"],
     logo: p.logo_url ? { uri: p.logo_url } : null,
+    ...(p.logo_framing ? { logoFraming: p.logo_framing } : {}),
     ...(p.location_text != null ? { location: p.location_text } : {}),
   };
 }
@@ -133,8 +179,9 @@ export interface ProximityResult<T> {
  * only one of them is "sorted by where you are":
  *
  *   • GPS         — a real position, so a real ranking.
- *   • saved city  — a centroid. Useful, and NOT where the client is standing,
- *                   so the reply says which city it used.
+ *   • saved place — the centre of an area or city the client picked on Home,
+ *                   or their Your area in Account. Useful, and NOT where
+ *                   they're standing, so the reply names it and says which.
  *   • unknown     — permission refused or nothing saved. The list is returned
  *                   unranked and the reply says so, rather than presenting an
  *                   arbitrary order as "nearest".
@@ -145,19 +192,19 @@ export interface ProximityResult<T> {
  */
 export async function sortByProximity<
   T extends { latitude: number | null; longitude: number | null },
->(providers: T[]): Promise<ProximityResult<T>> {
-  const location = await resolveClientLocation();
+>(providers: T[], accountArea?: string): Promise<ProximityResult<T>> {
+  const location = await resolveClientLocation({ accountArea: accountArea ?? null });
   const here = location.coords;
 
   if (!here) {
     return {
       providers,
       ranked: false,
-      // Names where the city actually gets set: the location picker on Home
-      // (HomeScreen's LocationModal, which writes STORAGE_KEYS.MANUAL_LOCATION
-      // — the same value this resolver reads back). Not "in your profile":
-      // there is no such control there, and sending someone to look for one
-      // is worse than not offering a fix at all.
+      // Names the location picker on Home (HomeScreen's LocationModal, which
+      // writes STORAGE_KEYS.MANUAL_LOCATION — the same value this resolver
+      // reads back). Account → Your area would also work (it's the fallback
+      // when nothing is picked on the phone), but reaching this branch means
+      // it's blank or couldn't be found, so Home is the one to point at.
       note:
         "I don't know where you are yet — turn on location access, or pick your area from the location button on Home, and I can sort by distance.",
     };
@@ -182,9 +229,11 @@ export async function sortByProximity<
     providers: withDistance.map((entry) => entry.p),
     ranked: true,
     note:
-      location.source === "saved-city" && location.cityLabel
-        ? `Sorted by distance from **${location.cityLabel}**, the city on your profile.`
-        : location.isCoarse
+      location.source === "saved-place" && location.placeLabel
+        ? `Sorted by distance from **${location.placeLabel.split(",")[0]}**, the area you picked on Home.`
+        : location.source === "account-area" && location.placeLabel
+          ? `Sorted by distance from **${location.placeLabel.split(",")[0]}**, your area in Account.`
+          : location.isCoarse
           ? "Sorted by distance, though your location is only approximate right now."
           : "Sorted by distance from you.",
   };

@@ -7,8 +7,9 @@
  * it's now focused sub-screens, each owning its own save:
  *
  *   BusinessInfoScreen      — name, links, emails, external booking, → T&Cs
- *   ServicesPricingScreen   — specialties, clientele, pricing, style
- *   AboutYouScreen          — credentials, patch test, cities covered, access
+ *   ServicesPricingScreen   — specialties, pricing, style, products
+ *   AboutYouScreen          — who you work with, credentials, patch test,
+ *                             languages, access
  *   SchedulingScreen        — availability, booking rules, → working hours
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
@@ -24,7 +25,8 @@
  * Shared form primitives live in src/features/business-details/.
  */
 import React from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -65,7 +67,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
   return (
     <View style={[st.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={[st.header, { borderBottomColor: C.border }]}>
           <Text style={[st.headerTitle, { color: C.text }]}>{t('providerProfile.businessDetails.title')}</Text>
@@ -93,21 +95,21 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="pricetags-outline"
             title={t('providerProfile.businessDetails.services.title')}
-            subtitle={t('providerProfile.businessDetails.services.sub')}
+            subtitle={t('providerProfile.ui.specialtiesPricingStyleProductsYouUse')}
             onPress={() => navigation.navigate('ServicesPricing')}
             C={C}
           />
           <NavRow
             icon="document-text-outline"
-            title={t('providerProfile.businessDetails.policies.title')}
-            subtitle={t('providerProfile.businessDetails.policies.sub')}
+            title={t('providerProfile.ui.policiesInfo')}
+            subtitle={t('providerProfile.ui.cancellationsReschedulesNoShowsRefundsWhat')}
             onPress={() => navigation.navigate('Policies')}
             C={C}
           />
           <NavRow
             icon="shield-checkmark-outline"
             title={t('providerProfile.businessDetails.about.title')}
-            subtitle={t('providerProfile.businessDetails.about.sub')}
+            subtitle={t('providerProfile.ui.areasYouCoverWhoYouWork')}
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />

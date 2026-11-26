@@ -3,6 +3,7 @@ import { join } from "path";
 import {
   CLIENT_BECCA_SCREENS,
   CLIENT_PROFILE_SCREENS,
+  CLIENT_WEBSITE_PAGES,
   PROVIDER_PUSH_NAV,
   PROVIDER_TAB_NAV,
 } from "../services/becca/navigationContract";
@@ -107,7 +108,7 @@ describe("Becca navigation chips point at reachable screens", () => {
         if (profileScreen) {
           expect({
             screen: profileScreen[1]!,
-            reachable: CLIENT_PROFILE_SCREENS.has(profileScreen[1]!),
+            reachable: CLIENT_PROFILE_SCREENS.has(profileScreen[1]!) || CLIENT_WEBSITE_PAGES.has(profileScreen[1]!),
           }).toEqual({ screen: profileScreen[1]!, reachable: true });
         }
       }

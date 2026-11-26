@@ -5,6 +5,12 @@ export interface AccountHatState {
   owned: Readonly<Record<AccountHat, boolean>>;
   active: AccountHat;
   canSwitch: boolean;
+  /**
+   * False while a provider's client hat hasn't been read from the users row
+   * (the profile load failed or timed out). `owned.client` is false then too,
+   * but that means "not known yet", so never offer to create a client account.
+   */
+  clientHatKnown: boolean;
 }
 
 /** Translate the legacy database fields into the one shape the UI consumes. */
@@ -53,6 +59,7 @@ export function getAccountHatState(
       owned: { client: false, provider: false },
       active,
       canSwitch: false,
+      clientHatKnown: false,
     };
   }
   const owned = getOwnedHats(role, hasClientProfile);
@@ -61,5 +68,6 @@ export function getAccountHatState(
     owned,
     active: safeActive,
     canSwitch: owned.client && owned.provider,
+    clientHatKnown: role !== 'provider' || typeof hasClientProfile === 'boolean',
   };
 }

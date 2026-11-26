@@ -23,19 +23,19 @@ import { SafeAreaView } from './SafeArea';
 import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../constants/providerThemes';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
+import { readableSheet } from '../constants/readableWidth';
 
 export interface AddOnPickerAddOn {
   id: string | number;
   name: string;
   price: number;
   description?: string;
+  /** Minutes this add-on adds to the appointment. */
+  extraMinutes?: number;
 }
 
-export interface AddOnPickerResult {
-  id: string | number;
-  name: string;
-  price: number;
-}
+export type AddOnPickerResult = ChosenAddOn;
 
 interface AddOnPickerModalProps {
   visible: boolean;
@@ -84,7 +84,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
       const exists = prev.some(a => a.id === addOn.id);
       return exists
         ? prev.filter(a => a.id !== addOn.id)
-        : [...prev, { id: addOn.id, name: addOn.name, price: addOn.price }];
+        : [...prev, { id: addOn.id, name: addOn.name, price: addOn.price, extraMinutes: addOn.extraMinutes ?? 0 }];
     });
   };
 
@@ -128,7 +128,12 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
                       <Text style={[styles.addOnDescription, { color: tokens.sub }]}>{addOn.description}</Text>
                     )}
                   </View>
-                  <Text style={[styles.addOnPrice, { color: accentColor }]}>+£{addOn.price}</Text>
+                  <View style={styles.addOnPriceColumn}>
+                    <Text style={[styles.addOnPrice, { color: accentColor }]}>+£{addOn.price}</Text>
+                    {!!addOn.extraMinutes && (
+                      <Text style={[styles.addOnTime, { color: tokens.sub }]}>{formatAddOnExtraTime(addOn.extraMinutes)}</Text>
+                    )}
+                  </View>
                   <View
                     style={[
                       styles.checkbox,
@@ -173,7 +178,7 @@ export const AddOnPickerModal: React.FC<AddOnPickerModalProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  sheet: { ...readableSheet, flex: 1, marginTop: 100, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -191,7 +196,9 @@ const styles = StyleSheet.create({
   },
   addOnName: { fontSize: 14, fontWeight: '600' },
   addOnDescription: { fontSize: 12, marginTop: 2 },
-  addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
+  addOnPrice: { fontSize: 13, fontWeight: '700' },
+  addOnPriceColumn: { alignItems: 'flex-end', marginRight: 10 },
+  addOnTime: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   checkmark: { fontSize: 12, fontWeight: '700' },
   footer: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth },
