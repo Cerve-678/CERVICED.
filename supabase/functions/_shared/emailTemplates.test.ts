@@ -42,7 +42,7 @@ import {
   mapsUrl,
   supportRequestEmail,
 } from './emailTemplates.ts';
-import { emailedReminderTiming, londonToday, reminderIsDue } from './reminderEmailTiming.ts';
+import { EMAILED_REMINDER_TIMING, londonToday, reminderIsDue } from './reminderEmailTiming.ts';
 
 /** No whitespace: firstNameOf() splits on it, so this survives whole. */
 const HOSTILE = `<script>alert(1)</script>&"'`;
@@ -557,13 +557,8 @@ describe('the reminder email', () => {
 });
 
 describe('which reminder is emailed', () => {
-  it('is the one nearest the appointment the provider sends', () => {
-    expect(emailedReminderTiming(undefined)).toBe('24h');
-    expect(emailedReminderTiming(['72h', '24h'])).toBe('24h');
-    expect(emailedReminderTiming(['48h', '72h'])).toBe('48h');
-    expect(emailedReminderTiming(['72h'])).toBe('72h');
-    expect(emailedReminderTiming([])).toBe('24h');
-    expect(emailedReminderTiming('24h')).toBe('24h');
+  it('is the day-before one, for every client', () => {
+    expect(EMAILED_REMINDER_TIMING).toBe('24h');
   });
 });
 

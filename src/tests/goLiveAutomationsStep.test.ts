@@ -44,7 +44,7 @@ describe('Profile Health automations step', () => {
       ({ automation_settings: settings }) as DbProvider;
     expect(deriveAutomationsSet(row(null))).toBe(false);
     expect(deriveAutomationsSet(row({ scheduleReleaseDay: 1, depositRequiredNew: true }))).toBe(false);
-    expect(deriveAutomationsSet(row({ clientReminderTiming: [] }))).toBe(true);
-    expect(deriveAutomationsSet(row({ clientReminderTiming: ['24h'] }))).toBe(true);
+    expect(deriveAutomationsSet(row({ rebookingNudgeWeeks: 'never' }))).toBe(true);
+    expect(deriveAutomationsSet(row({ rebookingNudgeWeeks: '6', autoReviewRequest: true }))).toBe(true);
   });
 });
