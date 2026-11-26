@@ -199,6 +199,19 @@ const EXPLORE_PORTFOLIO_SELECT = `
   provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
 `;
 
+// Every column Explore's service cards read (mapDbServiceToCards). Shared by
+// the Discover feed and the Favourites hydration so the two can't drift: the
+// Favourites copy once left out service_category, the card mapper threw on
+// it, and every saved service photo (and any collection holding one) said
+// "Can't show these looks right now". Discover requires at least one photo
+// (!inner); Favourites doesn't, since a saved service makes no card without one.
+export const DISCOVER_SERVICE_IMAGE_COLUMNS = "url, sort_order, aspect_ratio, fit";
+export const discoverServiceSelect = (images: "service_images" | "service_images!inner") => `
+  id, provider_id, name, description, price, service_category,
+  ${images} ( ${DISCOVER_SERVICE_IMAGE_COLUMNS} ),
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
+`;
+
 /** Fetch the lean portfolio projection used by Explore's public masonry feed. */
 export async function getExplorePortfolioItems(
   category?: string,
@@ -324,13 +337,7 @@ export async function getDiscoverServices(
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
-    .select(
-      `
-      id, provider_id, name, description, price, service_category,
-      service_images!inner ( url, sort_order, aspect_ratio, fit ),
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
-    `,
-    )
+    .select(discoverServiceSelect("service_images!inner"))
     .eq("is_active", true)
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
@@ -479,13 +486,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
     serviceIds.length > 0
       ? supabase
           .from("services")
-          .select(
-            `
-            id, provider_id, name, description, price,
-            service_images ( url, sort_order ),
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
-          `,
-          )
+          .select(discoverServiceSelect("service_images"))
           .in("id", serviceIds)
           .eq("is_active", true)
           .eq("provider.is_active", true)
