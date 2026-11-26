@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  cerviced-ac (fix/receipt-shows-promo-discount) — 20261126150000_client_bookings_promo_discount, written + dry-run, NOT applied (waiting for the user's OK)
+OWNER:  (none)
 ```
+
+### Applied 2026-11-26 (client bookings promo discount)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126150000 | `client_bookings_promo_discount` | **APPLIED 2026-11-26** on the user's "yep", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row: adds `promo_discount` as `client_bookings`' last column. Live max `20261126140000` (cerviced-90's #817), no unapplied migration above it on any open PR. md5 guard on the live view matched. Dry run first: 57 → 58 columns, same 232 rows. Verified live: version recorded; column present; `security_invoker=true` kept; `authenticated` can still select; 232 rows. PR #819. |
 
 ### Applied 2026-11-26 (a client booking can only be made by paying for it)
 
