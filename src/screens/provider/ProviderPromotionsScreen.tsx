@@ -9,13 +9,13 @@ import {
   Switch,
   Keyboard,
   Animated,
-  StatusBar,
   ActivityIndicator,
   Platform,
   Modal,
   Image,
   useWindowDimensions,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,6 +44,7 @@ import { formatTime12 } from '../../utils/dateUtils';
 import { useTranslation, tr, localeForLanguage } from '../../i18n';
 import { toUserMessage } from '../../utils/userFacingError';
 import { uploadToStorage } from '../../services/providerRegistrationService';
+import { readableSheet } from '../../constants/readableWidth';
 
 
 // ── Brand Palette ──────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ const CP_DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -66,7 +67,7 @@ const CP_LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -91,7 +92,7 @@ const TEMPLATES = [
     tagline: 'providerBusiness.promotions.template.flashTagline',
     icon: 'flash-outline' as const,
     gradient: ['#C0392B', '#922B21'] as [string, string],
-    prefill: { title: 'Flash Sale', description: "Limited time only — book before it's gone!", discountType: 'percent' as const, discountPercent: '20' },
+    prefill: { get title() { return tr('providerBusiness.promotions.template.flash'); }, description: "Limited time only — book before it's gone!", discountType: 'percent' as const, discountPercent: '20' },
   },
   {
     id: 'loyalty',
@@ -99,7 +100,7 @@ const TEMPLATES = [
     tagline: 'providerBusiness.promotions.template.loyaltyTagline',
     icon: 'star-outline' as const,
     gradient: ['#5B1E32', '#3D1420'] as [string, string],
-    prefill: { title: 'Loyalty Reward', description: 'A thank you to our valued clients — you deserve it.', discountType: 'percent' as const, discountPercent: '15' },
+    prefill: { get title() { return tr('providerBusiness.promotions.template.loyalty'); }, description: 'A thank you to our valued clients — you deserve it.', discountType: 'percent' as const, discountPercent: '15' },
   },
   {
     id: 'new_client',
@@ -115,7 +116,7 @@ const TEMPLATES = [
     tagline: 'providerBusiness.promotions.template.seasonalTagline',
     icon: 'sparkles-outline' as const,
     gradient: ['#4A1942', '#2E0F28'] as [string, string],
-    prefill: { title: 'Seasonal Special', description: 'Make the most of the season with an exclusive offer.', discountType: 'text' as const, discountText: 'Special Rate' },
+    prefill: { get title() { return tr('providerBusiness.promotions.template.seasonal'); }, description: 'Make the most of the season with an exclusive offer.', discountType: 'text' as const, discountText: 'Special Rate' },
   },
   {
     id: 'bundle',
@@ -188,11 +189,11 @@ function PromoTabBar({ active, onChange, counts, P }: {
           onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(t.key); }}
           activeOpacity={0.7}
         >
-          <Text style={[tabSt.label, { color: active === t.key ? P.ice : P.sub }]}>
+          <Text style={[tabSt.label, { color: active === t.key ? P.onAccent : P.sub }]}>
             {t.label}
           </Text>
           {counts[t.key] > 0 && (
-            <View style={[tabSt.dot, { backgroundColor: active === t.key ? P.ice : P.sub }]} />
+            <View style={[tabSt.dot, { backgroundColor: active === t.key ? P.onAccent : P.sub }]} />
           )}
         </TouchableOpacity>
       ))}
@@ -370,7 +371,7 @@ const pcSt = StyleSheet.create({
   banner: { height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: CP.card },
   bannerOverlay: { position: 'absolute', bottom: 10, left: 12, flexDirection: 'row', gap: 6 },
   discountBadge: { backgroundColor: CP.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 0.5, borderColor: CP.ice + '30' },
-  discountText: { color: CP.ice, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  discountText: { color: CP.onAccent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   catBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.35)' },
   catBadgeText: { color: CP.text, fontSize: 10, fontWeight: '600', letterSpacing: 0.8 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
@@ -445,7 +446,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
 
 const tpSt = StyleSheet.create({
   container: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 12, paddingHorizontal: 20, maxHeight: '80%' },
+  sheet: { ...readableSheet, backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 12, paddingHorizontal: 20, maxHeight: '80%' },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: CP.border, alignSelf: 'center', marginBottom: 20 },
   heading: { fontSize: 20, fontWeight: '700', color: CP.text, marginBottom: 4 },
   sub: { fontSize: 13, color: CP.sub, marginBottom: 20 },
@@ -458,7 +459,7 @@ const tpSt = StyleSheet.create({
 
 // ── Notify Modal ───────────────────────────────────────────────────────────────
 
-type Audience = 'interested' | 'all' | 'repeat' | 'bookmarked';
+type Audience = 'interested' | 'all' | 'repeat' | 'followers';
 
 function tomorrow9am() {
   const d = new Date();
@@ -498,10 +499,10 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   const repeatCount = clients.filter(c => c.booking_count >= 2).length;
 
   const audienceOptions: { key: Audience; label: string; sub: string; count: number | null }[] = [
-    { key: 'interested', label: t('providerBusiness.promotions.notify.interested'), sub: t('providerBusiness.promotions.notify.interestedSub'), count: null },
-    { key: 'all',        label: t('providerBusiness.promotions.notify.all'),        sub: t('providerBusiness.promotions.notify.allSub'),    count: clients.length },
-    { key: 'repeat',     label: t('providerBusiness.promotions.notify.repeat'),     sub: t('providerBusiness.promotions.notify.repeatSub'),           count: repeatCount },
-    { key: 'bookmarked', label: t('providerBusiness.promotions.notify.followers'),  sub: t('providerBusiness.promotions.notify.followersSub'),  count: null },
+    { key: 'interested', label: t('providerBusiness.promotions.notify.interested'), sub: t('providerBusiness.ui2.bookedYouOrTurnedOnYour'), count: null },
+    { key: 'all',        label: t('common.all'),       sub: t('providerBusiness.promotions.notify.allSub'),    count: clients.length },
+    { key: 'repeat',     label: t('providerBusiness.clientele.tab.repeat'),    sub: t('providerBusiness.promotions.notify.repeatSub'),           count: repeatCount },
+    { key: 'followers',  label: t('providerBusiness.promotions.notify.followers'), sub: t('providerBusiness.ui2.peopleWhoTurnedOnYourBell'), count: null },
   ];
 
   const handleSend = async () => {
@@ -547,12 +548,12 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
                 {selected && <View style={nmSt.radioDot} />}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[nmSt.optLabel, { color: selected ? C.ice : C.text }]}>{opt.label}</Text>
+                <Text style={[nmSt.optLabel, { color: selected ? CP.onAccent : C.text }]}>{opt.label}</Text>
                 <Text style={[nmSt.optSub, { color: selected ? 'rgba(255,255,255,0.7)' : C.sub }]}>{opt.sub}</Text>
               </View>
               {opt.count !== null && (
                 <View style={[nmSt.countBadge, { backgroundColor: C.surface }, selected && nmSt.countBadgeActive]}>
-                  <Text style={[nmSt.countText, { color: selected ? C.ice : C.sub }]}>{opt.count}</Text>
+                  <Text style={[nmSt.countText, { color: selected ? CP.onAccent : C.sub }]}>{opt.count}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -630,9 +631,9 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
         <TouchableOpacity style={[nmSt.sendBtn, sending && { opacity: 0.6 }]}
           onPress={handleSend} activeOpacity={0.8} disabled={sending}>
           {sending
-            ? <ActivityIndicator color={C.ice} size="small" />
+            ? <ActivityIndicator color={CP.onAccent} size="small" />
             : <>
-                <Ionicons name={scheduleMode ? 'alarm-outline' : 'notifications-outline'} size={16} color={C.ice} />
+                <Ionicons name={scheduleMode ? 'alarm-outline' : 'notifications-outline'} size={16} color={CP.onAccent} />
                 <Text style={nmSt.sendBtnText}>{scheduleMode ? t('providerBusiness.promotions.notify.scheduleBtn') : t('providerBusiness.promotions.notify.sendNow')}</Text>
               </>
           }
@@ -645,20 +646,20 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
 
 const nmSt = StyleSheet.create({
   container: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 },
+  sheet: { ...readableSheet, backgroundColor: CP.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: CP.border, alignSelf: 'center', marginBottom: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontSize: 18, fontWeight: '700', color: CP.text },
   promoPreview: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 0.5, borderColor: CP.border, borderRadius: 12, padding: 12, marginBottom: 20, backgroundColor: CP.card },
   promoBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: CP.accent },
-  promoBadgeText: { fontSize: 11, fontWeight: '800', color: CP.ice },
+  promoBadgeText: { fontSize: 11, fontWeight: '800', color: CP.onAccent },
   promoTitle: { fontSize: 14, fontWeight: '600', color: CP.text, flex: 1 },
   sectionLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginBottom: 10, color: CP.sub, textTransform: 'uppercase' },
   option: { flexDirection: 'row', alignItems: 'center', borderWidth: 0.5, borderColor: CP.border, borderRadius: 12, padding: 14, marginBottom: 8, backgroundColor: CP.card },
   optionActive: { borderColor: CP.ice + '40', backgroundColor: CP.accent },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: CP.border, marginRight: 12, alignItems: 'center', justifyContent: 'center' },
-  radioActive: { borderColor: CP.ice },
-  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CP.ice },
+  radioActive: { borderColor: CP.onAccent },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CP.onAccent },
   optLabel: { fontSize: 15, fontWeight: '600' },
   optSub: { fontSize: 12, marginTop: 1, color: CP.sub },
   countBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: CP.surface },
@@ -668,7 +669,7 @@ const nmSt = StyleSheet.create({
   pickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: CP.card, borderWidth: 0.5, borderColor: CP.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   pickerText: { color: CP.ice, fontSize: 13, fontWeight: '600', flex: 1 },
   sendBtn: { marginTop: 16, borderRadius: 14, backgroundColor: CP.accent, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: CP.ice + '30' },
-  sendBtnText: { color: CP.ice, fontSize: 15, fontWeight: '700' },
+  sendBtnText: { color: CP.onAccent, fontSize: 15, fontWeight: '700' },
 });
 
 // ── Form State ─────────────────────────────────────────────────────────────────
@@ -777,6 +778,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
 
   // Date picker state
@@ -790,6 +792,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 
   useEffect(() => {
     if (visible) {
+      setSaveError('');
       const f = editing ? promoToForm(editing) : initialForm ?? EMPTY_FORM;
       setForm(f);
       const fd = f.validFrom ? new Date(f.validFrom + 'T12:00:00') : new Date();
@@ -833,6 +836,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
     if (form.scheduleNotify && !form.scheduleDate.trim()) return;
 
     setSaving(true);
+    setSaveError('');
     try {
       let imageUrl: string | null | undefined = editing ? form.existingImageUrl : undefined;
       if (form.imageUri) {
@@ -872,6 +876,10 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
         ...(form.scheduleNotify ? { notify_sent_at: null } : {}),
       };
       await onSave(input);
+    } catch (e) {
+      // Shown inside the sheet: a toast on the screen behind it would be
+      // hidden by the Modal. The language filter's refusal lands here too.
+      setSaveError(toUserMessage(e, "That didn't save. Please try again.", 'ProviderPromotionsScreen.save'));
     } finally {
       setSaving(false);
       setUploadingImage(false);
@@ -896,6 +904,9 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
             }
           </TouchableOpacity>
         </View>
+        {saveError ? (
+          <Text style={[fmSt.saveError, { color: C.danger }]} accessibilityRole="alert">{saveError}</Text>
+        ) : null}
 
         <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
@@ -950,8 +961,8 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
               {(['text', 'percent', 'amount'] as const).map(t => (
                 <TouchableOpacity key={t} style={[fmSt.seg, form.discountType === t && [fmSt.segActive, { backgroundColor: C.accent }]]}
                   onPress={() => field('discountType', t)} activeOpacity={0.7}>
-                  <Text style={[fmSt.segText, { color: form.discountType === t ? C.ice : C.sub }]}>
-                    {t === 'text' ? tx('providerBusiness.promotions.form.typeCustom') : t === 'percent' ? tx('providerBusiness.promotions.form.typePercent') : tx('providerBusiness.promotions.form.typeAmount')}
+                  <Text style={[fmSt.segText, { color: form.discountType === t ? C.onAccent : C.sub }]}>
+                    {t === 'text' ? tr('providerBusiness.promotions.template.custom') : t === 'percent' ? '% Off' : '£ Off'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1059,7 +1070,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                 <TouchableOpacity key={cat}
                   style={[fmSt.catChip, { backgroundColor: C.card, borderColor: C.border }, form.category === cat && fmSt.catChipActive]}
                   onPress={() => field('category', form.category === cat ? '' : cat)} activeOpacity={0.7}>
-                  <Text style={[fmSt.catText, { color: form.category === cat ? C.ice : C.sub }]}>{cat}</Text>
+                  <Text style={[fmSt.catText, { color: form.category === cat ? CP.onAccent : C.sub }]}>{cat}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -1231,8 +1242,8 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
             <TouchableOpacity style={[fmSt.saveBtn, saving && { opacity: 0.6 }]}
               onPress={handleSave} activeOpacity={0.8} disabled={saving}>
               {saving
-                ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={fmSt.saveBtnText}>{editing ? tx('common.saveChanges') : tx('providerBusiness.promotions.form.createPromotion')}</Text>
+                ? <ActivityIndicator color={CP.onAccent} size="small" />
+                : <Text style={fmSt.saveBtnText}>{editing ? tr('providerProfile.kit.saveChanges') : tr('providerBusiness.promotions.form.createPromotion')}</Text>
               }
             </TouchableOpacity>
           </ScrollView>
@@ -1243,6 +1254,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 }
 
 const fmSt = StyleSheet.create({
+  saveError: { paddingHorizontal: 20, paddingVertical: 10, fontSize: 14, lineHeight: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 16 : 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: CP.border },
   headerClose: { minWidth: 60 },
   headerCloseText: { fontSize: 16, fontWeight: '500' },
@@ -1279,8 +1291,8 @@ const fmSt = StyleSheet.create({
   serviceChipName: { fontSize: 13, fontWeight: '500' },
   clearAll: { fontSize: 12, color: CP.danger, fontWeight: '600', opacity: 0.8 },
   selectAllPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: CP.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 0.5, borderColor: CP.ice + '30' },
-  selectAllDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: CP.ice },
-  selectAllText: { fontSize: 11, fontWeight: '700', color: CP.ice },
+  selectAllDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: CP.onAccent },
+  selectAllText: { fontSize: 11, fontWeight: '700', color: CP.onAccent },
   datePickerRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
   datePickerLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 1, color: CP.sub, marginBottom: 5 },
   datePickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: CP.card, borderWidth: 0.5, borderColor: CP.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12 },
@@ -1297,7 +1309,7 @@ const fmSt = StyleSheet.create({
   toggleLabel: { fontSize: 15, fontWeight: '600', color: CP.text },
   toggleSub: { fontSize: 11, marginTop: 1, color: CP.sub },
   saveBtn: { marginTop: 24, borderRadius: 14, backgroundColor: CP.accent, paddingVertical: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: CP.ice + '30' },
-  saveBtnText: { color: CP.ice, fontSize: 16, fontWeight: '700' },
+  saveBtnText: { color: CP.onAccent, fontSize: 16, fontWeight: '700' },
 });
 
 // ── Toast ──────────────────────────────────────────────────────────────────────
@@ -1574,7 +1586,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={scSt.safe} edges={['top']}>
 
         {/* Header */}
@@ -1593,7 +1605,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); setTemplateVisible(true); }}
               activeOpacity={0.7}
             >
-              <Ionicons name="add" size={22} color={P.ice} />
+              <Ionicons name="add" size={22} color={P.onAccent} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1636,8 +1648,8 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
                     onPress={() => setTemplateVisible(true)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="add" size={16} color={P.ice} />
-                    <Text style={[scSt.emptyBtnText, { color: P.ice }]}>{t('providerBusiness.promotions.form.createPromotion')}</Text>
+                    <Ionicons name="add" size={16} color={P.onAccent} />
+                    <Text style={[scSt.emptyBtnText, { color: P.onAccent }]}>{t('providerBusiness.promotions.form.createPromotion')}</Text>
                   </TouchableOpacity>
                 )}
               </View>

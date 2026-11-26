@@ -19,10 +19,12 @@ export interface CategoryTabPillProps {
   blurTint: 'light' | 'dark';
   borderColor: string;
   textColor: string;
+  /** Square corners instead of the rounded pill (Branding → Card Shape). */
+  square?: boolean;
 }
 
 const CategoryTabPill: React.FC<CategoryTabPillProps> = React.memo(
-  ({ category, isSelected, onPress, cardBg, blurIntensity, blurTint, borderColor, textColor }) => {
+  ({ category, isSelected, onPress, cardBg, blurIntensity, blurTint, borderColor, textColor, square = false }) => {
     const pressAnimatedValue = useRef(new Animated.Value(1)).current;
 
     const handlePressIn = useCallback(() => {
@@ -53,7 +55,7 @@ const CategoryTabPill: React.FC<CategoryTabPillProps> = React.memo(
     return (
       <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={1}>
         <Animated.View style={animatedStyle}>
-          <View style={[styles.tab, { borderColor }]}>
+          <View style={[styles.tab, { borderColor }, square && styles.tabSquare]}>
             <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.tabBlur, { backgroundColor: cardBg }]}>
               {isSelected && (
                 <LinearGradient
@@ -87,6 +89,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     minWidth: 80,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  tabSquare: {
+    borderRadius: 0,
   },
   tabBlur: {
     paddingHorizontal: 18,

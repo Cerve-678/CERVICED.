@@ -13,10 +13,10 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';

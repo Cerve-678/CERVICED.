@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useStackHidesTabBar } from '../../navigation/tabBarVisibility';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,6 +33,10 @@ import {
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { useChatSafety } from '../../features/safety/useChatSafety';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
 import { useTranslation } from '../../i18n';
 
 type Props = NativeStackScreenProps<ProviderHomeStackParamList, 'ProviderConversation'>;
@@ -46,14 +52,25 @@ interface Message {
 }
 
 export default function ProviderConversationScreen({ navigation, route }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { conversationId, clientName } = route.params;
   // Use the shared provider palette from the theme context so this screen obeys
   // light/dark mode the same way every other provider surface does, instead of a
   // hand-rolled OL/OD copy that could drift from the canonical palette.
   const { palette: OP } = useTheme();
   const { user } = useAuth();
-  const { showToast, DialogHost } = useAppDialog();
-  const { t } = useTranslation();
+  const { showToast, showConfirm, showAlert, DialogHost } = useAppDialog();
+  const { blockedByMe, openChatMenu, confirmReportMessage, unblock } = useChatSafety({
+    conversationId,
+    otherName: clientName,
+    activeMode: 'provider',
+    dialogs: { showConfirm, showAlert },
+  });
+  const insets = useSafeAreaInsets();
+  // Opened from Settings → Inbox or Home → Quick Access → Inbox there is no tab
+  // bar to clear, only the home indicator.
+  const tabBarHidden = useStackHidesTabBar();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -163,30 +180,28 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
       logger.error('[ProviderConversation] send message failed:', err);
       // Message never reached the client — put the text back so it isn't lost
       setInputText(text);
-      showToast(t('providerBusiness.conversation.sendFailed'), 'error');
+      showToast(toUserMessageAllowingDbGuard(err, 'Message not sent. Check your connection and try again.', 'ProviderConversationScreen.sendMessage'), 'error');
     }
     setSending(false);
-  }, [inputText, conversationId, providerUserId, sending, showToast, t]);
+  }, [inputText, conversationId, providerUserId, sending, showToast]);
 
   // Prompts fill the composer instead of sending automatically, so providers
   // can edit every reply and client details are never copied into canned text.
-  // Labels follow the app language; the text itself is message content sent
-  // to the client, so it stays as written.
   const defaultPrompts = [
-    { label: t('providerBusiness.conversation.prompt.confirmAddress'), text: 'Thanks — please confirm the address for your appointment.' },
-    { label: t('providerBusiness.conversation.prompt.bookingDetails'), text: 'Thanks for your message. I’ll check your booking details and come back to you shortly.' },
-    { label: t('providerBusiness.conversation.prompt.availability'), text: 'Thanks for getting in touch. What date and time were you hoping for?' },
-    { label: t('providerBusiness.conversation.prompt.onMyWay'), text: 'On my way now — see you shortly!' },
-    { label: t('providerBusiness.conversation.prompt.runningLate'), text: 'Sorry, I\'m running a little behind — I\'ll be there as soon as I can and will keep you posted.' },
-    { label: t('providerBusiness.conversation.prompt.reschedule'), text: 'Would you like to reschedule? Let me know a few days/times that work for you.' },
-    { label: t('providerBusiness.conversation.prompt.patchTest'), text: 'Quick reminder — this service needs a patch test at least 48 hours before your appointment. Let me know if you\'d like to arrange one.' },
-    { label: t('providerBusiness.conversation.prompt.aftercare'), text: 'Thanks for booking in! I\'ll send over your aftercare notes after the appointment.' },
-    { label: t('providerBusiness.conversation.prompt.deposit'), text: 'To secure this slot I\'ll need a deposit — I\'ll send payment details shortly.' },
-    { label: t('providerBusiness.conversation.prompt.priceCheck'), text: 'Thanks for asking — let me confirm the price for you and get right back.' },
-    { label: t('providerBusiness.conversation.prompt.parking'), text: 'Just so you know, here\'s some info on parking/access for your appointment.' },
-    { label: t('providerBusiness.conversation.prompt.mobile'), text: 'I travel to clients for this service — happy to come to you if that\'s easier.' },
-    { label: t('providerBusiness.conversation.prompt.thankYou'), text: 'Thank you so much — really appreciate it!' },
-    { label: t('providerBusiness.conversation.prompt.cantMake'), text: 'Unfortunately I\'m not able to make this one — really sorry for the short notice. Let me help find another time.' },
+    { label: tr('providerBusiness.conversation.prompt.confirmAddress'), text: 'Thanks — please confirm the address for your appointment.' },
+    { label: tr('providerBusiness.conversation.prompt.bookingDetails'), text: 'Thanks for your message. I’ll check your booking details and come back to you shortly.' },
+    { label: tr('providerBusiness.conversation.prompt.availability'), text: 'Thanks for getting in touch. What date and time were you hoping for?' },
+    { label: tr('providerBusiness.conversation.prompt.onMyWay'), text: 'On my way now — see you shortly!' },
+    { label: tr('providerBusiness.conversation.prompt.runningLate'), text: 'Sorry, I\'m running a little behind — I\'ll be there as soon as I can and will keep you posted.' },
+    { label: tr('providerBusiness.conversation.prompt.reschedule'), text: 'Would you like to reschedule? Let me know a few days/times that work for you.' },
+    { label: tr('providerBusiness.conversation.prompt.patchTest'), text: 'Quick reminder — this service needs a patch test at least 48 hours before your appointment. Let me know if you\'d like to arrange one.' },
+    { label: tr('providerBusiness.conversation.prompt.aftercare'), text: 'Thanks for booking in! I\'ll send over your aftercare notes after the appointment.' },
+    { label: tr('providerBusiness.conversation.prompt.deposit'), text: 'To secure this slot I\'ll need a deposit — I\'ll send payment details shortly.' },
+    { label: tr('providerBusiness.conversation.prompt.priceCheck'), text: 'Thanks for asking — let me confirm the price for you and get right back.' },
+    { label: tr('providerBusiness.conversation.prompt.parking'), text: 'Just so you know, here\'s some info on parking/access for your appointment.' },
+    { label: tr('providerBusiness.conversation.prompt.mobile'), text: 'I travel to clients for this service — happy to come to you if that\'s easier.' },
+    { label: tr('providerBusiness.conversation.prompt.thankYou'), text: 'Thank you so much — really appreciate it!' },
+    { label: tr('providerBusiness.conversation.prompt.cantMake'), text: 'Unfortunately I\'m not able to make this one — really sorry for the short notice. Let me help find another time.' },
   ];
   const quickPrompts = savedTemplates.length > 0
     ? savedTemplates.map(template => ({ label: template.label, text: template.content }))
@@ -211,7 +226,11 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           </Text>
         )}
         <View style={[styles.row, isMine ? styles.rowRight : styles.rowLeft]}>
-          <View
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={isMine}
+            onLongPress={() => confirmReportMessage(item.id)}
+            accessibilityHint={isMine ? undefined : tr('providerBusiness.ui2.pressAndHoldToReportThis')}
             style={[
               styles.bubble,
               isMine
@@ -219,14 +238,14 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
                 : [styles.bubbleProvider, { backgroundColor: OP.surface, borderColor: OP.border }],
             ]}
           >
-            <Text style={[styles.bubbleText, { color: isMine ? '#fff' : OP.text }]}>
+            <Text style={[styles.bubbleText, { color: isMine ? OP.onAccent : OP.text }]}>
               {item.content}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     );
-  }, [messages, OP]);
+  }, [messages, OP, confirmReportMessage]);
 
   // The custom header is inside this root; its height is already in the
   // avoiding view's measured y position. Adding it again doubles the gap.
@@ -259,7 +278,14 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             <Ionicons name="chevron-back" size={20} color={OP.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: OP.text }]} numberOfLines={1}>{clientName}</Text>
-          <View style={styles.iconBtn} />
+          <TouchableOpacity
+            onPress={openChatMenu}
+            style={[styles.iconBtn, { backgroundColor: OP.surface }]}
+            activeOpacity={0.7}
+            accessibilityLabel={tr('providerBusiness.ui2.reportOrBlock')}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={OP.text} />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
@@ -279,11 +305,26 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text style={[styles.emptyTitle, { color: OP.accent }]}>{clientName}</Text>
-              <Text style={[styles.emptyBody, { color: OP.sub }]}>{t('providerBusiness.conversation.empty')}</Text>
+              <Text style={[styles.emptyBody, { color: OP.sub }]}>{tr('providerBusiness.conversation.empty')}</Text>
             </View>
           }
         />
 
+        {blockedByMe ? (
+          <View style={[styles.blockedRow, {
+            backgroundColor: OP.bg,
+            borderTopColor: OP.border,
+            paddingBottom: tabBarHidden ? Math.max(insets.bottom, 12) : FLOATING_TAB_BAR_CLEARANCE,
+          }]}>
+            <Text style={[styles.blockedText, { color: OP.sub }]}>
+              {tr('providerBusiness.ui.blocked', { name: clientName })}
+            </Text>
+            <TouchableOpacity onPress={unblock} activeOpacity={0.75} style={[styles.blockedBtn, { borderColor: OP.border }]}>
+              <Text style={[styles.blockedBtnText, { color: OP.accent }]}>{tr('providerBusiness.ui2.unblock')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+        <>
         <View style={[styles.quickPromptRow, { borderTopColor: OP.border, backgroundColor: OP.bg }]}>
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -309,13 +350,13 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         <View style={[styles.inputRow, {
           backgroundColor: OP.bg,
           borderTopColor: OP.border,
-          paddingBottom: keyboardVisible ? 10 : FLOATING_TAB_BAR_CLEARANCE,
+          paddingBottom: keyboardVisible ? 10 : tabBarHidden ? Math.max(insets.bottom, 10) : FLOATING_TAB_BAR_CLEARANCE,
         }]}>
           <TextInput
             style={[styles.input, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={t('providerBusiness.conversation.placeholder')}
+            placeholder={tr('providerBusiness.conversation.placeholder')}
             placeholderTextColor={OP.sub}
             multiline
             maxLength={1000}
@@ -328,12 +369,14 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             activeOpacity={0.75}
           >
             {sending ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={OP.onAccent} />
             ) : (
-              <Ionicons name="arrow-up" size={20} color="#fff" />
+              <Ionicons name="arrow-up" size={20} color={OP.onAccent} />
             )}
           </TouchableOpacity>
         </View>
+        </>
+        )}
       </KeyboardDismissView>
       <DialogHost />
     </View>
@@ -341,6 +384,17 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
 }
 
 const styles = StyleSheet.create({
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  blockedText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  blockedBtn: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  blockedBtnText: { fontSize: 13, fontWeight: '600' },
   fill: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
   header: {

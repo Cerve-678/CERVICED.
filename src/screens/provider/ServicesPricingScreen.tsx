@@ -2,11 +2,14 @@
  * Services & Pricing — the "how you actually work" half of what used to be the
  * single 671-line Business Details screen.
  *
- * Scope: specialties, style & products, and who you work with (clientele,
- * price tier, team size, and — for hair providers only — which hair types
- * they cater to, the provider-level claim the client Search "Hair Type"
- * filter matches on; the narrower per-service version is edited alongside
- * each service in InfoRegScreen).
+ * Scope: specialties, price range and team size, style aesthetic, and the
+ * products the provider works with (brand chips by service category — see
+ * features/business-details/productBrands.ts).
+ *
+ * "Who you work with" (clientele, skin tones, hair types) moved to About You,
+ * which is now its only editor. It must stay out of this screen's save:
+ * updateProviderContactDetails writes every key it's given, so a copy here
+ * would overwrite whatever About You had just saved.
  *
  * Availability moved to SchedulingScreen and payment preference to
  * PaymentsScreen — both were part of this screen until availability settings
@@ -18,7 +21,8 @@
  * device only" caveats are gone rather than merely reworded.
  */
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,10 +41,13 @@ import {
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  SPECIALTIES_MAP, CLIENTELE_OPTS, PRICE_OPTS, TEAM_SIZE_OPTS,
-  ALL_SERVICE_TYPE_OPTS, styleAestheticOptions, productsPlaceholder, optionText,
+  SPECIALTIES_MAP, TEAM_SIZE_OPTS,
+  ALL_SERVICE_TYPE_OPTS, styleAestheticOptions,
 } from '../../features/business-details/options';
-import { HAIR_TYPES } from '../../constants/hairTypes';
+import {
+  productBrandSections, splitProductsUsed, joinProductsUsed,
+} from '../../features/business-details/productBrands';
+import { PRICE_BANDS, tierForBands } from '../../constants/priceBands';
 import { toUserMessage } from '../../utils/userFacingError';
 
 export default function ServicesPricingScreen({ navigation }: any) {
@@ -51,19 +58,18 @@ export default function ServicesPricingScreen({ navigation }: any) {
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [serviceCategory, setServiceCategory] = useState('');
+  const [serviceCategories, setServiceCategories] = useState<string[]>([]);
 
   const [specialties, setSpecialties]       = useState<string[]>([]);
-  const [clientele, setClientele]           = useState<string[]>([]);
-  const [priceTier, setPriceTier]           = useState('');
+  const [priceBands, setPriceBands]         = useState<string[]>([]);
   const [teamSize, setTeamSize]             = useState('');
   const [styleAesthetic, setStyleAesthetic] = useState<string[]>([]);
-  const [productsUsed, setProductsUsed]     = useState('');
+  // Every brand in providers.products_used, chips and typed ones alike. The
+  // chips show the ones in this provider's categories; the rest are shown in
+  // the "anything else" box (otherProducts) so nothing saved is hidden.
+  const [products, setProducts]             = useState<string[]>([]);
+  const [otherProducts, setOtherProducts]   = useState('');
   const [isVegan, setIsVegan]               = useState(false);
-  // Provider-level "which hair types do you cater to" — the broad claim the
-  // client Search filter matches on. Empty = caters to all, so leaving it
-  // untouched is a valid answer. Per-service refinement lives on each
-  // service (hairTypesSuitable, edited in InfoRegScreen's service modal).
-  const [hairTypesCatered, setHairTypesCatered] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -76,13 +82,18 @@ export default function ServicesPricingScreen({ navigation }: any) {
         if (providerData) {
           setProviderId(providerData.id ?? null);
           setServiceCategory(providerData.service_category ?? '');
-          setPriceTier(providerData.price_tier ?? '');
+          const categories = providerData.service_categories?.length
+            ? providerData.service_categories
+            : providerData.service_category ? [providerData.service_category] : [];
+          setServiceCategories(categories);
+          const offered = new Set(productBrandSections(categories).flatMap(section => section.brands));
+          const saved = splitProductsUsed(providerData.products_used);
+          setProducts(saved.filter(name => offered.has(name)));
+          setOtherProducts(saved.filter(name => !offered.has(name)).join(', '));
+          setPriceBands(providerData.price_bands ?? []);
           setTeamSize(providerData.team_size ?? '');
-          setClientele(providerData.clientele ?? []);
           setStyleAesthetic(providerData.style_tags ?? []);
-          setProductsUsed(providerData.products_used ?? '');
           setIsVegan(providerData.vegan_cruelty_free ?? false);
-          setHairTypesCatered(providerData.hair_types_catered ?? []);
 
           try {
             setSpecialties(await getProviderSpecialties(providerData.id));
@@ -116,9 +127,9 @@ export default function ServicesPricingScreen({ navigation }: any) {
       await Promise.all([
         updateProviderContactDetails(providerId, {
           // '' would violate the CHECK constraints — clear with null.
-          price_tier: (priceTier as 'budget' | 'mid' | 'premium' | 'luxury') || null,
+          price_bands: priceBands,
+          price_tier: tierForBands(priceBands) || null,
           team_size: (teamSize as 'solo' | 'small_team' | 'large_team') || null,
-          clientele,
           // availability_windows / accepts_new_clients / walk_ins_welcome /
           // group_bookings_available are owned by SchedulingScreen now, and
           // preferred_payment_methods by PaymentsScreen. They must stay out of
@@ -126,16 +137,8 @@ export default function ServicesPricingScreen({ navigation }: any) {
           // given, so re-sending stale local copies would silently clobber
           // whatever those screens had just saved.
           style_tags: styleAesthetic,
-          products_used: productsUsed.trim() || null,
+          products_used: joinProductsUsed([...products, otherProducts]),
           vegan_cruelty_free: isVegan,
-          // Only sent for hair providers, since they're the only ones shown
-          // the picker — spreading it in unconditionally would write [] over
-          // a non-hair provider's stored value they were never given a way
-          // to see or set. Empty array clears to null: '[]' and null both
-          // mean "caters to all", and null keeps that one representation.
-          ...(isHairProvider
-            ? { hair_types_catered: hairTypesCatered.length ? hairTypesCatered : null }
-            : {}),
         }),
         replaceMyProviderSpecialties(specialties),
       ]);
@@ -163,10 +166,9 @@ export default function ServicesPricingScreen({ navigation }: any) {
   // from here. The value is edited in Business Info (one editor, under a
   // 90-day cooldown); this is a pointer to it, not a second one.
   const serviceTypeLabel =
-    optionText(ALL_SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory ?? '', t);
-  // Hair types only mean something for hair providers — a nail tech has no
-  // use for the question, and asking would put noise in their profile.
-  const isHairProvider = serviceCategory === 'HAIR';
+    ALL_SERVICE_TYPE_OPTS.find(o => o.value === serviceCategory)?.label ?? serviceCategory;
+  // One section of brand chips per category the provider works in.
+  const brandSections = productBrandSections(serviceCategories);
 
   // Style aesthetic is scoped to the provider's trade (a lash artist sees
   // "wispy / doll / cat-eye", not "Bohemian"). Any value already stored under
@@ -189,7 +191,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
@@ -236,24 +238,16 @@ export default function ServicesPricingScreen({ navigation }: any) {
               </Text>
             </Card>
 
-            <Card title={t('providerProfile.services.who.title')}>
-              <SectionLabel text={t('providerProfile.services.clientele')} />
-              <ChipGroup options={CLIENTELE_OPTS} selected={clientele} onToggle={v => toggleChip(clientele, setClientele, v)} />
-
-              {isHairProvider && (
-                <>
-                  <View style={{ height: 18 }} />
-                  <SectionLabel text={t('providerProfile.services.hairTypes')} />
-                  <ChipGroup options={HAIR_TYPES} selected={hairTypesCatered} onToggle={v => toggleChip(hairTypesCatered, setHairTypesCatered, v)} />
-                  <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
-                    {t('providerProfile.services.hairTypesHint')}
-                  </Text>
-                </>
-              )}
-
-              <View style={{ height: 18 }} />
+            <Card title={t('providerProfile.ui.pricingTeam')}>
               <SectionLabel text={t('providerProfile.services.priceRange')} />
-              <RadioGroup options={PRICE_OPTS} value={priceTier} onChange={setPriceTier} />
+              <ChipGroup
+                options={PRICE_BANDS.map(band => band.label)}
+                selected={PRICE_BANDS.filter(band => priceBands.includes(band.value)).map(band => band.label)}
+                onToggle={label => {
+                  const band = PRICE_BANDS.find(b => b.label === label);
+                  if (band) toggleChip(priceBands, setPriceBands, band.value);
+                }}
+              />
 
               <View style={{ height: 18 }} />
               <SectionLabel text={t('providerProfile.services.teamSize')} />
@@ -265,11 +259,29 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 previously split across this screen, Automations and the
                 calendar with no single place to reason about it. */}
 
-            <Card title={t('providerProfile.services.style.title')} sub={t('providerProfile.services.style.sub')}>
-              <SectionLabel text={t('providerProfile.services.styleAesthetic')} />
+            <Card title={t('providerProfile.ui.yourStyle')}>
               <ChipGroup options={styleOptions} selected={styleAesthetic} onToggle={v => toggleChip(styleAesthetic, setStyleAesthetic, v)} />
+            </Card>
+
+            {/* Its own card, and its own section on the client's profile
+                (Additional Information → Products), rather than sharing a box
+                with style: a client looking for "uses Olaplex" is asking a
+                different question from "does soft glam". */}
+            <Card title={t('providerProfile.ui.productsIWorkWith')} sub={t('providerProfile.ui.manyClientsLookForProvidersWho')}>
+              {brandSections.map((section, index) => (
+                <View key={section.category} style={index > 0 ? { marginTop: 18 } : undefined}>
+                  <SectionLabel text={section.label} />
+                  <ChipGroup options={section.brands} selected={products} onToggle={v => toggleChip(products, setProducts, v)} />
+                </View>
+              ))}
               <View style={{ height: 14 }} />
-              <Field label={t('providerProfile.services.products')} value={productsUsed} onChange={setProductsUsed} placeholder={productsPlaceholder(serviceCategory)} multiline />
+              <Field
+                label={t('providerProfile.ui.anythingElseYouUse')}
+                value={otherProducts}
+                onChange={setOtherProducts}
+                placeholder={t('providerProfile.ui.brandsThatArenTListedSeparated')}
+                multiline
+              />
               <ToggleRow label={t('providerProfile.services.vegan')} value={isVegan} onChange={setIsVegan} />
             </Card>
 

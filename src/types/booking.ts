@@ -88,7 +88,8 @@ export function isMobileBooking(b: {
  *
  * `ConfirmedBooking.coordinates` is TYPED non-null but is genuinely null at
  * runtime whenever the client_bookings view masks it (address not yet released)
- * or the provider never geocoded — mapDbBookingToConfirmed casts null through
+ * or the booking snapshot omitted the provider's saved coordinates —
+ * mapDbBookingToConfirmed casts null through
  * `as unknown as BookingCoordinates`. Callers must check, not trust the type.
  */
 export function hasMapDestination(b: {
@@ -108,6 +109,16 @@ export function hasMapDestination(b: {
     b.coordinates?.latitude != null &&
     b.coordinates?.longitude != null
   );
+}
+
+/** A released venue address can open turn-by-turn directions even if it was
+ * never geocoded. Map markers still require hasMapDestination's coordinates. */
+export function hasDirectionsDestination(b: {
+  address?: string | null | undefined;
+  providerBusinessType?: string | null | undefined;
+  clientAddress?: string | null | undefined;
+}): boolean {
+  return !isMobileBooking(b) && !isAddressPending(b.address);
 }
 
 /** Statuses a booking never leaves. Nothing may re-derive a booking out of one
@@ -197,12 +208,18 @@ export enum PaymentStatus {
   /** Part of the payment came back (policy kept a deposit, or a partial refund). */
   PARTIALLY_REFUNDED = 'partially_refunded',
   FAILED = 'failed',
+  /** A request's payment, approved and held on the card but not taken: it is
+   *  charged only if the provider accepts (20261112100000_request_card_hold). */
+  AUTHORISED = 'authorised',
+  /** The hold was released without anything being taken. */
+  NOT_CHARGED = 'not_charged',
 }
 
 /**
  * Where a client's refund request is (refund_requests.status):
  * - `with_provider` — the provider has been told and can refund it
- * - `under_review`  — the provider passed it to Cerviced, with a reason
+ * - `under_review`  — the provider passed it to Cerviced, with a reason, or
+ *                     didn't reply within 3 days (passedAutomatically)
  * - `refunded`      — money went back while it was open, by any path
  * - `declined`      — Cerviced reviewed it and isn't refunding
  */
@@ -220,6 +237,8 @@ export interface RefundRequest {
   refundedAmount: number | null;
   createdAt: string;
   passedToCervicedAt: string | null;
+  /** Went to Cerviced because the provider didn't reply within 3 days. */
+  passedAutomatically: boolean;
   resolvedAt: string | null;
 }
 
@@ -310,6 +329,9 @@ export interface ConfirmedBooking {
     // time-of-day. See applyRescheduleRequestRow() in bookingService.ts.
     requestedTimes?: string[] | undefined;
     requestedAt?: string | undefined;
+    requestedBy?: 'user' | 'provider' | undefined;
+    cancelIfDeclined?: boolean | undefined;
+    providerNote?: string | undefined;
     providerAvailableDates?: AvailableDate[] | undefined;
     providerRespondedAt?: string | undefined;
     rescheduleCount?: number | undefined;
@@ -362,8 +384,21 @@ export interface ConfirmedBooking {
   /** £ the provider kept under their cancellation policy, set by the server
    *  when a client's late cancellation was settled. */
   policyRetainedAmount?: number | undefined;
+  /** Set when the client moved this booking while already inside the
+   *  provider's cancellation window: the late-cancel policy then applies
+   *  whenever it's cancelled (bookings.late_reschedule_from). */
+  lateRescheduleFrom?: string | undefined;
+  /** Booked after that rule went live, so a late reschedule request would
+   *  mark it. Older bookings are never covered. */
+  lateRescheduleRuleApplies?: boolean | undefined;
+  /** Booked after the five-day refund-request limit went live, so requests
+   *  close five days after the appointment. Older bookings have no limit. */
+  refundRequestWindowApplies?: boolean | undefined;
   /** Who cancelled — stamped by the DB when the booking became cancelled. */
   cancelledBy?: 'client' | 'provider' | 'system' | undefined;
+  /** Set when this was a request the provider declined, or that expired
+   *  unanswered (bookings.declined_at). Shown as "Declined", not "Cancelled". */
+  declinedAt?: string | undefined;
 
   // Metadata
   notes?: string | undefined;
@@ -376,6 +411,8 @@ export interface ConfirmedBooking {
   updatedAt: string;
   confirmedAt?: string | undefined;
   bookingInstructions?: string | undefined;
+  /** Venue access / arrival details, revealed alongside the booking address. */
+  howToGetThere?: string | undefined;
 
   // The provider's cancellation/booking policy as the client agreed to it at
   // checkout (BookingSheet/MultiBookingSheet only — CartScreen's checkbox is

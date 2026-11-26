@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -36,28 +37,39 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { logger } from '../../utils/logger';
-import { useTranslation, tr, localeForLanguage, type TranslationKey } from '../../i18n';
+import {
+  filterInboxConversations,
+  hasInboxFilters,
+  INBOX_DATE_CHIPS,
+  INBOX_READ_CHIPS,
+  NO_INBOX_FILTERS,
+  type InboxFilters,
+} from '../../features/providers/inboxFilters';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FilterKey = 'enquiries' | 'messages';
 
-const FILTERS: { key: FilterKey; label: TranslationKey }[] = [
-  { key: 'enquiries', label: 'providerBusiness.inbox.filter.enquiries' },
-  { key: 'messages', label: 'providerBusiness.inbox.filter.messages' },
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'enquiries', get label() { return tr('providerBusiness.inbox.filter.enquiries'); } },
+  { key: 'messages', get label() { return tr('providerBusiness.inbox.filter.messages'); } },
 ];
 
 function timeAgoISO(iso: string | null): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1)  return tr('providerBusiness.inbox.ago.now');
-  if (mins < 60) return tr('providerBusiness.inbox.ago.minutes', { count: mins });
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return tr('providerBusiness.inbox.ago.hours', { count: hrs });
+  if (hrs < 24)  return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
-  if (days < 7)  return tr('providerBusiness.inbox.ago.days', { count: days });
-  return new Date(iso).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' });
+  if (days < 7)  return `${days}d ago`;
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 function initials(name: string): string {
@@ -129,6 +141,8 @@ function ConversationRow({
   text,
   sub,
   accent,
+  onAccent,
+  card,
   border,
   onPress,
   onReply,
@@ -139,15 +153,18 @@ function ConversationRow({
   text: string;
   sub: string;
   accent: string;
+  onAccent: string;
+  card: string;
   border: string;
   onPress: () => void;
   onReply: () => void;
   onMarkRead: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const swipeRef  = useRef<Swipeable>(null);
-  const { t: tx } = useTranslation();
+  const swipeRef  = useRef<SwipeableMethods>(null);
 
   useEffect(() => {
     const delay = Math.min(index * 45, 300);
@@ -158,7 +175,7 @@ function ConversationRow({
   }, [fadeAnim, index, slideAnim]);
 
   const isUnread = conversation.unread_count_provider > 0;
-  const clientName = conversation.client?.name ?? tx('providerBusiness.inbox.client');
+  const clientName = conversation.client?.name ?? 'Client';
   const init = initials(clientName);
 
   const renderRightActions = () => (
@@ -168,21 +185,28 @@ function ConversationRow({
         onPress={() => { swipeRef.current?.close(); onMarkRead(); }}
       >
         <Ionicons name="checkmark-done" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>{tx('providerBusiness.inbox.markRead')}</Text>
+        <Text style={row.swipeBtnText}>{tr('providerBusiness.inbox.markRead')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[row.swipeBtn, { backgroundColor: accent }]}
         onPress={() => { swipeRef.current?.close(); onReply(); }}
       >
-        <Ionicons name="arrow-undo" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>{tx('providerBusiness.inbox.reply')}</Text>
+        <Ionicons name="arrow-undo" size={18} color={onAccent} />
+        <Text style={[row.swipeBtnText, { color: onAccent }]}>{tr('providerBusiness.inbox.reply')}</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+      {/* Swipeable draws Mark read and Reply behind the row, so the row needs
+          its own background or they show through it before any swipe. */}
+      <Swipeable
+        ref={swipeRef}
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+        childrenContainerStyle={{ backgroundColor: card }}
+      >
         <TouchableOpacity
           activeOpacity={0.72}
           onPress={onPress}
@@ -205,7 +229,7 @@ function ConversationRow({
             </View>
 
             <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
-              {conversation.last_message ?? tx('providerBusiness.inbox.noMessages')}
+              {conversation.last_message ?? 'No messages yet'}
             </Text>
           </View>
 
@@ -223,7 +247,7 @@ const LIGHT_P = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
   border:  'rgba(126,102,103,0.14)',
@@ -233,7 +257,7 @@ const DARK_P = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   text:    '#F0ECE7',
   sub:     '#7E6667',
   border:  'rgba(126,102,103,0.18)',
@@ -241,8 +265,9 @@ const DARK_P = {
 };
 
 export default function ProviderInboxScreen({ navigation, route }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { showToast, DialogHost } = useAppDialog();
-  const { t: tx } = useTranslation();
   const { isDarkMode: dark } = useTheme();
   const { user, myBookingMode } = useAuth();
   // A link-only pro takes no CERVICED bookings, so their inbox is one list of
@@ -257,6 +282,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter === 'enquiries' ? 'enquiries' : 'messages');
 
   const [loadError,     setLoadError]     = useState<string | null>(null);
+  // Narrows whichever tab is open. Kept when switching tabs so "Unread" stays
+  // on while the provider checks both.
+  const [filters,       setFilters]       = useState<InboxFilters>(NO_INBOX_FILTERS);
+  const filtersOn = hasInboxFilters(filters);
 
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
   const [replyText,    setReplyText]    = useState('');
@@ -292,7 +321,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       }
     } catch (error) {
       if (sequence !== loadSequence.current) return;
-      setLoadError(toUserMessage(error, tr('providerBusiness.inbox.loadFailed'), '[ProviderInbox] load failed'));
+      setLoadError(toUserMessage(error, "We couldn't refresh your inbox just now.", '[ProviderInbox] load failed'));
     }
   }, [route?.params?.initialFilter]);
 
@@ -337,10 +366,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       void loadInbox();
     } catch (err) {
       logger.error('[ProviderInbox] quick reply failed:', err);
-      showToast(tx('providerBusiness.inbox.sendFailed'), 'error');
+      showToast(toUserMessage(err, 'Message not sent. Check your connection and try again.', '[ProviderInbox] quick reply'), 'error');
     }
     setReplySending(false);
-  }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast, tx]);
+  }, [replyText, replyTarget, user?.id, replySending, loadInbox, showToast]);
 
   const openTemplates = useCallback(async () => {
     setTemplatesOpen(true);
@@ -350,7 +379,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setTemplates(data.map(({ label, content }) => ({ label, content })));
     } catch (err) {
       logger.error('[ProviderInbox] load templates failed:', err);
-      showToast(toUserMessage(err, tx('providerBusiness.inbox.templatesLoadFailed'), '[ProviderInbox] templates load'), 'error');
+      showToast(toUserMessage(err, "We couldn't load your templates just now.", '[ProviderInbox] templates load'), 'error');
       setTemplatesOpen(false);
     } finally {
       setTemplatesLoading(false);
@@ -367,13 +396,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setTemplates(cleaned);
       setTemplatesOpen(false);
       Keyboard.dismiss();
-      showToast(tx('providerBusiness.inbox.templatesSaved'), 'success');
+      showToast(tr('providerBusiness.inbox.templatesSaved'), 'success');
     } catch (err) {
       logger.error('[ProviderInbox] save templates failed:', err);
-      showToast(toUserMessage(err, tx('providerBusiness.inbox.templatesSaveFailed'), '[ProviderInbox] templates save'), 'error');
+      showToast(toUserMessage(err, "We couldn't save your templates just now.", '[ProviderInbox] templates save'), 'error');
     }
     setTemplatesSaving(false);
-  }, [templates, templatesSaving, showToast, tx]);
+  }, [templates, templatesSaving, showToast]);
 
   const updateTemplate = useCallback((index: number, field: 'label' | 'content', value: string) => {
     setTemplates(prev => prev.map((t, i) => (i === index ? { ...t, [field]: value } : t)));
@@ -394,12 +423,30 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const outstandingCount = unreadCounts.enquiries + unreadCounts.messages;
   // Link-only: every conversation, so one from before they switched to their
   // own booking link can't disappear behind a tab they no longer have.
-  const flatItems = useMemo(
+  const tabItems = useMemo(
     () => isLinkOnly
       ? conversations
       : conversations.filter(c => filter === 'messages' ? c.has_booking : !c.has_booking),
     [conversations, filter, isLinkOnly],
   );
+  const flatItems = useMemo(
+    () => filterInboxConversations(tabItems, filters),
+    [tabItems, filters],
+  );
+
+  const toggleReadFilter = useCallback((key: InboxFilters['read']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(prev => ({ ...prev, read: prev.read === key ? null : key }));
+  }, []);
+  const toggleDateFilter = useCallback((key: InboxFilters['date']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(prev => ({ ...prev, date: prev.date === key ? null : key }));
+  }, []);
+  const clearFilters = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilters(NO_INBOX_FILTERS);
+    Keyboard.dismiss();
+  }, []);
   const showEnquiries = isLinkOnly || filter === 'enquiries';
 
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -433,7 +480,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           )}
 
           <View style={s.headerCenter}>
-            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? tx('providerBusiness.inbox.filter.enquiries') : tx('providerBusiness.inbox.title')}</Text>
+            <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? tr('providerBusiness.inbox.filter.enquiries') : tr('providerBusiness.inbox.title')}</Text>
             {outstandingCount > 0 && (
               <View style={[s.badge, { backgroundColor: '#FF3B30' }]}>
                 <Text style={s.badgeText}>{outstandingCount}</Text>
@@ -445,7 +492,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             onPress={openTemplates}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-            accessibilityLabel={tx('providerBusiness.inbox.templatesA11y')}
+            accessibilityLabel={tr('providerBusiness.inbox.templatesA11y')}
           >
             <Ionicons name="documents-outline" size={18} color={P.text} />
           </TouchableOpacity>
@@ -467,10 +514,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 }}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={tx('providerBusiness.inbox.filterA11y', { label: tx(f.label), count: badgeCount })}
+                accessibilityLabel={tr('providerBusiness.inbox.filterA11y', { label: f.label, count: badgeCount })}
                 style={[s.filterChip, active && { borderBottomColor: P.accent, borderBottomWidth: 2 }]}
               >
-                <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{tx(f.label)}</Text>
+                <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{f.label}</Text>
                 {isNew && (
                   <View style={[s.filterBadge, { backgroundColor: '#FF3B30' }]}>
                     <Text style={s.filterBadgeText}>{badgeCount}</Text>
@@ -481,6 +528,68 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           })}
         </View>
         )}
+
+        {/* ── Search + filters ────────────────────────────────────── */}
+        <View style={[s.filterBar, { backgroundColor: P.card, borderBottomColor: P.border }]}>
+          <View style={[s.searchBox, { backgroundColor: P.surface }]}>
+            <Ionicons name="search" size={15} color={P.sub} />
+            <TextInput
+              style={[s.searchInput, { color: P.text }]}
+              value={filters.search}
+              onChangeText={search => setFilters(prev => ({ ...prev, search }))}
+              placeholder={tr('providerBusiness.ui2.searchByName')}
+              placeholderTextColor={P.sub}
+              autoCorrect={false}
+              autoCapitalize="words"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              accessibilityLabel={tr('providerBusiness.ui2.searchConversationsByName')}
+            />
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={s.chipRow}
+          >
+            {INBOX_READ_CHIPS.map(c => {
+              const on = filters.read === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  activeOpacity={0.75}
+                  onPress={() => toggleReadFilter(c.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[s.chip, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}
+                >
+                  <Text style={[s.chipText, { color: on ? P.onAccent : P.text }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={[s.chipDivider, { backgroundColor: P.border }]} />
+            {INBOX_DATE_CHIPS.map(c => {
+              const on = filters.date === c.key;
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  activeOpacity={0.75}
+                  onPress={() => toggleDateFilter(c.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[s.chip, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}
+                >
+                  <Text style={[s.chipText, { color: on ? P.onAccent : P.text }]}>{c.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {filtersOn && (
+              <TouchableOpacity activeOpacity={0.75} onPress={clearFilters} style={s.clearChip} accessibilityRole="button">
+                <Text style={[s.chipText, { color: P.accent }]}>{tr('common.clear')}</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
 
         {/* ── List ────────────────────────────────────────────────── */}
         {loading ? (
@@ -496,6 +605,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
             }
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={{ paddingBottom: FLOATING_TAB_BAR_CLEARANCE }}
             renderItem={({ item, index }) => (
               <ConversationRow
@@ -504,11 +615,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 text={P.text}
                 sub={P.sub}
                 accent={P.accent}
+                onAccent={P.onAccent}
+                card={P.card}
                 border={P.border}
                 onPress={() => navigation.navigate('ProviderConversation', {
                   conversationId: item.id,
                   clientUserId: item.user_id,
-                  clientName: item.client?.name ?? tx('providerBusiness.inbox.client'),
+                  clientName: item.client?.name ?? 'Client',
                 })}
                 onReply={() => { setReplyText(''); setReplyTarget(item); }}
                 onMarkRead={() => handleMarkConversationRead(item)}
@@ -517,30 +630,42 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             ListHeaderComponent={
               // With rows on screen the banner sits above them; with none, the
               // empty state below shows the failure instead of an empty inbox.
-              loadError && flatItems.length > 0 ? (
+              loadError && tabItems.length > 0 ? (
                 <View style={[s.errorBanner, { backgroundColor: P.iconBg, borderBottomColor: P.border }]}>
                   <Text style={[s.errorBannerText, { color: P.text }]}>
-                    {loadError} {tx('providerBusiness.inbox.outOfDate')}
+                    {loadError} {tr('providerBusiness.inbox.outOfDate')}
                   </Text>
                   <TouchableOpacity onPress={onRefresh} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={[s.errorRetry, { color: P.accent }]}>{tx('providerBusiness.inbox.retry')}</Text>
+                    <Text style={[s.errorRetry, { color: P.accent }]}>{tr('common.retry')}</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
-              loadError ? (
+              tabItems.length > 0 ? (
+                // There are conversations here, the filters just hide them all.
+                <View style={s.empty}>
+                  <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
+                    <Ionicons name="search-outline" size={36} color={P.sub} />
+                  </View>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBusiness.ui2.nothingMatches')}</Text>
+                  <Text style={[s.emptySub, { color: P.sub }]}>{tr('providerBusiness.ui2.noConversationsHereFitTheseFilters')}</Text>
+                  <TouchableOpacity onPress={clearFilters} style={[s.retryBtn, { borderColor: P.border }]}>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>{tr('providerBusiness.ui2.clearFilters')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : loadError ? (
                 <View style={s.empty}>
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name="cloud-offline-outline" size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>{tx('providerBusiness.inbox.loadFailedTitle')}</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{tr('providerBusiness.inbox.loadFailedTitle')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>{loadError}</Text>
                   <TouchableOpacity
                     onPress={onRefresh}
                     style={[s.retryBtn, { borderColor: P.border }]}
                   >
-                    <Text style={[s.retryBtnText, { color: P.accent }]}>{tx('providerBusiness.inbox.tryAgain')}</Text>
+                    <Text style={[s.retryBtnText, { color: P.accent }]}>{tr('common.tryAgain')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -548,13 +673,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
                     <Ionicons name={showEnquiries ? 'mail-open-outline' : 'chatbubble-outline'} size={36} color={P.sub} />
                   </View>
-                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? tx('providerBusiness.inbox.empty.enquiries') : tx('providerBusiness.inbox.empty.messages')}</Text>
+                  <Text style={[s.emptyTitle, { color: P.text }]}>{showEnquiries ? tr('providerBusiness.inbox.empty.enquiries') : tr('providerBusiness.inbox.empty.messages')}</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
                     {isLinkOnly
-                      ? tx('providerBusiness.inbox.empty.linkOnlySub')
+                      ? tr('providerBusiness.inbox.empty.linkOnlySub')
                       : filter === 'messages'
-                        ? tx('providerBusiness.inbox.empty.messagesSub')
-                        : tx('providerBusiness.inbox.empty.enquiriesSub')}
+                        ? 'Conversations with clients who have booked with you appear here.'
+                        : 'Questions sent through Get In Touch appear here until the person books with you.'}
                   </Text>
                 </View>
               )
@@ -578,13 +703,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             <KeyboardDismissView style={m.positioner}>
               <View style={[m.replyDialog, { backgroundColor: P.card }]}>
                 <Text style={[m.dialogTitle, { color: P.text }]}>
-                  {tx('providerBusiness.inbox.replyTo', { name: replyTarget.client?.name ?? tx('providerBusiness.inbox.clientLower') })}
+                  {tr('providerBusiness.ui.replyTo', { name: replyTarget.client?.name ?? tr('providerBusiness.ui.client') })}
                 </Text>
                 <TextInput
                   style={[m.replyInput, { color: P.text, borderColor: P.border }]}
                   value={replyText}
                   onChangeText={setReplyText}
-                  placeholder={tx('providerBusiness.inbox.replyPlaceholder')}
+                  placeholder={tr('providerBusiness.inbox.replyPlaceholder')}
                   placeholderTextColor={P.sub}
                   multiline
                   autoFocus
@@ -596,7 +721,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     activeOpacity={0.7}
                     onPress={() => { setReplyTarget(null); setReplyText(''); Keyboard.dismiss(); }}
                   >
-                    <Text style={[m.dialogBtnText, { color: P.sub }]}>{tx('common.cancel')}</Text>
+                    <Text style={[m.dialogBtnText, { color: P.sub }]}>{tr('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[m.replySendBtn, { backgroundColor: P.accent, opacity: replyText.trim() && !replySending ? 1 : 0.5 }]}
@@ -604,7 +729,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     onPress={handleSendReply}
                     disabled={!replyText.trim() || replySending}
                   >
-                    <Text style={m.replySendText}>{replySending ? tx('providerBusiness.inbox.sending') : tx('providerBusiness.inbox.send')}</Text>
+                    <Text style={[m.replySendText, { color: P.onAccent }]}>{replySending ? tr('providerBusiness.inbox.sending') : tr('common.send')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -627,7 +752,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             />
             <View style={[t.sheet, { backgroundColor: P.bg }]}>
               <View style={[t.sheetHeader, { borderBottomColor: P.border }]}>
-                <Text style={[t.sheetTitle, { color: P.text }]}>{tx('providerBusiness.inbox.templatesTitle')}</Text>
+                <Text style={[t.sheetTitle, { color: P.text }]}>{tr('providerBusiness.inbox.templatesTitle')}</Text>
                 <TouchableOpacity
                   onPress={() => { setTemplatesOpen(false); Keyboard.dismiss(); }}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -651,12 +776,12 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     keyboardDismissMode="interactive"
                   >
                     <Text style={[t.intro, { color: P.sub }]}>
-                      {tx('providerBusiness.inbox.templatesIntro')}
+                      {tr('providerBusiness.inbox.templatesIntro')}
                     </Text>
 
                     {templates.length === 0 ? (
                       <Text style={[t.empty, { color: P.sub }]}>
-                        {tx('providerBusiness.inbox.templatesEmpty')}
+                        {tr('providerBusiness.inbox.templatesEmpty')}
                       </Text>
                     ) : templates.map((template, index) => (
                       <View key={index} style={[t.item, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -665,7 +790,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                             style={[t.labelInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                             value={template.label}
                             onChangeText={value => updateTemplate(index, 'label', value)}
-                            placeholder={tx('providerBusiness.inbox.templateName')}
+                            placeholder={tr('providerBusiness.inbox.templateName')}
                             placeholderTextColor={P.sub}
                             maxLength={60}
                           />
@@ -677,7 +802,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                           style={[t.contentInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
                           value={template.content}
                           onChangeText={value => updateTemplate(index, 'content', value)}
-                          placeholder={tx('providerBusiness.inbox.templateText')}
+                          placeholder={tr('providerBusiness.inbox.templateText')}
                           placeholderTextColor={P.sub}
                           maxLength={1000}
                           multiline
@@ -695,7 +820,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     >
                       <Ionicons name="add" size={18} color={P.accent} />
                       <Text style={[t.addText, { color: P.accent }]}>
-                        {templates.length >= 12 ? tx('providerBusiness.inbox.templateLimit') : tx('providerBusiness.inbox.addTemplate')}
+                        {templates.length >= 12 ? tr('providerBusiness.inbox.templateLimit') : tr('providerBusiness.inbox.addTemplate')}
                       </Text>
                     </TouchableOpacity>
                   </ScrollView>
@@ -708,8 +833,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                       activeOpacity={0.8}
                     >
                       {templatesSaving
-                        ? <ActivityIndicator color="#FFFFFF" size="small" />
-                        : <Text style={t.saveText}>{tx('providerBusiness.inbox.saveTemplates')}</Text>}
+                        ? <ActivityIndicator color={P.onAccent} size="small" />
+                        : <Text style={[t.saveText, { color: P.onAccent }]}>{tr('providerBusiness.inbox.saveTemplates')}</Text>}
                     </TouchableOpacity>
                   </View>
                 </KeyboardDismissView>
@@ -743,6 +868,15 @@ const s = StyleSheet.create({
   filterBadge:  { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
 
+  filterBar:   { paddingTop: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, paddingHorizontal: 12, height: 38, borderRadius: 100 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  chipRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  chip:        { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },
+  chipText:    { fontSize: 13, fontWeight: '600' },
+  chipDivider: { width: StyleSheet.hairlineWidth, height: 20, marginHorizontal: 2 },
+  clearChip:   { paddingHorizontal: 8, paddingVertical: 7 },
+
   empty:      { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
@@ -774,7 +908,7 @@ const s = StyleSheet.create({
 const m = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   positioner:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  dialog:      { width: '100%', borderRadius: 14, overflow: 'hidden' },
+  dialog: { ...readableDialog, width: '100%', borderRadius: 14, overflow: 'hidden' },
   dialogTitle:   { fontSize: 16, fontWeight: '700', textAlign: 'center', paddingTop: 18, paddingHorizontal: 16 },
   dialogMessage: { fontSize: 13, textAlign: 'center', paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16, lineHeight: 18 },
   divider:     { height: StyleSheet.hairlineWidth, width: '100%' },
@@ -794,7 +928,7 @@ const m = StyleSheet.create({
 const t = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   overlayTap:  { flex: 1 },
-  sheet:       { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  sheet: { ...readableSheet, height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   sheetTitle:  { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
 

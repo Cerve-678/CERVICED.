@@ -11,6 +11,8 @@ import {
   ScrollView,
   Switch,
   Platform,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +26,12 @@ import {
   sendAnnouncement,
   queueScheduledAnnouncement,
   getClientBookingHistory,
+  getClientBeautyProfileForProvider,
+  getMyClientNote,
+  saveMyClientNote,
+  type ClientBeautyProfile,
+  getMyAnnouncementFollowers,
+  type AnnouncementFollower,
   getMyProviderProfile,
   getClientReliabilityStatsBatch,
   ClientReliabilityStats,
@@ -33,18 +41,24 @@ import type { ClienteleMember, DbBooking } from '../../types/database';
 import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { formatTime12, monthName } from '../../utils/dateUtils';
-import { useTranslation, tr, localeForLanguage, type TranslationKey } from '../../i18n';
+import { formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
-import { toUserMessage } from '../../utils/userFacingError';
+import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { reportError } from '../../utils/logger';
+import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { interestedRecipientIds } from '../../features/providers/announcementAudience';
+import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { trp } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -56,7 +70,7 @@ const DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -77,21 +91,8 @@ function initials(name: string) {
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 }
 function formatShort(iso: string) {
-  try { return new Date(iso).toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' }); }
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
   catch { return iso; }
-}
-// Display only — b.status stays the stored value everywhere else.
-const STATUS_KEYS: Partial<Record<string, TranslationKey>> = {
-  pending: 'providerBusiness.clientele.status.pending',
-  confirmed: 'providerBusiness.clientele.status.confirmed',
-  in_progress: 'providerBusiness.clientele.status.inProgress',
-  completed: 'providerBusiness.clientele.status.completed',
-  cancelled: 'providerBusiness.clientele.status.cancelled',
-  no_show: 'providerBusiness.clientele.status.noShow',
-};
-function statusText(status: string): string {
-  const key = STATUS_KEYS[status];
-  return key ? tr(key) : status;
 }
 function daysSince(iso: string) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
@@ -103,12 +104,13 @@ type Tab = 'all' | 'repeat' | 'new' | 'lapsed';
 function TabBar({ active, onChange, counts, P }: {
   active: Tab; onChange: (t: Tab) => void; counts: Record<Tab, number>; P: typeof LIGHT;
 }) {
-  const { t } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const tabs = [
-    { key: 'all' as Tab, label: t('providerBusiness.clientele.tab.all'), count: counts.all },
-    { key: 'repeat' as Tab, label: t('providerBusiness.clientele.tab.repeat'), count: counts.repeat },
-    { key: 'new' as Tab, label: t('providerBusiness.clientele.tab.new'), count: counts.new },
-    { key: 'lapsed' as Tab, label: t('providerBusiness.clientele.tab.lapsed'), count: counts.lapsed },
+    { key: 'all' as Tab, label: tr('common.all'), count: counts.all },
+    { key: 'repeat' as Tab, label: tr('providerBusiness.clientele.tab.repeat'), count: counts.repeat },
+    { key: 'new' as Tab, label: tr('common.new'), count: counts.new },
+    { key: 'lapsed' as Tab, label: tr('providerBusiness.clientele.tab.lapsed'), count: counts.lapsed },
   ];
   return (
     <View style={[tbSt.wrap, { backgroundColor: P.surface }]}>
@@ -117,7 +119,7 @@ function TabBar({ active, onChange, counts, P }: {
         activeKey={active}
         onPress={onChange}
         accentColor={P.accent}
-        activeTextColor={P.ice}
+        activeTextColor={P.onAccent}
         inactiveTextColor={P.sub}
         scrollable={false}
         height={40}
@@ -132,92 +134,296 @@ const tbSt = StyleSheet.create({
   wrap: { flexDirection: 'row', height: 48, marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
 });
 
-// ── Client History Sheet ───────────────────────────────────────────────────────
+// ── Client sheet ──────────────────────────────────────────────────────────────
+// Opens from a client's card: their Beauty Profile (once you've accepted a
+// booking from them), your own private notes on them, and every booking
+// they've had with you, newest first.
 
-function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: {
-  visible: boolean; member: ClienteleMember | null; bookings: DbBooking[];
-  loading: boolean; onClose: () => void; P: typeof LIGHT;
+type Loadable<T> = { state: 'loading' } | { state: 'failed' } | { state: 'ready'; value: T };
+
+function ClientSheet({ member, onClose, P, isDark }: {
+  member: ClienteleMember | null;
+  onClose: () => void;
+  P: typeof LIGHT;
+  isDark: boolean;
 }) {
-  const { t, tp } = useTranslation();
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  // Inside a <Modal>, so the live inset, not SafeAreaView (inert here).
+  const bottomInset = useSystemBottomInset();
+  const clientId = member?.user_id ?? null;
+  const [history, setHistory] = useState<Loadable<DbBooking[]>>({ state: 'loading' });
+  const [profile, setProfile] = useState<Loadable<ClientBeautyProfile | null>>({ state: 'loading' });
+  const [noteState, setNoteState] = useState<'loading' | 'failed' | 'ready'>('loading');
+  const [note, setNote] = useState('');
+  const [savedNote, setSavedNote] = useState('');
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Shown in the notes box itself: a toast would sit behind this Modal.
+  const [saveError, setSaveError] = useState('');
+  // Which client the in-flight loads belong to, so a slow answer for the
+  // last client opened can't land in this one's sheet.
+  const forId = useRef<string | null>(null);
+
+  const loadHistory = useCallback((id: string) => {
+    setHistory({ state: 'loading' });
+    getClientBookingHistory(id)
+      .then(v => { if (forId.current === id) setHistory({ state: 'ready', value: v }); })
+      .catch(e => {
+        if (forId.current !== id) return;
+        setHistory({ state: 'failed' });
+        reportError(e, 'ProviderClienteleScreen.history');
+      });
+  }, []);
+  const loadProfile = useCallback((id: string) => {
+    setProfile({ state: 'loading' });
+    getClientBeautyProfileForProvider(id)
+      .then(v => { if (forId.current === id) setProfile({ state: 'ready', value: v }); })
+      .catch(e => {
+        if (forId.current !== id) return;
+        setProfile({ state: 'failed' });
+        reportError(e, 'ProviderClienteleScreen.beautyProfile');
+      });
+  }, []);
+  const loadNote = useCallback((id: string) => {
+    setNoteState('loading');
+    getMyClientNote(id)
+      .then(n => {
+        if (forId.current !== id) return;
+        setNote(n?.note ?? '');
+        setSavedNote(n?.note ?? '');
+        setSavedAt(n?.updatedAt ?? null);
+        setNoteState('ready');
+      })
+      .catch(e => {
+        if (forId.current !== id) return;
+        setNoteState('failed');
+        reportError(e, 'ProviderClienteleScreen.note');
+      });
+  }, []);
+
+  useEffect(() => {
+    forId.current = clientId;
+    if (!clientId) return;
+    setNote(''); setSavedNote(''); setSavedAt(null); setSaveError('');
+    loadHistory(clientId);
+    loadProfile(clientId);
+    loadNote(clientId);
+  }, [clientId, loadHistory, loadProfile, loadNote]);
+
+  const dirty = noteState === 'ready' && note.trim() !== savedNote.trim();
+
+  const saveNote = async (): Promise<boolean> => {
+    if (!clientId || !dirty || saving) return true;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const at = await saveMyClientNote(clientId, note);
+      const trimmed = note.trim();
+      setNote(trimmed);
+      setSavedNote(trimmed);
+      setSavedAt(at);
+      return true;
+    } catch (e) {
+      setSaveError(`${toUserMessageAllowingDbGuard(e, tr('providerBusiness.ui.noteSaveFailed'), 'ProviderClienteleScreen.saveNote')} ${tr('providerBusiness.ui.tapSaveAgain')}`);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Closing keeps what you typed: an unsaved note is saved on the way out.
+  // If that save fails the sheet stays open with the reason, and closing a
+  // second time lets the change go rather than trapping them here.
+  const close = async () => {
+    if (dirty && !saveError && !(await saveNote())) return;
+    onClose();
+  };
+
+  const bookings = history.state === 'ready' ? history.value : [];
+  const sectionLabel = (label: string) => (
+    <Text style={[csSt.sectionLabel, { color: P.sub }]}>{label}</Text>
+  );
+  const retry = (label: string, onPress: () => void) => (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={csSt.center}>
+      <Text style={[csSt.emptySub, { color: P.sub }]}>{tr('providerBusiness.ui.couldntLoad', { what: label })}</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={chSt.backdrop} activeOpacity={1} onPress={onClose} />
-      <View style={[chSt.sheet, { backgroundColor: P.surface }]}>
-        <View style={[chSt.handle, { backgroundColor: P.border }]} />
-        <View style={chSt.header}>
+    <Modal visible={member !== null} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={close}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* The dim fills the whole window BEHIND the sheet, so the sheet's
+          rounded top corners show the dim, not the screen, through them. */}
+      <View style={csSt.overlay}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} accessibilityRole="button" accessibilityLabel={tr('common.close')} />
+      <View style={[csSt.sheet, { backgroundColor: P.surface, paddingBottom: bottomInset }]}>
+        <View style={[csSt.handle, { backgroundColor: P.border }]} />
+        <View style={csSt.header}>
           {member && (
-            <View style={[chSt.avatar, { backgroundColor: avatarColor(member.customer_name) + '22', borderColor: avatarColor(member.customer_name) + '44' }]}>
-              <Text style={[chSt.avatarText, { color: avatarColor(member.customer_name) }]}>{initials(member.customer_name)}</Text>
+            <View style={[csSt.avatar, { backgroundColor: avatarColor(member.customer_name) + '22', borderColor: avatarColor(member.customer_name) + '44' }]}>
+              <Text style={[csSt.avatarText, { color: avatarColor(member.customer_name) }]}>{initials(member.customer_name)}</Text>
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={[chSt.title, { color: P.text }]}>{member?.customer_name ?? ''}</Text>
-            <Text style={[chSt.sub, { color: P.sub }]}>{tp('providerBusiness.clientele.history.count', bookings.length)}</Text>
+            <Text style={[csSt.title, { color: P.text }]}>{member?.customer_name ?? ''}</Text>
+            <Text style={[csSt.sub, { color: P.sub }]}>
+              {member ? trp('providerBusiness.ui.bookingsWithYou', member.booking_count) : ''}
+            </Text>
           </View>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity onPress={close} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={tr('common.close')}>
             <Ionicons name="close" size={22} color={P.sub} />
           </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <View style={chSt.center}><ActivityIndicator color={P.accent} /></View>
-        ) : bookings.length === 0 ? (
-          <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>{t('providerBusiness.clientele.history.empty')}</Text></View>
-        ) : (
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 504 }} contentContainerStyle={{ paddingBottom: 40 }}>
-            {bookings.map(b => {
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 16 }}>
+          {/* ── Beauty Profile ── */}
+          {sectionLabel('Beauty Profile')}
+          <View style={[csSt.block, { backgroundColor: P.card }]}>
+            {profile.state === 'loading' ? (
+              <View style={csSt.center}><ActivityIndicator color={P.accent} /></View>
+            ) : profile.state === 'failed' ? (
+              retry('their Beauty Profile', () => clientId && loadProfile(clientId))
+            ) : profile.value === null ? (
+              // Null is "not shared yet", never "nothing on file" — saying
+              // nothing here would read as "no allergies".
+              <Text style={[csSt.emptySub, csSt.blockText, { color: P.sub }]}>
+                {tr('providerBusiness.ui2.sharedWithYouOnceYouVe')}
+              </Text>
+            ) : (
+              <ClientBeautyProfileDetails
+                profile={profile.value}
+                text={P.text}
+                sub={P.sub}
+                surface={P.surface}
+                divider={P.border}
+                isDark={isDark}
+              />
+            )}
+          </View>
+
+          {/* ── Your notes ── */}
+          {sectionLabel('Your notes')}
+          <View style={[csSt.block, { backgroundColor: P.card }]}>
+            {noteState === 'loading' ? (
+              <View style={csSt.center}><ActivityIndicator color={P.accent} /></View>
+            ) : noteState === 'failed' ? (
+              retry('your notes', () => clientId && loadNote(clientId))
+            ) : (
+              <>
+                <TextInput
+                  value={note}
+                  onChangeText={t => { setNote(t); if (saveError) setSaveError(''); }}
+                  placeholder={tr('providerBusiness.ui2.anythingToRememberAboutThemPreferences')}
+                  placeholderTextColor={P.sub}
+                  multiline
+                  maxLength={2000}
+                  style={[csSt.noteInput, { color: P.text }]}
+                  accessibilityLabel={tr('providerBusiness.ui2.yourNotesOnThisClient')}
+                />
+                <View style={csSt.noteFooter}>
+                  <Text style={[csSt.noteHint, { color: saveError ? DANGER : P.sub }]}>
+                    {saveError ? saveError : dirty ? 'Not saved yet' : savedAt ? `Only you can see this · Saved ${formatShort(savedAt)}` : 'Only you can see this'}
+                  </Text>
+                  {dirty && (
+                    <TouchableOpacity
+                      onPress={() => { Haptics.selectionAsync().catch(() => {}); saveNote(); }}
+                      disabled={saving}
+                      activeOpacity={0.7}
+                      style={[csSt.saveBtn, { backgroundColor: P.accent }]}
+                    >
+                      {saving
+                        ? <ActivityIndicator size="small" color={P.onAccent} />
+                        : <Text style={[csSt.saveText, { color: P.onAccent }]}>{tr('common.save')}</Text>}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* ── Booking history ── */}
+          {sectionLabel('Booking history')}
+          {history.state === 'loading' ? (
+            <View style={csSt.center}><ActivityIndicator color={P.accent} /></View>
+          ) : history.state === 'failed' ? (
+            retry('their history', () => clientId && loadHistory(clientId))
+          ) : bookings.length === 0 ? (
+            <View style={csSt.center}><Text style={[csSt.emptySub, { color: P.sub }]}>{tr('providerBusiness.clientele.history.empty')}</Text></View>
+          ) : (
+            bookings.map(b => {
               const statusColor = b.status === 'completed' ? GREEN
                 : b.status === 'cancelled' ? DANGER : P.sub;
+              const d = new Date(b.booking_date);
               return (
-                <View key={b.id} style={[chSt.bookingRow, { borderBottomColor: P.border }]}>
-                  <View style={[chSt.dateBadge, { backgroundColor: P.card }]}>
-                    <Text style={[chSt.dateDay, { color: P.text }]}>{new Date(b.booking_date).getDate()}</Text>
-                    <Text style={[chSt.dateMon, { color: P.sub }]}>{monthName(new Date(b.booking_date).getMonth(), 'short')}</Text>
+                <View key={b.id} style={[csSt.bookingRow, { borderBottomColor: P.border }]}>
+                  <View style={[csSt.dateBadge, { backgroundColor: P.card }]}>
+                    <Text style={[csSt.dateDay, { color: P.text }]}>{d.getDate()}</Text>
+                    <Text style={[csSt.dateMon, { color: P.sub }]}>{d.toLocaleString('en-GB', { month: 'short' })}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[chSt.svcName, { color: P.text }]} numberOfLines={1}>{b.service_name_snapshot}</Text>
-                    <Text style={[chSt.timeText, { color: P.sub }]}>{b.booking_time ? formatTime12(b.booking_time) : ''}</Text>
+                    <Text style={[csSt.svcName, { color: P.text }]} numberOfLines={1}>{b.service_name_snapshot}</Text>
+                    <Text style={[csSt.timeText, { color: P.sub }]}>
+                      {[d.getFullYear() !== new Date().getFullYear() ? String(d.getFullYear()) : null,
+                        b.booking_time ? formatTime12Safe(b.booking_time) : null].filter(Boolean).join(' · ')}
+                    </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                    <Text style={[chSt.amount, { color: P.text }]}>£{(b.base_price + b.add_ons_total).toFixed(0)}</Text>
-                    <View style={[chSt.statusPill, { backgroundColor: statusColor + '22' }]}>
-                      <Text style={[chSt.statusText, { color: statusColor }]}>{statusText(b.status)}</Text>
+                    <Text style={[csSt.amount, { color: P.text }]}>£{(b.base_price + b.add_ons_total).toFixed(0)}</Text>
+                    <View style={[csSt.statusPill, { backgroundColor: statusColor + '22' }]}>
+                      <Text style={[csSt.statusText, { color: statusColor }]}>{b.status.replace(/_/g, ' ')}</Text>
                     </View>
                   </View>
                 </View>
               );
-            })}
-          </ScrollView>
-        )}
+            })
+          )}
+        </ScrollView>
       </View>
+      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
-const chSt = StyleSheet.create({
-  backdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '75%' },
-  handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  header:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  avatar:      { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  avatarText:  { fontSize: 15, fontWeight: '700' },
-  title:       { fontSize: 18, fontWeight: '700' },
-  sub:         { fontSize: 12, marginTop: 2 },
-  center:      { paddingVertical: 32, alignItems: 'center' },
-  emptySub:    { fontSize: 14 },
-  bookingRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  dateBadge:   { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  dateDay:     { fontSize: 16, fontWeight: '800', lineHeight: 18 },
-  dateMon:     { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-  svcName:     { fontSize: 14, fontWeight: '600' },
-  timeText:    { fontSize: 12, marginTop: 2 },
-  amount:      { fontSize: 13, fontWeight: '700' },
-  statusPill:  { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  statusText:  { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+const csSt = StyleSheet.create({
+  overlay:      { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: { ...readableSheet, borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '88%' },
+  handle:       { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  avatar:       { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  avatarText:   { fontSize: 15, fontWeight: '700' },
+  title:        { fontSize: 18, fontWeight: '700' },
+  sub:          { fontSize: 12, marginTop: 2 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 8 },
+  block:        { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4 },
+  blockText:    { paddingVertical: 12 },
+  center:       { paddingVertical: 24, alignItems: 'center' },
+  emptySub:     { fontSize: 14 },
+  noteInput:    { fontSize: 14, lineHeight: 20, minHeight: 88, paddingTop: 10, paddingBottom: 6, textAlignVertical: 'top' },
+  noteFooter:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, gap: 8 },
+  noteHint:     { fontSize: 12, flex: 1 },
+  saveBtn:      { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 10, minWidth: 64, alignItems: 'center' },
+  saveText:     { fontSize: 13, fontWeight: '700' },
+  bookingRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  dateBadge:    { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  dateDay:      { fontSize: 16, fontWeight: '800', lineHeight: 18 },
+  dateMon:      { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
+  svcName:      { fontSize: 14, fontWeight: '600' },
+  timeText:     { fontSize: 12, marginTop: 2 },
+  amount:       { fontSize: 13, fontWeight: '700' },
+  statusPill:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  statusText:   { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
 });
 
 // ── Announcement Sheet ────────────────────────────────────────────────────────
 
-type AudienceKey = 'all' | 'repeat' | 'new' | 'lapsed';
+type AudienceKey = 'all' | 'interested' | 'repeat' | 'new' | 'lapsed' | 'followers';
+
+/** Audiences counted in people rather than clients: they reach people who haven't booked. */
+const countsPeople = (a: AudienceKey) => a === 'followers' || a === 'interested';
+
+const clientCount = (n: number) => `${n} client${n !== 1 ? 's' : ''}`;
+const peopleCount = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
 function tomorrow9am() {
   const d = new Date();
@@ -226,17 +432,21 @@ function tomorrow9am() {
   return d;
 }
 
-function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onScheduled, onError, P }: {
+function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSent, onScheduled, onError, P }: {
   visible: boolean;
   counts: Record<AudienceKey, number>;
   clients: ClienteleMember[];
+  /** People who saved you or have your bell on (ids only). */
+  followers: AnnouncementFollower[];
   onClose: () => void;
-  onSent: (count: number) => void;
+  onSent: (who: string) => void;
   onScheduled: (when: Date) => void;
   onError: (msg: string) => void;
   P: typeof LIGHT;
 }) {
-  const [audience, setAudience] = useState<AudienceKey>('all');
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
+  const [audience, setAudience] = useState<AudienceKey>(clients.length > 0 ? 'all' : 'followers');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -246,24 +456,28 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const { isDarkMode } = useTheme();
-  const { t, tp } = useTranslation();
   const bottomSafeGap = useSystemBottomInset() + 16;
 
   const audienceOptions: { key: AudienceKey; label: string; icon: string }[] = [
-    { key: 'all',    label: t('providerBusiness.clientele.audience.all'),    icon: 'people-outline' },
-    { key: 'repeat', label: t('providerBusiness.clientele.audience.repeat'), icon: 'repeat-outline' },
-    { key: 'new',    label: t('providerBusiness.clientele.audience.new'),    icon: 'sparkles-outline' },
-    { key: 'lapsed', label: t('providerBusiness.clientele.audience.lapsed'), icon: 'time-outline' },
+    { key: 'all',    label: tr('providerBusiness.clientele.audience.all'),    icon: 'people-outline' },
+    { key: 'interested', label: tr('providerBusiness.promotions.notify.interested'), icon: 'heart-outline' },
+    { key: 'repeat', label: tr('providerBusiness.clientele.audience.repeat'), icon: 'repeat-outline' },
+    { key: 'new',    label: tr('providerBusiness.clientele.audience.new'),    icon: 'sparkles-outline' },
+    { key: 'lapsed', label: tr('providerBusiness.clientele.audience.lapsed'),  icon: 'time-outline' },
+    { key: 'followers', label: tr('providerBusiness.ui2.savedYouOrBellOn'), icon: 'notifications-outline' },
   ];
 
   const recipientIds = (): string[] => {
     if (audience === 'all')    return clients.map(c => c.user_id);
+    if (audience === 'interested') return interestedRecipientIds(clients.map(c => c.user_id), followers.map(f => f.userId));
     if (audience === 'repeat') return clients.filter(c => c.booking_count >= 2).map(c => c.user_id);
     if (audience === 'new')    return clients.filter(c => c.booking_count === 1).map(c => c.user_id);
+    if (audience === 'followers') return followers.map(f => f.userId);
     return clients.filter(c => daysSince(c.last_booking_date) > 60).map(c => c.user_id);
   };
 
   const recipientCount = counts[audience];
+  const recipients = countsPeople(audience) ? peopleCount(recipientCount) : clientCount(recipientCount);
   const canSend = title.trim().length > 0 && body.trim().length > 0 && recipientCount > 0 && !sending;
 
   const sheetRef = useRef<BottomSheet>(null);
@@ -277,7 +491,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
   useEffect(() => {
     if (visible) {
       setEverOpened(true);
-      setAudience('all');
+      setAudience(clients.length > 0 ? 'all' : 'followers');
       setTitle('');
       setBody('');
       setErrorMsg('');
@@ -321,13 +535,13 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
         onScheduled(schedAt);
       } else {
         const { sent } = await sendAnnouncement(title.trim(), body.trim(), ids);
-        onSent(sent);
+        onSent(countsPeople(audience) ? peopleCount(sent) : clientCount(sent));
       }
       setTitle('');
       setBody('');
-      setAudience('all');
-    } catch {
-      setErrorMsg(t('providerBusiness.clientele.sendFailed'));
+      setAudience(clients.length > 0 ? 'all' : 'followers');
+    } catch (err) {
+      setErrorMsg(toUserMessage(err, 'Something went wrong. Please try again.', 'ProviderClienteleScreen.sendAnnouncement'));
     } finally {
       setSending(false);
     }
@@ -367,9 +581,9 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
     >
       <View style={anSt.header}>
         <View>
-          <Text style={[anSt.title, { color: P.text }]}>{t('providerBusiness.clientele.announce.title')}</Text>
+          <Text style={[anSt.title, { color: P.text }]}>{tr('providerBusiness.clientele.announce.title')}</Text>
           <Text style={[anSt.sub, { color: P.sub }]}>
-            {tp('providerBusiness.clientele.announce.recipients', recipientCount)}
+            {tr('providerBusiness.ui.willReceive', { recipients })}
           </Text>
         </View>
         <TouchableOpacity onPress={() => sheetRef.current?.close()} activeOpacity={0.7}>
@@ -383,7 +597,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[anSt.scroll, { paddingBottom: bottomSafeGap }]}
       >
-        <Text style={[anSt.label, { color: P.sub }]}>{t('providerBusiness.clientele.announce.audience')}</Text>
+        <Text style={[anSt.label, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.audience')}</Text>
         <View style={anSt.audienceRow}>
           {audienceOptions.map(opt => {
             const active = audience === opt.key;
@@ -403,22 +617,22 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
           })}
         </View>
 
-        <Text style={[anSt.label, { color: P.sub }]}>{t('providerBusiness.clientele.announce.titleLabel')}</Text>
+        <Text style={[anSt.label, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.titleLabel')}</Text>
         <BottomSheetTextInput
           style={[anSt.input, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
           value={title}
           onChangeText={setTitle}
-          placeholder={t('providerBusiness.clientele.announce.titlePlaceholder')}
+          placeholder={tr('providerBusiness.clientele.announce.titlePlaceholder')}
           placeholderTextColor={P.sub}
           maxLength={80}
         />
 
-        <Text style={[anSt.label, { color: P.sub }]}>{t('providerBusiness.clientele.announce.message')}</Text>
+        <Text style={[anSt.label, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.message')}</Text>
         <BottomSheetTextInput
           style={[anSt.input, anSt.textArea, { backgroundColor: P.card, color: P.text, borderColor: P.border }]}
           value={body}
           onChangeText={setBody}
-          placeholder={t('providerBusiness.clientele.announce.messagePlaceholder')}
+          placeholder={tr('providerBusiness.clientele.announce.messagePlaceholder')}
           placeholderTextColor={P.sub}
           multiline
           maxLength={300}
@@ -429,8 +643,8 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
         <View style={[anSt.scheduleRow, { backgroundColor: P.card, borderColor: P.border }]}>
           <Ionicons name="alarm-outline" size={16} color={scheduleMode ? P.accent : P.sub} style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={[anSt.scheduleLabel, { color: P.text }]}>{t('providerBusiness.clientele.announce.schedule')}</Text>
-            <Text style={[anSt.scheduleSub, { color: P.sub }]}>{t('providerBusiness.clientele.announce.scheduleSub')}</Text>
+            <Text style={[anSt.scheduleLabel, { color: P.text }]}>{tr('providerBusiness.clientele.announce.schedule')}</Text>
+            <Text style={[anSt.scheduleSub, { color: P.sub }]}>{tr('providerBusiness.clientele.announce.scheduleSub')}</Text>
           </View>
           <Switch value={scheduleMode} onValueChange={setScheduleMode}
             trackColor={{ false: P.border, true: P.accent }} thumbColor="#fff" />
@@ -444,7 +658,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
               activeOpacity={0.7}>
               <Ionicons name="calendar-outline" size={14} color={P.accent} />
               <Text style={[anSt.pickerText, { color: P.text }]}>
-                {schedAt.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short', year: 'numeric' })}
+                {schedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -504,10 +718,10 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
               <View style={[anSt.pickerSheet, { backgroundColor: P.card, paddingBottom: Math.max(20, bottomSafeGap) }]}>
                 <View style={[anSt.pickerHeader, { borderBottomColor: P.border }]}>
                   <Text style={[anSt.pickerHeaderLabel, { color: P.text }]}>
-                    {showDatePicker ? t('providerBusiness.clientele.announce.selectDate') : t('providerBusiness.clientele.announce.selectTime')}
+                    {showDatePicker ? tr('providerBusiness.clientele.announce.selectDate') : tr('providerBusiness.clientele.announce.selectTime')}
                   </Text>
                   <TouchableOpacity onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
-                    <Text style={[anSt.pickerDoneLabel, { color: P.accent }]}>{t('common.done')}</Text>
+                    <Text style={[anSt.pickerDoneLabel, { color: P.accent }]}>{tr('common.done')}</Text>
                   </TouchableOpacity>
                 </View>
                 {showDatePicker ? (
@@ -556,14 +770,14 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
           disabled={!canSend}
           activeOpacity={0.8}>
           {sending ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={canSend ? P.onAccent : P.text} />
           ) : (
             <>
-              <Ionicons name={scheduleMode ? 'alarm-outline' : 'megaphone-outline'} size={16} color="#fff" />
-              <Text style={anSt.sendBtnText}>
+              <Ionicons name={scheduleMode ? 'alarm-outline' : 'megaphone-outline'} size={16} color={canSend ? P.onAccent : P.text} />
+              <Text style={[anSt.sendBtnText, { color: canSend ? P.onAccent : P.text }]}>
                 {scheduleMode
-                  ? tp('providerBusiness.clientele.announce.scheduleFor', recipientCount)
-                  : tp('providerBusiness.clientele.announce.sendTo', recipientCount)}
+                  ? tr('providerBusiness.ui.scheduleFor', { recipients })
+                  : tr('providerBusiness.ui.sendTo', { recipients })}
               </Text>
             </>
           )}
@@ -604,7 +818,7 @@ const anSt = StyleSheet.create({
   errorText:    { fontSize: 13, color: '#FF6868', textAlign: 'center', marginTop: 10 },
   pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
   pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerSheet: { ...readableSheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
   pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
   pickerDoneLabel:   { fontSize: 15, fontWeight: '700' },
@@ -612,11 +826,12 @@ const anSt = StyleSheet.create({
 
 // ── Client Card ───────────────────────────────────────────────────────────────
 
-function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliability, P }: {
+function ClientCard({ member, onMessage, onRebook, onOpen, lapsed, reliability, P }: {
   member: ClienteleMember;
   onMessage: (m: ClienteleMember) => void;
   onRebook: (m: ClienteleMember) => void;
-  onViewHistory: (m: ClienteleMember) => void;
+  /** Tapping the card opens the client sheet: Beauty Profile, notes, history. */
+  onOpen: (m: ClienteleMember) => void;
   lapsed?: boolean;
   // No-show / late-cancel history this client has with THIS provider
   // (client_provider_reliability, batch-fetched once for the whole list —
@@ -624,13 +839,20 @@ function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliab
   reliability?: ClientReliabilityStats | undefined;
   P: typeof LIGHT;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const color = avatarColor(member.customer_name);
   const days = daysSince(member.last_booking_date);
-  const { t, tp } = useTranslation();
   const hasReliabilityFlag = !!reliability && (reliability.noShowCount > 0 || reliability.lateCancelCount > 0);
 
   return (
-    <TouchableOpacity style={[ccSt.wrap, { backgroundColor: P.surface }]} onPress={() => onViewHistory(member)} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[ccSt.wrap, { backgroundColor: P.surface }]}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(member); }}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityHint={tr('providerBusiness.ui2.opensTheirBeautyProfileYourNotes')}
+    >
       <View style={[ccSt.avatar, { backgroundColor: color + '22', borderColor: color + '44' }]}>
         <Text style={[ccSt.avatarText, { color }]}>{initials(member.customer_name)}</Text>
       </View>
@@ -639,20 +861,20 @@ function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliab
           <Text style={[ccSt.name, { color: P.text }]} numberOfLines={1}>{member.customer_name}</Text>
           {lapsed && (
             <View style={ccSt.lapsedBadge}>
-              <Text style={[ccSt.lapsedText, { color: DANGER }]}>{t('providerBusiness.clientele.card.daysAgo', { days })}</Text>
+              <Text style={[ccSt.lapsedText, { color: DANGER }]}>{tr('providerBusiness.ui.daysAgo', { days })}</Text>
             </View>
           )}
         </View>
         <Text style={[ccSt.meta, { color: P.sub }]}>
-          {tp('providerBusiness.clientele.card.bookings', member.booking_count)} · {t('providerBusiness.clientele.card.last', { date: formatShort(member.last_booking_date) })}
+          {trp('providerBusiness.ui.bookings', member.booking_count)} · {tr('providerBusiness.ui.lastOn', { date: formatShort(member.last_booking_date) })}
         </Text>
         {hasReliabilityFlag && (
           <View style={ccSt.reliabilityRow}>
             <Ionicons name="alert-circle-outline" size={11} color="#FF9500" />
             <Text style={[ccSt.reliabilityText, { color: '#FF9500' }]}>
               {[
-                reliability!.noShowCount > 0 ? tp('providerBusiness.clientele.card.noShows', reliability!.noShowCount) : null,
-                reliability!.lateCancelCount > 0 ? tp('providerBusiness.clientele.card.lateCancels', reliability!.lateCancelCount) : null,
+                reliability!.noShowCount > 0 ? `${reliability!.noShowCount} no-show${reliability!.noShowCount === 1 ? '' : 's'}` : null,
+                reliability!.lateCancelCount > 0 ? `${reliability!.lateCancelCount} late cancel${reliability!.lateCancelCount === 1 ? '' : 's'}` : null,
               ].filter(Boolean).join(' · ')}
             </Text>
           </View>
@@ -674,7 +896,7 @@ function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliab
             onPress={e => { e.stopPropagation(); Haptics.selectionAsync().catch(() => {}); onMessage(member); }}
             activeOpacity={0.7}>
             <Ionicons name="chatbubble-ellipses-outline" size={11} color={P.accent} />
-            <Text style={[ccSt.btnText, { color: P.accent }]}>{t('providerBusiness.clientele.card.message')}</Text>
+            <Text style={[ccSt.btnText, { color: P.accent }]}>{tr('providerBusiness.clientele.card.message')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -703,8 +925,9 @@ const ccSt = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function ProviderClienteleScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { isDarkMode } = useTheme();
-  const { t, tp } = useTranslation();
   const P = isDarkMode ? DARK : LIGHT;
   const [clients, setClients] = useState<ClienteleMember[]>([]);
   const [reliabilityByClient, setReliabilityByClient] = useState<Record<string, ClientReliabilityStats>>({});
@@ -713,9 +936,8 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('all');
   const [announcementOpen, setAnnouncementOpen] = useState(false);
-  const [historyFor, setHistoryFor] = useState<ClienteleMember | null>(null);
-  const [historyBookings, setHistoryBookings] = useState<DbBooking[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [followers, setFollowers] = useState<AnnouncementFollower[]>([]);
+  const [sheetFor, setSheetFor] = useState<ClienteleMember | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showToast, DialogHost } = useAppDialog();
 
@@ -739,12 +961,17 @@ export default function ProviderClienteleScreen({ navigation }: any) {
           .then(setReliabilityByClient)
           .catch(() => {});
       }
+      // Who else an announcement can reach. Best-effort too: without it the
+      // "Saved you or bell on" audience just shows 0.
+      getMyAnnouncementFollowers()
+        .then(setFollowers)
+        .catch(() => setFollowers([]));
     } catch (e: any) {
-      showToast(toUserMessage(e, t('providerBusiness.clientele.loadFailed'), 'ProviderClienteleScreen.load'), 'error');
+      showToast(toUserMessage(e, 'Could not load your clientele.', 'ProviderClienteleScreen.load'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [fadeAnim, showToast, t]);
+  }, [fadeAnim, showToast]);
 
   useFocusEffect(useCallback(() => {
     fadeAnim.setValue(0);
@@ -756,15 +983,20 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const lapsedClients = clients.filter(c => daysSince(c.last_booking_date) > 60);
   const displayed = tab === 'all' ? clients : tab === 'repeat' ? repeatClients : tab === 'new' ? newClients : lapsedClients;
   const counts = { all: clients.length, repeat: repeatClients.length, new: newClients.length, lapsed: lapsedClients.length };
+  const audienceCounts = {
+    ...counts,
+    interested: interestedRecipientIds(clients.map(c => c.user_id), followers.map(f => f.userId)).length,
+    followers: followers.length,
+  };
 
-  const handleAnnouncementSent = (count: number) => {
+  const handleAnnouncementSent = (who: string) => {
     setAnnouncementOpen(false);
-    showToast(tp('providerBusiness.clientele.toast.sent', count));
+    showToast(tr('providerBusiness.ui.announcementSent', { who }));
   };
 
   const handleAnnouncementScheduled = (when: Date) => {
     setAnnouncementOpen(false);
-    showToast(t('providerBusiness.clientele.toast.scheduled', { date: when.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' }), time: formatTime12(when) }));
+    showToast(tr('providerBusiness.clientele.toast.scheduled', { date: when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), time: formatTime12(when) }));
   };
 
   // Opens the real in-app conversation with this client rather than a
@@ -780,32 +1012,21 @@ export default function ProviderClienteleScreen({ navigation }: any) {
         clientName: member.customer_name,
       });
     } catch (e: any) {
-      showToast(toUserMessage(e, t('providerBusiness.clientele.messageFailed'), 'ProviderClienteleScreen.message'), 'error');
+      showToast(toUserMessage(e, 'Could not open that conversation.', 'ProviderClienteleScreen.message'), 'error');
     }
-  }, [providerId, navigation, showToast, t]);
+  }, [providerId, navigation, showToast]);
 
   const handleRebook = async (member: ClienteleMember) => {
     try {
       await sendRebookPrompt(member.user_id, providerName);
-      showToast(t('providerBusiness.clientele.toast.rebook', { name: member.customer_name }));
+      showToast(tr('providerBusiness.clientele.toast.rebook', { name: member.customer_name }));
     } catch (e: any) {
-      showToast(toUserMessage(e, t('providerBusiness.clientele.rebookFailed'), 'ProviderClienteleScreen.rebook'), 'error');
+      showToast(toUserMessage(e, 'Could not send that rebook prompt.', 'ProviderClienteleScreen.rebook'), 'error');
     }
   };
 
-  const handleViewHistory = async (member: ClienteleMember) => {
-    setHistoryFor(member);
-    setHistoryBookings([]);
-    setHistoryLoading(true);
-    try {
-      const data = await getClientBookingHistory(member.user_id);
-      setHistoryBookings(data);
-    } catch (e: any) {
-      showToast(toUserMessage(e, t('providerBusiness.clientele.historyFailed'), 'ProviderClienteleScreen.history'), 'error');
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
+  const handleOpenClient = useCallback((member: ClienteleMember) => setSheetFor(member), []);
+  const handleCloseClient = useCallback(() => setSheetFor(null), []);
 
   if (loading) {
     return (
@@ -822,17 +1043,17 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={s.header}>
           <View>
-            <Text style={[s.headerTitle, { color: P.text }]}>{t('providerBusiness.clientele.title')}</Text>
-            <Text style={[s.headerSub, { color: P.sub }]}>{tp('providerBusiness.clientele.clientCount', clients.length)} · {t('providerBusiness.clientele.repeatCount', { count: repeatClients.length })}</Text>
+            <Text style={[s.headerTitle, { color: P.text }]}>{tr('providerBusiness.clientele.title')}</Text>
+            <Text style={[s.headerSub, { color: P.sub }]}>{clients.length} {tr('providerBusiness.inbox.clientLower')}{clients.length !== 1 ? 's' : ''} · {repeatClients.length} repeat</Text>
           </View>
           <View style={s.headerActions}>
-            {clients.length > 0 && (
+            {(clients.length > 0 || followers.length > 0) && (
               <TouchableOpacity
                 style={[s.announceBtn, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setAnnouncementOpen(true); }}
                 activeOpacity={0.7}>
                 <Ionicons name="megaphone-outline" size={15} color={P.accent} />
-                <Text style={[s.announceBtnText, { color: P.accent }]}>{t('providerBusiness.clientele.announceBtn')}</Text>
+                <Text style={[s.announceBtnText, { color: P.accent }]}>{tr('providerBusiness.clientele.announceBtn')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()}>
@@ -848,7 +1069,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
             <View style={s.lapsedBanner}>
               <Ionicons name="time-outline" size={13} color={DANGER} />
               <Text style={[s.lapsedBannerText, { color: DANGER }]}>
-                {tp('providerBusiness.clientele.lapsedBanner', lapsedClients.length)}
+                {trp('providerBusiness.ui.lapsed', lapsedClients.length)}
               </Text>
             </View>
           )}
@@ -858,14 +1079,14 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                 <Ionicons name="people-outline" size={36} color={P.sub} />
               </View>
               <Text style={[s.emptyTitle, { color: P.text }]}>
-                {tab === 'repeat' ? t('providerBusiness.clientele.empty.repeat') : tab === 'new' ? t('providerBusiness.clientele.empty.new')
-                  : tab === 'lapsed' ? t('providerBusiness.clientele.empty.lapsed') : t('providerBusiness.clientele.empty.all')}
+                {tab === 'repeat' ? tr('providerBusiness.clientele.empty.repeat') : tab === 'new' ? 'No new clients'
+                  : tab === 'lapsed' ? 'No lapsed clients' : 'No clients yet'}
               </Text>
               <Text style={[s.emptySub, { color: P.sub }]}>
-                {tab === 'repeat' ? t('providerBusiness.clientele.empty.repeatSub')
-                  : tab === 'new' ? t('providerBusiness.clientele.empty.newSub')
-                  : tab === 'lapsed' ? t('providerBusiness.clientele.empty.lapsedSub')
-                  : t('providerBusiness.clientele.empty.allSub')}
+                {tab === 'repeat' ? tr('providerBusiness.clientele.empty.repeatSub')
+                  : tab === 'new' ? 'First-time bookers will appear here'
+                  : tab === 'lapsed' ? 'Clients inactive for 60+ days appear here'
+                  : 'Clients who complete a booking will appear here'}
               </Text>
             </View>
           ) : (
@@ -879,7 +1100,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                   reliability={reliabilityByClient[item.user_id]}
                   onMessage={handleMessage}
                   onRebook={handleRebook}
-                  onViewHistory={handleViewHistory}
+                  onOpen={handleOpenClient}
                   P={P}
                 />
               )}
@@ -892,8 +1113,9 @@ export default function ProviderClienteleScreen({ navigation }: any) {
 
       <AnnouncementSheet
         visible={announcementOpen}
-        counts={counts}
+        counts={audienceCounts}
         clients={clients}
+        followers={followers}
         onClose={() => setAnnouncementOpen(false)}
         onSent={handleAnnouncementSent}
         onScheduled={handleAnnouncementScheduled}
@@ -901,13 +1123,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
         P={P}
       />
 
-      <ClientHistorySheet
-        visible={historyFor !== null}
-        member={historyFor}
-        bookings={historyBookings}
-        loading={historyLoading}
-        onClose={() => setHistoryFor(null)}
+      <ClientSheet
+        member={sheetFor}
+        onClose={handleCloseClient}
         P={P}
+        isDark={isDarkMode}
       />
 
       <DialogHost />
@@ -935,7 +1155,7 @@ const s = StyleSheet.create({
   emptyTitle:       { fontSize: 18, fontWeight: '700' },
   emptySub:         { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   modalBackdrop:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalCard:        { maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  modalCard: { ...readableSheet, maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
   modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle:       { fontSize: 17, fontWeight: '700', flex: 1, marginRight: 12 },
   modalRow:         { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },

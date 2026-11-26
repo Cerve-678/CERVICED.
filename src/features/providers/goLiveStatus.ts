@@ -21,8 +21,10 @@
  *    supabase/MIGRATION_OWNER.md, "go-live now requires policies + payment"
  *    / "go-live now also requires a logo"). Never add anything here that
  *    the server doesn't also gate on, or the checklist starts lying again.
- *    A SEVENTH blocking step, `stripe` (Stripe Connect payouts / KYC
- *    complete), is emitted ONLY when STRIPE_CONNECT_PAYOUTS_ENABLED is on —
+ *    When STRIPE_CONNECT_PAYOUTS_ENABLED is on, the `payment` row is replaced
+ *    by a `stripe` row (Stripe Connect payouts / KYC complete AND the deposit
+ *    choice saved — both live on the Payments screen, so the user asked for
+ *    one row, 2026-11-16). That row is emitted ONLY when the flag is on —
  *    because its matching server gate (stripe_charges_enabled in
  *    check_and_set_provider_live, DRAFT_stripe_connect_gate_go_live.sql) is
  *    deliberately HELD until providers have onboarded (applying it darks
@@ -32,10 +34,11 @@
  *    the checklist would claim a block the DB doesn't yet enforce. While the
  *    flag is off the checklist is byte-for-byte its pre-Stripe self. See the
  *    auto-memory stripe-connect-payouts-build-handoff.
- *  - RECOMMENDED (`profile`, plus `portfolio`/`terms` for callers that
- *    supply them) is real setup worth finishing but that the server does
- *    not require to publish — writing an About/intro text, adding
- *    portfolio photos, or writing Terms & Conditions doesn't affect
+ *  - RECOMMENDED (`profile`, plus `portfolio`/`terms`/`automations` for
+ *    callers that supply them) is real setup worth finishing but that the
+ *    server does not require to publish — writing an About/intro text,
+ *    adding portfolio photos, writing Terms & Conditions or choosing
+ *    automations doesn't affect
  *    whether clients can find or book this provider (T&Cs blocks Add to
  *    Cart client-side, a different gate entirely — see
  *    provider-terms-are-a-form-not-a-column in auto-memory).
@@ -55,11 +58,12 @@ import {
   getMyProviderProfile,
   getProviderAvailability,
   hasMyProviderGoLiveAddress,
+  getCurrentAccountDetailsPending,
 } from '../../services/databaseService';
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import type { DbProvider, DbProviderAvailability } from '../../types/database';
-import { tr, trp } from '../../i18n';
+import { tr, trp } from '../../i18n/translate';
 
 export interface GoLiveStatus {
   /** Blocking — mirrors check_and_set_provider_live() exactly. */
@@ -93,6 +97,9 @@ export interface GoLiveStatus {
    *  whether clients can actually find this provider — never re-derive it
    *  from the steps below. */
   isLive: boolean;
+  /** Server gate for admin-made blank providers. The admin must assign the
+   * owner's login details before the profile can be published. */
+  detailsPending?: boolean | undefined;
   /** Recommended, Profile-Health-only. Optional and left `undefined` by
    *  ProviderHomeScreen's fetch (it never renders them — its checklist
    *  filters on `blocking`, which these never are — so there's no reason to
@@ -100,11 +107,17 @@ export interface GoLiveStatus {
    *  emits a step for these when the field is actually present. */
   portfolioSet?: boolean;
   termsSet?: boolean;
+  /** Recommended, Profile-Health-only, same rules as portfolioSet/termsSet:
+   *  true once the provider has saved Automations at least once (see
+   *  deriveAutomationsSet). Left undefined for a link-only provider, who has
+   *  no Automations screen. */
+  automationsSet?: boolean | undefined;
 }
 
 export type GoLiveStepKey =
-  | 'profile' | 'schedule' | 'services' | 'address'
-  | 'policies' | 'payment' | 'logo' | 'stripe' | 'portfolio' | 'terms';
+  | 'ownerDetails' | 'profile' | 'schedule' | 'services' | 'address'
+  | 'policies' | 'payment' | 'logo' | 'stripe' | 'portfolio' | 'terms'
+  | 'automations';
 
 export interface GoLiveStep {
   key: GoLiveStepKey;
@@ -138,7 +151,7 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
     },
     {
       key: 'schedule',
-      label: tr('providerProfile.goLive.step.schedule'),
+      label: tr('providerProfile.ui.setYourScheduleAndAvailability'),
       done: status.scheduleSet,
       required: true,
       blocking: true,
@@ -164,13 +177,27 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       required: true,
       blocking: true,
     },
-    {
-      key: 'payment',
-      label: tr('providerProfile.goLive.step.payment'),
-      done: status.paymentSet,
-      required: true,
-      blocking: true,
-    },
+    // With Stripe payouts on, the deposit choice and the payouts set-up are
+    // both on the Payments screen, so they're one row, "Set up Stripe
+    // payouts", ticked only once BOTH are done. The server still gates on
+    // the deposit choice, so it can't simply be dropped: that would leave a
+    // provider stuck on "Almost live" with no row telling them why. With
+    // Stripe off, the deposit row stands alone, as it did before Stripe.
+    status.stripeSet === undefined
+      ? {
+          key: 'payment',
+          label: tr('providerProfile.goLive.step.payment'),
+          done: status.paymentSet,
+          required: true,
+          blocking: true,
+        }
+      : {
+          key: 'stripe',
+          label: tr('providerProfile.goLive.step.stripe'),
+          done: status.stripeSet && status.paymentSet,
+          required: true,
+          blocking: true,
+        },
     {
       key: 'logo',
       label: tr('providerProfile.goLive.step.logo'),
@@ -179,16 +206,11 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       blocking: true,
     },
   ];
-  // Blocking, but conditional on the Stripe Connect payouts feature being on
-  // (see the `stripeSet` doc on GoLiveStatus and the header comment). Kept
-  // adjacent to the money steps (policies/payment) it belongs with. When the
-  // field is undefined the feature is off and no Stripe step exists at all —
-  // exactly as it was before Stripe, and matching the held server gate.
-  if (status.stripeSet !== undefined) {
-    steps.push({
-      key: 'stripe',
-      label: tr('providerProfile.goLive.step.stripe'),
-      done: status.stripeSet,
+  if (status.detailsPending) {
+    steps.unshift({
+      key: 'ownerDetails',
+      label: tr('providerProfile.ui.addTheAccountOwnerSDetails'),
+      done: false,
       required: true,
       blocking: true,
     });
@@ -214,6 +236,15 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       blocking: false,
     });
   }
+  if (status.automationsSet !== undefined) {
+    steps.push({
+      key: 'automations',
+      label: tr('providerProfile.ui.setYourAutomations'),
+      done: status.automationsSet,
+      required: true,
+      blocking: false,
+    });
+  }
   return steps;
 }
 
@@ -228,12 +259,26 @@ export type GoLiveTone =
    *  them. In practice that always means the address never geocoded. */
   | 'stalled';
 
+export const OWNER_DETAILS_GO_LIVE_MESSAGE =
+  "Add the account holder's name, email and date of birth below. Set a sign-in password or have one generated. Once saved, we'll check the profile for publishing again.";
+
 export interface GoLiveHeadline {
   tone: GoLiveTone;
   title: string;
   /** The one thing worth saying under the title, or null when the step list
    *  already says it. */
   detail: string | null;
+}
+
+/** Setup percent at which the Profile dashboard's go-live card stops leading
+ *  and drops to the bottom (user, 2026-11-18). */
+export const GO_LIVE_CARD_DROPS_AT_PERCENT = 80;
+
+/** Whether the Profile dashboard's go-live card leads the page. It leads
+ *  until setup is at least 80%, and always while clients can't book the
+ *  provider yet: then it's the only place that says what's stopping them. */
+export function goLiveCardLeads(percent: number, isLive: boolean): boolean {
+  return !isLive || percent < GO_LIVE_CARD_DROPS_AT_PERCENT;
 }
 
 export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {
@@ -254,6 +299,14 @@ export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {
       tone: 'liveWithExtras',
       title: tr('providerProfile.goLive.liveWithExtras'),
       detail: trp('providerProfile.goLive.liveWithExtrasDetail', recommendedOutstanding.length),
+    };
+  }
+
+  if (status.detailsPending) {
+    return {
+      tone: 'blocked',
+      title: tr('providerProfile.ui.accountDetailsNeededBeforeGoingLive'),
+      detail: OWNER_DETAILS_GO_LIVE_MESSAGE,
     };
   }
 
@@ -305,6 +358,14 @@ export function deriveRecommendedGoLiveFields(profile: DbProvider): {
   };
 }
 
+/** Whether the provider has saved Automations. Every save there writes
+ *  clientReminderTiming to providers.automation_settings (other screens write
+ *  other keys into the same column, so "not empty" isn't the test). Until
+ *  then reminders and nudges run on defaults nobody chose. */
+export function deriveAutomationsSet(profile: DbProvider): boolean {
+  return profile.automation_settings?.clientReminderTiming !== undefined;
+}
+
 /** The Stripe go-live field, or `undefined` when the payouts feature is off.
  *  Read straight off the provider row (providers.stripe_charges_enabled is a
  *  select('*') column) so no caller pays an extra query. `undefined` while
@@ -343,10 +404,11 @@ export async function fetchGoLiveStatus(
   // Three independent reads — one round trip, not three in sequence. The
   // address check takes the id we already have so it doesn't re-resolve the
   // same provider row from the auth session a second time.
-  const [availability, serviceCount, addressSet] = await Promise.all([
+  const [availability, serviceCount, addressSet, detailsPending] = await Promise.all([
     getProviderAvailability(profile.id),
     countProviderServices(profile.id),
     hasMyProviderGoLiveAddress(profile.id),
+    getCurrentAccountDetailsPending(),
   ]);
 
   return {
@@ -357,6 +419,7 @@ export async function fetchGoLiveStatus(
     brandingSet: !!profile.logo_url,
     stripeSet: deriveStripeGoLiveField(profile),
     isLive: !!profile.has_gone_live,
+    detailsPending,
   };
 }
 

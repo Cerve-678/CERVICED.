@@ -16,6 +16,13 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   httpClient: Stripe.createFetchHttpClient(),
 });
 
+// Above this checkout total (fee included) PayPal isn't offered. PayPal costs
+// CERVICED about 3.1% + 40p, and with the fee capped at £24.99 a larger PayPal
+// payment loses money. Card, Apple Pay and Google Pay are always offered.
+// The payment sheet hides its PayPal button by the same limit
+// (PAYPAL_MAX_CHECKOUT_TOTAL in src/features/cart/platformFee.ts).
+const PAYPAL_MAX_CHECKOUT_PENCE = 60000;
+
 interface RequestBody {
   checkoutBatchId: string;
   currency?: string;
@@ -61,7 +68,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: batch, error: batchError } = await supabase
       .from('checkout_batches')
-      .select('id, amount_due, currency, status, expires_at, payment_intent_id')
+      .select('id, amount_due, currency, status, expires_at, payment_intent_id, sheet_amount_pence')
       .eq('id', body.checkoutBatchId)
       .eq('user_id', user.id)
       .single();
@@ -75,7 +82,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
     const { data: holds, error: holdsError } = await admin.from('bookings')
-      .select('provider_id, late_fee_pence, no_show_fee_pence').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
+      .select('provider_id, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
     if (holdsError || !holds?.length) throw new Error('No active reservations');
     const providerIds = [...new Set(holds.map(row => row.provider_id))];
     const { data: providers, error: providersError } = await admin.from('providers')
@@ -87,24 +94,50 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // A provider with a late or no-show fee needs the card saved for an
-    // off-session charge after the appointment — and the client's recorded
+    // A provider with a late, no-show or late cancellation fee needs the card
+    // saved for an off-session charge later — and the client's recorded
     // agreement (fee_consent_records, written by accept_checkout_fees before
     // this call), or nothing is saved for off-session use.
-    const hasFees = holds.some(row => (row.late_fee_pence ?? 0) > 0 || (row.no_show_fee_pence ?? 0) > 0);
+    const hasFees = holds.some(row => (row.late_fee_pence ?? 0) > 0 || (row.no_show_fee_pence ?? 0) > 0
+      || (row.late_cancel_fee_pence ?? 0) > 0);
     if (hasFees) {
       const { data: consent, error: consentError } = await admin.from('fee_consent_records')
         .select('id').eq('checkout_batch_id', batch.id).eq('user_id', user.id).maybeSingle();
       if (consentError) throw consentError;
       if (!consent) {
-        return new Response(JSON.stringify({ code: 'fee_consent_required', error: 'Please agree to the provider\'s late and no-show fees to continue.' }), {
+        return new Response(JSON.stringify({ code: 'fee_consent_required', error: 'Please agree to the provider\'s fees and late cancellation charge to continue.' }), {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     }
 
+    // Each request in the checkout is held on the card on its own and charged
+    // only if accepted (20261116100000_request_card_hold). The plan is fixed
+    // once, here, before the sheet's payment exists: the sheet then charges
+    // the instant bookings, or holds the first request when there are no
+    // instant ones. A payment created before this existed keeps amount_due.
+    let sheetPence: number;
+    if (batch.payment_intent_id) {
+      sheetPence = batch.sheet_amount_pence ?? Math.round(Number(batch.amount_due) * 100);
+    } else {
+      const { data: planned, error: planError } = await admin.rpc('plan_checkout_holds', {
+        p_checkout_batch_id: batch.id,
+      });
+      if (planError) throw planError;
+      sheetPence = Number(planned);
+    }
+    const { data: holdRows, error: holdRowsError } = await admin.from('request_card_holds')
+      .select('on_sheet').eq('checkout_batch_id', batch.id);
+    if (holdRowsError) throw holdRowsError;
+    const hasRequestHolds = (holdRows ?? []).length > 0;
+    // Holds placed by the server after the sheet need the card saved to the
+    // client's Customer. The client is in the app when they're placed (and
+    // confirms any bank check there), so on-session use is enough unless
+    // fees already need it saved for later.
+    const holdsAfterSheet = (holdRows ?? []).some(row => !row.on_sheet);
+
     // Stripe only ever receives the database-calculated amount.
-    const amountInPence = Math.round(Number(batch.amount_due) * 100);
+    const amountInPence = sheetPence;
     if (!Number.isSafeInteger(amountInPence) || amountInPence <= 0) {
       return new Response(JSON.stringify({ error: 'Invalid amount' }), {
         status: 400,
@@ -131,21 +164,40 @@ Deno.serve(async (req: Request) => {
       currency: batch.currency,
       customer: customerId,
       metadata: { user_id: user.id, checkout_batch_id: batch.id },
-      // PayPal only when nothing has to be saved for later: a late/no-show fee
-      // is charged off-session by booking-fee, which charges cards only.
+      // PayPal only when nothing has to be saved for later (a late/no-show fee
+      // is charged off-session by booking-fee, which charges cards only),
+      // nothing is a request (a request's hold is on a card), and the total
+      // is within PAYPAL_MAX_CHECKOUT_PENCE.
       // Apple Pay and Google Pay ride on 'card'.
-      payment_method_types: hasFees ? ['card'] : ['card', 'paypal'],
-      ...(hasFees ? { setup_future_usage: 'off_session' as const } : {}),
+      payment_method_types: hasFees || hasRequestHolds || Math.round(Number(batch.amount_due) * 100) > PAYPAL_MAX_CHECKOUT_PENCE
+        ? ['card'] : ['card', 'paypal'],
+      ...(hasFees ? { setup_future_usage: 'off_session' as const }
+        : holdsAfterSheet ? { setup_future_usage: 'on_session' as const } : {}),
       // The sheet authorises only. Server settlement captures, then confirms
       // the reserved bookings; signed webhooks recover interrupted requests
       // and refund captured payments whose reservations became unavailable.
+      // When the sheet's payment is a request's own hold it stays uncaptured
+      // until the provider accepts (settleCheckout, requestCardHolds.ts).
       capture_method: 'manual',
-    }, { idempotencyKey: `checkout_create_saved_cards_${batch.id}` });
+    }, { idempotencyKey: `checkout_create_request_holds_${batch.id}` });
 
-    // An intent started before saved cards shipped has no Customer; attach it
-    // while it can still change, so the sheet's saved cards line up.
-    if (!paymentIntent.customer && paymentIntent.status === 'requires_payment_method') {
-      paymentIntent = await stripe.paymentIntents.update(paymentIntent.id, { customer: customerId });
+    // Reused for a new attempt while it can still change (one Stripe call):
+    //  - An intent started before saved cards shipped has no Customer; attach
+    //    it, so the sheet's saved cards line up.
+    //  - A refusal the sheet showed earlier was stamped decline_seen
+    //    (finalize-payment-intent). This is a new attempt, so clear it: if this
+    //    one fails with nobody watching (the app closed), reconcile-checkouts
+    //    must tell the client, even when it fails exactly like the last one.
+    //    Setting a metadata key to '' removes it; the other keys are kept.
+    if (paymentIntent.status === 'requires_payment_method') {
+      const attach = !paymentIntent.customer;
+      const clearSeen = Boolean(paymentIntent.metadata?.decline_seen);
+      if (attach || clearSeen) {
+        paymentIntent = await stripe.paymentIntents.update(paymentIntent.id, {
+          ...(attach ? { customer: customerId } : {}),
+          ...(clearSeen ? { metadata: { decline_seen: '' } } : {}),
+        });
+      }
     }
 
     if (paymentIntent.status === 'canceled' || paymentIntent.status === 'succeeded') {

@@ -82,7 +82,7 @@ describe('CoachMarkTour', () => {
   // card, nothing is ever attached to priceRef, and that step has to drop
   // itself instead of stalling the tour on an unmeasurable target.
   it('skips a step whose ref target never mounted', async () => {
-    const orphan = React.createRef<import('react-native').View>();
+    const orphan = React.createRef<import('react-native').ViewInstance>();
     render(
       <CoachMarkTour
         visible

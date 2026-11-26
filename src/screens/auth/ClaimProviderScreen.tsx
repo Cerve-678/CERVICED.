@@ -1,44 +1,48 @@
 // src/screens/auth/ClaimProviderScreen.tsx
 // "Is your business already on CERVICED?" — search scraped/unclaimed
-// listings, verify ownership via a code sent to the listing's contact
-// email, then continue into the normal signup wizard with business info
-// prefilled. The actual claim_provider_profile() RPC call happens later,
-// once the account exists — see the pending-claim pickup in
-// InfoRegScreen.tsx's mount effect.
+// listings, explain that ownership is checked through the listing's
+// Instagram, then continue into the normal signup wizard with business info
+// prefilled. The claim itself (request_provider_claim, which issues the bio
+// code) is opened once the account exists — see the pending-claim pickup in
+// InfoRegScreen.tsx.
 import React, { useCallback, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { ListingInitialBadge } from '../../components/ListingInitialBadge';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import {
   searchUnclaimedProviders,
   getUnclaimedProviderDetail,
-  requestClaimVerification,
   savePendingClaim,
+  displayHandle,
   type UnclaimedProviderSummary,
   type UnclaimedProviderDetail,
 } from '../../services/providerClaimService';
+import { getListingNudgeCount } from '../../services/databaseService';
+import { listingNudgeLine } from '../../features/providers/directoryListings';
 import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'ClaimProvider'>;
 
-type Step = 'search' | 'preview' | 'code';
+type Step = 'search' | 'preview' | 'instagram';
 
 /** DB guard messages (P0001) are written for people and safe to show; a coded
  *  or technical error (RLS, network, missing column…) is not — return null so
@@ -65,10 +69,21 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
   const [results, setResults] = useState<UnclaimedProviderSummary[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selected, setSelected] = useState<UnclaimedProviderDetail | null>(null);
-  const [maskedEmail, setMaskedEmail] = useState('');
-  const [code, setCode] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [isLoadingKnown, setIsLoadingKnown] = useState(!!knownProviderId);
+  // People who nudged this listing to join, shown to the owner on the preview.
+  const [nudgeCount, setNudgeCount] = useState(0);
+
+  useEffect(() => {
+    setNudgeCount(0);
+    if (!selected) return;
+    let cancelled = false;
+    getListingNudgeCount(selected.id)
+      .then(count => { if (!cancelled) setNudgeCount(count); })
+      // Nice to have, not part of claiming: the preview just goes without it.
+      .catch((e: unknown) => logger.error('[ClaimProvider] nudge count failed:', e));
+    return () => { cancelled = true; };
+  }, [selected]);
 
   useEffect(() => {
     if (!knownProviderId) return;
@@ -147,37 +162,30 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
     }
   }, []);
 
-  const handleRequestCode = useCallback(async () => {
+  const handleThisIsMine = useCallback(() => {
     if (!selected) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setIsBusy(true);
-    try {
-      const { maskedEmail: masked } = await requestClaimVerification(selected.id);
-      setMaskedEmail(masked);
-      setStep('code');
-    } catch (e: any) {
-      logger.error('[ClaimProvider] request code failed:', e);
-      Alert.alert("Couldn't send code", friendlyClaimError(e) ?? 'Please try again.');
-    } finally {
-      setIsBusy(false);
-    }
-  }, [selected]);
-
-  const handleConfirmCode = useCallback(async () => {
-    if (!selected || code.trim().length < 6) {
-      Alert.alert('Enter code', 'Please enter the 6-digit code from your email.');
+    if (!displayHandle(selected.instagram)) {
+      Alert.alert(
+        "We can't check this one in the app",
+        "This listing has no Instagram for us to check. Email support@cerviced.co and we'll help you claim it.",
+      );
       return;
     }
+    setStep('instagram');
+  }, [selected]);
+
+  const handleContinueToSignUp = useCallback(async () => {
+    if (!selected) return;
     setIsBusy(true);
     try {
-      // Not signed in yet — stash the claim and finish attaching it to the
-      // account once it exists (InfoRegScreen picks this up on first load).
-      await savePendingClaim({ providerId: selected.id, code: code.trim() });
+      // Not signed in yet — stash the listing and open the claim once the
+      // account exists (InfoRegScreen picks this up on first load).
+      await savePendingClaim({ providerId: selected.id });
 
       updateData({
         accountType: 'provider',
         businessName: selected.displayName,
-        businessEmail: selected.email || '',
         businessPhone: selected.phone || '',
         instagram: selected.instagram || '',
         website: selected.website || '',
@@ -187,16 +195,16 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.navigate('SignUpStep1');
     } catch (e: any) {
-      logger.error('[ClaimProvider] confirm claim failed:', e);
+      logger.error('[ClaimProvider] save pending claim failed:', e);
       Alert.alert('Something went wrong', friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
-  }, [selected, code, updateData, setCurrentStep, navigation]);
+  }, [selected, updateData, setCurrentStep, navigation]);
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <KeyboardDismissView>
         <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
           <TouchableOpacity
@@ -206,7 +214,9 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
               // never a search step to fall back to, so back should leave
               // this screen entirely rather than land on an empty search
               // field the user never used.
-              if (knownProviderId || step === 'search') {
+              if (step === 'instagram') {
+                setStep('preview');
+              } else if (knownProviderId || step === 'search') {
                 navigation.goBack();
               } else {
                 setStep('search');
@@ -225,15 +235,16 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
             <>
               <Text style={[styles.title, { color: t.text }]}>Is your business already listed?</Text>
               <Text style={[styles.subtitle, { color: t.sub }]}>
-                Search by business name or city. If we've found your listing, you can claim it and skip re-entering your info.
+                Search by business name, Instagram handle or area. If we've found your listing, you can claim it and skip re-entering your info.
               </Text>
               <TextInput
                 style={[styles.input, { color: t.text, backgroundColor: t.surface, borderColor: t.border }]}
-                placeholder="Business name or city"
+                placeholder="Business name, Instagram or area"
                 placeholderTextColor={t.sub}
                 value={query}
                 onChangeText={setQuery}
-                autoCapitalize="words"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               {isSearching && <ActivityIndicator style={{ marginTop: 16 }} color={t.accent} />}
               <FlatList
@@ -249,12 +260,14 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                     {item.logoUrl ? (
                       <Image source={{ uri: item.logoUrl }} style={styles.resultLogo} />
                     ) : (
-                      <View style={[styles.resultLogo, { backgroundColor: t.border }]} />
+                      <ListingInitialBadge name={item.displayName} dark={isDarkMode} fontSize={20} style={styles.resultLogo} />
                     )}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.resultName, { color: t.text }]}>{item.displayName}</Text>
                       <Text style={[styles.resultSub, { color: t.sub }]}>
-                        {item.serviceCategory}{item.locationText ? ` · ${item.locationText}` : ''}
+                        {[displayHandle(item.instagram) ? `@${displayHandle(item.instagram)}` : null, item.serviceCategory, item.locationText]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -262,7 +275,7 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                 ListEmptyComponent={
                   query.trim().length >= 2 && !isSearching ? (
                     <Text style={[styles.emptyText, { color: t.sub }]}>No unclaimed listings found. You can still sign up from scratch.</Text>
-                  ) : null
+                  ) : undefined
                 }
               />
             </>
@@ -272,8 +285,16 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
             <>
               <Text style={[styles.title, { color: t.text }]}>{selected.displayName}</Text>
               <Text style={[styles.subtitle, { color: t.sub }]}>
-                {selected.serviceCategory}{selected.locationText ? ` · ${selected.locationText}` : ''}
+                {[displayHandle(selected.instagram) ? `@${displayHandle(selected.instagram)}` : null, selected.serviceCategory, selected.locationText]
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
+              {listingNudgeLine(nudgeCount) && (
+                <View style={[styles.nudgeRow, { backgroundColor: t.surface }]}>
+                  <Ionicons name="megaphone-outline" size={18} color={t.text} />
+                  <Text style={[styles.nudgeText, { color: t.text }]}>{listingNudgeLine(nudgeCount)}</Text>
+                </View>
+              )}
               {selected.scrapedFields.length > 0 && (
                 <View style={[styles.noticeBox, { backgroundColor: t.surface, borderColor: t.accent }]}>
                   <Text style={[styles.noticeText, { color: t.text }]}>
@@ -284,39 +305,38 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
               {selected.aboutText ? <Text style={[styles.aboutText, { color: t.text }]}>{selected.aboutText}</Text> : null}
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: t.accent }]}
-                onPress={handleRequestCode}
+                onPress={handleThisIsMine}
                 disabled={isBusy}
+                activeOpacity={0.85}
               >
-                {isBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>THIS IS MY BUSINESS</Text>}
+                <Text style={styles.primaryBtnText}>THIS IS MY BUSINESS</Text>
               </TouchableOpacity>
             </>
           )}
 
-          {step === 'code' && selected && (
+          {step === 'instagram' && selected && (
             <>
-              <Text style={[styles.title, { color: t.text }]}>Verify it's you</Text>
+              <Text style={[styles.title, { color: t.text }]}>Prove it's yours on Instagram</Text>
               <Text style={[styles.subtitle, { color: t.sub }]}>
-                We sent a 6-digit code to {maskedEmail}, the contact email on file for this listing.
+                We check claims through the Instagram on this listing:
               </Text>
-              <TextInput
-                style={[styles.input, styles.codeInput, { color: t.text, backgroundColor: t.surface, borderColor: t.border }]}
-                placeholder="123456"
-                placeholderTextColor={t.sub}
-                value={code}
-                onChangeText={(v) => setCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
-                keyboardType="number-pad"
-                maxLength={6}
-              />
+              <Text style={[styles.handleText, { color: t.text }]}>@{displayHandle(selected.instagram)}</Text>
+              <View style={[styles.noticeBox, { backgroundColor: t.surface, borderColor: t.border }]}>
+                <Text style={[styles.noticeText, { color: t.text }]}>
+                  After you create your account, you'll get a short code to add to that Instagram bio. Once we've seen it there, the listing is yours. You can take the code out afterwards.
+                </Text>
+              </View>
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: t.accent }]}
-                onPress={handleConfirmCode}
+                onPress={handleContinueToSignUp}
                 disabled={isBusy}
+                activeOpacity={0.85}
               >
-                {isBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>CONTINUE</Text>}
+                {isBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>CONTINUE TO SIGN UP</Text>}
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleRequestCode} disabled={isBusy} style={{ marginTop: 16 }}>
-                <Text style={[styles.resendText, { color: t.accent }]}>Resend code</Text>
-              </TouchableOpacity>
+              <Text style={[styles.helpText, { color: t.sub }]}>
+                Not your Instagram any more? Email support@cerviced.co and we'll help.
+              </Text>
             </>
           )}
         </View>
@@ -332,16 +352,18 @@ const styles = StyleSheet.create({
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 22, marginBottom: 8 },
   subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, marginBottom: 20 },
   input: { minHeight: 50, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontSize: 15, fontFamily: 'Jura-VariableFont_wght' },
-  codeInput: { textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: '700' },
+  handleText: { fontFamily: 'BakbakOne-Regular', fontSize: 18, marginBottom: 20 },
   resultRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, padding: 12, marginBottom: 10, gap: 12 },
   resultLogo: { width: 44, height: 44, borderRadius: 10 },
   resultName: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700' },
   resultSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2 },
   emptyText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, textAlign: 'center', marginTop: 24 },
   noticeBox: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 20 },
+  nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, padding: 14, marginBottom: 16 },
+  nudgeText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, fontWeight: '700' },
   noticeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19 },
   aboutText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, marginBottom: 24 },
   primaryBtn: { minHeight: 50, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 1, color: '#FFFFFF' },
-  resendText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  helpText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 16 },
 });

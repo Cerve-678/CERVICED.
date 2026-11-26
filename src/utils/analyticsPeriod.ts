@@ -1,5 +1,5 @@
 import { dateToYMD, dayName, monthName } from './dateUtils';
-import { tr } from '../i18n';
+import { tr } from '../i18n/translate';
 
 /** The range selector on the provider analytics screen. Only "7d" is a
  *  day-level window. Despite the label, '30d' is bucketed as the last six

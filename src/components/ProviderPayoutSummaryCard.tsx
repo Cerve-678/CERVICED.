@@ -1,22 +1,34 @@
 // ProviderPayoutSummaryCard.tsx
-// The provider's money at a glance on their own My Profile dashboard: what's
-// in Stripe now, what's held until appointments pass, and the next transfer
-// to their bank. A summary only — PaymentsScreen (ProviderStripePayments)
-// owns the detail, onboarding and refunds, so the whole card links there.
-import React, { useCallback, useRef, useState } from 'react';
+// The provider's money at a glance on their own My Profile dashboard. With a
+// payout schedule it shows "Your paydays": the next three, each with the
+// booking payments and tips expected in it (user, 2026-11-18). Without one
+// (manual, unreadable, or nothing on its way) it falls back to what's in
+// Stripe now, what's processing, and the next transfer to their bank.
+// A summary only — PaymentsScreen (ProviderStripePayments) owns the detail,
+// onboarding and refunds, so VIEW links there.
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
+  getPayoutSchedule,
   getProviderFinance,
   getProviderPayouts,
+  getProviderTipEarnings,
   type ProviderFinance,
   type ProviderPayout,
+  type ProviderTipEarning,
 } from '../services/providerPaymentService';
+import type { PayoutSchedule } from '../constants/payoutSchedule';
+import { isDarkColor } from '../constants/providerThemes';
+import { paydayLabel, upcomingPaydays } from '../features/payments/paydayForecast';
 import { logger } from '../utils/logger';
 import { useTranslation, localeForLanguage } from '../i18n';
+
+/** Booking lines shown under the picked payday before "and N more". */
+const MAX_PAYDAY_LINES = 5;
 
 export interface ProviderPayoutSummaryCardProps {
   cardBg: string;
@@ -55,6 +67,9 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
 }) => {
   const [finance, setFinance] = useState<ProviderFinance | null>(null);
   const [payouts, setPayouts] = useState<ProviderPayout[] | null>(null);
+  const [tips, setTips] = useState<ProviderTipEarning[]>([]);
+  const [schedule, setSchedule] = useState<PayoutSchedule | null>(null);
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const sequence = useRef(0);
@@ -71,12 +86,20 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
       if (Date.now() - lastLoadedAt.current < 60_000) return;
       lastLoadedAt.current = Date.now();
       const current = ++sequence.current;
-      void Promise.allSettled([getProviderFinance(), getProviderPayouts()]).then(([f, p]) => {
+      void Promise.allSettled([
+        getProviderFinance(), getProviderPayouts(), getProviderTipEarnings(), getPayoutSchedule(),
+      ]).then(([f, p, t, s]) => {
         if (current !== sequence.current) return;
         if (f.status === 'fulfilled') setFinance(f.value);
         else logger.error('[PayoutSummary] finance load failed:', f.reason);
         if (p.status === 'fulfilled') setPayouts(p.value);
         else logger.error('[PayoutSummary] payouts load failed:', p.reason);
+        // Tips and the schedule only add the paydays view; without them the
+        // card falls back to the totals.
+        if (t.status === 'fulfilled') setTips(t.value);
+        else logger.error('[PayoutSummary] tips load failed:', t.reason);
+        if (s.status === 'fulfilled') setSchedule(s.value);
+        else logger.error('[PayoutSummary] schedule load failed:', s.reason);
         setFailed(f.status === 'rejected' && p.status === 'rejected');
         setLoaded(true);
       });
@@ -88,12 +111,88 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
     onOpenPayments();
   }, [onOpenPayments]);
 
+  const paydays = useMemo(
+    () => (schedule && payouts ? upcomingPaydays({ payouts, tips, schedule, now: new Date() }) : []),
+    [schedule, payouts, tips],
+  );
+  const picked = paydays.find(day => day.key === pickedDay) ?? paydays[0] ?? null;
+  const onAccent = isDarkColor(accentColor) ? '#FFFFFF' : '#1A1815';
+
   const connected = finance?.connected ?? null;
   const held = (payouts ?? []).filter(p => p.status === 'held');
   const heldTotal = total(held.map(p => ({ amount: p.payout_amount, currency: p.currency })));
   const nextPayout = finance?.payouts
     .filter(p => p.status === 'pending' || p.status === 'in_transit')
     .sort((a, b) => a.arrivalDate - b.arrivalDate)[0];
+
+  if (loaded && connected !== false && picked) {
+    const lines = picked.items.slice(0, MAX_PAYDAY_LINES);
+    const more = picked.items.length - lines.length;
+    return (
+      <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
+        <TouchableOpacity
+          onPress={handlePress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Your paydays. Open Payments."
+          style={styles.headerRow}
+        >
+          <View style={styles.titleWrap}>
+            <Ionicons name="wallet-outline" size={15} color={accentColor} />
+            <Text style={[styles.title, { color: textColor }]}>Your paydays</Text>
+          </View>
+          <View style={[styles.chip, { borderColor }]}>
+            <Text style={[styles.chipText, { color: accentColor }]}>{t('providerBusiness.payoutCard.view')}</Text>
+            <Ionicons name="chevron-forward" size={11} color={accentColor} />
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.days}>
+          {paydays.map(day => {
+            const on = day.key === picked.key;
+            const count = day.items.length;
+            const label = paydayLabel(day.date);
+            return (
+              <TouchableOpacity
+                key={day.key}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setPickedDay(day.key); }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${label}, ${money(day.totalPence, 'gbp')}, ${count} payment${count === 1 ? '' : 's'}`}
+                style={[styles.day, on ? { backgroundColor: accentColor, borderColor: accentColor } : { borderColor }]}
+              >
+                <Text style={[styles.dayLabel, { color: on ? onAccent : subTextColor }]} numberOfLines={1}>{label.toUpperCase()}</Text>
+                <Text style={[styles.dayAmount, { color: on ? onAccent : textColor }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {money(day.totalPence, 'gbp')}
+                </Text>
+                <Text style={[styles.dayCount, { color: on ? onAccent : subTextColor }]}>{count} payment{count === 1 ? '' : 's'}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={[styles.statLabel, { color: subTextColor, marginTop: 10, marginBottom: 0 }]}>
+          {`IN YOUR ${paydayLabel(picked.date).toUpperCase()} PAYDAY`}
+        </Text>
+        {lines.map(item => (
+          <View key={item.key} style={[styles.line, { borderTopColor: borderColor }]}>
+            <Text style={[styles.lineTitle, { color: textColor }]} numberOfLines={1}>
+              {item.title}
+              {!!item.detail && <Text style={{ color: subTextColor }}>{` · ${item.detail}`}</Text>}
+            </Text>
+            <Text style={[styles.lineAmount, { color: textColor }]}>{money(item.pence, 'gbp')}</Text>
+          </View>
+        ))}
+        {more > 0 && (
+          <Text style={[styles.note, { color: subTextColor, marginTop: 6 }]}>and {more} more</Text>
+        )}
+        {finance && !finance.livemode && (
+          <Text style={[styles.testMode, { color: subTextColor }]}>{t('providerBusiness.payoutCard.testMode')}</Text>
+        )}
+      </BlurView>
+    );
+  }
 
   let body: React.ReactNode;
   if (!loaded) {
@@ -114,14 +213,14 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
       <>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: subTextColor }]}>{t('providerBusiness.payoutCard.inStripe')}</Text>
+            <Text style={[styles.statLabel, { color: subTextColor }]}>READY FOR PAYDAY</Text>
             <Text style={[styles.statValue, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>
               {finance ? total(finance.available) : '—'}
             </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: borderColor }]} />
           <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: subTextColor }]}>{t('providerBusiness.payoutCard.held')}</Text>
+            <Text style={[styles.statLabel, { color: subTextColor }]}>PROCESSING</Text>
             <Text style={[styles.statValue, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>
               {payouts ? heldTotal : '—'}
             </Text>
@@ -131,8 +230,8 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
           {nextPayout
             ? t('providerBusiness.payoutCard.next', { amount: money(nextPayout.amount, nextPayout.currency), date: arrival(nextPayout.arrivalDate) })
             : held.length > 0
-              ? tp('providerBusiness.payoutCard.heldRelease', held.length)
-              : t('providerBusiness.payoutCard.none')}
+              ? `${held.length} booking payment${held.length === 1 ? '' : 's'} processing.`
+              : 'No payout on its way right now.'}
         </Text>
         {finance && !finance.livemode && (
           <Text style={[styles.testMode, { color: subTextColor }]}>{t('providerBusiness.payoutCard.testMode')}</Text>
@@ -222,6 +321,55 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     letterSpacing: -0.1,
+  },
+  days: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  day: {
+    flex: 1,
+    minHeight: 64,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+  },
+  dayLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 0.8,
+  },
+  dayAmount: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    marginTop: 2,
+  },
+  dayCount: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  line: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  lineTitle: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+  },
+  lineAmount: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 13,
   },
   testMode: {
     fontFamily: 'Jura-VariableFont_wght',

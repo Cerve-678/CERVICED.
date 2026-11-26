@@ -1,3 +1,4 @@
+import { useDescriptionTopics } from '../../features/providers/useDescriptionTopics';
 import { SKIN_TONES } from '../../constants/skinTones';
 import React, { useState, useCallback, useMemo, useRef, useEffect, useContext, createContext } from 'react';
 import {
@@ -10,7 +11,6 @@ import {
   StatusBar,
   FlatList,
   Dimensions,
-  useWindowDimensions,
   Alert,
   TextInput,
   Modal,
@@ -20,22 +20,35 @@ import {
   Switch,
   Animated,
   PanResponder,
+  useWindowDimensions,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { ImageCropModal } from '../../components/ImageCropModal';
+import { TapToEditTextInput } from '../../components/TapToEditTextInput';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import { StackScreenProps } from '@react-navigation/stack';
-import { useIsFocused } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 // Icon imports
 import { BellIcon } from '../../components/IconLibrary';
 import CategoryTabPill from '../../components/CategoryTabPill';
+import { ProfileStylePreview } from '../../features/providers/ProfileStylePreview';
+import { heroLabelsFrom, previewContentFrom } from '../../features/providers/previewContent';
+import { policyImageEdges, policyImageUrls } from '../../features/providers/policyImages';
+import { heroPhotosForPage } from '../../features/providers/heroPhotos';
+import { getPageStyle, heroPhotoPickLimit } from '../../constants/pageStyles';
+import { heroPhotoFramesOf } from '../../features/providers/HeroPhoto';
+import { DEFAULT_PROVIDER_FONT } from '../../constants/providerFonts';
 import AddressPicker from '../../components/AddressPicker';
-import TermsScreen from '../shared/TermsScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 // Theme import — this screen never follows the APP's dark/light mode (see
@@ -51,17 +64,26 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppDialog } from '../../components/AppDialog';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage, ServiceDescriptionVerificationError } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
+import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
 import { transferFromAcuity } from '../../services/acuityTransferService';
-import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { loadListingClaim, isClaimGuardError, displayHandle, type ProviderClaim } from '../../services/providerClaimService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderRelease } from '../../services/databaseService';
+import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
-import type { DbPortfolioItem } from '../../types/database';
+import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
+import { FramedLogo, LogoCircle } from '../../components/FramedLogo';
+import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
+import { slotsPillText } from '../../utils/slotsRowText';
+import { DEFAULT_RELEASE_TIME, releaseTimeLabel } from '../../utils/bookingHorizon';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
+import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
   DEFAULT_PROVIDER_THEME,
+  parseThemeKey,
   resolveProviderTheme,
   themeBrandingColours,
   withAlpha,
@@ -70,21 +92,65 @@ import {
 } from '../../constants/providerThemes';
 
 // Navigation types
-import { ProfileStackParamList } from '../../navigation/types';
+import { ProfileStackParamList, type ProviderServicesStackParamList } from '../../navigation/types';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { logger } from '../../utils/logger';
+import { openLegalPage } from '../../utils/legalPage';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
-import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
-import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
+import { formatLongDate } from '../../utils/dateUtils';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
+import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
 import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
 import { ChipSelect } from '../../features/provider-registration/ChipSelect';
+import {
+  BOOKING_INSTRUCTION_SUGGESTIONS,
+  selectedBookingInstructions,
+  toggleBookingInstruction,
+} from '../../features/business-details/bookingInstructions';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
-import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { createServiceDraft, upsertServiceInList } from '../../features/provider-registration/serviceDraft';
+import { serviceTypeOptionsFor, type ServiceTypeKey } from '../../constants/serviceTypes';
+import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
+import {
+  applyRuleToServices,
+  defaultAddOnKeysForCategory,
+  mergeAddOns,
+  removeAddOnFromServices,
+  removeCategoryFromLibrary,
+  renameCategoryInLibrary,
+  MAX_ADD_ONS,
+  type AddOnLibraryItem,
+} from '../../features/provider-registration/addOnLibrary';
+import { AddOnLibrarySection } from '../../features/provider-registration/AddOnLibrarySection';
+import { AddOnEditorModal, type AddOnEditorResult } from '../../features/provider-registration/AddOnEditorModal';
+import { ServiceAddOnsField } from '../../features/provider-registration/ServiceAddOnsField';
 import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
+import {
+  CATEGORY_KINDS,
+  OCCASION_TAGS_BY_CATEGORY,
+  OCCASION_TAGS_DEFAULT,
+  OUTCOME_TAGS_BY_CATEGORY,
+  SERVICE_TEMPLATES_BY_CATEGORY,
+  STYLE_TAGS_BY_CATEGORY,
+  TECHNIQUE_TAGS_BY_CATEGORY,
+  TREND_NAMES_BY_CATEGORY,
+  DESCRIPTION_PROBLEM_COPY,
+  TAG_GROUP_KEYS,
+  descriptionProblem,
+  hasNoTags,
+  inferCategoryKind,
+  mergeTagGroups,
+  parseTypedTags,
+  suggestServiceDetails,
+  tagLabel,
+  type CategoryKind,
+  type ServiceTagGroups,
+  type ServiceTemplate,
+} from '../../features/providers/serviceTags';
 import {
   INFO_REG_SECTIONS as EDITOR_SECTIONS,
   LINK_ONLY_INFO_REG_SECTIONS as LINK_ONLY_EDITOR_SECTIONS,
@@ -92,18 +158,22 @@ import {
   type InfoRegSectionKey as EditorSectionKey,
 } from '../../features/provider-registration/infoRegSections';
 import { toUserMessage } from '../../utils/userFacingError';
+import { PackFormHint, type PackFormKind } from '../../features/info-packs/PackFormHint';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
 
 import {
   ADDRESS_RELEASE_OPTS,
   BUSINESS_TYPE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  reconcileAddressReleasePolicy,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
+import { readableDialog, readableSheet } from '../../constants/readableWidth';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -178,7 +248,7 @@ const REVIEW_WARN_COLOR = '#FF9500';
 
 // ─── Policy types ────────────────────────────────────────────────────────────
 type CancelNotice     = 'none' | '24h' | '48h' | '72h';
-type CancelPenalty    = 'none' | 'deposit' | 'full';
+type CancelPenalty    = 'none' | 'deposit' | 'half';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
 type NoShowAction     = 'none' | 'warn' | 'charge_deposit';
@@ -208,7 +278,8 @@ interface ProviderPolicies {
    *  the read site. */
   noShowGraceMinutes: string;
   /** Optional instructions stamped onto every new booking (e.g. "please
-   *  arrive 10 minutes early") — shown to clients in their booking details */
+   *  arrive 10 minutes early") — shown to clients in their booking details
+   *  and their day-before reminder */
   bookingInstructions: string;
   /** Optional photo of a fuller policy document (e.g. a house-rules sheet,
    *  a scanned consent form) — shown to clients via a pop-up on their
@@ -241,24 +312,10 @@ const DEFAULT_POLICIES: ProviderPolicies = {
   waitlistSelectionMethod: 'fifo',
 };
 
-// Add-on interface
-interface AddOnData {
-  id: number;
-  // The real service_add_ons.id, when this add-on already exists in the DB —
-  // null for one created in this editing session. Threaded through to the
-  // save payload so replace_provider_services can update the row in place
-  // instead of deleting and recreating it under a new id, which used to
-  // silently break any cart or booking that had selected this exact add-on
-  // (service_add_ons.id has no stable identity across a save otherwise).
-  dbId: string | null;
-  name: string;
-  price: number;
-}
-
 interface ServiceData {
   id: number;
   // The real services.id, when this service already exists in the DB — null
-  // for one created in this editing session. See AddOnData.dbId for why: a
+  // for one created in this editing session. A
   // provider re-saving ANY service used to regenerate every service's id,
   // which orphaned every client cart item and booking pointing at the old
   // one (bookings.service_id is ON DELETE SET NULL — 96% of live bookings
@@ -272,7 +329,9 @@ interface ServiceData {
   bufferAfterMins: number | null;
   description: string;
   images: ServiceImageDraft[];
-  addOns: AddOnData[];
+  /** Keys of the provider's add-ons ticked on this service (see
+   *  features/provider-registration/addOnLibrary). */
+  addOnKeys: string[];
   // Discoverability tags
   tags: string[];
   techniqueTags: string[];
@@ -285,7 +344,7 @@ interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  serviceType: ServiceTypeKey | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
   skinTonesSuitable?: string[];
@@ -293,12 +352,6 @@ interface ServiceData {
   // mirrors the live services_audience_check constraint.
   audience: 'women' | 'men' | 'kids' | 'everyone' | '';
 }
-
-// ─── Category kinds ──────────────────────────────────────────────────────────
-// Every category a provider adds is tied to one of these "kinds". The kind is
-// what drives the smart suggestions below (templates, tags, trend names), so a
-// category named "Braids" or "Injectables" still gets HAIR / AESTHETICS help.
-type CategoryKind = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'MUA' | 'AESTHETICS' | 'OTHER';
 
 // Categories where a patch test is standard professional practice before the
 // treatment itself (chemical colour/lightener, lash/brow tint and adhesive,
@@ -309,8 +362,6 @@ type CategoryKind = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'MUA' | 'AESTHETICS'
 // adding a new service — never overrides a value the provider already set.
 const PATCH_TEST_DEFAULT_CATEGORIES: ReadonlySet<CategoryKind> = new Set(['HAIR', 'LASHES', 'BROWS', 'AESTHETICS']);
 
-
-const CATEGORY_KINDS: CategoryKind[] = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
 // icon = an Ionicons glyph name (no emoji — rendered via <Ionicons name={...} />)
 // blurb = short label shown on the picker card itself; description = the
@@ -414,81 +465,6 @@ const CATEGORY_NAME_EXAMPLE_BY_CATEGORY: Record<CategoryKind, string> = {
   OTHER:      'e.g., Bridal Package',
 };
 
-// Keyword hints so free-text / imported category names still resolve to a kind.
-const CATEGORY_KEYWORDS: Record<CategoryKind, string[]> = {
-  HAIR:       ['hair', 'braid', 'loc', 'weave', 'wig', 'silk press', 'blow', 'cut', 'colour', 'color', 'balayage', 'extension', 'twist', 'cornrow'],
-  NAILS:      ['nail', 'mani', 'pedi', 'acrylic', 'gel', 'biab', 'polish'],
-  LASHES:     ['lash', 'extension set', 'lift'],
-  BROWS:      ['brow', 'microblad', 'lamination', 'threading'],
-  MUA:        ['makeup', 'make up', 'mua', 'glam', 'bridal face'],
-  AESTHETICS: ['aesthetic', 'facial', 'skin', 'peel', 'filler', 'botox', 'injectable', 'needling', 'wax', 'laser', 'hifu', 'derma'],
-  OTHER:      [],
-};
-
-/** Resolve a category name to a kind — exact match → keyword match → fallback. */
-const inferCategoryKind = (name: string, fallback: string = 'OTHER'): CategoryKind => {
-  const upper = (name || '').trim().toUpperCase();
-  if ((CATEGORY_KINDS as string[]).includes(upper)) return upper as CategoryKind;
-  const lower = (name || '').toLowerCase();
-  for (const kind of CATEGORY_KINDS) {
-    if (kind === 'OTHER') continue;
-    if (CATEGORY_KEYWORDS[kind].some(kw => lower.includes(kw))) return kind;
-  }
-  const fb = (fallback || '').trim().toUpperCase();
-  return (CATEGORY_KINDS as string[]).includes(fb) ? (fb as CategoryKind) : 'OTHER';
-};
-
-// ─── Tag presets per context ─────────────────────────────────────────────────
-
-// "Style / Vibe" — a shared core plus a few flavours that fit each kind.
-const STYLE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['natural', 'glam', 'sleek', 'lived-in', 'boho', 'edgy', 'classic', 'bold', 'romantic', 'textured', 'polished', 'undone', 'vintage'],
-  NAILS:      ['natural', 'glam', 'minimalist', 'y2k', 'baddie', 'soft-girl', 'editorial', 'bold', 'chrome', 'french-inspired', 'grunge', 'coquette', 'clean-girl'],
-  LASHES:     ['natural', 'glam', 'wispy', 'doll', 'baddie', 'dramatic', 'classic', 'bold', 'fluffy', 'cat-eye', 'anime', 'soft-glam'],
-  BROWS:      ['natural', 'fluffy', 'defined', 'soft-girl', 'bold', 'editorial', 'classic', 'feathered', 'sculpted', 'arched', 'minimal'],
-  MUA:        ['natural', 'glam', 'editorial', 'soft-girl', 'clean-girl', 'bridal', 'bold', 'dewy', 'matte', 'sun-kissed', 'vintage-glam', 'monochrome'],
-  AESTHETICS: ['natural', 'glow-up', 'subtle', 'preventative', 'rejuvenating', 'clinical', 'natural-enhancement', 'restorative', 'youthful', 'refined'],
-  OTHER:      ['natural', 'glam', 'editorial', 'classic', 'minimalist', 'bold', 'modern', 'timeless'],
-};
-
-// "Best for (occasion)" — universal set, with a tailored list for aesthetics.
-const OCCASION_TAGS_DEFAULT = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party', 'graduation', 'holiday', 'girls-night', 'anniversary', 'vacation'];
-const OCCASION_TAGS_BY_CATEGORY: Partial<Record<CategoryKind, string[]>> = {
-  AESTHETICS: ['pre-wedding', 'event-prep', 'maintenance', 'glow-up', 'confidence-boost', 'anti-ageing', 'everyday', 'special-occasion', 'seasonal-refresh', 'first-treatment'],
-};
-
-const TECHNIQUE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['balayage', 'highlights', 'ombre', 'keratin', 'relaxer', 'braids', 'locs', 'twists', 'extensions', 'colour', 'foilyage', 'colour-correction', 'perm', 'silk-press', 'weave', 'toner'],
-  NAILS:      ['gel', 'acrylic', 'biab', 'nail-art', 'french', 'ombre', 'chrome', 'dip-powder', 'gel-x', 'polygel', 'encapsulated', 'hand-painted', '3d-art', 'cat-eye-gel'],
-  LASHES:     ['classic', 'hybrid', 'volume', 'mega-volume', 'lash-lift', 'lash-tint', 'russian', 'wispy', 'mink', 'faux-mink', 'colored-lashes', 'bottom-lashes'],
-  BROWS:      ['microblading', 'powder-brow', 'combo-brow', 'lamination', 'tinting', 'hd-brows', 'threading', 'waxing', 'nano-brows', 'brow-mapping', 'henna-brows', 'wax-and-thread'],
-  MUA:        ['airbrush', 'full-glam', 'editorial', 'natural', 'bridal', 'sfx', 'cut-crease', 'dewy', 'contour-and-highlight', 'strobing', 'baking', 'graphic-liner'],
-  AESTHETICS: ['microneedling', 'chemical-peel', 'dermaplaning', 'hifu', 'filler', 'botox', 'laser', 'hydrafacial', 'mesotherapy', 'prp', 'led-therapy', 'radiofrequency', 'cryotherapy', 'lymphatic-drainage'],
-  OTHER:      [],
-};
-
-const OUTCOME_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition', 'texture', 'colour-vibrancy', 'repair', 'bounce'],
-  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability', 'shine', 'flexibility', 'precision'],
-  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic', 'natural-look', 'symmetry', 'longevity'],
-  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched', 'symmetry', 'longevity', 'precision'],
-  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity', 'radiance', 'flawless-finish', 'camera-ready'],
-  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting', 'even-tone', 'collagen-boost', 'pore-refinement', 'radiance'],
-  OTHER:      ['results', 'enhancement', 'maintenance', 'confidence', 'refresh'],
-};
-
-// Viral / trend names clients actually search for — now per kind so a lash artist
-// never sees "soap-brows" and a nail tech never sees "butterfly-lashes".
-const TREND_NAMES_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['butterfly-cut', 'money-piece', 'expensive-brunette', 'old-money', 'mob-wife', 'cherry-cola', 'copper', 'lived-in', 'curtain-bangs', 'jellyfish-cut', 'clean-girl-bun', 'wolf-cut', 'chocolate-cherry', 'buttery-blonde'],
-  NAILS:      ['glazed-donut', 'blueberry-milk', 'cherry-cola', 'chrome', 'aura-nails', 'milky-white', 'strawberry-girl', 'velvet', 'lip-gloss', 'jelly-nails', 'cat-eye', 'french-tip-revival', 'mob-wife-nails'],
-  LASHES:     ['butterfly-lashes', 'manga-lashes', 'anime-lashes', 'wet-look', 'fox-eye', 'natural-classic', 'kim-k', 'angel-lashes', 'clean-girl-lashes', 'doll-eye', 'colored-tips'],
-  BROWS:      ['soap-brows', 'brow-lamination', 'fluffy-brows', 'fox-brows', 'feathered', 'snatched-arch', 'nano-brows', 'skinny-brow-revival', 'laminated-and-tinted'],
-  MUA:        ['clean-girl', 'latte-makeup', 'strawberry-girl', 'sunburn-blush', 'cold-girl', 'douyin', 'siren-eyes', 'glazed', 'tomato-girl', 'mob-wife-glam', 'espresso-makeup'],
-  AESTHETICS: ['glass-skin', 'baby-botox', 'russian-lips', 'lip-flip', 'skinboosters', 'glazed-donut-skin', 'snatched', 'fox-eye-lift', 'preventative-botox', 'liquid-facelift', 'tear-trough-filler'],
-  OTHER:      ['clean-girl', 'old-money', 'that-girl', 'quiet-luxury', 'coastal-grandma', 'mob-wife'],
-};
-
 // Starter contraindications — common, well-established conditions
 // practitioners routinely screen for, tailored to the kind of treatment the
 // service belongs to (the same catKey used for style/technique/outcome tags
@@ -554,161 +530,6 @@ const COMMON_CONTRAINDICATIONS_BY_CATEGORY: Record<CategoryKind, string[]> = {
     'Recent surgery in treatment area',
     'Uncontrolled diabetes',
     'Under 18 without guardian consent',
-  ],
-};
-
-// Pre-built service starting points offered the moment a provider taps "Add
-// Service" — pre-fills name + duration so most services are two taps to save.
-interface ServiceTemplate {
-  name: string;
-  duration: string;
-  serviceType?: ServiceData['serviceType'];
-  description?: string;
-  styleTags?: string[];
-  techniqueTags?: string[];
-  outcomeTags?: string[];
-  occasionTags?: string[];
-  trendNames?: string[];
-  /** Always offered as a starting point, regardless of which specific
-   *  subcategory is selected — e.g. a consultation. Not filtered out even
-   *  when a subcategory's template list is otherwise narrowed. */
-  generic?: boolean;
-}
-const SERVICE_TEMPLATES_BY_CATEGORY: Record<CategoryKind, ServiceTemplate[]> = {
-  HAIR: [
-    { name: 'Consultation',          duration: '20 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Cut & Blow Dry',        duration: '1 hr',      description: 'A fresh cut finished with a smooth, salon-quality blow dry.', styleTags: ['sleek'], techniqueTags: [], outcomeTags: ['shine', 'definition'] },
-    { name: 'Blow Dry',              duration: '45 min',    description: 'Wash and blow dry for a bouncy, salon-fresh finish.', styleTags: ['sleek', 'glam'], outcomeTags: ['volume', 'shine'] },
-    { name: 'Full Head Highlights',  duration: '3 hr',       description: 'Dimensional highlights all over for a lighter, sun-kissed look.', techniqueTags: ['highlights', 'colour'], outcomeTags: ['shine', 'definition'], trendNames: ['expensive-brunette', 'money-piece'] },
-    { name: 'Balayage',              duration: '3 hr',       description: 'Hand-painted, low-maintenance colour that grows out beautifully.', techniqueTags: ['balayage', 'colour'], outcomeTags: ['shine', 'definition'], trendNames: ['lived-in', 'money-piece', 'expensive-brunette'] },
-    { name: 'Root Tint',             duration: '1 hr 30',    description: 'Root touch-up to keep your colour looking fresh between full appointments.', techniqueTags: ['colour'], outcomeTags: ['grey-coverage', 'shine'] },
-    { name: 'Toner / Gloss',         duration: '30 min',     description: 'A quick gloss to refresh tone and add mirror-like shine.', techniqueTags: ['colour'], outcomeTags: ['shine'] },
-    { name: 'Keratin Treatment',     duration: '2 hr 30',    description: 'Smoothing treatment that cuts frizz and adds long-lasting shine.', techniqueTags: ['keratin'], outcomeTags: ['smoothness', 'shine', 'protection'] },
-    { name: 'Knotless Braids',       duration: '4 hr',       description: 'Tension-free knotless braids, neat at the root and lightweight to wear.', techniqueTags: ['braids'], outcomeTags: ['protection', 'length'], trendNames: [] },
-    { name: 'Silk Press',            duration: '1 hr 30',    description: 'Silky, salon-smooth press that shows off your natural length and shine.', outcomeTags: ['shine', 'smoothness'] },
-    { name: 'Wig Install',           duration: '2 hr',       description: 'Melted, natural-looking wig install customised to your hairline.', techniqueTags: ['extensions'], outcomeTags: ['definition', 'volume'] },
-    { name: 'Dry Cut',               duration: '30 min',     description: 'A precision cut with no wash or blow dry — quick shape-up between appointments.', outcomeTags: ['definition'] },
-    { name: 'Half Head Highlights',  duration: '2 hr',       description: 'Highlights around the face and crown for a lighter look without going full head.', techniqueTags: ['highlights', 'colour'], outcomeTags: ['shine', 'definition'] },
-    { name: 'Cornrows',              duration: '2 hr 30',    description: 'Neat, close-to-the-scalp cornrows — straight back or in a custom pattern.', techniqueTags: ['braids'], outcomeTags: ['protection', 'length'] },
-    { name: 'Deep Conditioning Treatment', duration: '45 min', description: 'Intensive moisture treatment to restore softness and strength to dry or damaged hair.', outcomeTags: ['smoothness', 'shine', 'growth'] },
-    { name: "Men's Haircut",         duration: '30 min',     description: "A tailored men's cut, clippers or scissor work to your preferred style.", outcomeTags: ['definition'] },
-    { name: 'Beard Trim',            duration: '20 min',     description: 'Shape and tidy for a sharp, well-defined beard line.', outcomeTags: ['definition'] },
-    { name: 'Foilyage',              duration: '2 hr 30',    description: 'Foil-placed balayage for brighter, more blended dimension.', techniqueTags: ['foilyage', 'highlights'], outcomeTags: ['shine', 'colour-vibrancy'], trendNames: ['money-piece'] },
-    { name: 'Colour Correction',     duration: '4 hr',       serviceType: 'restorative', description: 'Corrective colour work to fix tone, banding or previous colour gone wrong.', techniqueTags: ['colour-correction'], outcomeTags: ['colour-vibrancy', 'repair'] },
-    { name: 'Perm',                  duration: '2 hr',       description: 'Chemical wave treatment for lasting curl or texture.', techniqueTags: ['perm'], outcomeTags: ['texture', 'bounce'] },
-    { name: 'Weave Install',         duration: '3 hr',       description: 'Sewn-in weave for extra length and volume with a seamless blend.', techniqueTags: ['weave', 'extensions'], outcomeTags: ['length', 'volume'] },
-    { name: 'Fringe / Bangs Trim',   duration: '15 min',     description: 'Quick shape-up to keep your fringe fresh between full cuts.', outcomeTags: ['definition'] },
-  ],
-  NAILS: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Gel Manicure',          duration: '45 min',    description: 'Chip-resistant gel polish with shaping and cuticle care.', techniqueTags: ['gel'], outcomeTags: ['colour', 'durability'] },
-    { name: 'BIAB Overlay',          duration: '1 hr',       description: 'Strengthening builder gel overlay for stronger, healthier natural nails.', techniqueTags: ['biab'], outcomeTags: ['strength', 'durability'] },
-    { name: 'Acrylic Full Set',      duration: '1 hr 30',    description: 'Full set of acrylic extensions, shaped and finished to your choice of length.', techniqueTags: ['acrylic'], outcomeTags: ['length', 'durability'] },
-    { name: 'Gel-X Extensions',      duration: '1 hr 30',    description: 'Lightweight, flexible gel-x tips for a natural-feeling extension.', techniqueTags: ['gel-x'], outcomeTags: ['length', 'natural-look'], trendNames: ['milky-white'] },
-    { name: 'Infill',                duration: '1 hr',       description: 'Infill to keep your extensions neat as your natural nail grows through.', techniqueTags: ['acrylic', 'gel'], outcomeTags: ['durability'] },
-    { name: 'Soak Off & Removal',    duration: '30 min',     description: 'Gentle removal of gel or acrylic with nail and cuticle care after.', outcomeTags: ['natural-look'] },
-    { name: 'Gel Pedicure',          duration: '45 min',     description: 'Full pedicure with long-lasting gel polish and a relaxing soak.', techniqueTags: ['gel'], outcomeTags: ['colour', 'durability'] },
-    { name: 'Nail Art (per nail)',   duration: '15 min',     description: 'Custom nail art add-on, priced per nail — hand-painted or with embellishments.', techniqueTags: ['nail-art'], outcomeTags: ['art', 'colour'], trendNames: ['chrome', 'aura-nails'] },
-    { name: 'Classic Manicure',      duration: '30 min',     description: 'Shape, cuticle care and regular polish for a clean, natural finish.', outcomeTags: ['natural-look'] },
-    { name: 'Classic Pedicure',      duration: '30 min',     description: 'Soak, shape and regular polish with a relaxing foot massage.', outcomeTags: ['natural-look'] },
-    { name: 'French Tips',           duration: '45 min',     description: 'The timeless French manicure — clean white tips over a natural base.', techniqueTags: ['french'], outcomeTags: ['art', 'colour'] },
-    { name: 'Dip Powder Set',        duration: '1 hr',       description: 'Durable dip powder colour, built up in layers for strength and shine.', techniqueTags: ['dip-powder'], outcomeTags: ['colour', 'durability'] },
-    { name: 'Polygel Full Set',      duration: '1 hr 30',    description: 'Lightweight, flexible polygel extensions built up on tips or forms.', techniqueTags: ['polygel'], outcomeTags: ['length', 'flexibility'] },
-    { name: 'Cat Eye Gel Manicure',  duration: '1 hr',       description: 'Magnetic cat-eye gel polish for a shimmering, dimensional finish.', techniqueTags: ['cat-eye-gel', 'gel'], outcomeTags: ['colour', 'shine'], trendNames: ['cat-eye'] },
-    { name: '3D Nail Art (per nail)', duration: '20 min',    description: 'Sculpted 3D embellishments and charms, priced per nail.', techniqueTags: ['3d-art'], outcomeTags: ['art', 'precision'] },
-    { name: 'Encapsulated Nail Art', duration: '1 hr 15',    description: 'Delicate design or foil sealed under a clear gel layer for lasting shine.', techniqueTags: ['encapsulated', 'nail-art'], outcomeTags: ['art', 'durability'] },
-    { name: 'Nail Repair (per nail)', duration: '10 min',    description: 'Fixes a broken or lifted nail without a full new set.', outcomeTags: ['strength', 'durability'] },
-  ],
-  LASHES: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Classic Full Set',      duration: '1 hr 30',    description: 'One extension per natural lash for a subtle, everyday enhancement.', techniqueTags: ['classic'], outcomeTags: ['length', 'definition'], trendNames: ['natural-classic'] },
-    { name: 'Hybrid Full Set',       duration: '2 hr',       description: 'A mix of classic and volume fans for texture with added fullness.', techniqueTags: ['hybrid'], outcomeTags: ['volume', 'definition'] },
-    { name: 'Volume Full Set',       duration: '2 hr 30',    description: 'Lightweight fans of fine lashes for a fuller, fluffier look.', techniqueTags: ['volume'], outcomeTags: ['volume', 'dramatic'], trendNames: ['wet-look'] },
-    { name: 'Mega Volume',           duration: '2 hr 30',    description: 'Maximum density fans for a bold, glam lash look.', techniqueTags: ['mega-volume'], outcomeTags: ['volume', 'dramatic'], trendNames: ['kim-k'] },
-    { name: 'Infill (2–3 weeks)',    duration: '1 hr',       description: 'Top-up on natural lash growth to keep your set full.', outcomeTags: ['volume'] },
-    { name: 'Lash Lift & Tint',      duration: '1 hr',       description: 'Curls and tints your natural lashes for an extension-free lift.', techniqueTags: ['lash-lift', 'lash-tint'], outcomeTags: ['curl', 'definition'], trendNames: ['natural-classic'] },
-    { name: 'Lash Removal',          duration: '30 min',     description: 'Safe, gentle removal of extensions without damaging natural lashes.' },
-    { name: 'Wispy Lash Set',        duration: '2 hr',       description: 'Textured, spiky fans mixed through the set for a fluttery, wispy finish.', techniqueTags: ['wispy'], outcomeTags: ['definition', 'volume'] },
-    { name: 'Russian Volume Set',    duration: '2 hr 30',    description: 'Handmade Russian fans for ultra-fluffy, full volume lashes.', techniqueTags: ['russian'], outcomeTags: ['volume', 'dramatic'] },
-    { name: 'Lash Tint Only',        duration: '20 min',     description: 'Tints natural lashes darker — no extensions, just definition.', techniqueTags: ['lash-tint'], outcomeTags: ['definition'] },
-    { name: 'Mink Full Set',         duration: '2 hr',       description: 'Ultra-soft mink lashes for a naturally glamorous, long-lasting set.', techniqueTags: ['mink'], outcomeTags: ['volume', 'longevity'] },
-    { name: 'Faux Mink Full Set',    duration: '2 hr',       description: 'Cruelty-free faux mink lashes with a soft, natural-looking finish.', techniqueTags: ['faux-mink'], outcomeTags: ['volume', 'natural-look'] },
-    { name: 'Colored Lash Set',      duration: '2 hr',       description: 'Coloured lash extensions mixed through the set for a fun pop of colour.', techniqueTags: ['colored-lashes'], outcomeTags: ['dramatic', 'definition'], trendNames: ['colored-tips'] },
-    { name: 'Bottom Lash Set',       duration: '45 min',     description: 'Fine extensions on the lower lash line to frame the eyes.', techniqueTags: ['bottom-lashes'], outcomeTags: ['definition', 'symmetry'] },
-  ],
-  BROWS: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Brow Wax & Tint',       duration: '30 min',    description: 'Shaping wax with tint to define and fill your natural brow.', techniqueTags: ['waxing', 'tinting'], outcomeTags: ['definition', 'shape'] },
-    { name: 'Brow Lamination',       duration: '45 min',     description: 'Brushed-up, fluffy brows that hold their shape for weeks.', techniqueTags: ['lamination'], outcomeTags: ['fullness', 'shape'], trendNames: ['soap-brows', 'fluffy-brows'] },
-    { name: 'HD Brows',              duration: '45 min',     description: 'Tailored shape using tint, wax and precision trimming for a defined finish.', techniqueTags: ['hd-brows'], outcomeTags: ['definition', 'arched'] },
-    { name: 'Microblading',          duration: '2 hr',       serviceType: 'treatment', description: 'Semi-permanent hair-stroke tattoo for naturally fuller-looking brows.', techniqueTags: ['microblading'], outcomeTags: ['fullness', 'natural'] },
-    { name: 'Powder / Ombré Brows',  duration: '2 hr',       serviceType: 'treatment', description: 'Soft, powdered semi-permanent makeup finish for defined, filled-in brows.', techniqueTags: ['powder-brow', 'combo-brow'], outcomeTags: ['definition', 'bold'], trendNames: ['snatched-arch'] },
-    { name: 'Threading',             duration: '15 min',     description: 'Precise thread shaping for clean, natural brow lines.', techniqueTags: ['threading'], outcomeTags: ['shape', 'natural'] },
-    { name: 'Brow Henna',            duration: '30 min',     description: 'Natural henna tint that stains both the hairs and the skin beneath for extra fullness.', techniqueTags: ['tinting'], outcomeTags: ['fullness', 'natural'] },
-    { name: 'Combo Brows',           duration: '2 hr',       serviceType: 'treatment', description: 'Microblading strokes with shaded powder underneath for a soft, defined finish.', techniqueTags: ['combo-brow'], outcomeTags: ['definition', 'fullness'] },
-    { name: 'Brow Mapping Consultation', duration: '20 min', serviceType: 'consultation', description: 'Measuring and mapping your ideal brow shape before a semi-permanent treatment.' },
-    { name: 'Nano Brows',            duration: '2 hr',       serviceType: 'treatment', description: 'Ultra-fine hair-stroke semi-permanent brows for a crisp, natural finish.', techniqueTags: ['nano-brows'], outcomeTags: ['precision', 'fullness'], trendNames: ['nano-brows'] },
-    { name: 'Wax & Thread Combo',    duration: '25 min',     description: 'Wax for the bulk of the shape, thread for precision around the brow line.', techniqueTags: ['wax-and-thread'], outcomeTags: ['shape', 'precision'] },
-    { name: 'Brow Lamination & Tint', duration: '1 hr',      description: 'Lamination for hold plus a tint for fuller, longer-lasting definition.', techniqueTags: ['lamination', 'tinting'], outcomeTags: ['fullness', 'longevity'], trendNames: ['laminated-and-tinted'] },
-  ],
-  MUA: [
-    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
-    { name: 'Full Glam',             duration: '1 hr',       description: 'Full-coverage glam makeup built for photos and a big night out.', styleTags: ['glam'], techniqueTags: ['full-glam'], outcomeTags: ['glow', 'coverage', 'dramatic'] },
-    { name: 'Soft Glam',             duration: '1 hr',       description: 'Everyday-wearable glam with soft definition and a lit-from-within glow.', styleTags: ['soft-girl', 'glam'], outcomeTags: ['glow', 'natural-look'], trendNames: ['clean-girl', 'latte-makeup'] },
-    { name: 'Bridal Makeup',         duration: '1 hr 30',    description: 'Long-wear bridal makeup designed to look flawless all day and in photos.', styleTags: ['bridal'], techniqueTags: ['bridal'], outcomeTags: ['longevity', 'glow'], occasionTags: ['bridal'] },
-    { name: 'Bridal Trial',          duration: '1 hr 30',    description: 'Full trial run of your bridal look ahead of the big day.', styleTags: ['bridal'], techniqueTags: ['bridal'], occasionTags: ['bridal'] },
-    { name: 'Everyday Makeup',       duration: '45 min',     description: 'Fresh, skin-like makeup that enhances your features without heavy coverage.', styleTags: ['natural', 'clean-girl'], techniqueTags: ['natural'], outcomeTags: ['natural-look', 'glow'], trendNames: ['clean-girl'] },
-    { name: 'No-Makeup Makeup',      duration: '40 min',     description: 'Barely-there base and definition that looks like your skin, just better.', styleTags: ['natural'], techniqueTags: ['natural'], outcomeTags: ['natural-look', 'glow'] },
-    { name: 'Natural Glam',          duration: '1 hr',       description: 'Natural-look glam that keeps definition soft without a full-coverage face.', styleTags: ['natural', 'glam'], techniqueTags: ['natural'], outcomeTags: ['glow', 'definition', 'natural-look'] },
-    { name: 'Clean Girl Makeup',     duration: '45 min',     description: 'Skin-first, barely-there makeup with glossy lids and soft blush — the clean-girl look.', styleTags: ['clean-girl', 'natural'], techniqueTags: ['natural'], outcomeTags: ['glow', 'natural-look'], trendNames: ['clean-girl', 'latte-makeup'] },
-    { name: 'Dewy / Glowy Glam',     duration: '1 hr',       description: 'Luminous, hydrated-looking base built for maximum glow without heavy powder.', styleTags: ['dewy', 'glam'], techniqueTags: ['dewy'], outcomeTags: ['glow', 'radiance'] },
-    { name: 'Matte Glam',            duration: '1 hr',       description: 'Full-coverage matte base with softly defined eyes for a shine-free finish that lasts.', styleTags: ['matte', 'glam'], outcomeTags: ['coverage', 'longevity', 'definition'] },
-    { name: 'Makeup Lesson',         duration: '2 hr',       description: 'One-to-one lesson to learn techniques tailored to your face and routine.', outcomeTags: ['definition'] },
-    { name: 'Airbrush Makeup',       duration: '1 hr 15',    description: 'Lightweight, buildable airbrush foundation for flawless, long-wear coverage.', techniqueTags: ['airbrush'], outcomeTags: ['coverage', 'longevity'] },
-    { name: 'Editorial / Photoshoot Makeup', duration: '1 hr 30', description: 'Bold, camera-ready looks designed for photography and editorial shoots.', techniqueTags: ['editorial'], outcomeTags: ['dramatic', 'definition'], occasionTags: ['photoshoot'] },
-    { name: 'SFX Makeup',            duration: '2 hr',       description: 'Special-effects makeup for creative, theatrical or costume looks.', techniqueTags: ['sfx'], outcomeTags: ['dramatic'] },
-    { name: 'Contour & Highlight Session', duration: '45 min', description: 'Sculpted contour and highlight for a defined, camera-ready glow.', techniqueTags: ['contour-and-highlight'], outcomeTags: ['definition', 'radiance'] },
-    { name: 'Strobing Glow Makeup',  duration: '1 hr',       description: 'Dewy, light-reflecting strobing technique for a lit-from-within glow.', techniqueTags: ['strobing'], outcomeTags: ['glow', 'radiance'] },
-    { name: 'Graphic Liner Look',    duration: '45 min',     description: 'Bold graphic eyeliner styling for a striking, editorial-ready eye.', techniqueTags: ['graphic-liner'], outcomeTags: ['dramatic', 'definition'] },
-    { name: 'Baking & Setting Makeup', duration: '1 hr',     description: 'Baked, set-in-place base makeup built to last all day and photograph flawlessly.', techniqueTags: ['baking'], outcomeTags: ['flawless-finish', 'longevity'] },
-  ],
-  AESTHETICS: [
-    { name: 'Skin Consultation',        duration: '30 min', serviceType: 'consultation', description: 'In-depth skin assessment and a personalised treatment plan.', generic: true },
-    { name: 'Anti-Wrinkle (1 area)',    duration: '30 min', serviceType: 'treatment',    description: 'Targeted anti-wrinkle treatment for one area to soften fine lines.', techniqueTags: ['botox'], outcomeTags: ['smoothness'], trendNames: ['baby-botox'] },
-    { name: 'Anti-Wrinkle (3 areas)',   duration: '45 min', serviceType: 'treatment',    description: 'Full upper-face anti-wrinkle treatment across three areas.', techniqueTags: ['botox'], outcomeTags: ['smoothness', 'rejuvenation'] },
-    { name: 'Lip Filler (0.5ml)',       duration: '45 min', serviceType: 'enhancement',  description: 'Subtle lip enhancement for natural volume and hydration.', techniqueTags: ['filler'], outcomeTags: ['hydration', 'definition'], trendNames: ['lip-flip'] },
-    { name: 'Lip Filler (1ml)',         duration: '1 hr',   serviceType: 'enhancement',  description: 'Fuller lip enhancement with balanced, natural-looking volume.', techniqueTags: ['filler'], outcomeTags: ['hydration', 'definition'], trendNames: ['russian-lips'] },
-    { name: 'Cheek Filler',             duration: '45 min', serviceType: 'enhancement',  description: 'Contours and lifts the mid-face for a naturally sculpted look.', techniqueTags: ['filler'], outcomeTags: ['lifting', 'definition'], trendNames: ['snatched'] },
-    { name: 'Chemical Peel',            duration: '45 min', serviceType: 'treatment',    description: 'Resurfacing peel to brighten tone and refine texture.', techniqueTags: ['chemical-peel'], outcomeTags: ['glow', 'smoothness'], trendNames: ['glass-skin'] },
-    { name: 'Microneedling',            duration: '1 hr',   serviceType: 'treatment',    description: 'Collagen-boosting microneedling to improve texture and firmness.', techniqueTags: ['microneedling'], outcomeTags: ['firmness', 'rejuvenation'] },
-    { name: 'HydraFacial',              duration: '1 hr',   serviceType: 'treatment',    description: 'Deep cleanse, exfoliation and hydration for an instant glow.', techniqueTags: ['hydrafacial'], outcomeTags: ['glow', 'hydration'], trendNames: ['glass-skin', 'glazed-donut-skin'] },
-    { name: 'Dermaplaning',             duration: '45 min', serviceType: 'treatment',    description: 'Gentle exfoliation that removes peach fuzz for smoother, brighter skin.', techniqueTags: ['dermaplaning'], outcomeTags: ['smoothness', 'glow'] },
-    { name: 'Skin Booster Treatment',   duration: '45 min', serviceType: 'treatment',    description: 'Micro-injections of hyaluronic acid to deeply hydrate and improve skin quality over a course of sessions.', techniqueTags: ['mesotherapy'], outcomeTags: ['hydration', 'glow'] },
-    { name: 'Fat Dissolving Injections', duration: '30 min', serviceType: 'treatment',   description: 'Targeted injections to break down small pockets of stubborn fat.', techniqueTags: ['mesotherapy'], outcomeTags: ['reduction'] },
-    { name: 'Thread Lift',              duration: '1 hr',   serviceType: 'treatment',    description: 'Dissolvable threads inserted to lift and tighten sagging skin without surgery.', outcomeTags: ['lifting', 'firmness'] },
-    { name: 'HIFU Facial',              duration: '1 hr',   serviceType: 'treatment',    description: 'Ultrasound energy to lift and tighten deeper skin layers, non-invasively.', techniqueTags: ['hifu'], outcomeTags: ['lifting', 'firmness'] },
-    { name: 'Laser Skin Treatment',     duration: '30 min', serviceType: 'treatment',    description: 'Laser resurfacing to even tone, reduce pigmentation and refine texture.', techniqueTags: ['laser'], outcomeTags: ['smoothness', 'rejuvenation'] },
-    // LED Light Therapy, Radiofrequency, Cryotherapy and Lymphatic Drainage
-    // each live under their own subcategory (see SUBCATEGORY_SUGGESTIONS_BY_CATEGORY
-    // + SUBCATEGORY_SCOPE below) instead of a single flat entry here, so picking
-    // that subcategory shows every type of that treatment, not just one option.
-    { name: 'Red Light Therapy (Anti-Ageing)', duration: '30 min', serviceType: 'treatment', description: 'Red/near-infrared light to boost collagen and calm ageing skin.', techniqueTags: ['led-therapy'], outcomeTags: ['radiance', 'collagen-boost'] },
-    { name: 'Blue Light Therapy (Acne)', duration: '30 min', serviceType: 'treatment', description: 'Blue light wavelengths to target acne-causing bacteria and even tone.', techniqueTags: ['led-therapy'], outcomeTags: ['even-tone', 'pore-refinement'] },
-    { name: 'Combination LED Therapy',  duration: '45 min', serviceType: 'treatment',    description: 'Multi-wavelength LED protocol combining red and blue light for an all-round glow.', techniqueTags: ['led-therapy'], outcomeTags: ['radiance', 'even-tone'] },
-    { name: 'Radiofrequency Face Tightening', duration: '45 min', serviceType: 'treatment', description: 'Heat energy to stimulate collagen and firm sagging facial skin.', techniqueTags: ['radiofrequency'], outcomeTags: ['firmness', 'collagen-boost'] },
-    { name: 'Radiofrequency Body Contouring', duration: '1 hr', serviceType: 'treatment', description: 'Radiofrequency energy to tighten and contour looser body skin.', techniqueTags: ['radiofrequency'], outcomeTags: ['firmness', 'reduction'] },
-    { name: 'Cryotherapy Facial',       duration: '30 min', serviceType: 'treatment',    description: 'Cooling facial treatment to de-puff, tighten pores and boost radiance.', techniqueTags: ['cryotherapy'], outcomeTags: ['radiance', 'pore-refinement'] },
-    { name: 'Localised Cryotherapy (Fat Freezing)', duration: '45 min', serviceType: 'treatment', description: 'Targeted cooling to reduce stubborn fat pockets and firm the area.', techniqueTags: ['cryotherapy'], outcomeTags: ['reduction', 'firmness'] },
-    { name: 'Facial Lymphatic Drainage Massage', duration: '45 min', serviceType: 'treatment', description: 'Gentle facial massage technique to reduce puffiness and support circulation.', techniqueTags: ['lymphatic-drainage'], outcomeTags: ['reduction', 'glow'] },
-    { name: 'Full Body Lymphatic Drainage Massage', duration: '1 hr', serviceType: 'treatment', description: 'Full-body massage technique to ease fluid retention and support circulation.', techniqueTags: ['lymphatic-drainage'], outcomeTags: ['reduction', 'firmness'] },
-  ],
-  OTHER: [
-    { name: 'Consultation',          duration: '30 min', serviceType: 'consultation', description: 'A chance to talk through what you are looking for before booking in.', generic: true },
-    { name: 'Standard Appointment',  duration: '1 hr',    description: 'Standard appointment slot — details confirmed with your provider.' },
-    { name: 'Group Session',         duration: '2 hr',    description: 'A session booked for a group — details confirmed with your provider.' },
-    { name: 'Follow-up Appointment', duration: '30 min',  description: 'A shorter check-in or top-up following a previous appointment.' },
-    { name: 'Trial / Sample Session', duration: '30 min', description: 'A low-commitment taster session before booking the full service.', outcomeTags: ['confidence'] },
-    { name: 'Refresh / Top-up',      duration: '20 min',  description: 'A quick refresh between full appointments.', outcomeTags: ['refresh'] },
   ],
 };
 
@@ -819,19 +640,20 @@ const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
   'Lymphatic Drainage':     { templates: ['Facial Lymphatic Drainage Massage', 'Full Body Lymphatic Drainage Massage', 'Skin Consultation'], techniques: ['lymphatic-drainage'], outcomes: ['reduction', 'glow', 'firmness'] },
 };
 
-// ─── Reusable chip-select row, with a trailing "Other" chip ───────────────────
+// ─── Reusable chip-select row, with a trailing "Your own" chip ────────────────
 // Wraps ChipSelect with one more chip at the end. Tapping it reveals a text
-// box (rather than adding "Other" itself as a tag) — typing a value and
-// hitting + / return adds THAT value to the same selected array, exactly like
-// the Trend Names section's always-visible text box already works. Keeps
+// box (rather than adding a tag itself) — typing and hitting + / return adds
+// what was typed to the same selected array, like the Trend Names box. Keeps
 // every preset-tag section (style/occasion/technique/outcome) able to accept
-// a value that isn't in the curated per-category list, without changing what
-// gets stored (still just a plain string in that section's tags array).
+// a value that isn't in the curated per-category list. What's typed is put in
+// the presets' stored form first (parseTypedTags), so "Box Braids" ticks the
+// existing box-braids chip instead of saving a second spelling of it, and
+// "knotless, boho" adds two.
 interface TagSelectWithOtherProps {
   options: string[];
   selected: string[];
   onToggle: (tag: string) => void;
-  onAddOther: (tag: string) => void;
+  onAddOther: (tags: string[]) => void;
   accentColor?: string;
   styles: any;
 }
@@ -841,15 +663,21 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
   const [otherValue, setOtherValue] = useState('');
 
   const submitOther = () => {
-    const trimmed = otherValue.trim();
-    if (trimmed) onAddOther(trimmed);
+    const typed = parseTypedTags(otherValue);
+    if (typed.length) onAddOther(typed);
     setOtherValue('');
   };
+
+  // A selected tag that isn't one of this list's options — typed via Other, a
+  // template's tag under a narrowed subcategory, or a name suggestion — still
+  // gets a chip. Without it the tag was saved but invisible, so it could
+  // never be seen or unticked.
+  const chips = [...options, ...selected.filter(tag => !options.includes(tag))];
 
   return (
     <View>
       <View style={styles.chipGrid}>
-        {options.map(option => {
+        {chips.map(option => {
           const active = selected.includes(option);
           return (
             <TouchableOpacity
@@ -857,15 +685,16 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
               onPress={() => { tapSelect(); onToggle(option); }}
             >
-              <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
+              <Text style={[styles.chipText, active && { color: accentColor }]}>{tagLabel(option)}</Text>
             </TouchableOpacity>
           );
         })}
         <TouchableOpacity
           style={[styles.chip, showOtherInput && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
           onPress={() => { tapSelect(); setShowOtherInput(v => !v); }}
+          accessibilityLabel="Add your own tag"
         >
-          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>Other</Text>
+          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>+ Your own</Text>
         </TouchableOpacity>
       </View>
       {showOtherInput && (
@@ -875,10 +704,11 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={styles.textInput}
               value={otherValue}
               onChangeText={setOtherValue}
-              placeholder="Type your own..."
+              placeholder="A word clients search for, commas for more"
               placeholderTextColor={chrome.fg(0.4)}
               onSubmitEditing={submitOther}
               returnKeyType="done"
+              autoCapitalize="none"
               autoFocus
             />
           </View>
@@ -948,7 +778,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   // padding on the scroll container, which would otherwise throw off the
   // snap points.
   const cardWidth = screenWidth;
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [activeTemplateIdx, setActiveTemplateIdx] = useState(0);
   const handleTemplateScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActiveTemplateIdx(Math.round(e.nativeEvent.contentOffset.x / cardWidth));
@@ -1103,7 +933,12 @@ const bufferBeforeToPicker = (mins: number | null | undefined): string =>
 interface ServiceModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (service: ServiceData) => void;
+  /** `newAddOns` are add-ons made inside this editor, which join the
+   *  provider's list only now that the service is saved. */
+  onSave: (service: ServiceData, newAddOns: AddOnLibraryItem[]) => Promise<void>;
+  providerId: string | null;
+  /** The provider's add-ons; undefined when they failed to load. */
+  addOnLibrary: AddOnLibraryItem[] | undefined;
   service?: ServiceData | null;
   categoryName: string;
   /** True when editing an existing service (vs adding / template pre-fill). */
@@ -1111,17 +946,32 @@ interface ServiceModalProps {
   /** Business-level service type, used when a category name can't be resolved. */
   fallbackKind?: string;
   accentColor?: string;
+  /** Opens Info Packs or Forms once this service is saved. When given, the
+   *  sheet shows the Info Pack / Form tip under the description. */
+  onOpenPackOrForm?: (kind: PackFormKind) => void;
 }
+
+/** A ServiceData's tags in the shared group shape (serviceTags.ts). */
+const tagGroupsOf = (service?: ServiceData | null): ServiceTagGroups => ({
+  styleTags: service?.tags || [],
+  techniqueTags: service?.techniqueTags || [],
+  outcomeTags: service?.outcomeTags || [],
+  occasionTags: service?.occasionTags || [],
+  trendNames: service?.trendNames || [],
+});
 
 const ServiceModal: React.FC<ServiceModalProps> = ({
   visible,
   onClose,
   onSave,
+  providerId,
+  addOnLibrary,
   service,
   categoryName,
   isEditing = false,
   fallbackKind,
   accentColor = '#AF9197',
+  onOpenPackOrForm,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -1163,10 +1013,14 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferBefore, setBufferBefore] = useState(bufferBeforeToPicker(service?.bufferBeforeMins));
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
+  const [descriptionHistory, setDescriptionHistory] = useState<ServiceDescriptionRevision[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRequestRef = useRef(0);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
-  const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
-  const [newAddOnName, setNewAddOnName] = useState('');
-  const [newAddOnPrice, setNewAddOnPrice] = useState('');
+  const [addOnKeys, setAddOnKeys] = useState<string[]>(service?.addOnKeys || []);
+  const [pendingAddOns, setPendingAddOns] = useState<AddOnLibraryItem[]>([]);
+  const chromeTheme = useContext(InfoRegChromeContext);
   // Tag state
   const [selectedTags, setSelectedTags] = useState<string[]>(service?.tags || []);
   const [selectedTechniques, setSelectedTechniques] = useState<string[]>(service?.techniqueTags || []);
@@ -1176,6 +1030,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [trendInput, setTrendInput] = useState('');
   const [serviceType, setServiceType] = useState<ServiceData['serviceType']>(service?.serviceType || '');
   const [audience, setAudience] = useState<ServiceData['audience']>(service?.audience || '');
+  // Until the provider changes a tag (or who it's for) themselves, those
+  // follow the name as it's typed — see the suggestion effect below. After
+  // that they're the provider's and typing changes nothing.
+  const [tagsTouched, setTagsTouched] = useState(false);
+  const [audienceTouched, setAudienceTouched] = useState(false);
   // Safety state.
   // Model: the toggle asks the provider to FLAG a service as unsafe, not to
   // attest it's safe. Off (the default) = safe/no warning; on = "not
@@ -1202,7 +1061,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [durationOpen, setDurationOpen] = useState(false);
   const [openBuffer, setOpenBuffer] = useState<'before' | 'after' | null>(null);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   // Measured Y position of each input group, captured via onLayout — lets
   // focus scroll precisely to just above the field instead of always
   // jumping to the very bottom of the form.
@@ -1225,6 +1084,27 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     };
   }, []);
 
+  // Tags, who it's for and a description, read from the name and heading
+  // (suggestServiceDetails). Offered on a new service, or one that still has
+  // no tags at all — a provider who typed their own name ("Volume spikes")
+  // used to get none of what a template fills in, which is how half the live
+  // services ended up with no tags. Added to what the sheet opened with (a
+  // template's own tags), never replacing it. Applied from the name's change
+  // handler and once on open, not from an effect that watches the name, so
+  // a keystroke is one render rather than a render and then a second one.
+  const applySuggestions = (nextName: string, opened: ServiceTagGroups, tags: boolean, who: boolean) => {
+    const next = suggestServiceDetails({ name: nextName, categoryName, fallbackKind });
+    if (tags) {
+      const merged = mergeTagGroups(opened, next);
+      setSelectedTags(merged.styleTags);
+      setSelectedTechniques(merged.techniqueTags);
+      setSelectedOutcomes(merged.outcomeTags);
+      setSelectedOccasions(merged.occasionTags);
+      setTrendNames(merged.trendNames);
+    }
+    if (who) setAudience(next.audience);
+  };
+
   React.useEffect(() => {
     setName(service?.name || '');
     setPrice(service?.price ? String(service.price) : '');
@@ -1232,8 +1112,12 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setBufferBefore(bufferBeforeToPicker(service?.bufferBeforeMins));
     setBufferAfter(service?.bufferAfterMins?.toString() || '');
     setDescription(service?.description || '');
+    historyRequestRef.current += 1;
+    setDescriptionHistory(null);
+    setHistoryLoading(false);
     setImages(service?.images || []);
-    setAddOns(service?.addOns || []);
+    setAddOnKeys(service?.addOnKeys || []);
+    setPendingAddOns([]);
     setSelectedTags(service?.tags || []);
     setSelectedTechniques(service?.techniqueTags || []);
     setSelectedOutcomes(service?.outcomeTags || []);
@@ -1242,6 +1126,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTrendInput('');
     setServiceType(service?.serviceType || '');
     setAudience(service?.audience || '');
+    setTagsTouched(false);
+    setAudienceTouched(false);
+    const opened = tagGroupsOf(service);
+    const offerTags = !isEditing || hasNoTags(opened);
+    if (offerTags || !service?.audience) {
+      applySuggestions(service?.name || '', opened, offerTags, !service?.audience);
+    }
     setIsPregnancySafe(service?.isPregnancySafe ?? true);
     setPatchTestRequired(service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey)));
     setMinAge(service?.minAge?.toString() || '');
@@ -1253,74 +1144,81 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setError(null);
     setDurationOpen(false);
     setOpenBuffer(null);
+    // Reseeds once per service opened. applySuggestions is a new function
+    // every render and isEditing arrives with `service`; listing them would
+    // wipe the form on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service, catKey]);
 
-  const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
+  const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) => {
+    setTagsTouched(true);
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
+  };
+  const addOtherTag = (arr: string[], setArr: (v: string[]) => void) => (tags: string[]) => {
+    setTagsTouched(true);
+    setArr([...arr, ...tags.filter(t => !arr.includes(t))]);
+  };
 
+  const openedTags = useMemo(() => tagGroupsOf(service), [service]);
+  const offerSuggestions = !isEditing || hasNoTags(openedTags);
+  const suggestion = useMemo(
+    () => suggestServiceDetails({ name, categoryName, fallbackKind }),
+    [name, categoryName, fallbackKind],
+  );
+  const descriptionTopics = useDescriptionTopics(name, description);
+  const handleNameChange = (text: string) => {
+    setName(text);
+    const tags = offerSuggestions && !tagsTouched;
+    const who = !audienceTouched && !service?.audience;
+    if (tags || who) applySuggestions(text, openedTags, tags, who);
+  };
+  // A suggestion outside a narrowed subcategory's list stays a chip after
+  // it's unticked, so the provider can change their mind.
+  const withSuggested = (opts: string[], suggested: string[]) =>
+    offerSuggestions ? [...opts, ...suggested.filter(t => !opts.includes(t))] : opts;
+  const suggestedCount = offerSuggestions && !tagsTouched
+    ? TAG_GROUP_KEYS.reduce((n, group) => n + suggestion[group].filter(t => !openedTags[group].includes(t)).length, 0)
+    : 0;
+  const descriptionHint = useMemo(() => {
+    if (!description.trim()) return null;
+    const problem = descriptionProblem(description, name);
+    return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
+  }, [description, name]);
+
+  // Pick several photos at once, then crop each one in ImageCropModal, in the
+  // order picked. iOS's own crop (allowsEditing) only does squares and isn't
+  // offered during a multi-select, so the free-shape crop runs after the
+  // picker. Each crop starts as the whole photo: Use Photo without dragging
+  // keeps it as it is, and Skip leaves that one out. The crop IS the framing,
+  // so the photo fills its frame wherever it's shown.
+  const [cropQueue, setCropQueue] = useState<{ uris: string[]; total: number }>({ uris: [], total: 0 });
+  const cropping = cropQueue.uris[0] ?? null;
+  const nextCrop = () => setCropQueue(prev => ({ uris: prev.uris.slice(1), total: prev.uris.length > 1 ? prev.total : 0 }));
   const handleAddImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,   // pick several photos at once
-      selectionLimit: 10,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.length) {
-      // Keep the provider's complete original by default. They can switch an
-      // individual tile to "Fill frame" later when a tighter crop genuinely
-      // makes sense; opening every picked photo in a mandatory cropper made
-      // adding a simple service gallery feel like an editing task.
-      setImages(prev => [
-        ...prev,
-        ...result.assets.map(asset => ({ uri: asset.uri, fit: 'contain' as const })),
-      ]);
+    try {
+      // No permission request first: picking from the library needs none on
+      // iOS or Android, and asking added a round trip before every picker.
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        orderedSelection: true,
+        quality: 0.8,
+      });
+      const uris = result.canceled ? [] : (result.assets ?? []).map(asset => asset.uri).filter(Boolean);
+      if (!uris.length) return;
+      setCropQueue({ uris, total: uris.length });
+    } catch (e) {
+      Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
   };
 
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
 
-  // Tapping a photo re-crops it with the iOS crop. iOS only crops while a
-  // photo is being picked (and never during a multi-select, which is why
-  // adding several at once can't crop), so this reopens the library on a
-  // single pick and swaps the result in at the same place in the order.
-  const handleRecropImage = async (index: number) => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    const asset = result.assets?.[0];
-    if (result.canceled || !asset) return;
-    setImages(prev =>
-      prev.map((img, i) => (i === index ? { uri: asset.uri, fit: 'cover' } : img)),
-    );
-  };
-
   // Array order IS the stored order — it becomes service_images.sort_order on
   // save, and index 0 is the photo that leads the service everywhere it's
   // shown. Splice-then-insert rather than a swap, so dragging across several
   // slots moves one photo through them instead of exchanging the two ends.
-  // Framing is per photo, not per service — a provider may want a wide shot
-  // shown whole and a close-up filling the frame in the same set.
-  const handleToggleImageFit = (index: number) => {
-    setImages(prev =>
-      prev.map((img, i) =>
-        i === index
-          ? { ...img, fit: img.fit === 'cover' ? 'contain' : 'cover' }
-          : img,
-      ),
-    );
-  };
 
   const handleReorderImages = (from: number, to: number) => {
     setImages(prev => {
@@ -1332,24 +1230,14 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     });
   };
 
-  const handleAddAddOn = () => {
-    if (!newAddOnName.trim() || !newAddOnPrice.trim()) {
-      tapWarn();
-      setError('Give the add-on a name and a price.');
-      return;
-    }
-    setError(null);
-    setAddOns([...addOns, { id: Date.now(), dbId: null, name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
-    setNewAddOnName('');
-    setNewAddOnPrice('');
-    Keyboard.dismiss();
-  };
-
-  const handleRemoveAddOn = (id: number) => setAddOns(addOns.filter(a => a.id !== id));
-
+  // Same stored form as the presets (parseTypedTags), so "Glazed Donut!"
+  // is the glazed-donut chip, and commas add several at once.
   const handleAddTrend = () => {
-    const t = trendInput.trim().toLowerCase().replace(/\s+/g, '-');
-    if (t && !trendNames.includes(t)) setTrendNames([...trendNames, t]);
+    const added = parseTypedTags(trendInput).filter(t => !trendNames.includes(t));
+    if (added.length) {
+      setTagsTouched(true);
+      setTrendNames([...trendNames, ...added]);
+    }
     setTrendInput('');
   };
 
@@ -1359,11 +1247,45 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindicationInput('');
   };
 
-  const handleSave = () => {
+  const showDescriptionHistory = async () => {
+    if (!providerId || !service) return;
+    if (descriptionHistory) { historyRequestRef.current += 1; setDescriptionHistory(null); return; }
+    const request = ++historyRequestRef.current;
+    setHistoryLoading(true);
+    try {
+      const revisions = await getServiceDescriptionHistory(
+        providerId, service.dbId, service.dbId ?? String(service.id),
+      );
+      if (request === historyRequestRef.current) setDescriptionHistory(revisions);
+    } catch (cause) {
+      logger.error('[ServiceModal] description history failed:', cause);
+      if (request === historyRequestRef.current) setError('Could not load previous descriptions. Please try again.');
+    } finally {
+      if (request === historyRequestRef.current) setHistoryLoading(false);
+    }
+  };
+
+  /** Why this service can't be saved yet, shown and returned; null when it can. */
+  const saveProblem = (): string | null => {
+    const tagsNow: ServiceTagGroups = {
+      styleTags: selectedTags,
+      techniqueTags: selectedTechniques,
+      outcomeTags: selectedOutcomes,
+      occasionTags: selectedOccasions,
+      trendNames,
+    };
+    const descriptionIssue = descriptionProblem(description, name);
+    // A NEW service also needs what a client and Search need to find it.
+    // Existing ones aren't blocked on it, so editing a price never waits on an
+    // old service's tags; My Services lists those to fix instead.
     const problem =
       !name.trim() ? 'Give the service a name.'
       : !price.trim() ? 'Enter a price, or 0 if it varies.'
       : !duration.trim() ? 'Tap how long this service takes.'
+      : isEditing ? null
+      : descriptionIssue ? DESCRIPTION_PROBLEM_COPY[descriptionIssue]
+      : hasNoTags(tagsNow) ? 'Tick at least one tag below, so clients searching for it can find this service.'
+      : !audience ? 'Choose who this service is for.'
       : null;
     if (problem) {
       tapWarn();
@@ -1371,36 +1293,51 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       // The presets are collapsed by default, so pointing at a missing
       // duration without opening them names a control that isn't on screen.
       if (!duration.trim()) setDurationOpen(true);
-      return;
+      return problem;
     }
     setError(null);
-    onSave({
-      id: service?.id || Date.now(),
-      dbId: service?.dbId ?? null,
-      name: name.trim(),
-      price: parseFloat(price) || 0,
-      duration: duration.trim(),
-      bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
-      bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
-      description: description.trim(),
-      images,
-      addOns,
-      tags: selectedTags,
-      techniqueTags: selectedTechniques,
-      outcomeTags: selectedOutcomes,
-      occasionTags: selectedOccasions,
-      trendNames,
-      isPregnancySafe,
-      patchTestRequired,
-      minAge: minAge ? parseInt(minAge, 10) : null,
-      contraindications,
-      aftercareNotes: aftercareNotes.trim(),
-      serviceType,
-      hairTypesSuitable,
-      skinTonesSuitable,
-      audience,
-    });
-    onClose();
+    return null;
+  };
+
+  /** `then`: from the Info Pack / Form tip — once saved, open that screen. */
+  const handleSave = async (then?: PackFormKind) => {
+    if (saveProblem()) return;
+    setSavingDraft(true);
+    try {
+      await onSave({
+        id: service?.id || Date.now(),
+        dbId: service?.dbId ?? null,
+        name: name.trim(),
+        price: parseFloat(price) || 0,
+        duration: duration.trim(),
+        bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
+        bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
+        description: description.trim(),
+        images,
+        addOnKeys,
+        tags: selectedTags,
+        techniqueTags: selectedTechniques,
+        outcomeTags: selectedOutcomes,
+        occasionTags: selectedOccasions,
+        trendNames,
+        isPregnancySafe,
+        patchTestRequired,
+        minAge: minAge ? parseInt(minAge, 10) : null,
+        contraindications,
+        aftercareNotes: aftercareNotes.trim(),
+        serviceType,
+        hairTypesSuitable,
+        skinTonesSuitable,
+        audience,
+      }, pendingAddOns);
+      onClose();
+      if (then) onOpenPackOrForm?.(then);
+    } catch (cause) {
+      logger.error('[ServiceModal] service draft backup failed:', cause);
+      setError('Could not back up this description. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
   };
 
   const handleInputFocus = (inputName: string) => {
@@ -1419,13 +1356,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }, 350);
   };
 
-  const SERVICE_TYPES: { value: ServiceData['serviceType']; label: string }[] = [
-    { value: 'treatment',    label: 'Treatment' },
-    { value: 'enhancement',  label: 'Enhancement' },
-    { value: 'maintenance',  label: 'Maintenance' },
-    { value: 'restorative',  label: 'Restorative' },
-    { value: 'consultation', label: 'Consultation' },
-  ];
+  // Choices that fit this kind of service: a lash service gets Full set /
+  // Infill / Removal, a makeup one gets Event / Trial / Lesson.
+  const serviceTypeOptions = useMemo(() => serviceTypeOptionsFor(catKey, serviceType), [catKey, serviceType]);
 
   const SERVICE_AUDIENCE_OPTS: { value: ServiceData['audience']; label: string }[] = [
     { value: 'everyone', label: 'Everyone' },
@@ -1435,7 +1368,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!savingDraft) onClose(); }}>
       <KeyboardDismissView style={styles.modalOverlay}>
         {/* Tap the strip above the sheet to dismiss. Rendered first so the
             sheet paints over it, and absolute so it doesn't take part in the
@@ -1444,7 +1377,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={() => { tapLight(); onClose(); }}
+          onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
           accessibilityRole="button"
           accessibilityLabel="Close without saving"
         />
@@ -1470,7 +1403,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => { tapLight(); onClose(); }}
+                onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
@@ -1492,14 +1425,18 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   skip sits where they can't scroll past it. */}
               <View style={styles.inputGroup}>
                 <Text style={styles.serviceSheetSection}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onToggleFit={handleToggleImageFit} onRecrop={handleRecropImage} onReorder={handleReorderImages} size={100} styles={styles} />
-                <Text style={styles.serviceSheetHint}>Photos stay whole by default. Use Fill frame only when you want a tighter crop.</Text>
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} onReorder={handleReorderImages} size={100} styles={styles} />
               </View>
 
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
                 <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Service Name</RequiredLabel>
-                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
+                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={handleNameChange} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
+                {suggestedCount > 0 ? (
+                  <Text style={styles.serviceSheetHint}>
+                    {suggestedCount === 1 ? 'We ticked a tag' : `We ticked ${suggestedCount} tags`} from the name so clients can find this. Check them below.
+                  </Text>
+                ) : null}
               </View>
 
               {/* Price and duration share one row — they're the pair a provider
@@ -1539,6 +1476,79 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.serviceSheetLabel}>Description</Text>
                 <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+                {providerId && service ? (
+                  <>
+                    <TouchableOpacity onPress={() => { void showDescriptionHistory(); }} accessibilityRole="button" style={{ marginTop: 10, marginBottom: 8 }}>
+                      <Text style={[styles.serviceSheetHint, { color: accentColor }]}>
+                        {descriptionHistory ? 'Hide previous descriptions' : 'View previous descriptions'}
+                      </Text>
+                    </TouchableOpacity>
+                    {descriptionHistory ? <Text style={styles.serviceSheetHint}>Choose a version, save this service, then tap Save & Publish on your profile.</Text> : null}
+                    {historyLoading ? <ActivityIndicator color={accentColor} /> : null}
+                    {descriptionHistory?.length === 0 ? <Text style={styles.serviceSheetHint}>No previous descriptions yet.</Text> : null}
+                    {descriptionHistory?.map(revision => (
+                      <TouchableOpacity
+                        key={revision.id}
+                        onPress={() => { setDescription(revision.description); setDescriptionHistory(null); setError(null); }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Restore description from ${new Date(revision.created_at).toLocaleDateString()}`}
+                        style={[styles.serviceSheetInput, { marginBottom: 8, paddingVertical: 10 }, fieldBox]}
+                      >
+                        <Text style={styles.serviceSheetHint}>
+                          {revision.source === 'draft' ? 'Editor draft' : 'Published'} · {new Date(revision.created_at).toLocaleString()}
+                        </Text>
+                        <Text style={{ color: chrome.fg(0.9) }} numberOfLines={4}>
+                          {revision.description || '(Empty description)'}
+                        </Text>
+                        <Text style={[styles.serviceSheetHint, { color: accentColor, marginTop: 6 }]}>Use this description</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : null}
+                {/* Wording offered, never written in for them. */}
+                {!description.trim() && suggestion.descriptionIdeas.map(idea => (
+                  <TouchableOpacity
+                    key={idea}
+                    style={[styles.chip, styles.serviceSheetSuggestion, { borderColor: accentColor }]}
+                    onPress={() => { tapSelect(); setDescription(idea); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use suggested description: ${idea}`}
+                  >
+                    <Ionicons name="sparkles-outline" size={14} color={accentColor} />
+                    <Text style={[styles.chipText, styles.serviceSheetSuggestionText]} numberOfLines={2}>Use: “{idea}”</Text>
+                  </TouchableOpacity>
+                ))}
+                {descriptionTopics.length > 0 ? (
+                  <Text style={styles.serviceSheetHint}>Others offering this often mention {descriptionTopics.join(', ')}.</Text>
+                ) : null}
+                {descriptionHint ? <Text style={styles.serviceSheetHint}>{descriptionHint}</Text> : null}
+                {onOpenPackOrForm ? (
+                  <PackFormHint
+                    tour={TOUR_KEYS.PROVIDER_SERVICE_PACK_TIP}
+                    title="Aftercare or questions before they come?"
+                    body="Put them in an Info Pack or a Form. Clients get it with their booking, without you sending a thing."
+                    // Packs and Forms list live services, and a new one
+                    // here isn't live until Save & Publish.
+                    note={isEditing
+                      ? 'Saves this service first.'
+                      : "Saves this service first. It shows in Info Packs and Forms once you've published your profile."}
+                    palette={{
+                      card: fieldBox.backgroundColor,
+                      text: chrome.fg(0.9),
+                      sub: chrome.fg(0.55),
+                      border: fieldBox.borderColor,
+                      accent: accentColor,
+                    }}
+                    // Opening Info Packs or Forms closes this sheet, so it
+                    // saves first rather than throw away what's been typed.
+                    // False (the reason shown, the tip kept) when it can't.
+                    onOpen={kind => {
+                      if (savingDraft || saveProblem()) return false;
+                      void handleSave(kind);
+                      return true;
+                    }}
+                  />
+                ) : null}
               </View>
 
               {/* Buffer time before/after — overrides the account-wide default
@@ -1598,11 +1608,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <Text style={styles.serviceSheetSection}>Service Type</Text>
                 <Text style={styles.serviceSheetHint}>Helps clients understand what kind of service this is</Text>
                 <View style={styles.chipGrid}>
-                  {SERVICE_TYPES.map(({ value, label }) => {
+                  {serviceTypeOptions.map(({ value, label }) => {
                     const active = serviceType === value;
                     return (
                       <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setServiceType(active ? '' : value); }}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                        <Text style={[styles.chipText, active && styles.chipTextActive, active && { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -1617,14 +1627,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   suggest/match better, not just at the business level. */}
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
-                <Text style={styles.serviceSheetSection}>Who's This For?</Text>
+                {isEditing
+                  ? <Text style={styles.serviceSheetSection}>Who's This For?</Text>
+                  : <RequiredLabel required labelStyle={styles.serviceSheetSection} styles={styles}>Who's This For?</RequiredLabel>}
                 <Text style={styles.serviceSheetHint}>Helps the app suggest this service to the right clients</Text>
                 <View style={styles.chipGrid}>
                   {SERVICE_AUDIENCE_OPTS.map(({ value, label }) => {
                     const active = audience === value;
                     return (
-                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setAudience(active ? '' : value); }}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setAudienceTouched(true); setAudience(active ? '' : value); }}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive, active && { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -1636,7 +1648,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Style / Vibe</Text>
                 <Text style={styles.serviceSheetHint}>How would you describe this service's aesthetic?</Text>
-                <TagSelectWithOther options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={(t) => setSelectedTags(selectedTags.includes(t) ? selectedTags : [...selectedTags, t])} accentColor={accentColor} styles={styles} />
+                <TagSelectWithOther options={withSuggested(styleOptions, suggestion.styleTags)} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={addOtherTag(selectedTags, setSelectedTags)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Occasion Tags ────────────────────────────────────── */}
@@ -1644,7 +1656,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Best For (Occasion)</Text>
                 <Text style={styles.serviceSheetHint}>When would a client typically book this?</Text>
-                <TagSelectWithOther options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={(t) => setSelectedOccasions(selectedOccasions.includes(t) ? selectedOccasions : [...selectedOccasions, t])} accentColor={accentColor} styles={styles} />
+                <TagSelectWithOther options={withSuggested(occasionOptions, suggestion.occasionTags)} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={addOtherTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Technique Tags ───────────────────────────────────── */}
@@ -1653,7 +1665,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.serviceSheetSectionRule} />
                   <Text style={styles.serviceSheetSection}>Techniques Used</Text>
                   <Text style={styles.serviceSheetHint}>Select every technique this service involves</Text>
-                  <TagSelectWithOther options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={(t) => setSelectedTechniques(selectedTechniques.includes(t) ? selectedTechniques : [...selectedTechniques, t])} accentColor={accentColor} styles={styles} />
+                  <TagSelectWithOther options={withSuggested(techniquOptions, suggestion.techniqueTags)} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={addOtherTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
@@ -1663,7 +1675,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.serviceSheetSectionRule} />
                   <Text style={styles.serviceSheetSection}>Results / Outcomes</Text>
                   <Text style={styles.serviceSheetHint}>What will the client achieve with this service?</Text>
-                  <TagSelectWithOther options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={(t) => setSelectedOutcomes(selectedOutcomes.includes(t) ? selectedOutcomes : [...selectedOutcomes, t])} accentColor={accentColor} styles={styles} />
+                  <TagSelectWithOther options={withSuggested(outcomeOptions, suggestion.outcomeTags)} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={addOtherTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
@@ -1675,22 +1687,22 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 {trendNames.length > 0 && (
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
-                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTrendNames(trendNames.filter(x => x !== t)); }}>
-                        <Text style={styles.chipTextActive}>{t} ×</Text>
+                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames(trendNames.filter(x => x !== t)); }}>
+                        <Text style={[styles.chipTextActive, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{tagLabel(t)} ×</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.chipGrid}>
                   {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
-                    <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTrendNames([...trendNames, t]); }}>
-                      <Text style={styles.chipText}>{t}</Text>
+                    <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames([...trendNames, t]); }}>
+                      <Text style={styles.chipText}>{tagLabel(t)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1804,32 +1816,21 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               </View>
 
               {/* ── Add-Ons ──────────────────────────────────────────── */}
-              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; serviceInputPositions.current['newAddOnPrice'] = e.nativeEvent.layout.y; }}>
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Add-Ons (Optional)</Text>
-                <Text style={styles.serviceSheetHint}>Optional extras clients can add to this service</Text>
-                {addOns.length > 0 && (
-                  <View style={styles.addOnsContainer}>
-                    {addOns.map((addOn) => (
-                      <View key={addOn.id} style={styles.addOnItem}>
-                        <View style={styles.addOnInfo}>
-                          <Text style={styles.addOnName}>{addOn.name}</Text>
-                          <Text style={styles.addOnPrice}>+£{addOn.price}</Text>
-                        </View>
-                        <TouchableOpacity style={styles.removeAddOnButton} onPress={() => { tapWarn(); handleRemoveAddOn(addOn.id); }}>
-                          <Text style={styles.removeAddOnText}>×</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, styles.addOnNameInput, fieldBox]} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('newAddOnName')} />
-                  <TextInput style={[styles.serviceSheetInput, styles.addOnPriceInput, fieldBox]} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('newAddOnPrice')} />
-                  <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddAddOn(); }}>
-                    <Text style={styles.addAddOnButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.serviceSheetHint}>Extras clients can add to this service. Your add-ons are shared, so tick any you already have.</Text>
+                <ServiceAddOnsField
+                  library={addOnLibrary}
+                  pending={pendingAddOns}
+                  onPendingChange={setPendingAddOns}
+                  tickedKeys={addOnKeys}
+                  onTickedChange={setAddOnKeys}
+                  categoryName={categoryName}
+                  palette={chromeTheme}
+                  inputStyle={[styles.serviceSheetInput, fieldBox]}
+                  onInputFocus={() => handleInputFocus('newAddOnName')}
+                />
               </View>
             </ScrollView>
 
@@ -1839,15 +1840,25 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 style={[styles.serviceSheetSave, { backgroundColor: accentColor }]}
                 onPress={() => { tapMedium(); handleSave(); }}
                 activeOpacity={0.85}
+                disabled={savingDraft}
               >
-                <Text style={styles.serviceSheetSaveText}>
-                  {isEditing ? 'Save changes' : 'Add service'}
+                <Text style={[styles.serviceSheetSaveText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                  {savingDraft ? 'Saving…' : isEditing ? 'Save changes' : 'Add service'}
                 </Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
         </LinearGradient>
       </KeyboardDismissView>
+      <ImageCropModal
+        uri={cropping}
+        accent={accentColor}
+        onAccent={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'}
+        cancelLabel={cropQueue.total > 1 ? 'Skip' : 'Cancel'}
+        progressLabel={cropQueue.total > 1 ? `${cropQueue.total - cropQueue.uris.length + 1} of ${cropQueue.total}` : null}
+        onCancel={nextCrop}
+        onDone={uri => { setImages(prev => [...prev, { uri, fit: 'cover' }]); nextCrop(); }}
+      />
     </Modal>
   );
 };
@@ -2207,6 +2218,11 @@ interface PreviewModalProps {
   accentColor: string;
   portfolio: DbPortfolioItem[];
   venuePhotos: DbPortfolioItem[];
+  /** A link-only provider's clients see a different profile — Book on their
+   *  own page, specialities instead of a price list, no ratings or reviews —
+   *  so the preview shows that one. */
+  isLinkOnly: boolean;
+  specialities: readonly string[];
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -2216,6 +2232,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   accentColor,
   portfolio,
   venuePhotos,
+  isLinkOnly,
+  specialities,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -2229,7 +2247,24 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [selectedPreviewCategory, setSelectedPreviewCategory] = useState<string>(
     categoryNames[0] || ''
   );
-  const [showFullAbout, setShowFullAbout] = useState(false);
+  // Collapsing a long About from its bottom brings the card back into view
+  // rather than leaving the provider below it — same as the live profile.
+  const previewScrollRef = useRef<ScrollViewInstance>(null);
+  const previewAboutCardRef = useRef<ViewInstance>(null);
+  const previewScrollYRef = useRef(0);
+  const handlePreviewScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    previewScrollYRef.current = e.nativeEvent.contentOffset.y;
+  }, []);
+  const handlePreviewAboutCollapse = useCallback(() => {
+    revealIfScrolledPast({
+      scroll: previewScrollRef.current,
+      target: previewAboutCardRef.current,
+      scrollY: previewScrollYRef.current,
+      // The PREVIEW header sits above this ScrollView, not over it, so only a
+      // little breathing room is needed.
+      topInset: 12,
+    });
+  }, []);
 
   // Update selected category when categories change
   React.useEffect(() => {
@@ -2238,12 +2273,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     }
   }, [categoryNames, selectedPreviewCategory]);
 
-  // Mock rating for preview — this is a template/showcase view, not a live
-  // reflection of the provider's real current reviews, so the hero rating
-  // row stays a mock 5.0 rather than `providerData.rating`, and the Reviews
-  // card below always renders (matching ProviderProfileScreen) but
-  // deliberately shows no review data.
-  const mockRating = 5.0;
+  // Their real rating (providers.rating), exactly as the profile prints it —
+  // a made-up 5.0 here showed a new provider stars they don't have yet. The
+  // Reviews card below still always renders (matching ProviderProfileScreen)
+  // but shows no review data.
+  const previewRating = Number(providerData.rating) || 0;
   const PP = resolveProviderTheme(providerData.profileTheme);
   const cardBg = withAlpha(PP.card, PP.isDark ? 0.5 : 0.9);
   const cardBlurTint = PP.isDark ? ('dark' as const) : ('light' as const);
@@ -2276,9 +2310,218 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     return cols;
   }, [portfolio, PREVIEW_PORTFOLIO_COL_W]);
 
+  // Contact, Portfolio and Venue. The link-only preview draws all three; the
+  // styled preview draws its portfolio itself, in the page style's own photo
+  // layout, so it takes Contact before it and Venue after.
+  const contactSection = (
+    <>
+              {/* Contact Section */}
+              <BlurView
+                intensity={cardBlurIntensity}
+                tint={cardBlurTint}
+                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+              >
+                <LinearGradient
+                  colors={cardHighlightColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.previewCardHighlight}
+                />
+                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
+                {/* Mirrors get_public_provider_address: a salon/studio on
+                    "Always visible" shows its full address to anyone signed in, so the
+                    preview does too. Everyone else shows the area. */}
+                {(() => {
+                  const publicAddress =
+                    providerData.addressReleasePolicy === 'always'
+                    && (providerData.businessType === 'salon' || providerData.businessType === 'studio')
+                      ? providerData.fullAddress.trim()
+                      : '';
+                  const shown = publicAddress || providerData.location;
+                  return shown ? (
+                    <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                      <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
+                      <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={publicAddress ? 2 : 1}>{publicAddress ? `${shown} ›` : shown}</Text>
+                    </View>
+                  ) : null;
+                })()}
+                {providerData.phone ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Message ›</Text>
+                  </View>
+                ) : null}
+                {providerData.whatsapp ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>WhatsApp</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Open ›</Text>
+                  </View>
+                ) : null}
+                {providerData.email ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Send ›</Text>
+                  </View>
+                ) : null}
+                {providerData.instagram ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Instagram</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram} ›</Text>
+                  </View>
+                ) : null}
+                {providerData.website ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Website</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Visit ›</Text>
+                  </View>
+                ) : null}
+                {providerData.tiktok ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>TikTok</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.tiktok} ›</Text>
+                  </View>
+                ) : null}
+                {providerData.externalBookingUrl ? (
+                  <View style={styles.previewContactRow}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Booking Link</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.externalBookingUrl}</Text>
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.previewContactButton, { backgroundColor: accentColor }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.previewContactButtonText}>Get In Touch</Text>
+                </TouchableOpacity>
+              </BlurView>
+    </>
+  );
+  const portfolioMasonry = (
+    <>
+              {/* Portfolio Section — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
+              {portfolio.length > 0 && (
+                <View style={styles.previewPortfolioSection}>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Portfolio</Text>
+                  <View style={styles.previewPortfolioColumns}>
+                    {portfolioColumns.map((column, colIdx) => (
+                      <View key={`preview-pcol-${colIdx}`} style={styles.previewPortfolioColumn}>
+                        {column.map(item => (
+                          <View key={item.id} style={styles.previewPortfolioTile}>
+                            <Image
+                              source={{ uri: item.image_url }}
+                              style={{ width: '100%', height: item.tileHeight }}
+                              resizeMode="cover"
+                              fadeDuration={0}
+                            />
+                            {item.caption ? (
+                              <View style={styles.previewPortfolioCaptionWrap}>
+                                <Text style={styles.previewPortfolioCaption} numberOfLines={1}>{item.caption}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+    </>
+  );
+  const venueSection = (
+    <>
+              {/* Venue — a horizontal strip under its own label, matching
+                  ProviderAdditionalInfoSection's "Venue" block on the real
+                  profile. Kept out of the masonry above so the preview shows
+                  the provider where these photos actually land. */}
+              {venuePhotos.length > 0 && (
+                <View style={styles.previewPortfolioSection}>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Venue</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.previewVenueStrip}
+                  >
+                    {venuePhotos.map(item => (
+                      <View key={item.id} style={styles.previewVenueTile}>
+                        <Image
+                          source={{ uri: item.image_url }}
+                          style={styles.previewVenueImage}
+                          resizeMode="cover"
+                          fadeDuration={0}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+    </>
+  );
+
+  // Everyone but a link-only provider (whose page is different) sees their
+  // profile in the page style Branding picked, with everything they've filled
+  // in — the same pieces the profile itself is drawn from.
+  if (!isLinkOnly) {
+    const pageStyleKey = parseThemeKey(providerData.profileTheme).pageStyle;
+    const pickLimit = heroPhotoPickLimit(getPageStyle(pageStyleKey));
+    const heroItems = heroPhotosForPage(portfolio, pickLimit);
+    const heroUris = heroItems.map(item => item.image_url);
+    // A full-screen preview drawn once per open, so not memoized (this sits below an early return).
+    const heroFrames = heroPhotoFramesOf(heroItems);
+    const labels = heroLabelsFrom(providerData);
+    return (
+      <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
+        <FocusAwareStatusBar barStyle={heroIsDark ? 'light-content' : 'dark-content'} />
+        <View style={{ flex: 1, backgroundColor: PP.bg }}>
+          <ProfileStylePreview
+            full
+            themeKey={providerData.profileTheme}
+            gradient={providerData.hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
+            accent={accentColor}
+            backgroundImage={providerData.backgroundImage}
+            brandFont={providerData.brandFont ?? DEFAULT_PROVIDER_FONT}
+            name={providerData.providerName || 'Your business'}
+            logoUri={providerData.logo || null}
+            logoFraming={providerData.logoFraming ?? null}
+            metaLabels={labels.metaLabels}
+            pillLabels={labels.pillLabels}
+            kicker={labels.kicker}
+            location={labels.location}
+            photoUris={heroUris}
+            photoFrames={heroFrames}
+            content={previewContentFrom(providerData)}
+            policyPages={policyImageUrls(providerData.bookingPolicies)}
+            policyEdges={policyImageEdges(providerData.bookingPolicies)}
+            rating={String(previewRating)}
+            portfolio={portfolio}
+            afterPortfolio={venueSection}
+          >
+            {contactSection}
+          </ProfileStylePreview>
+          <View style={[styles.previewHeader, styles.previewHeaderFloating, { paddingTop: previewTopPad + 8 }]} pointerEvents="box-none">
+            <TouchableOpacity style={styles.previewBackButton} onPress={() => { tapLight(); onClose(); }}>
+              <Text style={styles.previewBackText}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.previewBadge}>
+              <Text style={styles.previewBadgeText}>PREVIEW</Text>
+            </View>
+          </View>
+        </View>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
+      </Modal>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+      <SafeAreaProvider>
+      <WindowControlsInsetProvider>
+      {/* The clock sits on the hero, which is pale for light presets with no
+          cover photo — white there was unreadable. */}
+      <FocusAwareStatusBar barStyle={heroIsDark ? 'light-content' : 'dark-content'} />
       <View style={[styles.previewContainer, { backgroundColor: PP.bg }]}>
         {/* Hero photo/gradient backdrop — mirror ProviderProfileScreen: a real
             cover photo (with a dark gradient overlay for legible text) when
@@ -2299,10 +2542,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             />
           </>
         ) : (
-          <LinearGradient
+          <ProfileHeroBackdrop
             colors={providerData.hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
+            finish={parseThemeKey(providerData.profileTheme).finish}
             style={styles.previewHeroImage}
           />
         )}
@@ -2318,20 +2560,18 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </View>
 
           <ScrollView
+            ref={previewScrollRef}
             style={styles.previewScrollContent}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.previewScrollContentContainer}
+            onScroll={handlePreviewScroll}
+            scrollEventThrottle={32}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
             <View style={styles.previewLogoContainer}>
               <View style={styles.previewLogoWrapper}>
                 {providerData.logo ? (
-                  <Image
-                    source={{ uri: providerData.logo }}
-                    style={styles.previewProviderLogo}
-                    resizeMode="cover"
-                    fadeDuration={0}
-                  />
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.previewProviderLogo} />
                 ) : (
                   <View style={[styles.previewProviderLogo, { backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' }]}>
                     <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
@@ -2370,21 +2610,52 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
               </Text>
 
-              {/* Rating */}
+              {/* Rating — not for link-only: clients book them elsewhere, so
+                  there are no CERVICED reviews to rate them from. */}
+              {!isLinkOnly && (
               <View style={styles.previewRatingContainer}>
                 <View style={styles.previewStars}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <Text key={star} style={styles.previewStar}>★</Text>
                   ))}
                 </View>
-                <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{mockRating}</Text>
+                <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{previewRating}</Text>
               </View>
+              )}
 
               {providerData.yearsExperience ? (
                 <Text style={[styles.previewYearsText, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>{providerData.yearsExperience} years experience</Text>
               ) : null}
 
-              {/* Slots with Bell */}
+              {/* Link-only: Book (their own page) with socials and messaging
+                  beside it, exactly as clients see it in place of the
+                  availability pill. Decorative here. */}
+              {isLinkOnly ? (
+                <View style={styles.previewLinkOnlyBookBlock}>
+                  <View style={styles.previewLinkOnlyBookRow}>
+                    <View style={[styles.previewLinkOnlyBookButton, { backgroundColor: PP.card, borderColor: PP.border }]}>
+                      <Text style={[styles.previewLinkOnlyBookText, { color: PP.text }]}>BOOK</Text>
+                      <Ionicons name="open-outline" size={15} color={PP.text} />
+                    </View>
+                    {providerData.instagram ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-instagram" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    {providerData.tiktok ? (
+                      <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                        <Ionicons name="logo-tiktok" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                      </View>
+                    ) : null}
+                    <View style={[styles.previewLinkOnlySocialButton, { backgroundColor: accentColor }]}>
+                      <Ionicons name="chatbubble-outline" size={20} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+                    </View>
+                  </View>
+                  <Text style={[styles.previewLinkOnlyCaption, { color: heroSub }, heroIsDark && styles.previewHeroTextShadow]}>
+                    Books on their own page — opens inside CERVICED
+                  </Text>
+                </View>
+              ) : (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2396,18 +2667,18 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewSlotsCardHighlight}
                 />
-                {/* Mirrors the computed pill on the real client-facing
-                    profile — same scheduleReleaseDay source, so the preview
-                    never shows text the live screen wouldn't. */}
+                {/* Mirrors the pill on the real client-facing profile: same
+                    helper, same scheduleReleaseDay source, so the preview
+                    never shows text the live screen wouldn't. The day itself
+                    is set in Scheduling & Availability. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {providerData.scheduleReleaseDay != null
-                    ? `Slots out every ${ordinalSuffix(providerData.scheduleReleaseDay)} of the month`
-                    : "Set a release day below"}
+                  {slotsPillText(providerData.scheduleReleaseDay, providerData.scheduleReleaseTime)}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
                 </View>
               </BlurView>
+              )}
             </View>
 
             {/* The content sheet rises over the hero photo with its own large
@@ -2417,36 +2688,40 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <View style={[styles.previewContentSheetClip, { backgroundColor: PP.bg }]}>
               {/* About card — the Policy tab that used to live here moved out
                   to Business Profile → Policies along with editing, so this
-                  preview no longer shows or depends on any policy state. */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.previewCardHighlight}
-                />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
-                <Text style={[styles.previewAboutText, { color: PP.sub }]}>
-                  {showFullAbout
-                    ? providerData.aboutText || 'Your business description will appear here...'
-                    : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => { tapSelect(); setShowFullAbout(!showFullAbout); }}
-                  style={styles.previewMoreButton}
+                  preview no longer shows or depends on any policy state.
+                  The unstyled wrapper is only there to be measured — see
+                  handlePreviewAboutCollapse. */}
+              <View ref={previewAboutCardRef}>
+                <BlurView
+                  intensity={cardBlurIntensity}
+                  tint={cardBlurTint}
+                  style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
                 >
-                  <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
-                    {showFullAbout ? 'Show Less' : 'More'}
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
+                  <LinearGradient
+                    colors={cardHighlightColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.previewCardHighlight}
+                  />
+                  <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
+                  <ExpandableAboutText
+                    text={providerData.aboutText || 'A short summary of your business will appear here.'}
+                    textStyle={[styles.previewAboutText, { color: PP.sub }]}
+                    linkStyle={styles.previewMoreButton}
+                    linkTextStyle={[styles.previewMoreButtonText, { color: PP.text }]}
+                    onCollapse={handlePreviewAboutCollapse}
+                  />
+                </BlurView>
+              </View>
+
+              {/* Link-only clients see specialities where the price list
+                  would be; their prices live on their own booking page. */}
+              {isLinkOnly && (
+                <ProviderSpecialitiesSection specialities={specialities} textColor={PP.text} accent={accentColor} />
+              )}
 
               {/* Services Section */}
-              {categoryNames.length > 0 && (
+              {!isLinkOnly && categoryNames.length > 0 && (
                 <View style={styles.previewServicesSection}>
                   <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Services</Text>
 
@@ -2532,20 +2807,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                           </View>
                         </View>
 
-                        {/* Add-ons preview */}
-                        {service.addOns && service.addOns.length > 0 && (
-                          <View style={[styles.previewServiceAddOns, { borderTopColor: PP.border }]}>
-                            <Text style={[styles.previewAddOnsLabel, { color: PP.sub }]}>Add-ons available:</Text>
-                            {service.addOns.map((addOn) => (
-                              <View key={addOn.id} style={styles.previewAddOnRow}>
-                                <Text style={[styles.previewAddOnName, { color: PP.sub }]}>+ {addOn.name}</Text>
-                                <Text style={[styles.previewAddOnPrice, { color: accentColor }]}>
-                                  +£{addOn.price}
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
-                        )}
                       </BlurView>
                     ))}
                   </View>
@@ -2554,7 +2815,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
               {/* Reviews — this is a template/showcase view, not a live reflection
                   of real reviews, so the card always shows (matching
-                  ProviderProfileScreen) but deliberately stays empty. */}
+                  ProviderProfileScreen) but deliberately stays empty. Never
+                  for link-only, whose clients see no reviews section. */}
+              {!isLinkOnly && (
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -2568,134 +2831,18 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 />
                 <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Reviews</Text>
               </BlurView>
-
-              {/* Contact Section */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.previewCardHighlight}
-                />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
-                {providerData.location ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.location}</Text>
-                  </View>
-                ) : null}
-                {providerData.phone ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Message ›</Text>
-                  </View>
-                ) : null}
-                {providerData.whatsapp ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>WhatsApp</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Open ›</Text>
-                  </View>
-                ) : null}
-                {providerData.email ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Send ›</Text>
-                  </View>
-                ) : null}
-                {providerData.instagram ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Instagram</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram} ›</Text>
-                  </View>
-                ) : null}
-                {providerData.website ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Website</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Visit ›</Text>
-                  </View>
-                ) : null}
-                {providerData.tiktok ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>TikTok</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.tiktok} ›</Text>
-                  </View>
-                ) : null}
-                {providerData.externalBookingUrl ? (
-                  <View style={styles.previewContactRow}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Booking Link</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.externalBookingUrl}</Text>
-                  </View>
-                ) : null}
-                <TouchableOpacity
-                  style={[styles.previewContactButton, { backgroundColor: accentColor }]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.previewContactButtonText}>Get In Touch</Text>
-                </TouchableOpacity>
-              </BlurView>
-
-              {/* Portfolio Section — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
-              {portfolio.length > 0 && (
-                <View style={styles.previewPortfolioSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Portfolio</Text>
-                  <View style={styles.previewPortfolioColumns}>
-                    {portfolioColumns.map((column, colIdx) => (
-                      <View key={`preview-pcol-${colIdx}`} style={styles.previewPortfolioColumn}>
-                        {column.map(item => (
-                          <View key={item.id} style={styles.previewPortfolioTile}>
-                            <Image
-                              source={{ uri: item.image_url }}
-                              style={{ width: '100%', height: item.tileHeight }}
-                              resizeMode="cover"
-                              fadeDuration={0}
-                            />
-                            {item.caption ? (
-                              <View style={styles.previewPortfolioCaptionWrap}>
-                                <Text style={styles.previewPortfolioCaption} numberOfLines={1}>{item.caption}</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                </View>
               )}
 
-              {/* Venue — a horizontal strip under its own label, matching
-                  ProviderAdditionalInfoSection's "Venue" block on the real
-                  profile. Kept out of the masonry above so the preview shows
-                  the provider where these photos actually land. */}
-              {venuePhotos.length > 0 && (
-                <View style={styles.previewPortfolioSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Venue</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.previewVenueStrip}
-                  >
-                    {venuePhotos.map(item => (
-                      <View key={item.id} style={styles.previewVenueTile}>
-                        <Image
-                          source={{ uri: item.image_url }}
-                          style={styles.previewVenueImage}
-                          resizeMode="cover"
-                          fadeDuration={0}
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              {contactSection}
+              {portfolioMasonry}
+              {venueSection}
             </View>
             </View>
           </ScrollView>
         </SafeAreaView>
       </View>
+      </WindowControlsInsetProvider>
+      </SafeAreaProvider>
     </Modal>
   );
 };
@@ -2706,10 +2853,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // reads useTheme().isDarkMode or branches on device/app appearance) — but
   // its chrome DOES follow the provider's own chosen branding once they're
   // editing an existing profile (see chromeTheme below, computed once
-  // isEditMode/providerData are known). statusBarStyle stays pinned to
-  // 'dark-content' regardless — every provider theme's card/sheet surfaces
-  // stay pale enough for dark status-bar content to read fine on top.
-  const statusBarStyle = 'dark-content' as const;
+  // isEditMode/providerData are known). The status bar follows that too: see
+  // statusBarStyle next to chromeTheme.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { user, myBookingMode } = useAuth();
   // Link-only providers (own booking page) only fill in Identity, About &
@@ -2752,18 +2897,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // is layered on top of. No zIndex/elevation set from in here can lift a child
   // above its own ancestor's later-painted sibling, which is why the pinned bars
   // stayed covered however high they were raised.
-  //
-  // Same mechanism ProviderProfileScreen uses (see its comment); IslandPillTabBar
-  // already reads this option off the focused tab's route. Cleanup restores the
-  // pill on blur so this screen's hidden state never leaks onto the next one.
-  const isFocused = useIsFocused();
-  useEffect(() => {
-    if (!isFocused) return;
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [isFocused, navigation]);
+  useHideTabBar();
 
   // Load the provider's own Terms & Conditions once. Deliberately NOT keyed on
   // focus: this is an editable field now, not a status label, so refetching on
@@ -2784,21 +2918,21 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Ref for the horizontal pager that moves between the 5 sections — replaces
   // the single vertical ScrollView this screen used to have.
-  const pagerRef = useRef<ScrollView>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
 
   // Each section now has its own independent vertical scroll space, so a
   // single shared ref no longer makes sense — these are ref maps keyed by
   // EditorSectionKey (the same key EDITOR_SECTIONS is already indexed by)
   // instead of 5 separate useRef calls, so the mapping stays symmetric with
   // the data-driven section list.
-  const sectionScrollRefs = useRef<Partial<Record<EditorSectionKey, ScrollView | null>>>({});
-  const sectionContentRefs = useRef<Partial<Record<EditorSectionKey, View | null>>>({});
+  const sectionScrollRefs = useRef<Partial<Record<EditorSectionKey, ScrollViewInstance | null>>>({});
+  const sectionContentRefs = useRef<Partial<Record<EditorSectionKey, ViewInstance | null>>>({});
   const registerSectionScroll = useCallback(
-    (key: EditorSectionKey) => (node: ScrollView | null) => { sectionScrollRefs.current[key] = node; },
+    (key: EditorSectionKey) => (node: ScrollViewInstance | null) => { sectionScrollRefs.current[key] = node; },
     [],
   );
   const registerSectionContent = useCallback(
-    (key: EditorSectionKey) => (node: View | null) => { sectionContentRefs.current[key] = node; },
+    (key: EditorSectionKey) => (node: ViewInstance | null) => { sectionContentRefs.current[key] = node; },
     [],
   );
 
@@ -2816,10 +2950,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // With five independent page scrollers, those guesses would be wrong
   // silently. Measuring removes the guesswork entirely: there is no
   // magic number left to keep in sync when the layout changes.
-  const fieldNodes = useRef<Record<string, View | null>>({});
+  const fieldNodes = useRef<Record<string, ViewInstance | null>>({});
 
   const registerField = useCallback(
-    (name: string) => (node: View | null) => { fieldNodes.current[name] = node; },
+    (name: string) => (node: ViewInstance | null) => { fieldNodes.current[name] = node; },
     [],
   );
 
@@ -2861,6 +2995,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     location: '',
     aboutText: '',
     scheduleReleaseDay: null,
+    scheduleReleaseTime: DEFAULT_RELEASE_TIME,
     // The default theme's own colours, which is what this signup saves, so a
     // new provider's profile matches Branding until they choose something.
     // (Was a coral/teal/blue placeholder gradient, saved for real and shown
@@ -2869,7 +3004,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     hasCustomGradient: false,
     profileTheme: 'app',
     logo: null,
+    logoFraming: null,
     categories: {},
+    // A brand-new sign-up has no saved add-ons to protect, so it starts with
+    // an empty list it can add to. An existing profile replaces this with
+    // what loaded (or undefined if that failed).
+    addOnLibrary: [],
     categoryDescriptions: {},
     phone: '',
     email: '',
@@ -2886,9 +3026,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     termsAcceptedAt: null,
     languagesSpoken: [],
     priceRange: '',
+    priceBands: [],
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
+    howToGetThere: '',
+    publicDirections: '',
     fullAddressCoordinates: null,
     addressReleasePolicy: null,
     backgroundImage: null,
@@ -2907,7 +3050,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [mountedPages, setMountedPages] = useState<ReadonlySet<number>>(
     () => new Set([0]),
   );
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
   // moved to Business Profile → Policies. handleSubmit still writes this
@@ -2930,6 +3072,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // 'app' theme) for a beat before the real saved data pops in, which reads
   // as a glitch. Gated in the render below, same as the other profile screens.
   const [isLoadingProvider, setIsLoadingProvider] = useState(true);
+  // The cached profile can be edited while its live refresh is still in
+  // flight. Preserve service changes if that refresh completes afterwards.
+  const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
+  // A live profile read can finish after a local rename. Keep the old keys
+  // out of that read so it cannot bring the renamed category back.
+  const renamedCategoryKeysRef = useRef<Set<string>>(new Set());
+  // The release day is also edited in Scheduling & Availability. True once
+  // it's changed here; until then the save leaves it alone and focus
+  // re-reads it, so this screen never writes back an older day.
+  const releaseDayEditedRef = useRef(false);
+  const releaseTimeEditedRef = useRef(false);
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
   // cache to fall back to) — gated in the render below, ahead of the normal
@@ -2955,6 +3109,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     () => resolveChromeTheme(isEditMode, providerData.profileTheme),
     [isEditMode, providerData.profileTheme],
   );
+  // The clock and battery sit straight on chromeTheme.bg (nothing frosted
+  // behind them), so they flip with it. Pinning 'dark-content' left them
+  // black-on-black for a provider with a dark theme (Black, Charcoal…).
+  const statusBarStyle = chromeTheme.isDark ? 'light-content' : 'dark-content';
   const styles = useMemo(
     () => makeStyles(chromeTheme, screenWidth, screenHeight),
     [chromeTheme, screenWidth, screenHeight],
@@ -2973,16 +3131,36 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // palette token the sheet above is built from.
   const chromeText = chromeTheme.text;
 
-  // Set when a pending "claim your business" code (from ClaimProviderScreen)
-  // fails to confirm here — expired, already used, or wrong by the time the
-  // signup wizard finished. Surfaced as a banner below so the provider isn't
-  // left with a silently-blank, unclaimed profile and no explanation.
+  // The account's claim on an imported listing (from ClaimProviderScreen):
+  // while open, the banner below carries the code to put in the listing's
+  // Instagram bio; once decided, it says how it went for a week. claimError
+  // is set when the claim couldn't be opened at all.
+  const [claim, setClaim] = useState<ProviderClaim | null>(null);
+  const [claimDismissed, setClaimDismissed] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
 
   // Render an existing provider's last saved profile as soon as AsyncStorage
   // responds, then reconcile it with Supabase in the background. The cache is
   // only a fast starting point: the live read still owns the final state and
   // failures only surface when neither source can provide a profile.
+  // Coming back to this screen picks up a release day changed in Scheduling
+  // & Availability meanwhile, unless it was already changed here.
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    return navigation.addListener('focus', () => {
+      if (releaseDayEditedRef.current || releaseTimeEditedRef.current) return;
+      getMyProviderRelease(userId)
+        .then(({ day, time }) => {
+          if (releaseDayEditedRef.current || releaseTimeEditedRef.current) return;
+          setProviderData(prev => (prev.scheduleReleaseDay === day && prev.scheduleReleaseTime === time
+            ? prev
+            : { ...prev, scheduleReleaseDay: day, scheduleReleaseTime: time }));
+        })
+        .catch(err => logger.warn('InfoReg: release day refresh failed:', err?.message ?? err));
+    });
+  }, [navigation, user?.id]);
+
   useEffect(() => {
     if (!user?.id) { setIsLoadingProvider(false); return; }
     const userId = user.id;
@@ -3002,45 +3180,88 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       setIsLoadingProvider(false);
     });
 
-    // If this account just came through the "claim your business" flow
-    // (ClaimProviderScreen), attach it to the unclaimed row *before* loading
-    // provider data below — once claimed, that same loadProviderFromSupabase
-    // call picks up every scraped field (services included) for free, no
-    // separate prefill path needed. Best-effort: an expired/already-used
-    // code just means the provider sets up their profile from scratch.
-    getPendingClaim()
-      .then(pending => {
-        if (!pending) return;
-        return claimProviderProfile(pending.providerId, pending.code)
-          .catch(err => {
-            logger.warn('claimProviderProfile failed:', err?.message ?? err);
-            setClaimError(
-              "We couldn't confirm your business claim — the code may have expired or been entered wrong. " +
-              'You can retry from Settings, or just continue setting up your profile below.'
-            );
-          })
-          .finally(() => clearPendingClaim());
+    // "Claim your business" (ClaimProviderScreen): open the claim now the
+    // account exists, or show the one already open. The listing is only
+    // linked once someone at CERVICED has seen the code in its Instagram bio
+    // and approved it server-side; once that has happened, the profile load
+    // below already returns the listing's row.
+    // Set when the listing was approved onto this account in the last week
+    // (loadListingClaim drops older decisions) — see the claimed-row prefill.
+    let claimedListing = false;
+    loadListingClaim(userId)
+      .then(found => {
+        if (cancelled) return;
+        setClaim(found);
+        claimedListing = found?.status === 'approved';
       })
-      .catch(() => {})
+      .catch(err => {
+        logger.warn('Opening the listing claim failed:', err?.message ?? err);
+        if (cancelled) return;
+        setClaimError(
+          isClaimGuardError(err)
+            ? err.message
+            : "We couldn't open your claim on that listing just now. We'll try again next time you open this screen.",
+        );
+      })
       .finally(() => {
         loadProviderFromSupabase(userId)
           .then(data => {
             if (cancelled) return;
             if (data) {
-              setProviderData(data);
+              setProviderData(prev => {
+                const categories = { ...data.categories };
+                const categoryDescriptions = { ...data.categoryDescriptions };
+                const categoryServiceTypes = { ...data.categoryServiceTypes };
+                for (const oldName of renamedCategoryKeysRef.current) {
+                  delete categories[oldName];
+                  delete categoryDescriptions[oldName];
+                  delete categoryServiceTypes[oldName];
+                }
+                for (const newName of Object.keys(editedServiceCategoriesRef.current)) {
+                  categoryDescriptions[newName] = prev.categoryDescriptions[newName] ?? '';
+                  categoryServiceTypes[newName] = prev.categoryServiceTypes[newName] ?? data.providerService;
+                }
+                return {
+                  ...data,
+                  categories: { ...categories, ...editedServiceCategoriesRef.current },
+                  categoryDescriptions,
+                  categoryServiceTypes,
+                  addOnLibrary: renamedCategoryKeysRef.current.size
+                    ? prev.addOnLibrary ?? data.addOnLibrary ?? []
+                    : data.addOnLibrary ?? [],
+                };
+              });
               setIsEditMode(true);
               // Being in edit mode means this profile was published, which
               // required agreeing. Seed the real state rather than faking a
               // tick in the render — a box that draws checked but holds false
               // does nothing on the first tap and looks broken.
               setTermsAccepted(true);
-              const firstCat = Object.keys(data.categories)[0];
-              if (firstCat) setSelectedCategory(firstCat);
+              setSelectedCategory(current => {
+                if (current && !renamedCategoryKeysRef.current.has(current)) return current;
+                return Object.keys(editedServiceCategoriesRef.current)[0]
+                  ?? Object.keys(data.categories).find(name => !renamedCategoryKeysRef.current.has(name))
+                  ?? '';
+              });
               // A contact field that exists elsewhere should already be in the
               // box, not blank with a note telling you where to go and type it.
               // The signup prefill below only runs on the very first save, so
               // an existing provider who never set an enquiry address saw an
               // empty field even though their business email was on file.
+              // A just-claimed listing already has a providers row, so the
+              // first-save prefill below never runs for it — and everything
+              // the owner answered at sign-up (price ranges, years, where
+              // they work, payment methods) would stay stranded on `users`.
+              // Fill the listing's blanks from it instead; it lands on the
+              // next save, which a claimed listing needs before going live.
+              if (claimedListing) {
+                getUserSignupPrefillInfo(userId)
+                  .then(prefill => {
+                    if (!prefill || cancelled) return;
+                    setProviderData(prev => fillProfileFromSignup(prev, prefill));
+                  })
+                  .catch(err => logger.warn('InfoReg: sign-up answers for claimed listing failed to load:', err?.message ?? err));
+              }
               if (!data.email) {
                 getUserBusinessInfo(userId)
                   .then(info => {
@@ -3059,12 +3280,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             return getUserSignupPrefillInfo(userId)
               .then(prefill => {
                 if (!prefill) return;
-                const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
-                const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
-                const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
-                const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
-                const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
-                const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
                 // "Services you offer" on SignUpStep4 is already a
                 // multi-select, and its answer already lands in
                 // users.service_interests — it just never reached the
@@ -3083,7 +3298,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ),
                 );
                 setProviderData(prev => ({
-                  ...prev,
+                  ...fillProfileFromSignup(prev, prefill),
                   ...(prefilledServiceTypes.length
                     ? {
                         serviceCategories: prefilledServiceTypes,
@@ -3092,36 +3307,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         providerService: prefilledServiceTypes[0] as string,
                       }
                     : {}),
-                  providerName: prev.providerName || prefill.business_name || prefill.name || '',
-                  phone: prev.phone || prefill.business_phone || prefill.phone || '',
-                  email: prev.email || prefill.business_email || '',
-                  instagram: prev.instagram || prefill.instagram || '',
-                  website: prev.website || prefill.website || '',
-                  // Asked on SignUpStep1 ("I use my own booking link").
-                  externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
-                  tiktok: prev.tiktok || prefill.tiktok || '',
-                  businessType: prev.businessType || prefilledBusinessType || '',
-                  teamSize: prev.teamSize || prefilledTeamSize || '',
-                  // Optional at signup, staged on users.years_experience. Carried
-                  // through so the first save writes it to providers; edited
-                  // afterwards in Business Info. String form because the field
-                  // (and the hero preview) are string-typed.
-                  yearsExperience: prev.yearsExperience || (prefill.years_experience != null ? String(prefill.years_experience) : ''),
-                  location: prev.location || prefill.location_text || '',
-                  accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
-                  languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
-                  priceRange: prev.priceRange || prefilledPriceRange || '',
-                  // Round-trip only — this screen neither shows nor owns contact
-                  // channels (Communications does). It's carried purely because
-                  // saveProviderToSupabase writes preferred_contact_methods on
-                  // every save, so dropping it here would reset the provider's
-                  // Communications toggles to ['in_app'] whenever they edit
-                  // anything in InfoReg.
-                  preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
-                    ? prev.preferredContactMethods
-                    : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
-                  serviceLocations: prev.serviceLocations.length ? prev.serviceLocations : (prefill.service_locations ?? []),
-                  preferredPaymentMethods: prev.preferredPaymentMethods.length ? prev.preferredPaymentMethods : (prefill.preferred_payment_methods ?? []),
                 }));
               })
               .catch(() => {});
@@ -3234,11 +3419,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Explore, and inside Additional Information on the client's profile.
   const handleAddPortfolioImages = useCallback(async (category?: string) => {
     if (!user?.id || !providerDbId) return;
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    // No permission request first: picking from the library needs none on
+    // iOS or Android, and asking added a round trip before every picker.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
@@ -3268,6 +3450,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         price: null,
         aspect_ratio: asset.width && asset.height ? asset.width / asset.height : 1,
         is_featured: false,
+        hero_frame: null,
         created_at: new Date().toISOString(),
         vibe_tags: null,
         occasion_tags: null,
@@ -3333,7 +3516,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // accepted once (providers.terms_accepted_at), so re-showing this on every
   // edit-save would be re-consent theatre, not a real gate.
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
   // The provider's OWN client-facing Terms & Conditions — separate from the
   // CERVICED platform terms `termsAccepted` above. Typed here as prose; it is
   // stored as the policy body of their is_terms provider_form_library row,
@@ -3352,6 +3534,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  // A link-only preview shows specialities, which this screen doesn't hold
+  // once the provider exists, so they're read when the preview opens. Before
+  // the first save they're still the ones picked at sign-up.
+  const [previewSpecialities, setPreviewSpecialities] = useState<string[]>([]);
+  useEffect(() => {
+    if (!showPreviewModal || !isLinkOnly) return;
+    if (!providerDbId) {
+      setPreviewSpecialities(signupSpecialties);
+      return;
+    }
+    let cancelled = false;
+    getProviderSpecialties(providerDbId)
+      .then(list => { if (!cancelled) setPreviewSpecialities(list); })
+      .catch(error => logger.error('InfoReg: loading specialities for the preview failed', error));
+    return () => { cancelled = true; };
+  }, [showPreviewModal, isLinkOnly, providerDbId, signupSpecialties]);
   const [currentCategory, setCurrentCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingService, setEditingService] = useState<ServiceData | null>(null);
@@ -3365,7 +3563,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Keeps the selected category tab in view — panning back to the start of
   // the strip every time you pick a category (especially one further along
   // the list) was disorienting.
-  const categoryScrollRef = useRef<ScrollView>(null);
+  const categoryScrollRef = useRef<ScrollViewInstance>(null);
   // Category pill order. Dragging uses the handle and commits the new order
   // when the finger is released; there are no hold, lift or reflow effects.
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
@@ -3390,34 +3588,79 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!providerData.logo) setLogoPage(0);
   }, [providerData.logo]);
 
-  // Picking and adjusting are the same thing: iOS only offers its crop (with
-  // pinch-to-zoom) while a photo is being picked, so every tap on the logo
-  // opens the library with the square crop on.
+  // The circle and the two Home cards are each framed in their own shape, by
+  // pinch and drag. Only a zoom and an offset are stored per shape; the logo
+  // image itself stays as picked.
+  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
+  const [logoImageRatio, setLogoImageRatio] = useState(1);
+
+  // No iOS crop step (user, 2026-11-03). With allowsEditing, expo-image-picker
+  // falls back to iOS's older UIImagePickerController, which was slow to
+  // appear; without it the system photo picker opens straight away. The new
+  // photo goes straight into the circle framer instead, so it can be adjusted
+  // (user, 2026-11-06: "circle logo doesn't allow adjustment").
   const handleSelectLogo = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
+    // No permission request first: picking from the library needs none on
+    // iOS or Android, and asking added a round trip before every picker.
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.8,
     });
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      setProviderData(prev => ({ ...prev, logo: asset.uri }));
+      // A new image makes the old framing meaningless, so it resets.
+      setProviderData(prev => ({ ...prev, logo: asset.uri, logoFraming: null }));
+      setLogoImageRatio(asset.width > 0 && asset.height > 0 ? asset.width / asset.height : 1);
+      setFramingSlot('circle');
     }
+  };
+
+  const handleFrameLogo = (slot: LogoCardSlot) => {
+    const logo = providerData.logo;
+    if (!logo) return;
+    Image.getSize(
+      logo,
+      (width, height) => {
+        setLogoImageRatio(width > 0 && height > 0 ? width / height : 1);
+        setFramingSlot(slot);
+      },
+      () => {
+        // Unmeasurable: frame it as square, the most common logo shape.
+        setLogoImageRatio(1);
+        setFramingSlot(slot);
+      },
+    );
+  };
+
+  const handleLogoFramed = (slot: LogoCardSlot, frame: LogoCardFrame) => {
+    setFramingSlot(null);
+    setProviderData(prev => ({
+      ...prev,
+      logoFraming: { ...(prev.logoFraming ?? {}), imageRatio: logoImageRatio, [slot]: frame },
+    }));
   };
 
   // Handle data transfer from Acuity Scheduling URL
   const handleTransferData = useCallback(async (url: string) => {
     const extracted = await transferFromAcuity(url);
-    // Preserve any existing contact fields not covered by Acuity import
-    setProviderData(prev => ({ ...prev, ...extracted }));
+    // Preserve any existing contact fields not covered by Acuity import.
+    // Imported services start with whichever add-ons already cover their
+    // category, the same as a service added by hand.
+    setProviderData(prev => ({
+      ...prev,
+      ...extracted,
+      categories: prev.addOnLibrary
+        ? Object.fromEntries(Object.entries(extracted.categories).map(([categoryName, services]) => [
+            categoryName,
+            services.map(service => ({
+              ...service,
+              addOnKeys: defaultAddOnKeysForCategory(prev.addOnLibrary ?? [], categoryName),
+            })),
+          ]))
+        : extracted.categories,
+    }));
     const firstCat = Object.keys(extracted.categories)[0];
     if (firstCat) setSelectedCategory(firstCat);
     setShowTransferModal(false);
@@ -3429,6 +3672,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Add service category
   const handleAddCategory = useCallback((name: string, description: string) => {
+    renamedCategoryKeysRef.current.delete(name);
     setProviderData(prev => ({
       ...prev,
       categories: { ...prev.categories, [name]: [] },
@@ -3455,12 +3699,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            delete editedServiceCategoriesRef.current[name];
+            renamedCategoryKeysRef.current.add(name);
             setProviderData(prev => {
               const newCategories = { ...prev.categories };
               delete newCategories[name];
               const newDescriptions = { ...prev.categoryDescriptions };
               delete newDescriptions[name];
-              return { ...prev, categories: newCategories, categoryDescriptions: newDescriptions };
+              const newServiceTypes = { ...prev.categoryServiceTypes };
+              delete newServiceTypes[name];
+              return {
+                ...prev,
+                categories: newCategories,
+                categoryDescriptions: newDescriptions,
+                categoryServiceTypes: newServiceTypes,
+                ...(prev.addOnLibrary ? { addOnLibrary: removeCategoryFromLibrary(prev.addOnLibrary, name) } : {}),
+              };
             });
             if (selectedCategory === name) {
               const remaining = Object.keys(providerData.categories).filter(c => c !== name);
@@ -3476,16 +3730,40 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const handleRenameCategory = useCallback((oldName: string, newName: string, description: string) => {
     if (!newName.trim()) return;
     const trimmedNew = newName.trim();
+    if (Object.keys(providerData.categories).some(name =>
+      name !== oldName && name.toLocaleLowerCase() === trimmedNew.toLocaleLowerCase())) {
+      Alert.alert('Category already exists', 'Choose a different category name.');
+      return;
+    }
+
+    if (oldName !== trimmedNew) {
+      const services = editedServiceCategoriesRef.current[oldName] ?? providerData.categories[oldName] ?? [];
+      delete editedServiceCategoriesRef.current[oldName];
+      editedServiceCategoriesRef.current[trimmedNew] = services;
+      renamedCategoryKeysRef.current.add(oldName);
+      renamedCategoryKeysRef.current.delete(trimmedNew);
+    }
 
     setProviderData(prev => {
       const newCategories: Record<string, ServiceData[]> = {};
       const newDescriptions: Record<string, string> = {};
+      const newServiceTypes: Record<string, string> = {};
       Object.keys(prev.categories).forEach(key => {
         const targetKey = key === oldName ? trimmedNew : key;
         newCategories[targetKey] = prev.categories[key] || [];
         newDescriptions[targetKey] = key === oldName ? description : (prev.categoryDescriptions?.[key] ?? '');
+        newServiceTypes[targetKey] = prev.categoryServiceTypes?.[key] ?? prev.providerService;
       });
-      return { ...prev, categories: newCategories, categoryDescriptions: newDescriptions };
+      return {
+        ...prev,
+        categories: newCategories,
+        categoryDescriptions: newDescriptions,
+        categoryServiceTypes: newServiceTypes,
+        // An add-on set to "All <category>" follows the category's new name.
+        ...(prev.addOnLibrary && oldName !== trimmedNew
+          ? { addOnLibrary: renameCategoryInLibrary(prev.addOnLibrary, oldName, trimmedNew) }
+          : {}),
+      };
     });
 
     if (selectedCategory === oldName) {
@@ -3493,34 +3771,93 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
     setShowEditCategoryModal(false);
     setEditingCategory('');
-  }, [selectedCategory]);
+  }, [providerData.categories, selectedCategory]);
 
   // Add/Edit service
-  const handleSaveService = useCallback((service: ServiceData) => {
+  const handleSaveService = useCallback(async (service: ServiceData, newAddOns: AddOnLibraryItem[]) => {
+    // Save the provider's accepted wording before touching the larger profile
+    // draft. A later refresh or failed publish cannot erase this copy.
+    const ownerId = providerDbId ?? (user?.id ? await getProviderIdForUserId(user.id) : null);
+    if (ownerId) {
+      await saveServiceDescriptionDraft(
+        ownerId, service.dbId, service.dbId ?? String(service.id), service.name, service.description,
+      );
+    } else if (isEditMode) {
+      throw new Error('Could not resolve provider for description backup');
+    }
     setProviderData(prev => {
-      const categoryServices = prev.categories[currentCategory] || [];
-      const existingIndex = categoryServices.findIndex(s => s.id === service.id);
+      // Matches on the saved row's id too, so an editor opened before the
+      // live refresh landed replaces the service instead of adding a copy.
+      const updatedServices = upsertServiceInList(prev.categories[currentCategory] || [], service);
 
-      let updatedServices;
-      if (existingIndex >= 0) {
-        // Update existing
-        updatedServices = [...categoryServices];
-        updatedServices[existingIndex] = service;
-      } else {
-        // Add new
-        updatedServices = [...categoryServices, service];
+      let categories: Record<string, ServiceData[]> = {
+        ...prev.categories,
+        [currentCategory]: updatedServices,
+      };
+      // An add-on made inside the service editor for "All <category>" or
+      // "Every service" goes on those other services now too. "Just this
+      // service" is already ticked on this one.
+      for (const addOn of newAddOns) {
+        if (addOn.appliesTo !== 'services') categories = applyRuleToServices(categories, addOn);
       }
-
+      for (const [name, services] of Object.entries(categories)) {
+        if (services !== prev.categories[name]) editedServiceCategoriesRef.current[name] = services;
+      }
       return {
         ...prev,
-        categories: {
-          ...prev.categories,
-          [currentCategory]: updatedServices,
-        },
+        categories,
+        ...(newAddOns.length && prev.addOnLibrary
+          ? { addOnLibrary: mergeAddOns(prev.addOnLibrary, newAddOns) }
+          : {}),
       };
     });
     setEditingService(null);
-  }, [currentCategory]);
+  }, [currentCategory, providerDbId, user?.id, isEditMode]);
+
+  // ── Universal add-ons: the provider's own list ─────────────────────────
+  const [editingAddOn, setEditingAddOn] = useState<AddOnLibraryItem | null>(null);
+  // The Services page's Add-ons tab. It only exists once there's an add-on;
+  // with none, the empty list and its guide sit under the services instead.
+  const [showingAddOns, setShowingAddOns] = useState(false);
+  const hasAddOns = (providerData.addOnLibrary?.length ?? 0) > 0;
+  const addOnsView = showingAddOns && hasAddOns;
+  const [showAddOnEditor, setShowAddOnEditor] = useState(false);
+  const openAddOnEditor = useCallback((item: AddOnLibraryItem | null) => {
+    setEditingAddOn(item);
+    setShowAddOnEditor(true);
+  }, []);
+  const closeAddOnEditor = useCallback(() => {
+    setShowAddOnEditor(false);
+    setEditingAddOn(null);
+  }, []);
+  const handleSaveAddOn = useCallback((result: AddOnEditorResult) => {
+    setProviderData(prev => {
+      const library = prev.addOnLibrary ?? [];
+      const exists = library.some(item => item.key === result.item.key);
+      return {
+        ...prev,
+        addOnLibrary: exists
+          ? library.map(item => (item.key === result.item.key ? result.item : item))
+          : [...library, result.item],
+        // Only a change to WHERE it goes re-places it. A price or name edit
+        // keeps any service it was ticked off (or on) by hand.
+        categories: result.placementChanged
+          ? applyRuleToServices(prev.categories, result.item, result.pickedServiceIds)
+          : prev.categories,
+      };
+    });
+    // Land on the list the add-on just joined.
+    setShowingAddOns(true);
+    closeAddOnEditor();
+  }, [closeAddOnEditor]);
+  const handleDeleteAddOn = useCallback((key: string) => {
+    setProviderData(prev => ({
+      ...prev,
+      addOnLibrary: (prev.addOnLibrary ?? []).filter(item => item.key !== key),
+      categories: removeAddOnFromServices(prev.categories, key),
+    }));
+    closeAddOnEditor();
+  }, [closeAddOnEditor]);
 
   // Delete service
   const handleDeleteService = useCallback((categoryName: string, serviceId: number) => {
@@ -3572,6 +3909,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your business name.');
       return;
     }
+    if (!providerData.providerService) {
+      Alert.alert('Missing Information', 'Please choose your service type.');
+      return;
+    }
     if (!providerData.location.trim()) {
       Alert.alert('Missing Information', 'Please enter your location.');
       return;
@@ -3612,13 +3953,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         user.id,
         {
           ...providerData,
+          // The live profile refresh and the modal can both update the form.
+          // Publish the service drafts retained from the modal save.
+          categories: { ...providerData.categories, ...editedServiceCategoriesRef.current },
           externalBookingUrl: isLinkOnly
             ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
             : providerData.externalBookingUrl,
           bookingMode: isLinkOnly ? 'external' : 'cerviced',
+          scheduleReleaseDayEdited: releaseDayEditedRef.current,
+          scheduleReleaseTimeEdited: releaseTimeEditedRef.current,
         },
         !isEditMode && termsAccepted,
       );
+      releaseDayEditedRef.current = false;
+      releaseTimeEditedRef.current = false;
       // First save only: the providers row now exists, so the specialities
       // answered at sign-up can finally be attached to it. Without this they
       // never reached the profile hero or Search's Speciality filter.
@@ -3650,6 +3998,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
+      if (e instanceof ServiceDescriptionVerificationError) {
+        logger.error('[InfoRegScreen] service descriptions could not be verified:', e);
+        Alert.alert(
+          'Descriptions not confirmed',
+          'We could not confirm that your service descriptions were published. Your edits are still in this editor. Check them and try Save & Publish again.',
+        );
+        return;
+      }
       // saveProviderToSupabase prefixes its error with the failing step, which
       // is what makes these diagnosable — but that belongs in the log, not in
       // front of a provider. toUserMessage reports it and returns safe copy.
@@ -3736,6 +4092,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setProviderData(prev => ({ ...prev, serviceCategories: [category], providerService: category }));
   }, []);
 
+  const selectBusinessType = useCallback((businessType: BusinessType) => {
+    setProviderData(prev => ({
+      ...prev,
+      businessType,
+      addressReleasePolicy: reconcileAddressReleasePolicy(businessType, prev.addressReleasePolicy),
+    }));
+  }, []);
+
   // Only the categories under the type currently selected in the switch —
   // this is what the pill strip renders and what drag-reorder operates on.
   const categoryNames = useMemo(
@@ -3788,7 +4152,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           title: 'Business identity',
           rows: [
             { label: 'Business name', value: filled(providerData.providerName), required: true },
-            { label: 'Service type', value: serviceTypeLabel },
+            { label: 'Service type', value: serviceTypeLabel, required: true },
             { label: 'Where you\'re based', value: filled(providerData.location), required: true },
             { label: 'Logo', value: providerData.logo ? 'Added' : '' },
           ],
@@ -4106,7 +4470,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
             ]}
           >
-            {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
+            {termsAccepted && <Ionicons name="checkmark" size={13} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />}
           </View>
           <Text style={styles.termsRowText}>
             I agree to the{' '}
@@ -4114,7 +4478,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 instead of toggling the box underneath. */}
             <Text
               style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-              onPress={() => { tapSelect(); setShowTermsModal(true); }}
+              onPress={() => { tapSelect(); openLegalPage('provider-terms'); }}
             >
               CERVICED Terms &amp; Conditions
             </Text>
@@ -4151,7 +4515,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             already provides that; the branding preview lives only in the
             Preview modal. */}
 
-        <StatusBar barStyle={statusBarStyle} translucent backgroundColor="transparent" />
+        <FocusAwareStatusBar barStyle={statusBarStyle} />
 
         {/* Transfer Data Modal */}
         <TransferDataModal
@@ -4186,7 +4550,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onPick={(template) => {
             setShowTemplatePicker(false);
             setIsEditingService(false);
-            setEditingService(createServiceDraft(template));
+            // A new service starts with every add-on whose rule already
+            // covers its category ("All Lashes", "Every service").
+            setEditingService({
+              ...createServiceDraft(template),
+              addOnKeys: defaultAddOnKeysForCategory(providerData.addOnLibrary ?? [], currentCategory),
+            });
             setShowServiceModal(true);
           }}
         />
@@ -4194,16 +4563,43 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         {/* Add/Edit Service Modal */}
         <ServiceModal
           visible={showServiceModal}
+          providerId={providerDbId}
           onClose={() => {
             setShowServiceModal(false);
             setEditingService(null);
           }}
           onSave={handleSaveService}
+          addOnLibrary={providerData.addOnLibrary}
           service={editingService}
           categoryName={currentCategory}
           isEditing={isEditingService}
           fallbackKind={selectedServiceType || providerData.providerService}
           accentColor={adaptiveAccentColor}
+          // Same tip as My Profile's service editor. Edit mode only: during
+          // first registration there are no bookings to send packs with yet,
+          // and link-only providers don't take CERVICED bookings at all.
+          // Pushed on top, so this screen and its unpublished edits stay put.
+          // Edit mode runs as EditProfile on the provider stacks, which all
+          // register InfoPacks and ProviderIntakeForm; this screen's props are
+          // typed by the client Profile stack, hence the narrow cast.
+          {...(isEditMode && !isLinkOnly
+            ? {
+                onOpenPackOrForm: (kind: PackFormKind) =>
+                  (navigation as unknown as NativeStackNavigationProp<ProviderServicesStackParamList>)
+                    .navigate(kind === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm'),
+              }
+            : {})}
+        />
+
+        {/* Add-on editor — opened from "Your add-ons" on the services page */}
+        <AddOnEditorModal
+          visible={showAddOnEditor}
+          item={editingAddOn}
+          categories={providerData.categories}
+          palette={chromeTheme}
+          onClose={closeAddOnEditor}
+          onSave={handleSaveAddOn}
+          onDelete={handleDeleteAddOn}
         />
 
         {/* Edit Category Modal */}
@@ -4226,6 +4622,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           accentColor={adaptiveAccentColor}
           portfolio={workPhotos}
           venuePhotos={venuePhotos}
+          isLinkOnly={isLinkOnly}
+          specialities={previewSpecialities}
         />
 
         {/* No `edges` prop: under fullScreenModal the nested provider this sits
@@ -4264,9 +4662,43 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           </View>
 
           {claimError && (
-            <View style={styles.claimErrorBanner}>
-              <Text style={styles.claimErrorText}>{claimError}</Text>
+            <View style={styles.claimBanner}>
+              <Text style={[styles.claimBannerText, { flex: 1 }]}>{claimError}</Text>
               <TouchableOpacity onPress={() => { tapSelect(); setClaimError(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color="#7A4B00" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {claim && !claimDismissed && (
+            <View style={styles.claimBanner}>
+              <View style={{ flex: 1 }}>
+                {claim.status === 'pending' ? (
+                  <>
+                    <Text style={styles.claimBannerTitle}>Confirm @{displayHandle(claim.instagramHandle)} is yours</Text>
+                    <Text style={styles.claimBannerText}>Add this code to your Instagram bio:</Text>
+                    <Text style={styles.claimBannerCode} selectable>{claim.bioCode}</Text>
+                    <Text style={styles.claimBannerText}>
+                      We'll check it and link the listing to your account, usually within a day. You can take the code out once it's confirmed.
+                    </Text>
+                  </>
+                ) : claim.status === 'approved' ? (
+                  <>
+                    <Text style={styles.claimBannerTitle}>@{displayHandle(claim.instagramHandle)} is confirmed as yours</Text>
+                    <Text style={styles.claimBannerText}>
+                      We saw your code, so the listing is now part of your account. You can take {claim.bioCode} out of your bio.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.claimBannerTitle}>We couldn't confirm @{displayHandle(claim.instagramHandle)}</Text>
+                    <Text style={styles.claimBannerText}>
+                      So the listing hasn't been linked to your account. If it is your business, email support@cerviced.co and we'll look again.
+                    </Text>
+                  </>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => { tapSelect(); setClaimDismissed(true); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={16} color="#7A4B00" />
               </TouchableOpacity>
             </View>
@@ -4320,7 +4752,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 first page of a swipe: the next two pages are the same logo in
                 the small and large Home cards, at their real sizes, so the
                 provider sees each crop in place rather than in a list below.
-                Tapping any page reopens the crop. */}
+                Tapping any page opens the framer for that shape; the circle's
+                framer can also swap the photo. */}
               <View style={styles.logoSection}>
                 {providerData.logo ? (
                   <>
@@ -4340,20 +4773,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoContainer}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('circle'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Adjust logo"
                               accessibilityHint="Swipe left to see it on Home"
                             >
-                              <Image
-                                source={{ uri: providerData.logo }}
-                                style={styles.providerLogo}
-                                resizeMode="cover"
-                                // Per the Scalability rules: without this any unrelated
-                                // re-render can retrigger the default fade-in as a flicker.
-                                fadeDuration={0}
-                              />
+                              <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.providerLogo} />
                               {/* Badge sits on the 45° diagonal of the circle rather than a
                                   square's corner, so it hugs the edge instead of floating
                                   off it — offset = r - (r/√2) - badgeR, rounded. */}
@@ -4365,23 +4791,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeSmallCard}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('small'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Your logo on a small Home card. Adjust crop"
+                              accessibilityLabel="Your logo on a small Home card. Adjust how it sits"
                             >
-                              <Image source={{ uri: providerData.logo }} style={styles.logoHomeFill} resizeMode="cover" fadeDuration={0} />
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="small" style={{ borderRadius: LOGO_CARD_SIZES.small.radius }} />
                             </TouchableOpacity>
                           </View>
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoHomeLargeCard}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('large'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
-                              accessibilityLabel="Your logo on a large Home card. Adjust crop"
+                              accessibilityLabel="Your logo on a large Home card. Adjust how it sits"
                             >
-                              <Image source={{ uri: providerData.logo }} style={styles.logoHomeFill} resizeMode="cover" fadeDuration={0} />
+                              <FramedLogo uri={providerData.logo} framing={providerData.logoFraming} slot="large" style={{ borderRadius: LOGO_CARD_SIZES.large.radius }} />
                             </TouchableOpacity>
                           </View>
                         </ScrollView>
@@ -4414,6 +4840,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </>
                 )}
               </View>
+              <LogoCardFramer
+                slot={framingSlot}
+                uri={providerData.logo}
+                imageRatio={logoImageRatio}
+                initial={framingSlot ? providerData.logoFraming?.[framingSlot] : undefined}
+                onDone={handleLogoFramed}
+                onCancel={() => setFramingSlot(null)}
+                onReplace={framingSlot === 'circle' ? () => { tapSelect(); handleSelectLogo(); } : undefined}
+                palette={{
+                  bg: chrome.surf(0.98),
+                  card: chrome.surf(0.35),
+                  text: chrome.fg(0.92),
+                  sub: chrome.fg(0.55),
+                  accent: adaptiveAccentColor,
+                  onAccent: chrome.onAccent,
+                }}
+              />
 
             {/* Business Name */}
               <View
@@ -4421,15 +4864,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('businessName')}
               >
                 <RequiredLabel required missing={visibleMissingRequiredSet.has('Business name')} styles={styles}>Business Name</RequiredLabel>
-                <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                  <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
-                  <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                    {providerData.providerName || 'Not set'}
-                  </Text>
-                </View>
-                <Text style={styles.inputHint}>
-                  Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
-                </Text>
+                {isEditMode ? (
+                  <>
+                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                        {providerData.providerName || 'Not set'}
+                      </Text>
+                    </View>
+                    <Text style={styles.inputHint}>
+                      Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
+                    </Text>
+                  </>
+                ) : (
+                  <View style={[styles.inputBlur, styles.profileInputBox]}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={providerData.providerName}
+                      onChangeText={providerName => setProviderData(prev => ({ ...prev, providerName }))}
+                      placeholder="Business name"
+                      placeholderTextColor={chrome.fg(0.45)}
+                    />
+                  </View>
+                )}
               </View>
 
               {/* Service Category — free to pick at sign-up, and locked here
@@ -4443,7 +4900,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   no longer sends the column, so a pick made here would not
                   save. */}
               <View style={styles.inputGroup}>
-                <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has('Service type')} styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
                   <>
                     {/* Every type they ticked at sign-up, each locked. One
@@ -4464,8 +4921,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </View>
                     <Text style={styles.inputHint}>
                       {serviceTypes.length > 1
-                        ? 'Set at sign-up — contact support to change your service types.'
-                        : 'Set at sign-up — contact support to change your service type.'}
+                        ? 'Change your service types in Business Profile → Business Details → Business Info.'
+                        : 'Change your service type in Business Profile → Business Details → Business Info.'}
                     </Text>
                   </>
                 ) : (
@@ -4497,21 +4954,36 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
-              {/* Business Type, for link-only pros only. Everyone else sees it
-                  on 05 · Address Confirmation, a page link-only pros don't
-                  get. Locked here like Business Name and Service Type above:
-                  Business Info is its one editor. */}
+              {/* Link-only providers have no Address Confirmation page, so
+                  first-time setup chooses business type here. */}
               {isLinkOnly && (
                 <View style={styles.inputGroup}>
                   <RequiredLabel styles={styles}>Business Type</RequiredLabel>
-                  <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                    <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
-                    <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
-                    </Text>
-                  </View>
+                  {isEditMode ? (
+                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                        {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.serviceCategoryGrid}>
+                      {BUSINESS_TYPE_OPTS.map(({ value, label }) => (
+                        <TouchableOpacity
+                          key={value}
+                          activeOpacity={0.75}
+                          style={[styles.serviceCategoryChip, providerData.businessType === value && styles.serviceCategoryChipSelected]}
+                          onPress={() => { tapSelect(); selectBusinessType(value); }}
+                        >
+                          <Text style={[styles.serviceCategoryText, providerData.businessType === value && styles.serviceCategoryTextSelected]}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                   <Text style={styles.inputHint}>
-                    Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.
+                    {isEditMode
+                      ? 'Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.'
+                      : 'Where you see clients. Shown on your profile.'}
                   </Text>
                 </View>
               )}
@@ -4527,10 +4999,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     filter/sort, free-text search matching, and the location
                     line on provider cards.
 
-                    The separate "cities you cover" multi-select (serviceLocations
-                    → providers.service_locations, feeding the client Search
-                    "City" filter) lives in Business Details › AboutYouScreen —
-                    not duplicated here.
+                    It is also what the client Search "City" filter goes by:
+                    src/utils/providerCity.ts reads "Shoreditch, London" (or a
+                    bare "Shoreditch") up to London. A mobile provider's other
+                    places live in "Areas you cover", which is edited in
+                    Business Details → About You (providers.service_locations),
+                    not here.
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
@@ -4587,20 +5061,47 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.docHeading}>About & Portfolio</Text>
               <Text style={styles.docSub}>Your introduction and the work clients see</Text>
 
+              {/* The only editor of years of experience once a profile exists.
+                  Sign-up asks too and stages its answer on the user row, which
+                  prefills this. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('yearsExperience')}
+              >
+                <Text style={styles.inputLabel}>Years of Experience</Text>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.yearsExperience}
+                    onChangeText={(text) =>
+                      setProviderData(prev => ({ ...prev, yearsExperience: text.replace(/[^0-9]/g, '') }))
+                    }
+                    placeholder="e.g. 5"
+                    placeholderTextColor={chrome.fg(0.4)}
+                    keyboardType="number-pad"
+                    onFocus={() => handleInputFocus('yearsExperience', 'about')}
+                  />
+                </View>
+                <Text style={styles.inputHint}>Shown on your public profile (optional).</Text>
+              </View>
+
             {/* About Section */}
               <View
                 style={styles.inputGroup}
                 ref={registerField('about')}
               >
-                <Text style={styles.inputLabel}>Description</Text>
+                <Text style={styles.inputLabel}>About your business</Text>
+                <Text style={styles.inputHint}>A short summary clients read first on your profile.</Text>
                 <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
-                  <TextInput
+                  {/* Opens the keyboard on a real tap only, not when a scroll
+                      down the page happens to start on top of it. */}
+                  <TapToEditTextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
                     onChangeText={(text) =>
                       setProviderData({ ...providerData, aboutText: text })
                     }
-                    placeholder="Tell clients about your services, policies, deposit requirements..."
+                    placeholder="Who you are, what you're known for and what clients can expect when they book with you."
                     placeholderTextColor={chrome.fg(0.4)}
                     multiline
                     numberOfLines={6}
@@ -4610,30 +5111,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* The release day. Edited here AND in Scheduling &
+                  Availability: both write automation_settings.scheduleReleaseDay
+                  (merged in on save), which drives the booking limit
+                  (utils/bookingHorizon, provider_last_bookable_date), the
+                  profile pill and the release message. The save only writes
+                  it when it was changed here (releaseDayEditedRef), and the
+                  value is re-read on focus, so the two screens stay in step.
+                  The row IS the picker: tap, choose a day, or "No release
+                  day" there. */}
               <View
                 style={styles.inputGroup}
                 ref={registerField('scheduleReleaseDay')}
               >
-                {/* Same setting as ProviderAutomationsScreen's "Notify
-                    followers on schedule release day" card — both read/write
-                    providers.automation_settings.scheduleReleaseDay, so
-                    changing it here or there updates the same value and each
-                    screen shows the current one on its own next load. The
-                    client-facing profile's "Slots out every Nth of the
-                    month" pill is computed live from this same value —
-                    there's no separate free-text field to keep in sync
-                    anymore, so this is the only place this ever needs
-                    setting. */}
-                {/* One control, not a switch plus a hidden picker. The switch
-                    only ever meant "is a day set", and flipping it on guessed
-                    today's date — a real value the provider never chose, which
-                    then had to be corrected in the picker underneath. Now the
-                    row IS the picker: tap it, choose a day (it opens on today
-                    when nothing is set yet), and choosing "Don't notify" in
-                    there is what clears it. */}
                 <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Notify Followers on Release Day</Text>
-                  <Text style={styles.toggleHint}>Clients who turned on notifications for your profile get a reminder on this day each month</Text>
+                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead. You can also change it in Scheduling & Availability.</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.releaseDayBtn}
@@ -4642,7 +5135,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 >
                   <Text style={styles.releaseDayBtnText}>
                     {providerData.scheduleReleaseDay != null
-                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      ? `Day ${providerData.scheduleReleaseDay} of every month at ${releaseTimeLabel(providerData.scheduleReleaseTime)}`
                       : 'Choose a day'}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
@@ -4650,50 +5143,53 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
-              <Text style={styles.sectionSubtitle}>
-                Photos of your work, shown on your public profile in a two-column gallery.
-              </Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Portfolio</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Photos of your work, shown on your public profile in a two-column gallery.
+                </Text>
 
-              {portfolioLoading ? (
-                <View style={styles.portfolioLoadingRow}>
-                  <ActivityIndicator color="#AF9197" />
-                </View>
-              ) : (
-                <View style={styles.portfolioGrid}>
-                  {workPhotos.map(item => (
-                    <View key={item.id} style={styles.portfolioThumbWrap}>
-                      <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
-                      <TouchableOpacity
-                        style={styles.portfolioRemoveBtn}
-                        onPress={() => { tapWarn(); handleRemovePortfolioItem(item); }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.portfolioRemoveText}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
+                {portfolioLoading ? (
+                  <View style={styles.portfolioLoadingRow}>
+                    <ActivityIndicator color="#AF9197" />
+                  </View>
+                ) : (
+                  <View style={styles.portfolioGrid}>
+                    {workPhotos.map(item => (
+                      <View key={item.id} style={styles.portfolioThumbWrap}>
+                        <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
+                        <TouchableOpacity
+                          style={styles.portfolioRemoveBtn}
+                          onPress={() => { tapWarn(); handleRemovePortfolioItem(item); }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.portfolioRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
 
-                  <TouchableOpacity
-                    style={styles.portfolioAddTile}
-                    onPress={() => { tapMedium(); handleAddPortfolioImages(); }}
-                    activeOpacity={0.8}
-                    disabled={portfolioUploading || !providerDbId}
-                  >
-                    {portfolioUploading ? (
-                      <ActivityIndicator color="#000" />
-                    ) : (
-                      <>
-                        <Text style={styles.portfolioAddPlus}>+</Text>
-                        <Text style={styles.portfolioAddText}>Add Photos</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
+                    <TouchableOpacity
+                      style={styles.portfolioAddTile}
+                      onPress={() => { tapMedium(); handleAddPortfolioImages(); }}
+                      activeOpacity={0.8}
+                      disabled={portfolioUploading || !providerDbId}
+                    >
+                      {portfolioUploading ? (
+                        <ActivityIndicator color="#000" />
+                      ) : (
+                        <>
+                          <Text style={styles.portfolioAddPlus}>+</Text>
+                          <Text style={styles.portfolioAddText}>Add Photos</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
 
-              {!providerDbId && !portfolioLoading && (
-                <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
-              )}
+                {!providerDbId && !portfolioLoading && (
+                  <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
+                )}
+              </View>
 
               <TouchableOpacity
                 style={styles.docNextButton}
@@ -4763,12 +5259,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Same providers.whatsapp_number the Communications screen edits —
-                  one value, two editors, by design. The contact *details* are a
-                  shared pool (signup fills what it collects, either screen can
-                  fill the rest); what differs is who each screen publishes them
-                  to. Filling it here makes it public; ticking WhatsApp in
-                  Communications offers it to booked clients. */}
+              {/* providers.whatsapp_number — the PUBLIC number. Communications
+                  has its own booked-client values (provider_booked_contact);
+                  a blank one there falls back to this, so filling it here
+                  also reaches booked clients until they're given a separate
+                  number. */}
               <View
                 style={styles.inputGroup}
                 ref={registerField('whatsapp')}
@@ -4897,13 +5392,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
               )}
 
-              {/* Years of Experience moved to Business Profile → Business
-                  Details → Business Info — it's an ongoing business fact a
-                  provider updates over time, not first-publish setup.
-                  providerData.yearsExperience still round-trips through this
-                  screen untouched (hero preview reads it) so an existing
-                  value is never lost by editing/saving here. */}
-
               {isLinkOnly ? documentEnd : (
                 <TouchableOpacity
                   style={styles.docNextButton}
@@ -4969,13 +5457,27 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View style={styles.servicesSection}>
                 <View style={styles.servicesSectionHeader}>
-                  <Text style={styles.sectionTitleNoCard}>Your Services</Text>
-                  <TouchableOpacity
-                    style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
-                    onPress={() => { tapLight(); setShowCategoryModal(true); }}
-                  >
-                    <Text style={styles.addCategoryText}>+ Add Category</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.sectionTitleNoCard}>Your Categories</Text>
+                  <View style={styles.servicesHeaderButtons}>
+                    {/* New add-ons start here, beside + Add Category. Hidden
+                        when the add-on list didn't load (a save mustn't
+                        replace it with nothing) or is already full. */}
+                    {providerData.addOnLibrary && providerData.addOnLibrary.length < MAX_ADD_ONS ? (
+                      <TouchableOpacity
+                        style={[styles.addAddOnHeaderButton, { borderColor: adaptiveAccentColor }]}
+                        onPress={() => { tapLight(); openAddOnEditor(null); }}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.addCategoryText, { color: adaptiveAccentColor }]}>+ Add-on</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => { tapLight(); setShowingAddOns(false); setShowCategoryModal(true); }}
+                    >
+                      <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                   {/* Service-type switch — plain underline, the same
@@ -4983,15 +5485,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ProviderBookingHistoryScreen, and deliberately not a
                       filled pill: the category pills directly below are
                       already filled, and two filled controls stacked read
-                      as one level rather than two. Hidden entirely for a
-                      single-type provider. */}
-                  {serviceTypes.length > 1 ? (
+                      as one level rather than two. A single-type provider
+                      only gets it once they have an add-on: then it reads
+                      Services / Add-ons, and the Add-ons tab shows their
+                      add-on list in place of the services. */}
+                  {serviceTypes.length > 1 || hasAddOns ? (
                     <View style={[styles.serviceTypeSwitch, { borderBottomColor: chrome.fg(0.15) }]}>
                       {serviceTypes.map(serviceType => {
-                        const active = serviceType === selectedServiceType;
-                        const count = Object.entries(providerData.categories)
-                          .filter(([name]) => typeOfCategory(name) === serviceType)
-                          .reduce((total, [, list]) => total + list.length, 0);
+                        const active = !addOnsView && serviceType === selectedServiceType;
+                        // One type: the tab is the categories you add, so it
+                        // says Categories and counts them. Several types: each
+                        // tab counts the services under it, as before.
+                        const ofType = Object.entries(providerData.categories)
+                          .filter(([name]) => typeOfCategory(name) === serviceType);
+                        const count = serviceTypes.length > 1
+                          ? ofType.reduce((total, [, list]) => total + list.length, 0)
+                          : ofType.length;
                         return (
                           <TouchableOpacity
                             key={serviceType}
@@ -4999,7 +5508,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               styles.serviceTypeTab,
                               active && { borderBottomColor: adaptiveAccentColor },
                             ]}
-                            onPress={() => { tapSelect(); setSelectedServiceType(serviceType); }}
+                            onPress={() => { tapSelect(); setShowingAddOns(false); setSelectedServiceType(serviceType); }}
                             activeOpacity={0.7}
                           >
                             <Text
@@ -5011,16 +5520,49 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 },
                               ]}
                             >
-                              {serviceType}
+                              {serviceTypes.length > 1 ? serviceType : 'Categories'}
                               {count > 0 ? `  ${count}` : ''}
                             </Text>
                           </TouchableOpacity>
                         );
                       })}
+                      {hasAddOns ? (
+                        <TouchableOpacity
+                          style={[
+                            styles.serviceTypeTab,
+                            addOnsView && { borderBottomColor: adaptiveAccentColor },
+                          ]}
+                          onPress={() => { tapSelect(); setShowingAddOns(true); }}
+                          activeOpacity={0.7}
+                          accessibilityRole="tab"
+                          accessibilityState={{ selected: addOnsView }}
+                        >
+                          <Text
+                            style={[
+                              styles.serviceTypeTabText,
+                              {
+                                color: addOnsView ? chrome.fg(0.95) : chrome.fg(0.5),
+                                fontWeight: addOnsView ? '700' : '600',
+                              },
+                            ]}
+                          >
+                            {`Add-ons  ${providerData.addOnLibrary?.length ?? 0}`}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   ) : null}
 
-                {categoryNames.length === 0 ? (
+                {addOnsView ? (
+                  <AddOnLibrarySection
+                    library={providerData.addOnLibrary}
+                    categories={providerData.categories}
+                    palette={chromeTheme}
+                    onEdit={openAddOnEditor}
+                    onNew={() => openAddOnEditor(null)}
+                    inTab
+                  />
+                ) : categoryNames.length === 0 ? (
                   <View style={styles.emptyServicesCard}>
                     <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
                     <Text style={styles.emptyServicesText}>
@@ -5294,6 +5836,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
+              {/* No add-ons yet (or the list didn't load): the empty list and
+                  its guide sit here. Once there's one, it moves to the
+                  Add-ons tab above. */}
+              {!hasAddOns && (
+                <AddOnLibrarySection
+                  library={providerData.addOnLibrary}
+                  categories={providerData.categories}
+                  palette={chromeTheme}
+                  onEdit={openAddOnEditor}
+                  onNew={() => openAddOnEditor(null)}
+                />
+              )}
+
               <TouchableOpacity
                 style={styles.docNextButton}
                 onPress={() => {
@@ -5351,25 +5906,37 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Text style={styles.docFieldFlag}>Required</Text>
                 )}
               </View>
-                {/* Always locked in InfoReg: business_type decides who travels to
-                    whom (mobile goes to the client; every other type is a venue
-                    the client comes to) and drives the address-release timings
-                    below — changing it later could silently leave an
-                    already-live profile in an inconsistent state. The private
-                    address itself is required for every type, mobile included;
-                    an earlier version of this comment said mobile was exempt,
-                    which has not been true since require_provider_address.sql. */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
-                  <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                    <Ionicons name="lock-closed" size={11} color="#fff" />
-                    <Text style={[styles.policyPillText, { color: '#fff' }]}>
-                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                {/* Admin-created accounts have no sign-up answer to prefill.
+                    Choose the type before the provider row is first saved;
+                    existing profiles keep Business Info as their editor. */}
+                {isEditMode ? (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
+                      <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                        <Ionicons name="lock-closed" size={11} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />
+                        <Text style={[styles.policyPillText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                          {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.inputHint}>
+                      Not editable here — change it in Business Profile → Business Details → Business Info.
                     </Text>
+                  </>
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {BUSINESS_TYPE_OPTS.map(({ value, label }) => (
+                      <TouchableOpacity
+                        key={value}
+                        activeOpacity={0.75}
+                        style={[styles.policyPill, providerData.businessType === value && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => { tapSelect(); selectBusinessType(value); }}
+                      >
+                        <Text style={[styles.policyPillText, providerData.businessType === value && { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                </View>
-                <Text style={styles.inputHint}>
-                  Not editable here — change it in Business Profile → Business Details → Business Info.
-                </Text>
+                )}
 
               <View style={[styles.docFieldRow, { marginTop: 14 }]}>
                 <Text style={styles.policyLabel}>
@@ -5399,6 +5966,53 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 }))}
                 accentColor={adaptiveAccentColor}
               />
+
+              {/* Two fields, split by who may see them. How to get there is
+                  on `providers` (public profile); Arrival details is in
+                  provider_private_details and reaches a client only with the
+                  released address. A mobile provider travels to the client,
+                  so neither applies. */}
+              {providerData.businessType !== 'mobile' && (
+                <>
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>HOW TO GET THERE</Text>
+                  <Text style={styles.addressHint}>
+                    Optional, shown on your profile — nearest station, where to park, landmarks. Anyone can see this, so no door codes.
+                  </Text>
+                  <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                    <TextInput
+                      style={[styles.textInput, styles.textInputMultiline]}
+                      value={providerData.publicDirections}
+                      onChangeText={(publicDirections) => setProviderData(prev => ({ ...prev, publicDirections }))}
+                      placeholder="e.g. 2 minutes from Hackney Central. Free parking on Mare Street after 6pm."
+                      placeholderTextColor={chrome.fg(0.4)}
+                      multiline
+                      maxLength={300}
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      accessibilityLabel="How to get there"
+                    />
+                  </View>
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>ARRIVAL DETAILS</Text>
+                  <Text style={styles.addressHint}>
+                    Optional, private — door or buzzer codes, flat number, which entrance. Only booked clients see this, at the same time as your address.
+                  </Text>
+                  <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                    <TextInput
+                      style={[styles.textInput, styles.textInputMultiline]}
+                      value={providerData.howToGetThere}
+                      onChangeText={(howToGetThere) => setProviderData(prev => ({ ...prev, howToGetThere }))}
+                      placeholder="e.g. Flat 3, buzzer 3B. Use the side entrance beside the blue gate."
+                      placeholderTextColor={chrome.fg(0.4)}
+                      multiline
+                      maxLength={500}
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      accessibilityLabel="Arrival details"
+                    />
+                  </View>
+                </>
+              )}
 
               {/* Which timings each business type may offer is
                   ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
@@ -5433,7 +6047,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           addressReleasePolicy: v === '' ? null : (v as AddressReleasePolicy),
                         })); }}
                       >
-                        <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: '#fff' }]}>{l}</Text>
+                        <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>{l}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -5513,9 +6127,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
 
 
-              {/* WHERE YOU WORK (cities covered) moved up to 01 · Identity,
-                  alongside "Where you're based" — the two location questions
-                  belong together rather than four sections apart. */}
 
               {/* PRICE RANGE moved out to Services & Pricing (ServicesPricingScreen) —
                   same field, same providers.price_tier column, alongside the
@@ -5540,22 +6151,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   saying the same thing. Business Details → Policies is the
                   ongoing editor of that same field; this is the signup-time
                   ask, same key, same format. */}
-              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ANYTHING CLIENTS SHOULD KNOW</Text>
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>YOUR INSTRUCTIONS</Text>
               <Text style={styles.addressHint}>
-                Shown to clients on every booking (optional) — parking, buzzer codes, what to bring, how to find you.
+                Shown to clients as your instructions in their booking details and in the reminder the day before, on every new booking (optional), like arriving early or what to bring. Directions go in How to get there and door codes in Arrival details, so there's no need to repeat them here. Changing it later won't update bookings already made.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={policies.bookingInstructions}
                   onChangeText={(text) => setPolicies(prev => ({ ...prev, bookingInstructions: text }))}
-                  placeholder="e.g. Please arrive 10 minutes early. Free parking on the street outside."
+                  placeholder="Write your own or tap a suggestion below"
                   placeholderTextColor={chrome.fg(0.4)}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
               </View>
+              <ChipSelect
+                options={BOOKING_INSTRUCTION_SUGGESTIONS}
+                selected={selectedBookingInstructions(policies.bookingInstructions)}
+                onToggle={(line) => setPolicies(prev => ({ ...prev, bookingInstructions: toggleBookingInstruction(prev.bookingInstructions, line) }))}
+                accentColor={adaptiveAccentColor}
+                styles={styles}
+              />
 
               {/* The provider's OWN client-facing Terms & Conditions — the
                   prose a client must agree to before adding this provider to
@@ -5683,26 +6301,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
+
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
-            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
+            value={providerData.scheduleReleaseDay ?? null}
+            time={providerData.scheduleReleaseTime}
+            onSelectTime={(time) => { releaseTimeEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseTime: time })); }}
             accentColor={adaptiveAccentColor}
             cardColor={editTheme.card}
             textColor={editTheme.text}
             subColor={editTheme.sub}
             borderColor={editTheme.border}
-            styles={styles}
             allowClear
-            onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
-            onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
+            onClear={() => { releaseDayEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseDay: null })); }}
+            onSelect={(day) => { releaseDayEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseDay: day })); }}
             onClose={() => setReleaseDayPickerVisible(false)}
           />
-
-          {/* Reuses the same read-only Terms content shown from account
-              settings — no separate copy to keep in sync. */}
-          <Modal visible={showTermsModal} animationType="slide" transparent={false} onRequestClose={() => setShowTermsModal(false)}>
-            <TermsScreen navigation={{ goBack: () => setShowTermsModal(false) }} />
-          </Modal>
 
           <DialogHost />
         </SafeAreaView>
@@ -5836,11 +6450,6 @@ const LOGO_BADGE_SIZE = 32;
 const LOGO_BADGE_OFFSET = Math.round(
   LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
 );
-/** The two Home card sizes a logo fills, copied from HomeScreen's
- *  `brandCardBlur` (small) and `providerBlur` (large). If those change, change
- *  these too, or the preview shows a crop clients never see. */
-const LOGO_HOME_SMALL = { width: 160, height: 70, radius: 12 } as const;
-const LOGO_HOME_LARGE = { width: 282, height: 147, radius: 16 } as const;
 /** One caption per page of the logo swipe, in page order. */
 const LOGO_PAGE_CAPTIONS = [
   'Profile logo · tap to adjust',
@@ -5919,9 +6528,9 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 20,
     color: P.text,
   },
-  claimErrorBanner: {
+  claimBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginHorizontal: 20,
     marginBottom: 12,
@@ -5932,14 +6541,27 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderWidth: 1,
     borderColor: 'rgba(255, 193, 7, 0.4)',
   },
-  claimErrorText: {
-    flex: 1,
+  claimBannerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    color: '#7A4B00',
+    marginBottom: 4,
+    marginRight: 8,
+  },
+  claimBannerText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     color: '#7A4B00',
     marginRight: 8,
+  },
+  claimBannerCode: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    letterSpacing: 1,
+    color: '#7A4B00',
+    marginVertical: 6,
   },
   scrollContent: {
     padding: 20,
@@ -6009,31 +6631,27 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // Every page is as tall as the tallest thing on any page (the large card),
   // so the dots and caption below don't jump as the provider swipes.
   logoPage: {
-    height: Math.max(LOGO_SIZE, LOGO_HOME_LARGE.height),
+    height: Math.max(LOGO_SIZE, LOGO_CARD_SIZES.large.height),
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoHomeSmallCard: {
-    width: LOGO_HOME_SMALL.width,
-    height: LOGO_HOME_SMALL.height,
-    borderRadius: LOGO_HOME_SMALL.radius,
+    width: LOGO_CARD_SIZES.small.width,
+    height: LOGO_CARD_SIZES.small.height,
+    borderRadius: LOGO_CARD_SIZES.small.radius,
     overflow: 'hidden',
     backgroundColor: P.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: fg(0.12),
   },
   logoHomeLargeCard: {
-    width: LOGO_HOME_LARGE.width,
-    height: LOGO_HOME_LARGE.height,
-    borderRadius: LOGO_HOME_LARGE.radius,
+    width: LOGO_CARD_SIZES.large.width,
+    height: LOGO_CARD_SIZES.large.height,
+    borderRadius: LOGO_CARD_SIZES.large.radius,
     overflow: 'hidden',
     backgroundColor: P.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: fg(0.12),
-  },
-  logoHomeFill: {
-    width: '100%',
-    height: '100%',
   },
   logoDots: {
     flexDirection: 'row',
@@ -6496,8 +7114,8 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
 
   // ── Location picker ──
   // The city trigger deliberately matches profileInputBox's quiet tonal fill
-  // rather than releaseDayBtn's bordered pill, so it reads as the Location
-  // field itself (which it replaces) and not as a button sitting beside one.
+  // rather than a bordered pill, so it reads as the Location field itself
+  // (which it replaces) and not as a button sitting beside one.
   locationSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -6579,10 +7197,23 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 15,
     paddingHorizontal: 5,
   },
+  servicesHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   addCategoryButton: {
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+  // Outlined, so it reads as the smaller of the two next to + Add Category.
+  // 1.5px border, 1.5px less padding: same height as the filled button.
+  addAddOnHeaderButton: {
+    paddingHorizontal: 13.5,
+    paddingVertical: 6.5,
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
   addCategoryText: {
     fontFamily: 'BakbakOne-Regular',
@@ -6876,7 +7507,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Bottom-sheet modals (template picker, add category)
-  templateSheet: {
+  templateSheet: { ...readableSheet,
     height: '82%',
     marginTop: 'auto',
     borderTopLeftRadius: 28,
@@ -7096,7 +7727,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 16,
     fontWeight: 'bold',
   },
-  modalContent: {
+  modalContent: { ...readableDialog,
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -7229,6 +7860,20 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     lineHeight: 17,
     color: fg(0.5),
     marginBottom: 8,
+  },
+  // "Use: '…'" under the description — a chip, dashed so it reads as an
+  // offer rather than a value already chosen.
+  serviceSheetSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'stretch',
+    borderStyle: 'dashed',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  serviceSheetSuggestionText: {
+    flex: 1,
   },
   serviceSheetInput: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -7370,7 +8015,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   transferButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#fff',
+    color: '#1A1815',
   },
   skipButton: {
     paddingVertical: 14,
@@ -7430,7 +8075,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   saveButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#fff',
+    color: '#1A1815',
   },
 
   // Carousel
@@ -7508,21 +8153,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   // Bottom-right so it never sits under the remove button (top-right) or the
   // Cover badge (bottom-left).
-  fitToggle: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  fitToggleText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
   carouselHint: {
     marginTop: 8,
     fontSize: 11,
@@ -7614,6 +8244,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     right: 0,
     bottom: 0,
   },
+  previewHeaderFloating: { position: 'absolute', top: 0, left: 0, right: 0 },
   previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -7774,6 +8405,45 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     letterSpacing: 0.4,
   },
   // Slots with Bell
+  // Mirrors ProviderProfileScreen's linkOnlyBook* styles.
+  previewLinkOnlyBookBlock: {
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  previewLinkOnlyBookRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookButton: {
+    height: 46,
+    flex: 1,
+    borderRadius: 23,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  previewLinkOnlyBookText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 1,
+  },
+  previewLinkOnlySocialButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewLinkOnlyCaption: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   previewSlotsPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -7959,33 +8629,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: 'bold',
     color: '#fff',
   },
-  // Add-ons in preview
-  previewServiceAddOns: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
-    paddingTop: 8,
-  },
-  previewAddOnsLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 10,
-    marginBottom: 4,
-  },
-  previewAddOnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 3,
-  },
-  previewAddOnName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  previewAddOnPrice: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-  },
   // Contact rows — matches ProviderProfileScreen's contactRow layout
   previewContactRow: {
     flexDirection: 'row',
@@ -8107,63 +8750,11 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Add-Ons Styles
-  addOnsContainer: {
-    marginTop: 10,
-    marginBottom: 15,
-    gap: 8,
-  },
-  addOnItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: surf(0.3),
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-  },
-  addOnInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'space-between',
-    marginRight: 10,
-  },
-  addOnName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 14,
-    color: P.text,
-    flex: 1,
-  },
-  addOnPrice: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    color: P.accent,
-  },
-  removeAddOnButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,100,100,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeAddOnText: {
-    fontSize: 16,
-    color: '#c00',
-    fontWeight: 'bold',
-  },
   addAddOnRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginTop: 10,
-  },
-  addOnNameInput: {
-    flex: 2,
-  },
-  addOnPriceInput: {
-    flex: 1,
   },
   addAddOnButton: {
     width: 44,
@@ -8175,7 +8766,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   addAddOnButtonText: {
     fontSize: 24,
-    color: '#fff',
+    color: '#1A1815',
     fontWeight: 'bold',
   },
 
@@ -8259,6 +8850,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 1,
   },
 
+
   releaseDayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -8275,84 +8867,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 13,
     fontWeight: '700',
     color: fg(0.75),
-  },
-
-  releasePickerOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(20,14,18,0.46)',
-  },
-  releasePickerSheet: {
-    backgroundColor: P.surfaceRaised,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 34,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  releasePickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  releasePickerEyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1.1,
-    color: fg(0.46),
-    marginBottom: 4,
-  },
-  releasePickerTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 21,
-    color: '#20191C',
-  },
-  releasePickerClose: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: surf(0.06),
-  },
-  releasePickerSubtext: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 12,
-    lineHeight: 18,
-    color: fg(0.57),
-    marginTop: 10,
-    marginBottom: 18,
-  },
-  releasePickerClearButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginTop: 14,
-  },
-  releasePickerClearText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 13,
-    textDecorationLine: 'underline',
-  },
-  releasePickerDoneButton: {
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    marginTop: 20,
-  },
-  releasePickerDoneText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    color: '#FFFFFF',
   },
 
   // ── Tab switcher ──
