@@ -75,9 +75,9 @@ Curated: [[Availability & Slots]] · **298 files**
 
 ## Payments
 Curated: [[Payments]] · **256 files**
-- `src/screens/client/CartScreen.tsx` _(339)_
+- `src/screens/client/CartScreen.tsx` _(340)_
 - `src/screens/provider/PaymentsScreen.tsx` _(229)_
-- `src/features/cart/StripePaymentSheet.tsx` _(176)_
+- `src/features/cart/StripePaymentSheet.tsx` _(177)_
 - `src/components/ProviderStripePayments.tsx` _(126)_
 - `src/components/BookingSheet.tsx` _(118)_
 - `src/i18n/catalogs/en/providerBusiness.ts` _(116)_
@@ -96,7 +96,7 @@ Curated: [[Payments]] · **256 files**
 - `src/services/bookingService.ts` _(73)_
 - `src/services/database/edgeFunctions.ts` _(61)_
 - `src/types/database.ts` _(59)_
-- `src/i18n/catalogs/en/cart.ts` _(54)_
+- `src/i18n/catalogs/en/cart.ts` _(56)_
 - `src/features/providers/goLiveStatus.ts` _(53)_
 - `src/utils/depositPolicy.ts` _(51)_
 - `src/services/becca/capabilities/client.ts` _(48)_
@@ -112,7 +112,7 @@ Curated: [[Booking Flow]] · **492 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/services/becca/capabilities/client.ts` _(628)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(585)_
-- `src/screens/client/CartScreen.tsx` _(574)_
+- `src/screens/client/CartScreen.tsx` _(576)_
 - `src/contexts/BookingContext.tsx` _(541)_
 - `src/screens/client/BookingDetailScreen.tsx` _(510)_
 - `src/screens/client/BookingsScreen.tsx` _(429)_
@@ -130,8 +130,8 @@ Curated: [[Booking Flow]] · **492 files**
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/services/becca/engine.ts` _(132)_
 - `supabase/phase1_schema.sql` _(125)_
+- `src/features/cart/StripePaymentSheet.tsx` _(124)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
-- `src/features/cart/StripePaymentSheet.tsx` _(123)_
 - `src/services/database/registration.ts` _(116)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
@@ -346,14 +346,14 @@ Curated: [[Services]] · **96 files**
 - … +66 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **136 files**
-- `src/screens/client/CartScreen.tsx` _(568)_
-- `src/i18n/catalogs/en/cart.ts` _(280)_
+Curated: [[Payments]] · **137 files**
+- `src/screens/client/CartScreen.tsx` _(571)_
+- `src/i18n/catalogs/en/cart.ts` _(283)_
 - `src/i18n/catalogs/pl/cart.ts` _(249)_
 - `src/i18n/catalogs/de/cart.ts` _(241)_
 - `src/i18n/catalogs/es/cart.ts` _(241)_
 - `src/i18n/catalogs/fr/cart.ts` _(241)_
-- `src/features/cart/StripePaymentSheet.tsx` _(116)_
+- `src/features/cart/StripePaymentSheet.tsx` _(119)_
 - `src/web/WebPaymentStep.tsx` _(84)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/services/database/services.ts` _(59)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **136 files**
 - `src/web/ProviderWebPage.tsx` _(13)_
 - `src/features/cart/RequestHoldChecks.tsx` _(10)_
 - `src/features/cart/requestHolds.ts` _(9)_
-- … +106 more
+- … +107 more
