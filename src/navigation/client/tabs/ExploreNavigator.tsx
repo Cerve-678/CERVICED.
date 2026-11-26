@@ -7,12 +7,14 @@ import SearchScreen from '../../../screens/client/SearchScreen';
 import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvidersScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import { ExploreStackParamList } from '../../types';
+import { useTranslation } from '../../../i18n';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 const ExploreStack = createNativeStackNavigator<ExploreStackParamList>();
 
 export default function ExploreNavigator() {
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <ExploreStack.Navigator>
@@ -25,7 +27,7 @@ export default function ExploreNavigator() {
       <ExploreStack.Screen
         name="ProviderChat"
         component={ProviderChatScreen}
-        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: t('common.back') }}
       />
 
       {/* PUSH NAVIGATION for Provider Profile */}
@@ -33,9 +35,9 @@ export default function ExploreNavigator() {
         name="ProviderProfile"
         component={ProviderProfileScreen}
         options={{
-          title: 'Provider Profile',
+          title: t('shared.nav.providerProfile'),
           presentation: 'card',
-          headerBackTitle: 'Explore',
+          headerBackTitle: t('shared.nav.explore'),
           headerStyle: {
             backgroundColor: theme.background,
           },
@@ -58,9 +60,9 @@ export default function ExploreNavigator() {
         name="BookmarkedProviders"
         component={BookmarkedProvidersScreen}
         options={{
-          title: 'Your Providers',
+          title: t('shared.nav.yourProviders'),
           presentation: 'card',
-          headerBackTitle: 'Explore',
+          headerBackTitle: t('shared.nav.explore'),
           headerStyle: {
             backgroundColor: theme.background,
           },
@@ -99,10 +101,10 @@ export default function ExploreNavigator() {
         name="Search"
         component={SearchScreen}
         options={{
-          title: 'Search Cervices',
+          title: t('shared.nav.searchCervices'),
           presentation: 'card',
           animation: 'none',
-          headerBackTitle: 'Back',
+          headerBackTitle: t('common.back'),
           headerStyle: {
             backgroundColor: theme.background,
           },

@@ -33,6 +33,8 @@ import { SectionDivider } from "./pageParts";
 import { capsuleTones } from "./heroes/CapsuleHero";
 import { LATTE_OVERLAP, latteBand, latteGlass, latteInk, latteShade } from "./heroes/LatteHero";
 import { GlowText } from "./heroes/NeonHero";
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -1176,6 +1178,8 @@ export function LatteBookBar({
   serviceName?: string | undefined;
   onBook?: (() => void) | undefined;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const sheet = palette.pourSheet ?? palette.background;
   const bar = latteShade(palette.accent, sheet, 1);
   const top = latteShade(palette.accent, sheet, 0);
@@ -1191,10 +1195,10 @@ export function LatteBookBar({
         onPress={onBook}
         disabled={!onBook}
         accessibilityRole="button"
-        accessibilityLabel="Book"
+        accessibilityLabel={tr('beautyProfile.hello.book')}
         activeOpacity={0.85}
       >
-        <Text style={[surfaceStyles.pourBarButtonText, { color: latteInk(top).text }]}>Book</Text>
+        <Text style={[surfaceStyles.pourBarButtonText, { color: latteInk(top).text }]}>{tr('beautyProfile.hello.book')}</Text>
       </TouchableOpacity>
     </View>
   );

@@ -16,6 +16,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { isDarkColor } from '../../constants/providerThemes';
+import { useTranslation } from '../../i18n';
 
 // ── Input component ──────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ function Field({
 
 export default function ChangeCredentialsScreen({ navigation }: any) {
   const { theme, isDarkMode } = useTheme();
+  const { t } = useTranslation();
   const { session } = useAuth();
 
   // Password
@@ -98,14 +100,14 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
   // ── Password update ──────────────────────────────────────────────────────
 
   const handlePasswordUpdate = async () => {
-    if (!newPassword) return Alert.alert('Required', 'Please enter a new password.');
-    if (newPassword.length < 8) return Alert.alert('Too short', 'Password must be at least 8 characters.');
-    if (newPassword !== confirmPassword) return Alert.alert('Mismatch', 'New passwords do not match.');
+    if (!newPassword) return Alert.alert(t('shared.changeCredentials.required.title'), t('shared.changeCredentials.required.body'));
+    if (newPassword.length < 8) return Alert.alert(t('shared.changeCredentials.tooShort.title'), t('shared.changeCredentials.tooShort.body'));
+    if (newPassword !== confirmPassword) return Alert.alert(t('shared.changePassword.mismatch.title'), t('shared.changePassword.mismatch.body'));
 
     setPasswordLoading(true);
     try {
       if (!session) {
-        Alert.alert('Session expired', 'Please log out and log back in, then try again.');
+        Alert.alert(t('shared.changeCredentials.sessionExpired.title'), t('shared.changeCredentials.sessionExpired.body'));
         return;
       }
 
@@ -126,9 +128,9 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
 
       setNewPassword('');
       setConfirmPassword('');
-      Alert.alert('Success', 'Your password has been updated.');
+      Alert.alert(t('shared.changeCredentials.success'), t('shared.changePassword.updated'));
     } catch {
-      Alert.alert('Error', 'Couldn\'t update your password. Please try again.');
+      Alert.alert(t('common.error'), t('shared.changePassword.updateFailed'));
     } finally {
       setPasswordLoading(false);
     }
@@ -148,7 +150,7 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
           >
             <Text style={[styles.backArrow, { color: theme.text }]}>←</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>CHANGE PASSWORD</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>{t('shared.changeCredentials.header')}</Text>
           <View style={styles.backBtn} />
         </View>
 
@@ -160,10 +162,10 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
           >
             <View style={styles.section}>
                 <Field
-                  label="New password"
+                  label={t('shared.changeCredentials.newLabel')}
                   value={newPassword}
                   onChangeText={setNewPassword}
-                  placeholder="Min. 8 characters"
+                  placeholder={t('shared.changePassword.newPlaceholder')}
                   secureTextEntry
                   showToggle
                   visible={showNew}
@@ -172,10 +174,10 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
                   isDarkMode={isDarkMode}
                 />
                 <Field
-                  label="Confirm new password"
+                  label={t('shared.changeCredentials.confirmLabel')}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  placeholder="Repeat new password"
+                  placeholder={t('shared.changeCredentials.confirmPlaceholder')}
                   secureTextEntry
                   showToggle
                   visible={showConfirm}
@@ -206,12 +208,12 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
                     })}
                     <Text style={[styles.strengthLabel, { color: theme.secondaryText }]}>
                       {newPassword.length < 8
-                        ? 'Too short'
+                        ? t('shared.changeCredentials.strength.tooShort')
                         : !(/[A-Z]/.test(newPassword) || /[0-9]/.test(newPassword))
-                        ? 'Weak'
+                        ? t('shared.changeCredentials.strength.weak')
                         : /[^A-Za-z0-9]/.test(newPassword)
-                        ? 'Strong'
-                        : 'Good'}
+                        ? t('shared.changeCredentials.strength.strong')
+                        : t('shared.changeCredentials.strength.good')}
                     </Text>
                   </View>
                 )}
@@ -225,7 +227,7 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
                   {passwordLoading ? (
                     <ActivityIndicator color={isDarkColor(theme.accent) ? '#FFFFFF' : '#1B2740'} />
                   ) : (
-                    <Text style={[styles.buttonText, { color: isDarkColor(theme.accent) ? '#FFFFFF' : '#1B2740' }]}>Update Password</Text>
+                    <Text style={[styles.buttonText, { color: isDarkColor(theme.accent) ? '#FFFFFF' : '#1B2740' }]}>{t('shared.changeCredentials.submit')}</Text>
                   )}
                 </TouchableOpacity>
               </View>

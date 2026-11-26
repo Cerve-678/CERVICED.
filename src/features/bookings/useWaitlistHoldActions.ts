@@ -9,6 +9,7 @@ import {
 import type { DialogButton } from '../../components/AppDialog';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { buildWaitlistHoldCartItem, offeredSlotLabel } from './waitlist';
+import { tr } from '../../i18n/translate';
 
 interface WaitlistHoldActionsArgs {
   showAlert: (title: string, message?: string) => void;
@@ -46,7 +47,7 @@ export function useWaitlistHoldActions({ showAlert, showConfirm, setBusyId, open
     try {
       const hold = await getBookingById(place.holdBookingId);
       if (!hold || hold.status !== 'on_hold' || !hold.hold_expires_at) {
-        showAlert('This slot has gone', "Its time ran out before you could pay, so you've come off this waitlist. You can rejoin.");
+        showAlert(tr('clientBooking.waitlist.goneTitle'), "Its time ran out before you could pay, so you've come off this waitlist. You can rejoin.");
         await reload();
         return;
       }
@@ -80,7 +81,7 @@ export function useWaitlistHoldActions({ showAlert, showConfirm, setBusyId, open
       `Pass on ${slot}?`,
       "It'll be offered to someone else, and you'll come off this waitlist. You can rejoin afterwards.",
       [
-        { text: 'Keep it', style: 'cancel' },
+        { text: tr('clientBooking.external.keepIt'), style: 'cancel' },
         {
           text: 'Pass it on',
           style: 'destructive',

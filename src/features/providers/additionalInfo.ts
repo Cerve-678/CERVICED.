@@ -23,6 +23,7 @@ import { BUSINESS_TYPE_LABEL } from './profilePresentation';
 import type { ProviderProfileData } from './profileTypes';
 import { productsGroup, workWithGroups, type ChipGroup } from './workWith';
 import type { PageStyle } from '../../constants/pageStyles';
+import { tr } from '../../i18n';
 
 // Client-facing wording for providers.team_size.
 const TEAM_SIZE_LABELS: Record<string, string> = {
@@ -40,7 +41,7 @@ export function additionalInfoGroups(
   // knotless?"). Same values Search's Speciality filter matches on. A
   // link-only profile shows them in their own section instead.
   if (provider.specialties.length > 0 && !provider.isLinkOnly) {
-    groups.push({ label: 'Specialities', chips: [...provider.specialties] });
+    groups.push({ label: tr('discover.profile.specialities'), chips: [...provider.specialties] });
   }
   // What they do (Nails, Lashes…). Cover and Duet leave it out of the top
   // of the page, so it's said here instead (owner, 2026-11-15).
@@ -65,16 +66,16 @@ export function additionalInfoGroups(
   const products = productsGroup(provider);
   if (products) groups.push(products);
   if (provider.languagesSpoken.length > 0) {
-    groups.push({ label: 'Languages', chips: [...provider.languagesSpoken] });
+    groups.push({ label: tr('discover.profile.languages'), chips: [...provider.languagesSpoken] });
   }
   const teamLabel = provider.teamSize ? TEAM_SIZE_LABELS[provider.teamSize] : null;
-  if (teamLabel) groups.push({ label: 'Team', chips: [teamLabel] });
+  if (teamLabel) groups.push({ label: tr('discover.profile.team'), chips: [teamLabel] });
   const credentials: string[] = [];
   if (provider.isInsuredSelfDeclared) credentials.push('Insured (self-declared)');
   if (provider.dbsCheckedSelfDeclared) credentials.push('DBS checked (self-declared)');
-  if (credentials.length > 0) groups.push({ label: 'Credentials', chips: credentials });
+  if (credentials.length > 0) groups.push({ label: tr('discover.profile.credentials'), chips: credentials });
   if (provider.accessibilityTags.length > 0) {
-    groups.push({ label: 'Accessibility', chips: [...provider.accessibilityTags] });
+    groups.push({ label: tr('discover.profile.accessibility'), chips: [...provider.accessibilityTags] });
   }
   // The provider's stated preference only (Payments, or Business Info for a
   // link-only pro) — Cerviced doesn't collect or track off-app payments.
@@ -83,7 +84,7 @@ export function additionalInfoGroups(
   const paymentLabels = provider.paymentMethods
     .map(v => PAYMENT_OPTS.find(o => o.value === v)?.label)
     .filter((l): l is string => !!l);
-  if (paymentLabels.length > 0) groups.push({ label: 'Payment methods', chips: paymentLabels });
+  if (paymentLabels.length > 0) groups.push({ label: tr('discover.profile.paymentMethods'), chips: paymentLabels });
   return groups;
 }
 

@@ -63,6 +63,8 @@ import {
   notificationKindLabel,
   REVIEW_PROMPT_TYPES,
 } from '../../features/notifications/notificationPresentation';
+import { useTranslation, tr, localeForLanguage } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 interface Notification {
   id: string;
@@ -227,6 +229,15 @@ function maintenanceItemIdOf(metadata: unknown): string | undefined {
   return typeof id === 'string' ? id : undefined;
 }
 
+// Empty-state copy per filter tab. Keyed by the filter's stable `key`, which
+// is never shown — interpolating it into a sentence only worked in English.
+const EMPTY_FILTER_KEYS: Readonly<Record<string, TranslationKey>> = {
+  unread: 'shared.notifications.empty.filter.unread',
+  bookings: 'shared.notifications.empty.filter.bookings',
+  reviews: 'shared.notifications.empty.filter.reviews',
+  promotions: 'shared.notifications.empty.filter.promotions',
+};
+
 const hapticLight = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
 const hapticMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
 const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
@@ -236,6 +247,7 @@ const NOTIFICATION_PAGE_SIZE = 50;
 
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
+  const { t } = useTranslation();
   const { textStyles } = useFont();
   const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
@@ -387,7 +399,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     } catch (error) {
       if (generation !== loadGenerationRef.current) return;
       logger.error('Failed to load notifications:', error);
-      setLoadError('Failed to load notifications. Pull down to retry.');
+      setLoadError(tr('shared.notifications.loadFailed'));
     } finally {
       if (generation === loadGenerationRef.current) setNotificationsLoading(false);
     }
@@ -526,7 +538,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       setActionError(
         toUserMessage(
           error,
-          "We couldn't mark that as read.",
+          tr('shared.notifications.markReadFailed'),
           '[NotificationsScreen] mark read failed',
         ),
       );
@@ -560,7 +572,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       setActionError(
         toUserMessage(
           error,
-          "We couldn't mark everything as read.",
+          tr('shared.notifications.markAllReadFailed'),
           '[NotificationsScreen] mark all read failed',
         ),
       );
@@ -598,7 +610,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       setActionError(
         toUserMessage(
           error,
-          "We couldn't delete that notification.",
+          tr('shared.notifications.deleteFailed'),
           '[NotificationsScreen] delete failed',
         ),
       );
@@ -943,12 +955,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     const diffInHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInDays === 1) return 'Yesterday';
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    if (diffInMinutes < 1) return t('common.time.justNow');
+    if (diffInMinutes < 60) return t('common.time.minutesAgo', { count: diffInMinutes });
+    if (diffInHours < 24) return t('common.time.hoursAgo', { count: diffInHours });
+    if (diffInDays === 1) return t('common.date.yesterday');
+    if (diffInDays < 7) return t('common.time.daysAgo', { count: diffInDays });
+    return date.toLocaleDateString(localeForLanguage(), { day: 'numeric', month: 'short' });
   };
 
   // Loaded unread plus the ones further back, so this matches the bell.
@@ -1019,20 +1031,20 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const getActionButtonText = (type: string) => {
     switch (type) {
       case 'booking_pending':
-        return 'View Booking';
+        return t('shared.notifications.action.viewBooking');
       // The reminder is a heads-up about one appointment; the button is how
       // the client gets to everything else about it.
       case 'booking_reminder':
-        return 'View Full Details';
+        return t('shared.notifications.action.viewFullDetails');
       case 'daily_recap':
-        return 'View Schedule';
+        return t('shared.notifications.action.viewSchedule');
       case 'booking_confirmed':
       case 'booking_in_progress':
       case 'rebooking_nudge':
-        return 'View Booking';
+        return t('shared.notifications.action.viewBooking');
       case 'booking_declined':
       case 'booking_cancelled':
-        return isProvider ? 'View Booking' : 'View Past Bookings';
+        return isProvider ? t('shared.notifications.action.viewBooking') : t('shared.notifications.action.viewPastBookings');
       case 'no_show':
       case 'provider_no_show':
       case 'no_show_disputed':
@@ -1054,49 +1066,49 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // destination is the booking itself — not "Reschedule Now", which would
       // point at a flow the provider's notice window may now refuse.
       case 'reschedule_expired':
-        return 'View Booking';
+        return t('shared.notifications.action.viewBooking');
       // The point of this one is that cancelling is still possible, but not
       // for much longer — the booking is where that decision gets made.
       case 'cancel_window_closing':
-        return 'View Booking';
+        return t('shared.notifications.action.viewBooking');
       case 'pending_booking_reminder':
-        return 'Respond Now';
+        return t('shared.notifications.action.respondNow');
       case 'payment_success':
-        return 'View Booking';
+        return t('shared.notifications.action.viewBooking');
       case 'fee_payment_requested':
-        return 'Pay Fee';
+        return t('shared.notifications.action.payFee');
       case 'reschedule_request':
       case 'reschedule_provider_response':
-        return 'Reschedule Now';
+        return t('shared.notifications.action.rescheduleNow');
       case 'reschedule_confirmed':
-        return 'View Booking';
+        return t('shared.notifications.action.viewBooking');
       case 'new_provider':
-        return 'View Provider';
+        return t('shared.notifications.action.viewProvider');
       case 'promotion':
-        return 'Shop Now';
+        return t('shared.notifications.action.shopNow');
       case 'review_request':
-        return 'Rate Now';
+        return t('shared.notifications.action.rateNow');
       case 'review_received':
-        return 'View Review';
+        return t('shared.notifications.action.viewReview');
       case 'intake_form_reminder':
-        return 'Send Form';
+        return t('shared.notifications.action.sendForm');
       case 'intake_form_received':
-        return 'Fill In Form';
+        return t('shared.notifications.action.fillInForm');
       case 'intake_form_completed':
-        return 'View Responses';
+        return t('shared.notifications.action.viewResponses');
       case 'info_pack_received':
-        return 'Read Info';
+        return t('shared.notifications.action.readInfo');
       case 'announcement':
       case 'birthday_greeting':
         return 'View Provider';
       case 'post_appt_check_in':
         return 'Rate Visit';
       case 'provider_message':
-        return 'Open Inbox';
+        return t('shared.notifications.action.openInbox');
       case 'new_message':
-        return 'Open Chat';
+        return t('shared.notifications.action.openChat');
       case 'address_released':
-        return 'View Address';
+        return t('shared.notifications.action.viewAddress');
       case 'schedule_fully_booked':
         return 'View Certificate';
       case 'payout_failed':
@@ -1106,15 +1118,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'waitlist_joined':
         return 'View Waitlist';
       case 'points_earned':
-        return 'View Points';
+        return t('shared.notifications.action.viewPoints');
       case 'maintenance_due':
-        return 'View Maintenance';
+        return t('shared.notifications.action.viewMaintenance');
       case 'aftercare_available':
         return 'Read Aftercare';
       case 'follow_request':
         return 'See Request';
       default:
-        return 'View';
+        return t('shared.notifications.action.view');
     }
   };
 
@@ -1254,7 +1266,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   ) : amount ? (
                     <Text style={[styles.rowAmount, { color: P.accentText }]}>{amount}</Text>
                   ) : item.type === 'tip_received' ? (
-                    <Text style={[styles.viewTip, { color: P.accentText }]}>View tip</Text>
+                    <Text style={[styles.viewTip, { color: P.accentText }]}>{t('shared.notifications.viewTip')}</Text>
                   ) : null}
                 </View>
               </View>
@@ -1284,7 +1296,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               adjustsFontSizeToFit
               minimumFontScale={0.75}
             >
-              {isProvider ? 'Business Notifications' : 'Notifications'}
+              {isProvider ? t('shared.notifications.title.business') : t('shared.notifications.title.client')}
             </Text>
             {unreadCount > 0 && (
               <View style={[styles.unreadBadge, { backgroundColor: P.accent }]}>
@@ -1299,7 +1311,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               onPress={() => { hapticMedium(); markAllAsRead(); }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.markAllText, { color: P.accentText }]}>Mark All Read</Text>
+              <Text style={[styles.markAllText, { color: P.accentText }]}>{t('shared.notifications.markAllRead')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1311,21 +1323,21 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               // Link-only: no CERVICED bookings and no reviews, so those two
               // tabs would always be empty.
               ? [
-                  { key: 'all', label: 'All' },
-                  { key: 'unread', label: 'Unread', count: unreadCount },
+                  { key: 'all', label: t('common.all') },
+                  { key: 'unread', label: t('shared.notifications.filter.unread'), count: unreadCount },
                 ]
               : isProvider
               ? [
-                  { key: 'all', label: 'All' },
-                  { key: 'unread', label: 'Unread', count: unreadCount },
-                  { key: 'bookings', label: 'Bookings' },
-                  { key: 'reviews', label: 'Reviews' },
+                  { key: 'all', label: t('shared.notifications.filter.all') },
+                  { key: 'unread', label: t('shared.notifications.filter.unread'), count: unreadCount },
+                  { key: 'bookings', label: t('shared.notifications.filter.bookings') },
+                  { key: 'reviews', label: t('shared.notifications.filter.reviews') },
                 ]
               : [
-                  { key: 'all', label: 'All' },
-                  { key: 'unread', label: 'Unread', count: unreadCount },
-                  { key: 'bookings', label: 'Bookings' },
-                  { key: 'promotions', label: 'Offers' },
+                  { key: 'all', label: t('shared.notifications.filter.all') },
+                  { key: 'unread', label: t('shared.notifications.filter.unread'), count: unreadCount },
+                  { key: 'bookings', label: t('shared.notifications.filter.bookings') },
+                  { key: 'promotions', label: t('shared.notifications.filter.offers') },
                 ]
             )}
             activeKey={selectedFilter}
@@ -1341,7 +1353,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{loadError}</Text>
             <TouchableOpacity onPress={() => { hapticLight(); loadNotifications(); }}>
-              <Text style={styles.errorRetryText}>Retry</Text>
+              <Text style={styles.errorRetryText}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1352,7 +1364,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{actionError}</Text>
             <TouchableOpacity onPress={() => { hapticLight(); setActionError(null); }}>
-              <Text style={styles.errorRetryText}>Dismiss</Text>
+              <Text style={styles.errorRetryText}>{t('shared.notifications.dismiss')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1376,21 +1388,23 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 {notificationsLoading ? (
                   <>
                     <BellIcon size={48} color={P.sub} />
-                    <Text style={[textStyles.body, styles.emptyStateText, { color: P.sub }]}>Loading notifications…</Text>
+                    <Text style={[textStyles.body, styles.emptyStateText, { color: P.sub }]}>{t('shared.notifications.loading')}</Text>
                   </>
                 ) : <>
                 <BellIcon size={64} color={P.sub} />
                 <Text style={[textStyles.h3, styles.emptyStateTitle, { color: P.text }]}>
-                  {isProvider ? 'No business notifications' : 'No beauty notifications'}
+                  {isProvider ? t('shared.notifications.empty.titleBusiness') : t('shared.notifications.empty.titleBeauty')}
                 </Text>
                 <Text style={[textStyles.body, styles.emptyStateText, { color: P.sub }]}>
                   {selectedFilter !== 'all'
-                    ? `No ${selectedFilter} notifications to show.`
+                    ? t(EMPTY_FILTER_KEYS[selectedFilter] ?? 'shared.notifications.empty.filter.generic')
                     : otherHatUnread > 0
                       // Point at the other hat rather than letting an empty list
                       // read as "nothing happened" when items are waiting there.
-                      ? `You're all caught up here — but you have ${otherHatUnread} unread in ${isProvider ? 'client' : 'provider'} mode.`
-                      : "You're all caught up! New notifications will appear here."}
+                      ? (isProvider
+                        ? t('shared.notifications.empty.otherHatClient', { count: otherHatUnread })
+                        : t('shared.notifications.empty.otherHatProvider', { count: otherHatUnread }))
+                      : t('shared.notifications.empty.caughtUp')}
                 </Text>
                 </>}
               </View>

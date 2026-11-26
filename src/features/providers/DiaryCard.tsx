@@ -32,6 +32,8 @@ import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type Dashbo
 import { compactTime } from './linkOnlyDashboard';
 import { CalendarChooserSheet } from './CalendarChooserSheet';
 import { logger } from '../../utils/logger';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface DiaryPalette {
   card: string;

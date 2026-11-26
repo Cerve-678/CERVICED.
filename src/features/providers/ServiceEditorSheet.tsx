@@ -54,6 +54,8 @@ import { formatLatestStart, latestStartToEditor } from '../../utils/latestStart'
 import { PackFormHint, type PackFormKind } from '../info-packs/PackFormHint';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -156,9 +158,9 @@ function latestStartChoices(current: string): string[] {
 
 const AUDIENCE_OPTIONS: { value: Exclude<ServiceAudienceValue, ''>; label: string }[] = [
   { value: 'everyone', label: 'Everyone' },
-  { value: 'women', label: 'Women' },
-  { value: 'men', label: 'Men' },
-  { value: 'kids', label: 'Kids' },
+  { value: 'women', get label() { return tr('discover.search.audience.women'); } },
+  { value: 'men', get label() { return tr('discover.search.audience.men'); } },
+  { value: 'kids', get label() { return tr('discover.search.audience.kids'); } },
 ];
 
 /** How many unticked starter chips to offer when nothing can be suggested. */
@@ -238,6 +240,8 @@ export default function ServiceEditorSheet({
   onSaveAndOpen?: (draft: MyServiceDraft, kind: PackFormKind) => void;
   onClose: () => void;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const bottomInset = useSystemBottomInset();
   const [value, setValue] = useState<ServiceEditorValue>(initial);
   const [error, setError] = useState<string | null>(null);
@@ -661,7 +665,7 @@ export default function ServiceEditorSheet({
             activeOpacity={0.85}
           >
             <Text style={[styles.saveButtonText, { color: isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740' }]}>
-              {saving ? 'Saving…' : isNew ? 'Add service' : 'Save changes'}
+              {saving ? tr('common.saving') : isNew ? 'Add service' : 'Save changes'}
             </Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>

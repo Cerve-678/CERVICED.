@@ -51,6 +51,8 @@ import {
   ordinalSuffix,
 } from '../../utils/dateUtils';
 import { readableSheet } from '../../constants/readableWidth';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 type Palette = {
   bg: string;
@@ -112,6 +114,8 @@ export default function CloseScheduleSection({
   showToast,
   onOpenBooking,
 }: Props) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const insets = useSafeAreaInsets();
   const [closure, setClosure] = useState<MyScheduleClosure | null>(lastClosure.get(providerId) ?? null);
   const [loaded, setLoaded] = useState(lastClosure.has(providerId));
@@ -279,7 +283,7 @@ export default function CloseScheduleSection({
             <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
           ) : (
             <Text style={[st.bannerBtnText, { color: isClosed ? (isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740') : P.text }]}>
-              {isClosed ? 'Reopen' : 'Close'}
+              {isClosed ? 'Reopen' : tr('common.close')}
             </Text>
           )}
         </TouchableOpacity>
@@ -395,7 +399,7 @@ export default function CloseScheduleSection({
                     activeOpacity={0.8}
                     accessibilityRole="button"
                   >
-                    <Text style={[st.actionText, { color: P.text }]}>Try again</Text>
+                    <Text style={[st.actionText, { color: P.text }]}>{tr('common.tryAgain')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : upcoming === null ? (
@@ -444,7 +448,7 @@ export default function CloseScheduleSection({
                               activeOpacity={0.8}
                               accessibilityRole="button"
                             >
-                              <Text style={[st.actionText, { color: P.text }]}>Cancel</Text>
+                              <Text style={[st.actionText, { color: P.text }]}>{tr('common.cancel')}</Text>
                             </TouchableOpacity>
                           </View>
                         )}

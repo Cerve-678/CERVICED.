@@ -39,6 +39,8 @@ import type { ProviderProfileData } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 import type { HeroPhotoFrames } from "../HeroPhoto";
 import { heroTopPadding } from "./heroTopPadding";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 const SERIF = "Prata-Regular";
 const NAME_SIZE = HERO_NAME_SIZE;
@@ -105,6 +107,8 @@ export function ProviderPageHero({
   onOpenLinkOnlyBooking,
   onRecordStat,
 }: ProviderPageHeroProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const {
     OP,
     pageStyle,
@@ -353,14 +357,14 @@ export function ProviderPageHero({
                           ? socialButton("instagram", "logo-instagram", `Open @${provider.instagram} on Instagram`, () => {
                               onRecordStat("instagram_tap");
                               Linking.openURL(`https://instagram.com/${provider.instagram}`).catch(() => {
-                                Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+                                Alert.alert(tr('discover.profile.instagramFailed'), tr('discover.profile.tryAgainMoment'));
                               });
                             })
                           : null}
                         {provider.tiktok
                           ? socialButton("tiktok", "logo-tiktok", `Open @${provider.tiktok} on TikTok`, () => {
                               Linking.openURL(`https://www.tiktok.com/@${provider.tiktok.replace(/^@/, "")}`).catch(() => {
-                                Alert.alert("Couldn't open TikTok", "Please try again in a moment.");
+                                Alert.alert(tr('discover.profile.tiktokFailed'), tr('discover.profile.tryAgainMoment'));
                               });
                             })
                           : null}
@@ -369,7 +373,7 @@ export function ProviderPageHero({
                       <Text
                         style={[styles.linkOnlyCaption, { color: detailsSub }, detailsShadow && styles.heroTextShadow]}
                       >
-                        Books on their own page — opens inside CERVICED
+                        {tr('discover.profile.linkOnlyCaption')}
                       </Text>
                     </View>
                   );
@@ -412,7 +416,7 @@ export function ProviderPageHero({
                       onPress={onToggleBell}
                       disabled={!bell.canSave || bell.loading}
                       activeOpacity={0.8}
-                      accessibilityLabel="Notifications"
+                      accessibilityLabel={tr('discover.home.notificationsA11y')}
                       accessibilityRole="button"
                       accessibilityState={{ selected: bell.enabled, disabled: !bell.canSave || bell.loading }}
                     >
@@ -431,8 +435,8 @@ export function ProviderPageHero({
                           `https://instagram.com/${provider.instagram}`,
                         ).catch(() => {
                           Alert.alert(
-                            "Couldn't open Instagram",
-                            "Please try again in a moment.",
+                            tr('discover.profile.instagramFailed'),
+                            tr('discover.profile.tryAgainMoment'),
                           );
                         });
                       }}

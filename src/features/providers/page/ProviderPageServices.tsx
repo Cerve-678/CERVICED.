@@ -22,6 +22,8 @@ import { placeInLineLabel } from "../../bookings/waitlist";
 import { capsuleServiceSurface, GlossShine } from "../ProfilePageStyle";
 import type { ProviderProfileData, ProviderProfileService } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
+import { tr } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 
 type ServiceData = ProviderProfileService;
 
@@ -137,6 +139,8 @@ function ServiceDescription({
   /** Branding → Custom's text font; null keeps the app's. */
   fontStyle?: { fontFamily: string; fontWeight: "400" } | null;
 }) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const [overflows, setOverflows] = useState(false);
   return (
     <View>
@@ -160,7 +164,7 @@ function ServiceDescription({
       {(overflows || expanded) && (
         <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
           <Text style={[styles.seeMoreText, { color: linkColor }]}>
-            {expanded ? "See less" : "See more"}
+            {expanded ? tr('discover.profile.seeLess') : tr('discover.profile.seeMore')}
           </Text>
         </TouchableOpacity>
       )}
@@ -268,6 +272,8 @@ export function ProviderPageServices({
   onOpenWaitlistPlace,
   onJoinWaitlist,
 }: ProviderPageServicesProps) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const {
     pageStyle,
     bodyFont,
@@ -453,7 +459,7 @@ export function ProviderPageServices({
           style={styles.selectModeLinkRow}
         >
           <Text style={[styles.selectModeLinkText, { color: adaptiveAccentColor }]}>
-            {selectMode ? "Cancel" : "Select"}
+            {selectMode ? tr('common.cancel') : tr('common.select')}
           </Text>
         </TouchableOpacity>
       )}
@@ -598,7 +604,7 @@ export function ProviderPageServices({
                           { color: adaptiveAccentColor },
                         ]}
                       >
-                        Available virtually
+                        {tr('discover.profile.availableVirtually')}
                       </Text>
                     )}
                   <ServiceDescription
@@ -722,7 +728,7 @@ export function ProviderPageServices({
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             >
                               <Text style={[styles.editAddOnsLink, { color: adaptiveAccentColor }]}>
-                                {pickedAddOns.length > 0 ? 'Edit' : 'Add extras'}
+                                {pickedAddOns.length > 0 ? tr('common.edit') : tr('discover.profile.addExtras')}
                               </Text>
                             </TouchableOpacity>
                           )}
@@ -869,7 +875,7 @@ export function ProviderPageServices({
                             { color: SV.sub },
                           ]}
                         >
-                          No openings next 2 wks
+                          {tr('discover.profile.noOpenings')}
                         </Text>
                       );
                     }

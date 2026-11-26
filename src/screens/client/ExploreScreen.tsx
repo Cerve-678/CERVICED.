@@ -74,6 +74,7 @@ import {
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
+import { tr, useTranslation, trp } from '../../i18n';
 
 
 // Mixes portfolio photos with service ("bookable") cards for a
@@ -269,8 +270,8 @@ interface SubTabProps {
 }
 
 const SUB_TABS = [
-  { key: 'discover' as const,   label: 'Discover' },
-  { key: 'favourites' as const, label: 'Favourites' },
+  { key: 'discover' as const,   get label() { return tr('discover.explore.tab.discover'); } },
+  { key: 'favourites' as const, get label() { return tr('discover.explore.tab.favourites'); } },
 ];
 
 // Both tabs match — same heavier BakbakOne treatment, sitting side by side
@@ -309,6 +310,8 @@ SubTabBar.displayName = 'SubTabBar';
 // MAIN EXPLORE SCREEN
 // ============================================================================
 const ExploreScreen = memo(() => {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const { isDarkMode, palette: P } = useTheme();
   // Measured per render, not captured at module load: the masonry column
@@ -1139,32 +1142,32 @@ const ExploreScreen = memo(() => {
   const tourSteps = useMemo<CoachMarkStep[]>(() => [
     {
       key: 'heart',
-      title: 'Save it with a tap',
-      body: 'Heart any look, provider or service to keep it — no need to remember who posted it.',
+      title: tr('discover.explore.tour.heartTitle'),
+      body: tr('discover.explore.tour.heartBody'),
       target: { ref: tourHeartRef },
       radius: 15,
       icon: 'heart',
     },
     {
       key: 'price',
-      title: 'A price means you can book it',
-      body: 'Cards showing a price are a real service. Tap one and you book that exact service — not just the provider.',
+      title: tr('discover.explore.tour.priceTitle'),
+      body: tr('discover.explore.tour.priceBody'),
       target: { ref: tourPriceRef },
       radius: 10,
       icon: 'pricetag',
     },
     {
       key: 'favourites',
-      title: 'Everything you saved',
-      body: 'Your hearted looks, providers and services all collect under Favourites.',
+      title: tr('discover.explore.tour.favouritesTitle'),
+      body: tr('discover.explore.tour.favouritesBody'),
       target: { ref: tourFavouritesRef },
       radius: 10,
       icon: 'sparkles',
     },
     {
       key: 'saved',
-      title: 'Your providers',
-      body: 'Bookmarked providers live here, ready to rebook without searching again.',
+      title: tr('discover.explore.tour.savedTitle'),
+      body: tr('discover.explore.tour.savedBody'),
       target: { ref: tourSavedRef },
       radius: 18,
       icon: 'bookmark',
@@ -1257,7 +1260,7 @@ const ExploreScreen = memo(() => {
               >
                 <TabIcon name="magnifying-glass" size={18} color={P.sub} />
                 <Text style={[styles.searchInput, { color: P.sub }]} numberOfLines={1}>
-                  Search looks, styles, providers...
+                  {tr('discover.explore.searchPlaceholder')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1322,7 +1325,7 @@ const ExploreScreen = memo(() => {
                         the grid doesn't shift down when it does. */}
                     <Text style={[styles.gridCount, { color: P.sub }]}>
                       {discoverTotals[selectedFilter] !== undefined
-                        ? `${discoverTotals[selectedFilter]} results`
+                        ? trp('discover.explore.results', discoverTotals[selectedFilter] ?? 0)
                         : ' '}
                     </Text>
                   </View>
@@ -1331,9 +1334,9 @@ const ExploreScreen = memo(() => {
                   discoverFailed ? (
                     <View style={styles.emptyContainer}>
                       <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                      <Text style={[styles.emptyText, { color: P.text }]}>Couldn't load looks</Text>
+                      <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.loadFailed')}</Text>
                       <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                        Check your connection and try again
+                        {tr('discover.explore.checkConnection')}
                       </Text>
                       <TouchableOpacity
                         style={[styles.retryButton, { backgroundColor: P.accent }]}
@@ -1343,15 +1346,15 @@ const ExploreScreen = memo(() => {
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.retryButtonText, { color: P.onAccent }]}>Try again</Text>
+                        <Text style={[styles.retryButtonText, { color: P.onAccent }]}>{tr('common.tryAgain')}</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
                     <View style={styles.emptyContainer}>
                       <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                      <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                      <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.noLooks')}</Text>
                       <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                        Try a different search or filter
+                        {tr('discover.explore.noLooksSub')}
                       </Text>
                     </View>
                   )
@@ -1412,25 +1415,25 @@ const ExploreScreen = memo(() => {
                   // provider is no longer on CERVICED).
                   <View style={styles.emptyContainer}>
                     <TabIcon name="heart" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>Can't show these looks right now</Text>
+                    <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.cantShow')}</Text>
                     <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      Check back soon
+                      {tr('discover.explore.checkBack')}
                     </Text>
                   </View>
                 ) : openCollection ? (
                   <View style={styles.emptyContainer}>
                     <TabIcon name="heart" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>Nothing in {openCollection.name} yet</Text>
+                    <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.collectionEmpty', { name: openCollection.name })}</Text>
                     <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      Heart a look, then tap Add to a collection
+                      {tr('discover.explore.collectionEmptySub')}
                     </Text>
                   </View>
                 ) : (
                   <View style={styles.emptyContainer}>
                     <TabIcon name="heart" size={48} color={P.sub} />
-                    <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
+                    <Text style={[styles.emptyText, { color: P.text }]}>{tr('discover.explore.noFavourites')}</Text>
                     <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                      Tap the heart on any look, provider or service to save it here
+                      {tr('discover.explore.noFavouritesSub')}
                     </Text>
                   </View>
                 )
@@ -1454,7 +1457,7 @@ const ExploreScreen = memo(() => {
       >
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel="Back to top"
+          accessibilityLabel={tr('discover.explore.backToTop')}
           style={[styles.backToTopButton, { backgroundColor: P.card, borderColor: P.sep }]}
           onPress={handleBackToTop}
           activeOpacity={0.7}
