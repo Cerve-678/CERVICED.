@@ -228,7 +228,7 @@ describe('the "slot opened" notification opens the ticket on the provider page',
 
   it('opens that hold\'s ticket, or says the slot has gone', () => {
     expect(PROFILE).toContain('place.holdBookingId === openWaitlistHoldId');
-    expect(PROFILE).toContain('"This slot has gone"');
+    expect(PROFILE).toContain("tr('discover.profile.slotGoneTitle')");
   });
 });
 

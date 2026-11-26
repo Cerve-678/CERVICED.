@@ -7,6 +7,7 @@ import type { DbProviderAvailability, DbProviderDailyStat } from '../../types/da
 import { DAY_NAMES_FULL, dateToYMD, formatTime12Safe } from '../../utils/dateUtils';
 import { DASHBOARD_WEEK_DAYS, hoursFor, startOfDay } from './diaryDays';
 import { sumLinkOnlyStats, type DayBar, type LinkOnlyTotals } from './linkOnlyAnalytics';
+import { tr } from '../../i18n';
 
 /** "Open today 9am–6pm", "Closed today", or null when there are no hours
  *  for today. */
@@ -129,11 +130,11 @@ export function buildProfileStrength(input: ProfileStrengthInput): { items: Prof
   const photosToGo = Math.max(0, FULL_PORTFOLIO_COUNT - input.portfolioCount);
   const items: ProfileStrengthItem[] = [
     { key: 'logo', label: 'Add your logo', hint: 'It shows on your profile and in search', doneLabel: 'Logo', shortLabel: 'logo', done: input.logoSet },
-    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', doneLabel: 'About', shortLabel: 'About', done: input.aboutSet },
+    { key: 'about', label: 'Write your About', hint: 'A few lines about you and your work', doneLabel: tr('discover.profile.tab.about'), shortLabel: tr('discover.profile.tab.about'), done: input.aboutSet },
     { key: 'hours', label: 'Set your opening hours', hint: 'Shown to clients on your profile', doneLabel: 'Opening hours', shortLabel: 'opening hours', done: input.hoursSet },
-    { key: 'specialities', label: 'Add your specialities', hint: 'Show up in more Search filters', doneLabel: 'Specialities', shortLabel: 'specialities', done: input.specialityCount > 0 },
+    { key: 'specialities', label: 'Add your specialities', hint: 'Show up in more Search filters', doneLabel: tr('discover.profile.specialities'), shortLabel: 'specialities', done: input.specialityCount > 0 },
     { key: 'instagram', label: 'Link your Instagram', hint: 'Clients can see more of your work', doneLabel: 'Instagram', shortLabel: 'Instagram', done: !!input.instagram?.trim() },
-    { key: 'policies', label: 'Add your policies', hint: 'Cancellation and deposit rules', doneLabel: 'Policies', shortLabel: 'policies', done: input.policiesSet },
+    { key: 'policies', label: 'Add your policies', hint: 'Cancellation and deposit rules', doneLabel: tr('providerAccount.linkOnly.policies.title'), shortLabel: 'policies', done: input.policiesSet },
     {
       key: 'photos',
       label: photosToGo === 1 ? 'Add 1 more photo' : `Add ${photosToGo} more photos`,
@@ -142,7 +143,7 @@ export function buildProfileStrength(input: ProfileStrengthInput): { items: Prof
       shortLabel: photosToGo === 1 ? '1 more photo' : `${photosToGo} more photos`,
       done: photosToGo === 0,
     },
-    { key: 'accessibility', label: 'Add accessibility info', hint: 'Step-free access, parking and more', doneLabel: 'Accessibility', shortLabel: 'accessibility info', done: !!input.accessibilityNotes?.trim() },
+    { key: 'accessibility', label: 'Add accessibility info', hint: 'Step-free access, parking and more', doneLabel: tr('discover.profile.accessibility'), shortLabel: 'accessibility info', done: !!input.accessibilityNotes?.trim() },
     { key: 'payments', label: 'State preferred payment method', hint: 'How clients can pay you', doneLabel: 'Payment method', shortLabel: 'payment method', done: (input.paymentMethods?.length ?? 0) > 0 },
   ];
   const done = items.filter(item => item.done).length;
