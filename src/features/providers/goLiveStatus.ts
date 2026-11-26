@@ -359,11 +359,12 @@ export function deriveRecommendedGoLiveFields(profile: DbProvider): {
 }
 
 /** Whether the provider has saved Automations. Every save there writes
- *  clientReminderTiming to providers.automation_settings (other screens write
- *  other keys into the same column, so "not empty" isn't the test). Until
- *  then reminders and nudges run on defaults nobody chose. */
+ *  rebookingNudgeWeeks to providers.automation_settings, and no other screen
+ *  does (other screens write other keys into the same column, so "not empty"
+ *  isn't the test). Until then nudges and review requests run on defaults
+ *  nobody chose. */
 export function deriveAutomationsSet(profile: DbProvider): boolean {
-  return profile.automation_settings?.clientReminderTiming !== undefined;
+  return profile.automation_settings?.rebookingNudgeWeeks !== undefined;
 }
 
 /** The Stripe go-live field, or `undefined` when the payouts feature is off.

@@ -390,6 +390,14 @@ export interface Capability {
   /** Entities this capability consumes. */
   needs?: EntityRequirement[];
   /**
+   * The capability that answers a message naming this entity and nothing
+   * else — "lashes", "gel nails". With no phrase matched, every capability
+   * needing that entity ties on the entity bonus alone, and registration
+   * order used to pick the winner (a price breakdown, for "lashes"). This
+   * breaks only that exact tie; any phrase match still outranks it.
+   */
+  answersBare?: EntityKind;
+  /**
    * Optional veto, checked against the raw message before scoring.
    *
    * For the case where two capabilities share vocabulary but differ by a
