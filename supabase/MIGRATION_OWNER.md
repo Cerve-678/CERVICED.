@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-26 (home-based only, and the client is told to message the provider)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126110000 | `address_reminder_home_based_and_client_notice` | **APPLIED 2026-11-26** on the user's "apply and deploy", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Lock `(none)` on main, live max `20261126100000`, no unapplied migration on any open PR. md5 guard on live `process_address_release_reminders()` matched (`4d7385ec…`, the user's comment-free re-run of 100000). Forced-rollback dry run first: home-based reminded, mobile not, client `address_not_sent` only once the 4-hour reminder is an hour old, nothing once the address is sent, second run sent 0. Verified live: version recorded (live max); md5 `7b2cd270…`, the dry run's; anon/authenticated can't execute; 61 types incl. `address_not_sent`; cron unchanged. `send-push-notification` deployed straight after (v36). PR #812. |
+
 ### Applied 2026-11-26 (a provider on Manual release is reminded to send their address)
 
 | Recorded version | Name | Verified live |
