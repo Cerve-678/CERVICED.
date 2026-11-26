@@ -481,6 +481,22 @@ on `/\b(edit|add|change|update|remove|delete|new)\b/`. Phrasing remains the
 primary mechanism — reach for this only when a modifier genuinely inverts the
 intent.
 
+### `answersBare` — who owns a message that names only a service
+
+"lashes" or "gel nails" on its own matches no phrase, so every capability that
+needs a service ties on the service bonus alone. The matcher used to settle
+that tie by registration order, which gave a bare "lashes" a **price
+breakdown**. A capability may declare `answersBare: "service"` to own that
+exact tie (`discover.find` does). Ties are broken by phrase score first, so
+any capability whose words actually matched still wins.
+
+Ranking and "who's new" clauses (`RATING_ASK_RE`, `NEW_ASK_RE` in
+`capabilities/client.ts`) are vetoed off `discover.find` and answered by
+`discover.top`, which reads the service and reorders by distance itself. A
+day in a search ("who can do lashes this saturday") is handed from
+`discover.find` to the availability check, the same way
+`discover.followup_day` does it.
+
 ### Not built yet — client
 
 | Missing | Why it matters | Backing function (exists) |

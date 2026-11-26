@@ -130,6 +130,8 @@ const nextBooking: Capability = {
     "what have i got coming up", "what's coming up", "whats coming up",
     "when's my appointment", "when am i seeing", "next one",
     "how long until my", "when do i see",
+    // Named the way people ask about one booking: "what time is my nails on sunday".
+    "what time is my", "what time's my", "what day is my",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
     const upcoming = sortUpcoming(bookings);
@@ -185,6 +187,7 @@ const listBookings: Capability = {
   phrases: [
     "my bookings", "all my bookings", "my appointments", "show my bookings",
     "what have i got", "what do i have", "my schedule", "booked in",
+    "anything booked", "have i got anything", "do i have anything",
   ],
   async run({ bookings, entities }): Promise<CapabilityResult> {
     let upcoming = sortUpcoming(bookings);
@@ -269,6 +272,9 @@ const bookingDetails: Capability = {
     "tell me about my * appointment", "tell me about my * booking",
     "more about my * appointment", "more about my * booking",
     "break down my * appointment", "details of my * appointment",
+    // "What's the cancellation policy" is about the booking in hand: this answer
+    // already carries its policies.
+    "details of my", "cancellation policy", "charged if i cancel", "cancellation fee", "cancel fee", "late cancellation",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -349,6 +355,7 @@ const bookingInfoPacks: Capability = {
     "my information pack", "my info pack", "booking notes", "appointment notes",
     "instructions for my appointment", "what do i need to read",
     "what did * send me", "what has * sent me",
+    "did * send me", "has * sent me", "send me anything", "sent me anything",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -572,6 +579,7 @@ const rescheduleBooking: Capability = {
     "change the date", "different day", "another day", "different time",
     "another time", "push it back", "bring it forward", "shift my",
     "rearrange", "swap my appointment", "can i come a different",
+    "change my appointment", "push my appointment", "push my * back", "push back", "move my appointment",
   ],
   needs: [{ kind: "booking", required: false }],
   async run({ bookings, entities }): Promise<CapabilityResult> {
@@ -890,6 +898,9 @@ const bookingRoutine: Capability = {
     "what do i normally get", "what do i usually get", "my usual appointment",
     "my booking routine", "how often do i book", "when did i last get",
     "when was my last appointment", "what did i get last time", "my usual",
+    // Longer than discover.forme's "what do i usually", so the booking-history
+    // reading wins when the client asks what they BOOK.
+    "how often do i", "what do i usually book", "do i usually book",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
     const completed = bookings
@@ -968,6 +979,7 @@ const bookingHistory: Capability = {
     "everything i've booked", "everything ive booked", "all time",
     "how many appointments have i had", "how much have i booked",
     "my old bookings", "further back", "before that",
+    "last year", "had done", "done last year",
   ],
   async run({ bookings, now }): Promise<CapabilityResult> {
     // Anchor at the oldest booking already in context, so this genuinely
@@ -1034,6 +1046,33 @@ const bookingHistory: Capability = {
 };
 
 // ==================== DISCOVERY ====================
+
+/** A person who offers a service, as people name them in a search. */
+const PROVIDER_NOUN = String.raw`(?:techs?|artists?|providers?|salons?|stylists?|hairdressers?|barbers?|beauticians?|people|ones|faces)`;
+
+/**
+ * A ranking clause: "best", "top lash techs", "a good nail tech", "best
+ * reviewed". discover.find steps aside for it, because discover.top reads the
+ * service and does its own near-me reordering — so neither clause is lost.
+ * "Best price" / "best way to" / "good idea" are not rankings of people.
+ */
+const RATING_ASK_RE = new RegExp(
+  String.raw`\b(?:(?:top|best|highest|highly)[\s-]?rated|(?:best|well|highly)[\s-]?reviewed|good reviews` +
+    String.raw`|top \d+|top (?:\S+\s+){0,2}?${PROVIDER_NOUN}` +
+    String.raw`|(?:best|(?:any|a|really|very) good)\b(?!\s+(?:price|prices|deal|deals|value|way|ways|time|times|idea|ideas)\b))\b`,
+  "i",
+);
+
+/**
+ * A "who's new" clause: "any new lash techs", "anyone new doing lashes",
+ * "recently joined". Deliberately NOT a bare "new": "new nails" is a fresh
+ * set, "new nail art ideas" is inspiration, "any new messages" is the inbox.
+ */
+const NEW_ASK_RE = new RegExp(
+  String.raw`\b(?:newest|(?:just|recently|newly) joined|(?:anyone|anybody|someone|who's|whos|who is) new` +
+    String.raw`|new (?:on|to) (?:here|cerviced|the app)|new (?:\S+\s+){0,2}?${PROVIDER_NOUN})\b`,
+  "i",
+);
 
 /** "lashes", "men's grooming" — a category as it reads in a sentence. */
 function categoryWords(category: string): string {
@@ -1110,8 +1149,21 @@ const findProviders: Capability = {
   // A rating clause hands it to discover.top the same way: "best rated near
   // me" after a nails search otherwise came back as nails-near-me with the
   // rating silently dropped. discover.top does its own nearby reordering.
-  excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look|top[\s-]?rated|best[\s-]?rated|highest[\s-]?rated)\b/i,
+  //
+  // A "who's new" clause goes the same way, to the same capability.
+  excludeWhen: new RegExp(
+    [
+      String.raw`\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b`,
+      // "how often do i get my nails done" asks about their own routine.
+      String.raw`\bhow often\b`,
+      RATING_ASK_RE.source,
+      NEW_ASK_RE.source,
+    ].join("|"),
+    "i",
+  ),
   needs: [{ kind: "service", required: true }],
+  // "lashes" on its own is a search for lash providers.
+  answersBare: "service",
   thinking: ({ entities, message }) => {
     const service = entities.service?.value;
     const steps = [`Searching providers for ${service ? categoryWords(service.category) : "beauty"}…`];
@@ -1122,7 +1174,13 @@ const findProviders: Capability = {
     if (steps.length < 3) steps.push("Putting the list together…");
     return steps;
   },
-  async run({ entities, rawMessage, clientArea }): Promise<CapabilityResult> {
+  async run(ctx): Promise<CapabilityResult> {
+    const { entities, rawMessage, clientArea } = ctx;
+    // "who can do lashes this saturday" — the day decides the answer, and a
+    // plain list would drop it. Dates are never carried between turns, so a
+    // date here is always one this message named. Same hand-off as
+    // discover.followup_day.
+    if (entities.date) return findAvailable.run(ctx);
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
@@ -1316,6 +1374,11 @@ const pickFromList: Capability = {
   // enough for this capability to win on the provider entity alone.
   excludeWhen: /\bmy (?:[\w'’-]+ ){0,5}(?:appointments?|bookings?)\b/i,
   needs: [{ kind: "provider", required: true }],
+  // "lola studio" on its own opens them. When the client also has a booking
+  // there, naming the provider resolves that booking too, and every booking
+  // capability tied this one on entity bonuses alone; the booking breakdown
+  // won on registration order.
+  answersBare: "provider",
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
     const dbId = await resolveProviderDbId(provider);
@@ -1419,7 +1482,7 @@ const followUpPrice: Capability = {
     "what does it cost", "what do they usually cost", "rough price",
     // "Who's cheapest" is this answer drawn as a comparison.
     "cheapest", "who's cheapest", "whos cheapest", "who is cheapest", "most affordable",
-    "compare prices", "price comparison",
+    "compare prices", "price comparison", "best price", "best prices", "best value",
   ],
   // A pronoun means a specific provider is being asked about, and their real
   // price list beats a category average — discover.provider_services owns
@@ -1517,7 +1580,8 @@ const findAvailable: Capability = {
     // remains live-provider gated, so this never exposes unpublished profiles.
     const dbProviders = await getProviders(service?.category);
     if (dbProviders.length === 0) {
-      return { text: `I couldn't find any ${label} providers at all.` };
+      // label is already "providers" when no service was named.
+      return { text: `I couldn't find any ${service ? `${label} providers` : label} at all.` };
     }
 
     // Availability is per-provider and genuinely expensive, so cap the fan-out
@@ -1753,6 +1817,8 @@ const providerServices: Capability = {
     "what are their prices", "how much would it be", "are they expensive",
     "their rates", "what do they cost", "how much do they cost",
     "price list", "menu",
+    // Named forms: "lola studio prices".
+    "prices", "price", "services", "rates", "cost",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2016,6 +2082,9 @@ const providerLocation: Capability = {
     "where are they", "where is the provider", "where is their salon", "their location",
     "their address", "where are you based", "where are they based", "do they travel",
     "mobile provider", "home visit", "home visits", "come to me",
+    // Named forms. Every phrase above is pronoun-shaped, so "where is lola
+    // studio" matched none of them and lost to the booking breakdown.
+    "where is", "where's", "based", "travel", "travels", "mobile", "address", "located", "location",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2082,6 +2151,7 @@ const bookingLocation: Capability = {
     "where is my appointment", "where's my appointment", "where is my booking",
     "where's my booking", "where am i going", "how do i get there", "directions",
     "where is it", "where's it",
+    "address for my", "the address for", "address of my",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2193,6 +2263,7 @@ const providerBookingTiming: Capability = {
     "how late can i book", "how far ahead can i book", "booking window",
     "minimum notice", "last minute booking", "same day booking", "book ahead",
     "when can i book", "how soon can i book",
+    "last minute", "how far ahead", "how far in advance", "same day",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2256,6 +2327,8 @@ const providerAvailability: Capability = {
     // The provider's name sits mid-phrase: "when is Lola Studio next free?"
     "when is * free", "when is * next free", "when is * available",
     "when is * next available", "when can i see *", "when can i book in with *",
+    // Named forms: "is lola studio free tomorrow", "lola studio availability".
+    "free", "available", "availability", "next free",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -2312,7 +2385,7 @@ const myProviders: Capability = {
   hat: "client",
   describe: "Who are my saved providers",
   thinking: ["Opening your saved providers…"],
-  phrases: ["my providers", "saved providers", "bookmarked", "my usual", "my regulars", "favourites", "favorites"],
+  phrases: ["my providers", "saved providers", "bookmarked", "my usual", "my regulars", "favourites", "favorites", "have i saved", "i've saved", "ive saved"],
   async run(): Promise<CapabilityResult> {
     const rows = await getBookmarkedProviders();
     if (rows.length === 0) {
@@ -2475,6 +2548,9 @@ const messages: Capability = {
     "my messages", "messages", "any replies", "has anyone replied", "my inbox",
     "any messages", "unread messages", "did they reply", "have they replied",
     "heard back", "any word from", "check my messages", "dm", "chats",
+    // "did lola studio reply" names a provider, which also resolves the booking;
+    // the reply is still an inbox question.
+    "reply", "replied", "messaged me", "anyone messaged",
   ],
   async run(): Promise<CapabilityResult> {
     const convos = await getUserConversations();
@@ -2766,6 +2842,8 @@ const offers: Capability = {
     "whats on offer", "what's on offer", "anything on sale", "sales on",
     "special offers", "any bargains", "cheap deals", "money off",
     "anything discounted", "current offers", "discounted",
+    // Plural codes. discover.promocode owns checking ONE code at a provider.
+    "promo codes", "discount codes", "voucher codes", "any codes",
   ],
   // Optional: "any nail deals?" narrows by category, a bare "any offers?"
   // shows everything.
@@ -2876,10 +2954,34 @@ const topRated: Capability = {
     "best rated", "top rated", "highest rated", "best providers", "who's the best",
     "whos the best", "the best", "any good", "new providers", "newest",
     "just joined", "trending", "popular", "well reviewed", "good reviews",
+    // Ranking words as people type them around a service: "best brows in
+    // london", "top lash techs", "a good nail tech", "best reviewed". Without
+    // these the message matched only on its service and got a price list.
+    "best", "best reviewed", "highly rated", "highly reviewed", "a good",
+    "really good", "five star", "5 star", "top 3", "top 5", "top 10",
+    "top techs", "top artists", "top salons", "top stylists", "top hairdressers",
+    "top barbers", "top * techs", "top * tech", "top * artists", "top * artist",
+    "top * providers", "top * salons", "top * stylists",
+    // "Who's new" the same way — never a bare "new" (see NEW_ASK_RE).
+    "anyone new", "anybody new", "someone new", "who's new", "whos new",
+    "who is new", "recently joined", "newly joined", "new on here",
+    "new to cerviced", "new techs", "new artists", "new salons", "new stylists",
+    "new hairdressers", "new barbers", "new * techs", "new * tech",
+    "new * artists", "new * artist", "new * providers", "new * salons",
   ],
-  async run({ rawMessage, clientArea }): Promise<CapabilityResult> {
-    const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
-    let rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
+  // "Best price", "the best way to look after my lashes", "is it a good
+  // idea" share the words but aren't asking who is best.
+  excludeWhen: /\b(?:best|good)\s+(?:price|prices|deal|deals|value|way|ways|time|times|idea|ideas)\b/i,
+  // "who's top rated in lashes" names the list as well as the ranking.
+  // discover.find hands every rating question over to this capability, so if
+  // the service isn't read HERE it is silently dropped and the client gets
+  // the best rated across everything instead.
+  needs: [{ kind: "service", required: false }],
+  async run({ rawMessage, clientArea, entities }): Promise<CapabilityResult> {
+    const wantsNew = NEW_ASK_RE.test(rawMessage);
+    const category = entities.service?.value.category;
+    const inService = category ? ` for ${categoryWords(category)}` : "";
+    let rows = wantsNew ? await getNewProviders(12, category) : await getTopRatedProviders(12, category);
 
     // "see who is near me top rated" is one question with two clauses, and
     // rating is the one that decides WHICH list. Distance then reorders it —
@@ -2898,20 +3000,20 @@ const topRated: Capability = {
         text:
           (wantsNew
             ? oneOf(
-              `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`,
-              `Fresh faces: **${rows.length}** new provider${rows.length !== 1 ? "s" : ""}.`,
+              `**${rows.length}** provider${rows.length !== 1 ? "s" : ""}${inService} recently joined:`,
+              `Fresh faces${inService}: **${rows.length}** new provider${rows.length !== 1 ? "s" : ""}.`,
             )
             : oneOf(
-              "Here are the top-rated providers right now:",
-              "These are the best reviewed on CERVICED at the moment:",
-              "The highest rated right now:",
+              `Here are the top-rated providers${inService} right now:`,
+              `These are the best reviewed${inService} on CERVICED at the moment:`,
+              `The highest rated${inService} right now:`,
             )) + proximityNote,
         card: {
           title: wantsNew ? "JUST JOINED" : "TOP RATED",
           meta: `${rows.length} provider${rows.length !== 1 ? "s" : ""}`,
           rows: rows.slice(0, 8).map(providerRow),
         },
-        work: [wantsNew ? "Found who joined most recently" : "Ranked providers by their reviews"],
+        work: [wantsNew ? `Found who joined most recently${inService}` : `Ranked providers${inService} by their reviews`],
         providers: rows.map(providerFromDb),
         suggestions: [
           askChip("free", "Who's free this week?", "Who's free this week?"),
@@ -2929,6 +3031,31 @@ const topRated: Capability = {
     //
     // Fall back to showing who IS here, and say plainly why ratings aren't
     // the sort — rather than dead-ending on an empty, chipless reply.
+    if (!wantsNew && category) {
+      // Same honesty as below, kept to the service that was asked about —
+      // falling back to everyone would drop "lashes" all over again.
+      const inCategory = await getProviders(category);
+      if (inCategory.length > 0) {
+        return {
+          text:
+            `No one${inService} has built up enough reviews yet for a top-rated list — it takes a few before that means anything.\n\n` +
+            `Here ${inCategory.length !== 1 ? "are" : "is"} who's on CERVICED${inService}:`,
+          providers: inCategory.slice(0, 12).map(providerFromDb),
+          suggestions: [
+            askChip("free", "Who's free this week?", "Who's free this week?"),
+            askChip("top", "Top rated overall", "Who are the best rated providers?"),
+          ],
+        };
+      }
+      return {
+        text: `There isn't anyone${inService} on CERVICED yet.`,
+        suggestions: [
+          askChip("top", "Top rated overall", "Who are the best rated providers?"),
+          navChip("explore", "Browse Explore", "Explore"),
+        ],
+      };
+    }
+
     if (!wantsNew) {
       const anyone = await getProviders();
       if (anyone.length > 0) {
@@ -2961,7 +3088,7 @@ const topRated: Capability = {
 
     return {
       text: wantsNew
-        ? "No one's joined recently — but there are still providers to browse."
+        ? `No one${inService} has joined recently — but there are still providers to browse.`
         : "I couldn't find anyone to show right now.",
       suggestions: [
         askChip("browse", "Show me everything", "Show me all services"),
@@ -3049,6 +3176,7 @@ const rescheduleStatus: Capability = {
     "has my reschedule", "reschedule accepted", "reschedule approved",
     "heard back about", "any word on my reschedule", "reschedule status",
     "did they accept", "have they replied about",
+    "accept my new time", "accepted my new time", "accept my reschedule", "agreed to my new time",
   ],
   async run({ bookings, entities }): Promise<CapabilityResult> {
     // Only bookings actually awaiting a reschedule decision are relevant —
@@ -3120,6 +3248,8 @@ const providerContact: Capability = {
   phrases: [
     "how do i contact", "contact them", "their number", "phone number",
     "their email", "get in touch", "how do i reach", "whatsapp",
+    // Named forms: "message lola studio", "lola studio instagram".
+    "message", "contact", "number", "phone", "instagram", "insta", "email", "reach",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, bookings }): Promise<CapabilityResult> {
@@ -3369,6 +3499,8 @@ const promoCode: Capability = {
     "is this code valid", "does this code work", "coupon", "coupon code",
     "any discount", "any offers", "any deals", "do they have offers",
     "is there a discount", "redeem a code", "apply a code", "referral code",
+    // "use code SAVE10": the code itself is read off the verbatim message.
+    "use code", "use the code", "use a code", "apply code", "i have a code", "got a code",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, verbatimMessage }): Promise<CapabilityResult> {
@@ -3421,6 +3553,7 @@ const eventPlans: Capability = {
   phrases: [
     "my event", "event plan", "my wedding", "group booking",
     "my party", "event bookings", "my big day",
+    "group bookings", "hen party", "hen do", "bridal party", "birthday party",
   ],
   async run(): Promise<CapabilityResult> {
     const plans = await getMyEventPlans();
@@ -3641,6 +3774,7 @@ const saveProvider: Capability = {
     "save", "save this provider", "save them", "save provider",
     "bookmark", "bookmark them", "add to my providers",
     "add to my saved", "remember them", "keep them", "follow them",
+    "to my favourites", "to my favorites", "add * to my favourites", "add * to my favorites",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -3691,6 +3825,7 @@ const joinWaitlistAction: Capability = {
     "add me to the waitlist", "add me to their waitlist",
     "waiting list for", "let me know if something opens",
     "tell me if there's a cancellation", "notify me if",
+    "waitlist", "waiting list", "has a cancellation", "cancellation spot", "join * waitlist",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities, userId }): Promise<CapabilityResult> {
@@ -3743,6 +3878,8 @@ const leaveReview: Capability = {
   phrases: [
     "leave a review", "write a review", "review my", "rate my",
     "give feedback", "rate them", "leave feedback",
+    // "rate lola studio". "rating" (their score) stays with discover.reviews.
+    "rate", "review",
   ],
   async run({ bookings }): Promise<CapabilityResult> {
     const past = bookings
@@ -3789,6 +3926,9 @@ const forMe: Capability = {
     "recommend something", "what should i book", "something for me",
     "surprise me", "what do you suggest", "suggest something",
     "based on what i like", "my usual", "the usual", "what do i usually",
+    // "Best FOR ME" asks what suits them, not who ranks highest overall —
+    // and outscores discover.top's bare "best" by being longer.
+    "best for me", "what suits me", "what would suit me",
   ],
   async run({ personal, userId }): Promise<CapabilityResult> {
     // What the client's Beauty Profile says suits them (hair type, goals,
@@ -3936,6 +4076,7 @@ const appNavigation: Capability = {
     "my points", "loyalty points",
     "help centre", "help center", "report a problem", "report problem",
     "terms and conditions", "terms", "about the app", "about cerviced",
+    "contact support", "support", "settings", "open settings", "log out", "logout", "sign out",
   ],
   async run({ rawMessage }): Promise<CapabilityResult> {
     const message = rawMessage.toLowerCase();

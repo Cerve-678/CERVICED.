@@ -62,6 +62,18 @@ OWNER:  (none)
 |---|---|---|
 | 20261126160000 | `release_payouts_settles_stuck_fees` | **APPLIED 2026-11-26** on the user's "yep", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row: lets `process_due_payouts()` start a run for a fee row at `processing` for 15+ minutes. Applied straight after 150000. md5 guard matched. Dry run first. Verified live: version recorded; gate present (md5 `9aec160d…`); not executable by authenticated, executable by service_role; cron `release-due-payouts` still `*/15`. `release-payouts` deploy by the user. PR #820. |
 
+### Applied 2026-11-26 (client bookings promo discount)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126150000 | `client_bookings_promo_discount` | **APPLIED 2026-11-26** on the user's "yep", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row: adds `promo_discount` as `client_bookings`' last column. Live max `20261126140000` (cerviced-90's #817), no unapplied migration above it on any open PR. md5 guard on the live view matched. Dry run first: 57 → 58 columns, same 232 rows. Verified live: version recorded; column present; `security_invoker=true` kept; `authenticated` can still select; 232 rows. PR #819. |
+
+### Applied 2026-11-26 (a client booking can only be made by paying for it)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126120000 | `checkout_only_through_payment` | **APPLIED 2026-11-26** on the user's "yes, apply it now", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row, before the branch was pushed (the repo is public and the hole was live). Lock taken on this branch; live max `20261126110000`, no unapplied migration on any open PR. md5 guard on the three live functions matched. Forced-rollback dry run first: all three gone, `prepare_checkout` and `expire_cart_holds` intact, live max unchanged. Verified live: version recorded (live max); 0 of `hold_cart_booking_slots` / `claim_cart_booking_slots` / `release_cart_booking_slots` left; `prepare_checkout(jsonb)` present and executable by authenticated; cron `expire-cart-holds` still scheduled. |
+
 ### Applied 2026-11-26 (every client gets reminders 2 days before and the day before; providers no longer choose)
 
 | Recorded version | Name | Verified live |

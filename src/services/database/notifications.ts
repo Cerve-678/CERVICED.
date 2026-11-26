@@ -457,34 +457,6 @@ export async function getProviderBookingCapSettings(
 }
 
 /**
- * Batched form of getProviderBookingCapSettings, keyed by provider id.
- * Providers not returned (deleted/RLS) are omitted — callers should fall
- * back to the same {auto_accept: false, max_per_day: 0} default.
- */
-export async function getProviderBookingCapSettingsForProviders(
-  providerIds: string[],
-): Promise<Record<string, { auto_accept: boolean; max_per_day: number }>> {
-  if (providerIds.length === 0) return {};
-
-  const { data, error } = await supabase
-    .from("providers")
-    .select("id, auto_accept_bookings, max_bookings_per_day")
-    .in("id", providerIds);
-
-  if (error || !data) return {};
-
-  const result: Record<string, { auto_accept: boolean; max_per_day: number }> =
-    {};
-  for (const p of data as any[]) {
-    result[p.id] = {
-      auto_accept: p.auto_accept_bookings ?? false,
-      max_per_day: p.max_bookings_per_day ?? 0,
-    };
-  }
-  return result;
-}
-
-/**
  * Count non-cancelled, non-no_show bookings for a provider on a given date.
  * Used to enforce max_bookings_per_day.
  */
@@ -500,44 +472,6 @@ export async function countProviderBookingsOnDate(
     .not("status", "in", '("cancelled","no_show")');
   if (error) throw error;
   return count ?? 0;
-}
-
-/**
- * Batched form of countProviderBookingsOnDate for multiple (providerId, date)
- * pairs at once — one query per unique date rather than one per cart item,
- * since Supabase can't OR-combine per-pair filters in a single round trip.
- * Keyed by `${providerId}|${date}`.
- */
-export async function countProviderBookingsOnDates(
-  pairs: { providerId: string; date: string }[],
-): Promise<Record<string, number>> {
-  const result: Record<string, number> = {};
-  if (pairs.length === 0) return result;
-
-  const uniqueDates = [...new Set(pairs.map((p) => p.date))];
-  const uniqueProviderIds = [...new Set(pairs.map((p) => p.providerId))];
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .select("provider_id, booking_date")
-    .in("provider_id", uniqueProviderIds)
-    .in("booking_date", uniqueDates)
-    .not("status", "in", '("cancelled","no_show")');
-  if (error) throw error;
-
-  for (const row of (data ?? []) as {
-    provider_id: string;
-    booking_date: string;
-  }[]) {
-    const key = `${row.provider_id}|${row.booking_date}`;
-    result[key] = (result[key] ?? 0) + 1;
-  }
-  // Ensure every requested pair has a key, even with zero matches.
-  for (const { providerId, date } of pairs) {
-    const key = `${providerId}|${date}`;
-    if (!(key in result)) result[key] = 0;
-  }
-  return result;
 }
 
 // ─────────────────────────────────────────────────────────

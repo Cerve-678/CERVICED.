@@ -237,42 +237,6 @@ export async function isSlotTaken(
   return (data?.length ?? 0) > 0;
 }
 
-/**
- * Batched form of isSlotTaken for multiple (providerId, date, time) triples —
- * one query for every unique (provider, date) pair rather than one per slot,
- * with the exact-time match done client-side against that day's bookings.
- * Keyed by `${providerId}|${date}|${time24}`.
- */
-export async function getSlotsTaken(
-  slots: { providerId: string; date: string; time24: string }[],
-): Promise<Record<string, boolean>> {
-  const result: Record<string, boolean> = {};
-  if (slots.length === 0) return result;
-
-  const uniqueDates = [...new Set(slots.map((s) => s.date))];
-  const uniqueProviderIds = [...new Set(slots.map((s) => s.providerId))];
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .select("provider_id, booking_date, booking_time")
-    .in("provider_id", uniqueProviderIds)
-    .in("booking_date", uniqueDates)
-    .not("status", "in", '("cancelled","no_show")');
-
-  const taken = new Set(
-    (data ?? []).map(
-      (row: any) =>
-        `${row.provider_id}|${row.booking_date}|${row.booking_time}`,
-    ),
-  );
-  for (const { providerId, date, time24 } of slots) {
-    const key = `${providerId}|${date}|${time24}`;
-    // fail open on error — the DB's unique index is the real backstop
-    result[key] = error ? false : taken.has(key);
-  }
-  return result;
-}
-
 // ─────────────────────────────────────────────────────────
 // BOOKINGS — Provider side
 // ─────────────────────────────────────────────────────────
