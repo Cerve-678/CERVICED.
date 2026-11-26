@@ -2,7 +2,8 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
-import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
+import ProviderNotificationSettingsScreen from '../../../screens/provider/ProviderNotificationSettingsScreen';
+import ProviderAchievementsScreen from '../../../screens/provider/ProviderAchievementsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
@@ -12,9 +13,12 @@ import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
-import AboutScreen from '../../../screens/shared/AboutScreen';
-import TermsScreen from '../../../screens/shared/TermsScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
+import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
+import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
+import AdminCreatedAccountsScreen from '../../../screens/shared/AdminCreatedAccountsScreen';
+import AdminListingNudgesScreen from '../../../screens/shared/AdminListingNudgesScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
@@ -35,6 +39,7 @@ import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccount
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
+import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
 import { ProviderAccountStackParamList } from '../../types';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
@@ -65,6 +70,22 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
+      {/* Someone else's profile, opened by a provider-only account scanning their
+          QR code. The screen knows it's in the provider hat: Book explains, and
+          Message opens their public contact options, so nothing here leads into
+          a client-only flow. */}
+      <ProviderAccountStack.Screen
+        name="PublicProviderProfile"
+        component={MyPublicProfileComponent}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="FullCervicedFeatures"
+        component={FullCervicedFeaturesScreen}
+        options={{ headerShown: false }}
+      />
+
       <ProviderAccountStack.Screen
         name="EditProfile"
         component={InfoRegComponent}
@@ -74,13 +95,18 @@ export default function ProviderAccountNavigator() {
         }}
       />
 
+      {/* The notifications list itself lives on the Home tab (bell button,
+          push taps); this tab only holds which ones push. */}
       <ProviderAccountStack.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-        options={{
-          headerShown: false,
-          presentation: 'formSheet',
-        }}
+        name="NotificationSettings"
+        component={ProviderNotificationSettingsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Achievements"
+        component={ProviderAchievementsScreen}
+        options={{ headerShown: false }}
       />
 
       <ProviderAccountStack.Screen
@@ -249,21 +275,40 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
-      <ProviderAccountStack.Screen
-        name="About"
-        component={AboutScreen}
-        options={{ headerShown: false }}
-      />
-
-      <ProviderAccountStack.Screen
-        name="Terms"
-        component={TermsScreen}
-        options={{ headerShown: false }}
-      />
 
       <ProviderAccountStack.Screen
         name="ReportProblem"
         component={ReportProblemScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminMoney"
+        component={AdminMoneyScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminCreateAccount"
+        component={AdminCreateAccountScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminCreatedAccounts"
+        component={AdminCreatedAccountsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminListingNudges"
+        component={AdminListingNudgesScreen}
         options={{ headerShown: false }}
       />
 

@@ -8,7 +8,8 @@
 // computeBeautyProfileStats; its three counting rules are unchanged.
 
 import React, { useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -42,11 +43,14 @@ interface Props {
   onCloseCategory: () => void;
   onToggleEdit: () => void;
   onSave: () => void;
+  /** Where the category's back control leads, when it isn't the tile view
+   *  (a category opened from a landing card goes back to the landing). */
+  categoryBackLabel?: string | undefined;
 }
 
 export function MyProfileView({
   draft, setDraft, stats, editing, saving, selectedCategory,
-  onBack, onOpenCategory, onCloseCategory, onToggleEdit, onSave,
+  onBack, onOpenCategory, onCloseCategory, onToggleEdit, onSave, categoryBackLabel,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const S = semanticColors(isDarkMode);
@@ -92,11 +96,11 @@ export function MyProfileView({
     const isHealth = selectedCategory === 'health';
     return (
       <ThemedBackground style={styles.bg}>
-        <StatusBar barStyle={theme.statusBar} translucent />
+        <FocusAwareStatusBar barStyle={theme.statusBar} />
         <ScrollView contentContainerStyle={scrollStyle} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={onCloseCategory} activeOpacity={0.5} accessibilityRole="button">
-              <Text style={[styles.focusBack, { color: P.accentText }]}>← {t('beautyProfile.allCategories').toUpperCase()}</Text>
+              <Text style={[styles.focusBack, { color: P.accentText }]}>← {(categoryBackLabel ?? t('beautyProfile.allCategories')).toUpperCase()}</Text>
             </TouchableOpacity>
             {editToggle}
           </View>
@@ -185,7 +189,7 @@ export function MyProfileView({
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView contentContainerStyle={scrollStyle} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>

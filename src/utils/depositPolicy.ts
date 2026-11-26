@@ -32,11 +32,8 @@ function isDepositMode(v: unknown): v is DepositMode {
 /**
  * Resolve the provider's deposit mode.
  *
- * Returns `null` when the provider has never saved a deposit setting at all —
- * deliberately distinct from 'full_only', because callers treat "not
- * configured" differently from "explicitly no deposit". The client mapper
- * keeps its historical 20%-both-options default for the null case rather than
- * silently changing what live profiles offer.
+ * Returns `null` when the provider has never saved a deposit setting at all.
+ * Clients are offered no deposit in that case, the same as 'full_only'.
  */
 export function resolveDepositMode(policies: StoredDepositPolicy | null | undefined): DepositMode | null {
   if (!policies) return null;
@@ -49,9 +46,23 @@ export function resolveDepositMode(policies: StoredDepositPolicy | null | undefi
 }
 
 /** The provider-editor counterpart: what the radio group should start on.
- *  Unconfigured falls back to 'client_choice' rather than null, matching the
- *  20%-both-options default the client mapper already applies to those rows —
- *  so opening Payments and pressing Save doesn't change what clients see. */
+ *  Unconfigured starts on 'full_only' because that's what clients get, so
+ *  opening Payments and pressing Save doesn't turn a deposit on. */
 export function resolveEditorDepositMode(policies: StoredDepositPolicy | null | undefined): DepositMode {
-  return resolveDepositMode(policies) ?? 'client_choice';
+  return resolveDepositMode(policies) ?? 'full_only';
+}
+
+/**
+ * The "Note to clients" a provider writes under their deposit on Payments,
+ * as the booking sheet shows it. Only while they actually take a deposit
+ * (the same rule as the deposit button), so a note left over from before
+ * they switched deposits off never reaches a client.
+ */
+export function depositNoteForClients(
+  policies: (StoredDepositPolicy & { depositAmount?: unknown; depositNote?: unknown }) | null | undefined,
+): string | null {
+  const mode = resolveDepositMode(policies);
+  if (!mode || mode === 'full_only' || !policies?.depositAmount) return null;
+  const note = typeof policies.depositNote === 'string' ? policies.depositNote.trim() : '';
+  return note || null;
 }

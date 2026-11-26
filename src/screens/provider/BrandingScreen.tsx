@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,25 @@ import {
   Image,
   Alert,
   ActivityIndicator,
-  StatusBar,
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ProfileStylePreview, type PreviewContent } from '../../features/providers/ProfileStylePreview';
+import { heroLabelsFrom, previewContentFrom } from '../../features/providers/previewContent';
+import { policyImageEdges, policyImageUrls, type PolicyImageEdge } from '../../features/providers/policyImages';
+import type { LogoFraming } from '../../types/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  isDarkColor,
   PROVIDER_THEMES,
   DEFAULT_PROVIDER_THEME,
   SHEET_BG,
@@ -24,13 +34,47 @@ import {
   decodeCustomTheme,
   encodeThemeKey,
   parseThemeKey,
+  resolveProviderTheme,
+  DEFAULT_HERO_FINISH,
+  HERO_FINISHES,
+  LINK_ONLY_HERO_FINISHES,
+  LINK_ONLY_THEMES,
+  type HeroFinish,
+  type CardShape,
+  CARD_SHAPES,
+  DEFAULT_CARD_SHAPE,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
+import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
-import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
+import PageStylePicker from '../../components/PageStylePicker';
+import {
+  DEFAULT_PAGE_STYLE,
+  DEFAULT_POLICY_PICTURE_LOOK,
+  getPageStyle,
+  heroPhotoPickLimit,
+  PAGE_STYLES,
+  POLICY_PICTURE_LOOKS,
+  type PageStyleKey,
+  type PolicyPictureLook,
+} from '../../constants/pageStyles';
+import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
+import { heroUsesBrandFont } from '../../features/providers/ProfileHero';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
-import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
+import { getMyProviderBranding, getProviderPortfolio, setHeroPhotoFrames, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
+import type { DbPortfolioItem, HeroPhotoFrame } from '../../types/database';
+import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
+import { HeroPhotoAdjustRow } from '../../features/providers/HeroPhotoAdjust';
+import { heroPhotoFramesOf } from '../../features/providers/HeroPhoto';
+import { CustomPageMaker, CustomTapPanel } from '../../features/providers/CustomPageMaker';
+import { withPart, type CustomPartKey } from '../../constants/customPageStyle';
+import { DEFAULT_CUSTOM_CHOICES, type CustomChoices } from '../../constants/customPageStyle';
+import { HERO_PHOTO_LIMIT, heroPhotos } from '../../features/providers/heroPhotos';
 import { toUserMessage } from '../../utils/userFacingError';
+import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
+import { ImageCropModal } from '../../components/ImageCropModal';
+import { coloursFromPhoto } from '../../features/provider-registration/photoColours';
+import { logger } from '../../utils/logger';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -42,6 +86,17 @@ const DARK = {
   accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667',
   border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
 };
+
+// Branding is split into parts, so a provider sees one group of related
+// settings at a time instead of every section in one long page. Custom is
+// where they make a plain page of their own (features/providers/CustomPageMaker).
+type BrandingPart = 'layout' | 'colours' | 'name' | 'custom';
+const BRANDING_PARTS: { key: BrandingPart; label: string }[] = [
+  { key: 'layout', label: 'Layout' },
+  { key: 'colours', label: 'Colours' },
+  { key: 'name', label: 'Name' },
+  { key: 'custom', label: 'Custom' },
+];
 
 // Background gradients are derived from the Colour Theme's backdrop colour
 // (saved as [backdrop, sheetColor]) — there is no separate gradient picker.
@@ -68,8 +123,11 @@ async function uploadBackgroundImage(
 
 export default function BrandingScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
   const P = isDarkMode ? DARK : LIGHT;
+  // Link-only pros get a smaller set; the rest shows locked (see
+  // LINK_ONLY_THEMES).
+  const limited = myBookingMode === 'external';
 
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
@@ -84,9 +142,53 @@ export default function BrandingScreen({ navigation }: any) {
   const [customCard, setCustomCard]           = useState('#F9E9EE');
   const [customAccent, setCustomAccent]       = useState('#D98BA6');
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
+  const [heroFinish, setHeroFinish]           = useState<HeroFinish>(DEFAULT_HERO_FINISH);
+  const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
+  const [pageStyle, setPageStyle]             = useState<PageStyleKey>(DEFAULT_PAGE_STYLE);
+  const [policyLook, setPolicyLook]           = useState<PolicyPictureLook>(DEFAULT_POLICY_PICTURE_LOOK);
+  // Branding → Custom's picks; they only show while the page style is Custom.
+  const [customChoices, setCustomChoices]     = useState<CustomChoices>(DEFAULT_CUSTOM_CHOICES);
+  // What the full preview needs that Branding doesn't edit: the name, the
+  // logo's framing and the line under the name. From the saved profile cache.
+  const [previewOpen, setPreviewOpen]         = useState(false);
+  // Custom's Tap Your Page: the full preview with each part tappable, and
+  // the part they're changing (null is the usual preview).
+  const [tapPart, setTapPart]                 = useState<CustomPartKey | null>(null);
+  const [profileName, setProfileName]         = useState('Your Business');
+  const [logoFraming, setLogoFraming]         = useState<LogoFraming | null>(null);
+  const [metaLabels, setMetaLabels]           = useState<string[]>([]);
+  const [pillLabels, setPillLabels]           = useState<string[]>([]);
+  const [heroKicker, setHeroKicker]           = useState('');
+  const [heroLocation, setHeroLocation]       = useState('');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
+  const [lockedOpen, setLockedOpen]           = useState(false);
+  const [imageToCrop, setImageToCrop]         = useState<string | null>(null);
+  // Custom → "From your photos": colours found in the logo and background
+  // photo, plus any photo chosen just for its colours.
+  const [logoUrl, setLogoUrl]                 = useState<string | null>(null);
+  const [photoColours, setPhotoColours]       = useState<string[]>([]);
+  const [photoColoursLoading, setPhotoColoursLoading] = useState(false);
+  const photoColoursFor = useRef<string | null>(null);
+  // The colour square and hue bar take a vertical drag, so the page stops
+  // scrolling while a finger is on them.
+  const [colourDragging, setColourDragging]   = useState(false);
+  // Branding → Your Photos (Hush): their work photos and the ones picked for
+  // its hero, saved with everything else.
+  const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
+  const [portfolioLoadState, setPortfolioLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  // Their About and categories, so Preview reads like their page (services stay outlines).
+  const [previewContent, setPreviewContent]   = useState<PreviewContent | undefined>(undefined);
+  const [previewPolicyPages, setPreviewPolicyPages] = useState<string[]>([]);
+  const [previewPolicyEdges, setPreviewPolicyEdges] = useState<Record<string, PolicyImageEdge>>({});
+  const [previewRating, setPreviewRating] = useState<string | undefined>(undefined);
+  const [heroPicked, setHeroPicked]             = useState<string[]>([]);
+  const savedHeroPicked = useRef<string[]>([]);
+  // How each hero photo is framed, by portfolio item id (null = centred).
+  const [heroFrames, setHeroFrames]             = useState<Record<string, HeroPhotoFrame | null>>({});
+  const savedHeroFrames = useRef<Record<string, HeroPhotoFrame | null>>({});
+  const [part, setPart]                       = useState<BrandingPart>('layout');
 
   useEffect(() => {
     let active = true;
@@ -100,9 +202,30 @@ export default function BrandingScreen({ navigation }: any) {
         setGradient(cached.gradient);
         setAccentColor(cached.accentColor);
         setBackgroundImage(cached.backgroundImage);
+        setLogoUrl(cached.logo);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
-        const { base, sheet } = parseThemeKey(cached.profileTheme);
+        if (cached.providerName?.trim()) setProfileName(cached.providerName.trim());
+        setLogoFraming(cached.logoFraming ?? null);
+        {
+          // The same line the profile prints under the name (and Cover's pills).
+          const labels = heroLabelsFrom(cached);
+          setMetaLabels(labels.metaLabels);
+          setPillLabels(labels.pillLabels);
+          setHeroKicker(labels.kicker);
+          setHeroLocation(labels.location);
+        }
+        // Their own words, categories, policy pictures and rating for the preview.
+        setPreviewContent(previewContentFrom(cached));
+        setPreviewPolicyPages(policyImageUrls(cached.bookingPolicies));
+        setPreviewPolicyEdges(policyImageEdges(cached.bookingPolicies));
+        setPreviewRating(String(Number(cached.rating) || 0));
+        const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook, custom: cachedCustom } = parseThemeKey(cached.profileTheme);
+        setCardShape(shape);
+        setPageStyle(cachedPageStyle);
+        setPolicyLook(cachedPolicyLook);
+        setCustomChoices(cachedCustom);
         setSheetColor(sheet);
+        setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
         if (custom) {
           setThemeChoice('custom');
@@ -125,9 +248,15 @@ export default function BrandingScreen({ navigation }: any) {
           }
           if (data.accent_color) setAccentColor(data.accent_color);
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
+          if (data.logo_url) setLogoUrl(data.logo_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish, shape, pageStyle: savedPageStyle, policyLook: savedPolicyLook, custom: savedCustom } = parseThemeKey(data.profile_theme);
+          setCardShape(shape);
+          setPageStyle(savedPageStyle);
+          setPolicyLook(savedPolicyLook);
+          setCustomChoices(savedCustom);
           setSheetColor(sheet);
+          setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
           if (custom) {
             setThemeChoice('custom');
@@ -155,15 +284,67 @@ export default function BrandingScreen({ navigation }: any) {
       Alert.alert('Permission needed', 'Allow access to your photo library to set a background image.');
       return;
     }
+    // No allowsEditing: iOS's editor ignores `aspect` and only crops to a
+    // square, which cut most of a portrait photo away. ImageCropModal starts
+    // on the whole photo instead, so leaving it alone keeps the full image.
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [9, 16],
+      mediaTypes: ['images'],
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
+    setImageToCrop(result.assets[0].uri);
+  }, [userId]);
 
-    const localUri = result.assets[0].uri;
+  // Read colours out of the logo and background photo the first time Custom
+  // is open, and again only if either photo changes. Nothing is fetched for a
+  // provider who never opens Custom.
+  useEffect(() => {
+    if (themeChoice !== 'custom' || limited) return;
+    const sources = [logoUrl, backgroundImage].filter((u): u is string => !!u);
+    const key = sources.join('|');
+    if (sources.length === 0 || photoColoursFor.current === key) return;
+    photoColoursFor.current = key;
+    let active = true;
+    setPhotoColoursLoading(true);
+    void Promise.allSettled(sources.map(uri => coloursFromPhoto(uri, 5))).then(results => {
+      if (!active) return;
+      const found: string[] = [];
+      for (const result of results) {
+        if (result.status === 'fulfilled') found.push(...result.value);
+        else logger.warn('[Branding] could not read colours from a photo:', result.reason);
+      }
+      setPhotoColours([...new Set(found)].slice(0, 8));
+      setPhotoColoursLoading(false);
+    });
+    return () => { active = false; };
+  }, [themeChoice, limited, logoUrl, backgroundImage]);
+
+  // Any photo from the library, used only for its colours (nothing uploads).
+  const chooseColourPhoto = useCallback(async () => {
+    let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+    if (!permission.granted) permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow access to your photo library to take colours from a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5 });
+    if (result.canceled || !result.assets[0]) return;
+    setPhotoColoursLoading(true);
+    try {
+      const found = await coloursFromPhoto(result.assets[0].uri, 6);
+      // The chosen photo's colours lead; the logo/background ones follow.
+      setPhotoColours(existing => [...new Set([...found, ...existing])].slice(0, 10));
+    } catch (e) {
+      logger.warn('[Branding] could not read colours from the chosen photo:', e);
+      Alert.alert('Couldn\u2019t read that photo', 'Try a different photo, or pick a colour on the square below.');
+    } finally {
+      setPhotoColoursLoading(false);
+    }
+  }, []);
+
+  const handleImageCropped = useCallback(async (localUri: string) => {
+    setImageToCrop(null);
+    if (!userId) return;
     const previousImage = backgroundImage;
     // The provider chose this image already; show it now, rather than making
     // the preview wait for the storage upload to finish.
@@ -186,6 +367,59 @@ export default function BrandingScreen({ navigation }: any) {
     setBackgroundImage(null);
   }, []);
 
+  useEffect(() => {
+    if (!providerId) return;
+    let active = true;
+    getProviderPortfolio(providerId)
+      .then(({ work }) => {
+        if (!active) return;
+        const picks = work.filter(item => item.is_featured).map(item => item.id).slice(0, HERO_PHOTO_LIMIT);
+        setPortfolioItems(work);
+        setPortfolioLoadState('ready');
+        setHeroPicked(picks);
+        savedHeroPicked.current = picks;
+        const frames = Object.fromEntries(work.filter(item => item.hero_frame).map(item => [item.id, item.hero_frame]));
+        setHeroFrames(frames);
+        savedHeroFrames.current = frames;
+      })
+      .catch(e => {
+        if (!active) return;
+        setPortfolioLoadState('error');
+        logger.warn('[Branding] could not load the portfolio for Your Photos:', e);
+      });
+    return () => { active = false; };
+  }, [providerId]);
+
+  // The picked font only shows on styles whose hero draws the name in it.
+  const fontShows = heroUsesBrandFont(getPageStyle(pageStyle, customChoices));
+  // Editorial shows one picked photo, Snapshot and Hush three.
+  const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle, customChoices));
+  const picksHeroPhotos = heroPickLimit > 0;
+  // Moving to a style that shows fewer (Snapshot's 3 → Editorial's 1) keeps
+  // the picks that style shows, so the count never reads "3 of 1".
+  useEffect(() => {
+    if (heroPickLimit > 0 && heroPicked.length > heroPickLimit) {
+      const marked = portfolioItems.map(item => ({ ...item, is_featured: heroPicked.includes(item.id) }));
+      setHeroPicked(heroPhotos(marked, heroPickLimit).filter(item => item.is_featured).map(item => item.id));
+    }
+  }, [heroPickLimit, heroPicked, portfolioItems]);
+  // The photos the hero shows with these picks, in its order.
+  const shownHeroPhotos = useMemo(
+    () => (picksHeroPhotos
+      ? heroPhotos(portfolioItems.map(item => ({ ...item, is_featured: heroPicked.includes(item.id) })), heroPickLimit)
+      : portfolioItems.slice(0, 3)),
+    [picksHeroPhotos, portfolioItems, heroPicked, heroPickLimit],
+  );
+  // The preview's hero, as the profile will show it with these picks and frames.
+  const previewPhotoUris = useMemo(() => shownHeroPhotos.map(item => item.image_url), [shownHeroPhotos]);
+  const previewPhotoFrames = useMemo(
+    () => heroPhotoFramesOf(shownHeroPhotos.map(item => ({ ...item, hero_frame: heroFrames[item.id] ?? null }))),
+    [shownHeroPhotos, heroFrames],
+  );
+  const setHeroFrame = useCallback((itemId: string, frame: HeroPhotoFrame | null) => {
+    setHeroFrames(prev => ({ ...prev, [itemId]: frame }));
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (!providerId) return;
     setSaving(true);
@@ -203,7 +437,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle, policyLook, customChoices);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -212,6 +446,23 @@ export default function BrandingScreen({ navigation }: any) {
         profile_theme: resolvedProfileTheme,
         brand_font: brandFont,
       });
+
+      // The picked photos live on the portfolio rows, so they save on their own.
+      const picksChanged = heroPicked.length !== savedHeroPicked.current.length
+        || heroPicked.some(id => !savedHeroPicked.current.includes(id));
+      if (picksChanged) {
+        await setHeroPortfolioPhotos(providerId, heroPicked);
+        savedHeroPicked.current = heroPicked;
+      }
+      // Each moved photo's frame lives on its own portfolio row too.
+      const changedFrames = Object.fromEntries(
+        Object.entries(heroFrames).filter(([id, frame]) =>
+          JSON.stringify(frame ?? null) !== JSON.stringify(savedHeroFrames.current[id] ?? null)),
+      );
+      if (Object.keys(changedFrames).length > 0) {
+        await setHeroPhotoFrames(providerId, changedFrames);
+        savedHeroFrames.current = heroFrames;
+      }
 
       // Keep My Profile's render cache in step with the DB so returning to it
       // doesn't flash the previous colours/photo for a frame before the live
@@ -232,7 +483,22 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, customChoices, brandFont, heroPicked, heroFrames, navigation]);
+
+  // The profile_theme the on-screen choices would save, for the preview.
+  const liveThemeKey = encodeThemeKey(
+    themeChoice === 'custom' ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice,
+    sheetColor,
+    heroFinish,
+    cardShape,
+    pageStyle,
+    policyLook,
+    customChoices,
+  );
+
+  // Both stacks that open Branding for a link-only pro (Home, Settings) have
+  // the Full CERVICED experience page.
+  const showLocked = useCallback(() => setLockedOpen(true), []);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
@@ -251,6 +517,12 @@ export default function BrandingScreen({ navigation }: any) {
     setGradient(resolvedGradient);
   }, []);
 
+  // The preview's words follow the backdrop's lead colour, so pale sets like
+  // Oat Milk read in ink rather than shadowed white.
+  const previewOnLight = !backgroundImage && !isDarkColor(gradient[0]);
+  const previewInk = previewOnLight ? '#26201E' : '#FFFFFF';
+  const accentInk = isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740';
+
   if (loading) {
     return (
       <View style={[styles.centred, { backgroundColor: P.bg }]}>
@@ -261,9 +533,78 @@ export default function BrandingScreen({ navigation }: any) {
 
   return (
     <View style={[styles.bg, { backgroundColor: P.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <ImageCropModal
+        uri={imageToCrop}
+        accent={P.accent}
+        onAccent={isDarkColor(P.accent) ? '#FFFFFF' : '#1A1815'}
+        onCancel={() => setImageToCrop(null)}
+        onDone={handleImageCropped}
+      />
+      <Modal
+        visible={previewOpen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => { setPreviewOpen(false); setTapPart(null); }}
+      >
+        {/* A Modal is its own native surface, so it needs its own safe-area provider. */}
+        <SafeAreaProvider>
+          <ProfilePreviewScreen
+            onClose={() => { setPreviewOpen(false); setTapPart(null); }}
+            pageStyle={pageStyle}
+            onPickStyle={setPageStyle}
+            isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+            onLockedPress={() => {
+              setPreviewOpen(false);
+              showLocked();
+            }}
+            accent={accentColor}
+            renderBar={tapPart ? bottomInset => (
+              <CustomTapPanel
+                part={tapPart}
+                onPartChange={setTapPart}
+                choices={customChoices}
+                onPick={(key, value) => {
+                  setCustomChoices(prev => withPart(prev, key, value));
+                  setPageStyle('custom');
+                }}
+                accent={accentColor}
+                bottomInset={bottomInset}
+              />
+            ) : undefined}
+          >
+            <ProfileStylePreview
+              themeKey={liveThemeKey}
+              gradient={gradient}
+              accent={accentColor}
+              backgroundImage={backgroundImage}
+              brandFont={brandFont}
+              name={profileName}
+              logoUri={logoUrl}
+              logoFraming={logoFraming}
+              metaLabels={metaLabels}
+              pillLabels={pillLabels}
+              kicker={heroKicker}
+              location={heroLocation}
+              photoUris={previewPhotoUris}
+              photoFrames={previewPhotoFrames}
+              portfolio={portfolioItems}
+              // Clears the row of page styles along the preview's foot.
+              pinnedBarBottom={120}
+              content={previewContent}
+              policyPages={previewPolicyPages}
+              policyEdges={previewPolicyEdges}
+              rating={previewRating}
+              editParts={tapPart ? { active: tapPart, onPress: setTapPart, accent: accentColor } : undefined}
+            >
+              {/* Room for the taller Tap Your Page panel. */}
+              {tapPart ? <View style={{ height: 150 }} /> : null}
+            </ProfileStylePreview>
+          </ProfilePreviewScreen>
+        </SafeAreaProvider>
+      </Modal>
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} scrollEnabled={!colourDragging}>
 
           {/* Header */}
           <TouchableOpacity
@@ -290,94 +631,380 @@ export default function BrandingScreen({ navigation }: any) {
                 />
               </>
             ) : (
-              <LinearGradient
-                colors={gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
+              <ProfileHeroBackdrop colors={gradient} finish={heroFinish} style={StyleSheet.absoluteFill} />
             )}
+            {/* Opens the full preview: the top of the profile as clients
+                will see it with these choices, saved or not. */}
+            <TouchableOpacity
+              style={styles.previewButton}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setPreviewOpen(true);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Preview your profile"
+            >
+              <Ionicons name="eye-outline" size={15} color="#1F1A18" />
+              <Text style={styles.previewButtonText}>Preview</Text>
+            </TouchableOpacity>
             <View style={styles.previewContent}>
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
-                <Text style={styles.previewAccentLabel}>ACCENT</Text>
+                <Text style={[styles.previewAccentLabel, { color: accentInk }]}>ACCENT</Text>
               </View>
-              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont) }]}>Your Profile</Text>
-              <Text style={styles.previewSub}>Background preview</Text>
+              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont), fontSize: 20 * resolveProviderFontScale(brandFont), color: previewInk }, !previewOnLight && styles.previewShadow]}>Your Profile</Text>
+              <Text style={[styles.previewSub, { color: previewInk, opacity: 0.75 }]}>Background preview</Text>
             </View>
           </View>
 
-          {/* Profile theme — accent + card colour + backdrop sets */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each preset is a matched set of accent, card, and backdrop colours.
-              Pick one or tap Custom to build your own.
-            </Text>
-            <ProviderThemePicker
-              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
-              onChange={handleThemeChange}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              sepColor={P.sep}
-            />
-          </View>
-
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>Choose how your business name appears on your public profile.</Text>
-            <ProviderFontPicker
-              value={brandFont}
-              onChange={setBrandFont}
-              accentColor={accentColor}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              cardColor={P.surface}
-            />
-          </View>
-
-          {/* Background image */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              A photo background overrides the gradient. Clients see it behind your profile.
-            </Text>
-            <View style={styles.imageRow}>
-              {backgroundImage ? (
-                <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
-              ) : (
-                <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
-                  <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>
-                </View>
-              )}
-              <View style={styles.imageActions}>
+          {/* Layout / Colours / Name: one group of related settings at a time. */}
+          <View style={[styles.partSwitch, { backgroundColor: P.surface }]}>
+            {BRANDING_PARTS.map(p => {
+              const selected = part === p.key;
+              return (
                 <TouchableOpacity
-                  style={[styles.imageBtn, { backgroundColor: accentColor }]}
-                  onPress={pickImage}
+                  key={p.key}
+                  style={[styles.partOption, selected && { backgroundColor: P.card }]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setPart(p.key);
+                  }}
                   activeOpacity={0.8}
-                  disabled={uploadingImage}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
                 >
-                  {uploadingImage ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.imageBtnText}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
-                  )}
+                  <Text style={[styles.partLabel, { color: selected ? P.text : P.sub }]}>{p.label}</Text>
                 </TouchableOpacity>
-                {backgroundImage && (
-                  <TouchableOpacity
-                    style={[styles.imageBtn, styles.imageBtnRemove, { borderColor: P.border }]}
-                    onPress={removeImage}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.imageBtnText, { color: P.sub }]}>Remove</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+              );
+            })}
           </View>
 
-          {/* Save */}
+          {part === 'layout' && (
+            <>
+              {/* Page style — the layout and decoration of the whole profile */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  The layout of your whole profile. Your colours and font stay as you set them.
+                </Text>
+                {portfolioLoadState === 'ready' && portfolioItems.length === 0 ? (
+                  <Text style={[styles.sectionSub, { color: P.sub }]}>
+                    Add work photos in My Services → Portfolio to show the portfolio on your profile.
+                  </Text>
+                ) : portfolioLoadState === 'error' ? (
+                  <Text style={[styles.sectionSub, { color: P.sub }]}>
+                    Your work photos could not be loaded. Reopen Branding to try again.
+                  </Text>
+                ) : null}
+                <PageStylePicker
+                  value={pageStyle}
+                  onChange={setPageStyle}
+                  isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+                  onLockedPress={showLocked}
+                  gradient={gradient}
+                  accent={accentColor}
+                  sheet={sheetColor}
+                  cardColour={resolveProviderTheme(liveThemeKey).card}
+                  backgroundImage={backgroundImage}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
+                />
+              </View>
+
+              {/* Your Photos (Editorial, Bow, Snapshot, Hush): the photos their hero opens on. */}
+              {picksHeroPhotos && (
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Your Photos</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {heroPickLimit === 1
+                    ? `${getPageStyle(pageStyle).name} shows one of your photos at the top. Tap the one you want. Nothing picked? Your newest shows.`
+                    : `${getPageStyle(pageStyle).name} shows ${heroPickLimit} of your photos at the top. Tap the ones you want. Pick fewer and your newest fill the rest.`}
+                </Text>
+                <HeroPhotoPicker
+                  items={portfolioItems}
+                  picked={heroPicked}
+                  onChange={setHeroPicked}
+                  limit={heroPickLimit}
+                  accent={accentColor}
+                  subColor={P.sub}
+                />
+                <HeroPhotoAdjustRow
+                  photos={shownHeroPhotos}
+                  frames={heroFrames}
+                  onChange={setHeroFrame}
+                  hero={getPageStyle(pageStyle, customChoices).hero}
+                  accent={accentColor}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
+                />
+              </View>
+              )}
+
+              {/* Policy pictures — how their uploaded policy pages sit in the
+                  profile. Templates only: Classic keeps them behind the button. */}
+              {pageStyle !== DEFAULT_PAGE_STYLE && (
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  How the policy pictures you added in Policies show on your profile.
+                </Text>
+                <View style={styles.policyLookGrid}>
+                  {POLICY_PICTURE_LOOKS.map(look => {
+                    const selected = policyLook === look.key;
+                    const pageColour = accentColor;
+                    return (
+                      <TouchableOpacity
+                        key={look.key}
+                        style={styles.policyLookOption}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setPolicyLook(look.key);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${look.name}: ${look.description}`}
+                      >
+                        <View style={[styles.policyLookPreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                          {look.key !== 'melt' && look.key !== 'bleed' ? (
+                            <PolicyLookSmallPreview look={look.key} pageColour={pageColour} sheet={sheetColor} />
+                          ) : (
+                          <>
+                          {look.key === 'melt' ? (
+                            <LinearGradient colors={[sheetColor, pageColour]} style={styles.policyLookFade} />
+                          ) : (
+                            <View style={[styles.policyLookWave, { backgroundColor: pageColour }]} />
+                          )}
+                          <View style={[styles.policyLookPage, { backgroundColor: pageColour }]}>
+                            <View style={styles.policyLookLine} />
+                            <View style={[styles.policyLookLine, styles.policyLookLineShort]} />
+                            <View style={styles.policyLookLine} />
+                          </View>
+                          {look.key === 'melt' ? (
+                            <LinearGradient colors={[pageColour, sheetColor]} style={styles.policyLookFade} />
+                          ) : (
+                            <View style={[styles.policyLookWave, styles.policyLookWaveBottom, { backgroundColor: pageColour }]} />
+                          )}
+                          </>
+                          )}
+                        </View>
+                        <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{look.name}</Text>
+                        <Text style={[styles.policyLookDescription, { color: P.sub }]}>{look.description}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              )}
+
+              {/* Card shape — corners of the service cards and category pills */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  The corners of your service cards and category pills.
+                </Text>
+                <View style={styles.finishRow}>
+                  {CARD_SHAPES.map(shape => {
+                    const selected = cardShape === shape.key;
+                    const square = shape.key === 'square';
+                    return (
+                      <TouchableOpacity
+                        key={shape.key}
+                        style={styles.finishOption}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setCardShape(shape.key);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${shape.name}: ${shape.description}`}
+                      >
+                        <View style={[styles.shapePreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                          <View style={styles.shapePillRow}>
+                            <View style={[styles.shapePill, { backgroundColor: accentColor }, square && styles.shapeSquare]} />
+                            <View style={[styles.shapePill, styles.shapePillIdle, square && styles.shapeSquare]} />
+                          </View>
+                          <View style={[styles.shapeCard, square && styles.shapeSquare]}>
+                            <View style={[styles.shapeThumb, { backgroundColor: accentColor }]} />
+                            <View style={styles.shapeLines}>
+                              <View style={styles.shapeLineLong} />
+                              <View style={styles.shapeLineShort} />
+                            </View>
+                          </View>
+                        </View>
+                        <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{shape.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
+
+          {part === 'colours' && (
+            <>
+              {/* Profile theme — accent + card colour + backdrop sets */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  Two backdrop colours and an accent. Swipe a collection, or make your own.
+                </Text>
+                <ProviderThemePicker
+                  value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
+                  onChange={handleThemeChange}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
+                  sepColor={P.sep}
+                  unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
+                  onLockedPress={showLocked}
+                  photoColours={photoColours}
+                  photoColoursLoading={photoColoursLoading}
+                  onChoosePhoto={chooseColourPhoto}
+                  onColourDraggingChange={setColourDragging}
+                />
+              </View>
+
+              {/* Hero finish — how the two backdrop colours are drawn */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {backgroundImage
+                    ? 'Your background photo is showing instead. Remove it to use a finish.'
+                    : 'How your two colours blend behind the top of your profile.'}
+                </Text>
+                {/* Dimmed while a photo is showing: the photo covers the finish. */}
+                <View style={[styles.finishRow, backgroundImage ? styles.finishRowCovered : null]}>
+                  {HERO_FINISHES.map(f => {
+                    const selected = heroFinish === f.key;
+                    const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
+                    return (
+                      <TouchableOpacity
+                        key={f.key}
+                        style={[styles.finishOption, locked && styles.finishLocked]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          if (locked) showLocked();
+                          else setHeroFinish(f.key);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
+                      >
+                        <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                          <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
+                          {locked && (
+                            <View style={styles.finishLock}>
+                              <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Background image */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  A photo shows behind your profile instead of your colours.
+                </Text>
+                <View style={styles.imageRow}>
+                  {backgroundImage ? (
+                    <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
+                  ) : (
+                    <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
+                      <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>
+                    </View>
+                  )}
+                  <View style={styles.imageActions}>
+                    <TouchableOpacity
+                      style={[styles.imageBtn, { backgroundColor: accentColor }]}
+                      onPress={pickImage}
+                      activeOpacity={0.8}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? (
+                        <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} size="small" />
+                      ) : (
+                        <Text style={[styles.imageBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
+                      )}
+                    </TouchableOpacity>
+                    {backgroundImage && (
+                      <TouchableOpacity
+                        style={[styles.imageBtn, styles.imageBtnRemove, { borderColor: P.border }]}
+                        onPress={removeImage}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.imageBtnText, { color: P.sub }]}>Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+
+          {part === 'custom' && (
+            <CustomPageMaker
+              choices={customChoices}
+              onChange={setCustomChoices}
+              active={pageStyle === 'custom'}
+              onUse={() => setPageStyle('custom')}
+              brandFont={brandFont}
+              onBrandFontChange={setBrandFont}
+              cardShape={cardShape}
+              onCardShapeChange={setCardShape}
+              onOpenColours={() => setPart('colours')}
+              onOpenTapEdit={() => { setTapPart('top'); setPreviewOpen(true); }}
+              locked={limited}
+              onLockedPress={showLocked}
+              accent={accentColor}
+              P={P}
+            />
+          )}
+
+          {part === 'name' && (
+            <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+              <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
+              {fontShows ? (
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {getPageStyle(pageStyle, customChoices).nameFontPickable
+                    // Noir, Muse, Ledger, Hush, Quiet, Signature: Classic keeps their own lettering.
+                    ? `How your business name appears on your profile. Leave it on Classic to keep ${getPageStyle(pageStyle).name}'s own lettering.`
+                    : 'How your business name appears on your profile.'}
+                </Text>
+              ) : (
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {`${getPageStyle(pageStyle).name} writes your name in its own lettering, so this font doesn't show on your page. It shows on ${BRAND_FONT_STYLE_NAMES}.`}
+                </Text>
+              )}
+              <View style={!fontShows && styles.fontOff} pointerEvents={fontShows ? 'auto' : 'none'} accessibilityElementsHidden={!fontShows} importantForAccessibility={fontShows ? 'auto' : 'no-hide-descendants'}>
+              <ProviderFontPicker
+                value={brandFont}
+                onChange={setBrandFont}
+                accentColor={accentColor}
+                textColor={P.text}
+                subColor={P.sub}
+                borderColor={P.border}
+                cardColor={P.surface}
+                unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
+                onLockedPress={showLocked}
+              />
+              </View>
+            </View>
+          )}
+
+        </ScrollView>
+        {/* Save stays on screen, so there is no scrolling to the end to find it. */}
+        <View style={[styles.saveBar, { backgroundColor: P.bg, borderTopColor: P.border }]}>
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: accentColor, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave}
@@ -385,22 +1012,101 @@ export default function BrandingScreen({ navigation }: any) {
             disabled={saving || uploadingImage}
           >
             {saving ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
             ) : (
-              <Text style={styles.saveBtnText}>Save Changes</Text>
+              <Text style={[styles.saveBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Save Changes</Text>
             )}
           </TouchableOpacity>
-
-        </ScrollView>
+        </View>
       </SafeAreaView>
+
+      <FullCervicedLockedSheet
+        visible={lockedOpen}
+        title="Unlock the rest of your branding"
+        note="You can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish now."
+        onClose={() => setLockedOpen(false)}
+        onSeeMore={() => navigation.navigate('FullCervicedFeatures')}
+      />
     </View>
   );
 }
 
+/** Branding's drawing of a Policy Pictures choice other than Melt in and
+ *  Bleed: the profile as grey lines, with the pages drawn in that design. */
+function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<PolicyPictureLook, 'melt' | 'bleed'>; pageColour: string; sheet: string }) {
+  const line = isDarkColor(sheet) ? 'rgba(255,255,255,0.28)' : 'rgba(38,32,30,0.16)';
+  const lines = (
+    <>
+      <View style={[styles.smallLine, { backgroundColor: line }]} />
+      <View style={[styles.smallLine, styles.smallLineShort, { backgroundColor: line }]} />
+      <View style={[styles.smallLine, { backgroundColor: line }]} />
+    </>
+  );
+  return (
+    <View style={styles.smallPreview}>
+      {look === 'story' ? (
+        <View style={styles.smallRings}>
+          <View style={[styles.smallRing, { borderColor: pageColour }]} />
+        </View>
+      ) : null}
+      {lines}
+      {look === 'thumbs' ? (
+        <View style={styles.smallThumbs}>
+          {[0, 1, 2].map(i => <View key={i} style={[styles.smallThumb, { backgroundColor: pageColour }]} />)}
+        </View>
+      ) : null}
+      {look === 'button' ? (
+        <View style={[styles.smallButton, { borderColor: line }]}>
+          <View style={[styles.smallButtonDoc, { backgroundColor: pageColour }]} />
+          <View style={[styles.smallLine, styles.smallLineShort, { backgroundColor: line, height: 3 }]} />
+        </View>
+      ) : null}
+      {look === 'framed' ? (
+        <View style={styles.smallFrame}>
+          <View style={[styles.smallFramePage, { backgroundColor: pageColour }]} />
+        </View>
+      ) : null}
+      {look === 'swipe' ? (
+        <>
+          <View style={styles.smallSwipeRow}>
+            <View style={[styles.smallSwipePage, { backgroundColor: pageColour }]} />
+            <View style={[styles.smallSwipePage, styles.smallSwipeNext, { backgroundColor: pageColour }]} />
+          </View>
+          <View style={styles.smallDots}>
+            {[1, 0.3, 0.3].map((opacity, i) => <View key={i} style={[styles.smallDot, { backgroundColor: pageColour, opacity }]} />)}
+          </View>
+        </>
+      ) : null}
+      {look === 'fan' ? (
+        <View style={styles.smallFan}>
+          {[-10, 10, 0].map(tilt => (
+            <View key={tilt} style={[styles.smallFanCard, { backgroundColor: pageColour, opacity: tilt === 0 ? 1 : 0.6, transform: [{ translateX: tilt * 0.7 }, { rotate: `${tilt}deg` }] }]} />
+          ))}
+        </View>
+      ) : null}
+      {look === 'peek' ? (
+        <View style={styles.smallPeek}>
+          <LinearGradient colors={[pageColour, sheet]} style={StyleSheet.absoluteFill} />
+        </View>
+      ) : null}
+      {look === 'story' ? lines : null}
+    </View>
+  );
+}
+
+/** The styles the picked font shows on, for the note when it doesn't. */
+const BRAND_FONT_STYLE_NAMES = (() => {
+  // Custom isn't in PAGE_STYLES (it has no fixed design) but draws the name in this font too.
+  const names = [...PAGE_STYLES.filter(heroUsesBrandFont).map(style => style.name), 'Custom'];
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+})();
+
 const styles = StyleSheet.create({
+  // Business Name Font on a style that letters the name itself.
+  fontOff: { opacity: 0.4 },
   bg:      { flex: 1 },
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll:  { paddingHorizontal: 20, paddingBottom: 48 },
+  scroll:  { paddingHorizontal: 20, paddingBottom: 24 },
 
   backBtn:   { marginTop: 12, marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
@@ -411,11 +1117,29 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 18,
     overflow: 'hidden',
-    marginBottom: 28,
+    marginBottom: 16,
     justifyContent: 'flex-end',
   },
   previewBg: {
     ...StyleSheet.absoluteFill,
+  },
+  previewButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  previewButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    color: '#1F1A18',
   },
   previewContent: {
     padding: 18,
@@ -437,6 +1161,8 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: '#fff',
+  },
+  previewShadow: {
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -448,6 +1174,22 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     marginTop: 2,
   },
+
+  partSwitch: {
+    flexDirection: 'row',
+    padding: 4,
+    gap: 4,
+    borderRadius: 14,
+    marginBottom: 20,
+  },
+  partOption: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
 
   section: {
     borderRadius: 18,
@@ -473,6 +1215,79 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 
+  finishRow: { flexDirection: 'row', gap: 10 },
+  finishRowCovered: { opacity: 0.45 },
+  finishOption: { flex: 1, alignItems: 'center', gap: 6 },
+  finishSwatch: {
+    width: '100%',
+    aspectRatio: 0.8,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  finishSwatchOn: { borderWidth: 2.5 },
+  finishLocked: { opacity: 0.55 },
+  finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  policyLookGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  policyLookOption: { width: '31%', flexGrow: 1 },
+  // The small choices: the profile as grey lines, with circles, thumbnails or a button.
+  smallPreview: { flex: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 6 },
+  smallLine: { height: 4, borderRadius: 2, width: '85%' },
+  smallLineShort: { width: '55%' },
+  smallRings: { flexDirection: 'row', gap: 5, marginBottom: 4 },
+  smallRing: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
+  smallThumbs: { flexDirection: 'row', gap: 5, marginTop: 4 },
+  smallThumb: { width: 16, height: 22, borderRadius: 2 },
+  smallButton: { height: 14, borderRadius: 4, borderWidth: 1, marginTop: 4, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 3 },
+  smallButtonDoc: { width: 5, height: 7, borderRadius: 1 },
+  smallFrame: { alignSelf: 'center', padding: 3, marginTop: 2, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOpacity: 0.15, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  smallFramePage: { width: 34, height: 40 },
+  smallSwipeRow: { flexDirection: 'row', gap: 4, marginTop: 2, overflow: 'hidden' },
+  smallSwipePage: { width: '78%', height: 40, borderRadius: 2 },
+  smallSwipeNext: { opacity: 0.5 },
+  smallDots: { flexDirection: 'row', gap: 3, alignSelf: 'center' },
+  smallDot: { width: 4, height: 4, borderRadius: 2 },
+  smallFan: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  smallFanCard: { position: 'absolute', width: 26, height: 36, borderRadius: 2 },
+  smallPeek: { height: 40, borderRadius: 2, overflow: 'hidden', marginTop: 2 },
+  policyLookPreview: { height: 116, borderRadius: 14, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
+  policyLookFade: { height: 18 },
+  policyLookWave: { height: 12, marginTop: 6, borderTopLeftRadius: 60, borderTopRightRadius: 14 },
+  policyLookWaveBottom: { marginTop: 0, marginBottom: 6, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 14, borderBottomRightRadius: 60 },
+  policyLookPage: { height: 54, paddingHorizontal: 14, justifyContent: 'center', gap: 6 },
+  policyLookLine: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.75)', width: '80%', alignSelf: 'center' },
+  policyLookLineShort: { width: '55%' },
+  policyLookDescription: { fontSize: 11, lineHeight: 14, marginTop: 2 },
+  finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+
+  // Card Shape previews: a mini category-pill row over a mini service card.
+  shapePreview: {
+    width: '100%',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 10,
+  },
+  shapePillRow: { flexDirection: 'row', gap: 6 },
+  shapePill: { width: 44, height: 16, borderRadius: 8 },
+  shapePillIdle: { backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.12)' },
+  shapeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  shapeSquare: { borderRadius: 0 },
+  // The service photo stays a circle in both shapes, as on the profile.
+  shapeThumb: { width: 22, height: 22, borderRadius: 11, opacity: 0.7 },
+  shapeLines: { flex: 1, gap: 4 },
+  shapeLineLong: { height: 5, borderRadius: 2.5, backgroundColor: 'rgba(0,0,0,0.18)', width: '85%' },
+  shapeLineShort: { height: 5, borderRadius: 2.5, backgroundColor: 'rgba(0,0,0,0.1)', width: '50%' },
+
   imageRow:    { flexDirection: 'row', alignItems: 'center', gap: 14 },
   imageThumb:  { width: 80, height: 80, borderRadius: 12 },
   imagePlaceholder: {
@@ -496,13 +1311,17 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
+  saveBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   saveBtn: {
     minHeight: 52,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 12,
   },
   saveBtnText: {
     fontFamily: 'BakbakOne-Regular',
@@ -510,4 +1329,143 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.5,
   },
+});
+
+/** The full preview's frame: the preview itself and a close button over the hero. */
+function ProfilePreviewScreen({
+  children,
+  onClose,
+  pageStyle,
+  onPickStyle,
+  isLocked,
+  onLockedPress,
+  accent,
+  renderBar,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  /** Replaces the page styles along the bottom (Custom's Tap Your Page panel). */
+  renderBar?: ((bottomInset: number) => React.ReactNode) | undefined;
+  pageStyle: PageStyleKey;
+  onPickStyle: (key: PageStyleKey) => void;
+  isLocked: (key: PageStyleKey) => boolean;
+  onLockedPress: () => void;
+  accent: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
+  const { width: screenWidth } = useWindowDimensions();
+  // The chips row opens on the style they picked, centred, rather than at
+  // Classic (owner, 2026-11-17), and a chip tapped later slides to the middle.
+  const chipsRef = useRef<ScrollViewInstance>(null);
+  const chipFrames = useRef(new Map<PageStyleKey, { x: number; width: number }>());
+  const openedOnPick = useRef(false);
+  const centreChip = useCallback((key: PageStyleKey, animated: boolean) => {
+    const frame = chipFrames.current.get(key);
+    if (!frame) return;
+    chipsRef.current?.scrollTo({ x: Math.max(0, frame.x + frame.width / 2 - screenWidth / 2), animated });
+  }, [screenWidth]);
+  useEffect(() => {
+    if (openedOnPick.current) centreChip(pageStyle, true);
+  }, [pageStyle, centreChip]);
+  return (
+    <View style={previewStyles.root}>
+      {children}
+      <TouchableOpacity
+        style={[previewStyles.close, { top: insets.top + 10 }]}
+        onPress={onClose}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Close the preview"
+      >
+        <Ionicons name="close" size={22} color="#1F1A18" />
+      </TouchableOpacity>
+      <View style={[previewStyles.badge, { top: insets.top + 14 }]} pointerEvents="none">
+        <Text style={previewStyles.badgeText}>PREVIEW</Text>
+      </View>
+      {/* The page styles along the bottom: a tap swaps the style in place.
+          Picking one here is the same as picking it in Page Style; nothing
+          saves until Save. */}
+      {renderBar ? renderBar(insets.bottom) : (
+      <View style={[previewStyles.bar, { paddingBottom: insets.bottom + 12 }]}>
+        <ScrollView ref={chipsRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={previewStyles.chips}>
+          {PAGE_STYLES.map(style => {
+            const selected = style.key === pageStyle;
+            const locked = isLocked(style.key);
+            return (
+              <TouchableOpacity
+                key={style.key}
+                onLayout={event => {
+                  const { x, width } = event.nativeEvent.layout;
+                  chipFrames.current.set(style.key, { x, width });
+                  // Jump straight to their pick the first time it's laid out.
+                  if (selected && !openedOnPick.current) {
+                    openedOnPick.current = true;
+                    centreChip(style.key, false);
+                  }
+                }}
+                style={[previewStyles.chip, selected && { backgroundColor: accent, borderColor: accent }]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  if (locked) onLockedPress();
+                  else onPickStyle(style.key);
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${style.name}${locked ? ', locked' : ''}`}
+              >
+                {locked ? <Ionicons name="lock-closed" size={11} color="#FFFFFF" /> : null}
+                <Text style={[previewStyles.chipText, selected && { color: onAccent }]}>{style.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+      )}
+    </View>
+  );
+}
+
+const previewStyles = StyleSheet.create({
+  root: { flex: 1 },
+  close: {
+    position: 'absolute',
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(20,16,14,0.6)',
+  },
+  badgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.2, color: '#FFFFFF' },
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    backgroundColor: 'rgba(20,16,14,0.78)',
+  },
+  chips: { gap: 8, paddingHorizontal: 16 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
+  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: '#FFFFFF' },
 });

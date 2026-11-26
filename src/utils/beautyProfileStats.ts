@@ -80,10 +80,10 @@ const CATEGORY_FIELDS: Record<CategoryKey, readonly (keyof BeautyData)[]> = {
   health:          ['allergies', 'medicalNotes'],
   skin:            ['skinType', 'skinTone', 'skinConcerns', 'sensitiveAreas'],
   hair:            ['hairType', 'scalpCondition', 'treatmentHistory', 'hairGoals'],
-  nails:           ['nailLength', 'nailShape'],
+  nails:           ['nailCondition', 'nailService', 'nailLength', 'nailShape', 'nailStyle', 'nailColours'],
   lashesBrows:     ['lashStyle', 'lashStatus', 'browStyle', 'browCondition'],
   makeup:          ['makeupCoverage', 'makeupFinish', 'makeupEyes', 'makeupLips'],
-  general:         ['styleVibe', 'serviceInterests'],
+  general:         ['styleVibe', 'styleAesthetics', 'styleOccasions', 'styleRoutine', 'serviceInterests'],
   personalisation: ['gender'],
   consent:         [],
 };

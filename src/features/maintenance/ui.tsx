@@ -5,6 +5,7 @@
 // the app's existing semantic colours below — no new palette.
 
 import React from 'react';
+import { useTranslation } from '../../i18n';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -23,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { AppTheme } from '../../constants/theme';
-import { useTranslation } from '../../i18n';
+import { readableSheet } from '../../constants/readableWidth';
 
 export const FONT_DISPLAY = 'BakbakOne-Regular';
 export const FONT_BODY = 'Jura-VariableFont_wght';
@@ -57,6 +58,11 @@ export const hapticError = () => { Haptics.notificationAsync(Haptics.Notificatio
 
 export function SectionLabel({ text, P }: { text: string; P: AppTheme }) {
   return <Text style={[ui.label, { color: P.sub }]}>{text}</Text>;
+}
+
+/** A section heading with how many are in it: "NEEDS ATTENTION · 2". */
+export function countedLabel(label: string, count: number): string {
+  return `${label.toUpperCase()} · ${count}`;
 }
 
 export type PillTone = 'accent' | 'bad' | 'warn' | 'ok' | 'mute';
@@ -160,7 +166,7 @@ export function WeekStepper({
         disabled={value <= min}
         activeOpacity={0.5}
         accessibilityRole="button"
-        accessibilityLabel={t('clientAccount.maintenance.fewer')}
+        accessibilityLabel={t('maintenance.a11y.fewer')}
       >
         <Ionicons name="remove" size={16} color={P.accentText} />
       </TouchableOpacity>
@@ -171,7 +177,7 @@ export function WeekStepper({
         disabled={value >= max}
         activeOpacity={0.5}
         accessibilityRole="button"
-        accessibilityLabel={t('clientAccount.maintenance.more')}
+        accessibilityLabel={t('maintenance.a11y.more')}
       >
         <Ionicons name="add" size={16} color={P.accentText} />
       </TouchableOpacity>
@@ -258,7 +264,7 @@ export const ui = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   sheetWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, maxHeight: '88%', paddingTop: 10 },
+  sheet: { ...readableSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, maxHeight: '88%', paddingTop: 10 },
   grab: { width: 40, height: 4, borderRadius: 4, alignSelf: 'center', marginBottom: 6 },
   sheetBody: { paddingHorizontal: 16, paddingTop: 6, gap: 14 },
   sheetTitle: { fontFamily: FONT_DISPLAY, fontSize: 20, letterSpacing: 1 },

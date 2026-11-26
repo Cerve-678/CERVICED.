@@ -1,11 +1,15 @@
-import { checkFeeEligibility, type FeeKind } from '../_shared/bookingFeePlan.ts';
+import { checkFeeEligibility, feeKindLabel, isVisitFee, sameVisit, VISIT_ALREADY_CHARGED, type FeeKind } from '../_shared/bookingFeePlan.ts';
+import { isLateClientCancel, readCancelPenalty } from '../_shared/cancellationSettlement.ts';
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
 import { closeFeeRequest, isRetryableDecline, recordFeePaid, requestClientPayment, termsAllowRetries } from '../_shared/feePayRequest.ts';
 
-// Late-arrival and no-show fees (auto-memory late-and-no-show-fees-decision).
+// Late-arrival and no-show fees (auto-memory late-and-no-show-fees-decision),
+// and the late cancellation fee: the rest up to half the price on a
+// deposit-only booking the client cancelled late under a "Half the price"
+// policy (auto-memory late-cancel-half-top-up).
 //
 //   action 'charge' — the owning provider charges the fee the client agreed to
 //     at checkout, to the card saved then, off-session. Rules live in
@@ -73,7 +77,8 @@ Deno.serve(async (req: Request) => {
     if (providerError) throw providerError;
     if (!provider) return json({ error: 'Only providers can manage fees.' }, 403);
 
-    if (body?.action === 'charge' && typeof body.bookingId === 'string' && (body.kind === 'late' || body.kind === 'no_show')) {
+    if (body?.action === 'charge' && typeof body.bookingId === 'string'
+        && (body.kind === 'late' || body.kind === 'no_show' || body.kind === 'late_cancel')) {
       return await charge(provider, body.bookingId, body.kind);
     }
     if (body?.action === 'refund' && typeof body.chargeId === 'string') {
@@ -89,11 +94,38 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+/** The other bookings in this booking's visit: same checkout, provider, client
+ *  and day (bookingFeePlan sameVisit). */
+async function visitSiblingIds(
+  checkoutBatchId: string,
+  booking: { id: string; provider_id: string; user_id: string; booking_date: string },
+): Promise<string[]> {
+  const { data: items, error } = await admin.from('checkout_batch_items')
+    .select('booking_id').eq('checkout_batch_id', checkoutBatchId).neq('booking_id', booking.id);
+  if (error) throw error;
+  const ids = (items ?? []).map(item => item.booking_id as string);
+  if (ids.length === 0) return [];
+  const { data: rows, error: rowsError } = await admin.from('bookings')
+    .select('id, provider_id, user_id, booking_date').in('id', ids);
+  if (rowsError) throw rowsError;
+  return (rows ?? []).filter(row => sameVisit(row, booking)).map(row => row.id as string);
+}
+
+/** Late or no-show fees on these bookings that aren't failed: charged, going
+ *  through, waiting on the client, or refunded. A row stuck at 'processing'
+ *  counts too, since it may have reached Stripe. */
+async function liveVisitFees(bookingIds: string[]): Promise<{ id: string }[]> {
+  const { data, error } = await admin.from('booking_fee_charges')
+    .select('id').in('booking_id', bookingIds).in('kind', ['late', 'no_show']).neq('status', 'failed');
+  if (error) throw error;
+  return (data ?? []) as { id: string }[];
+}
+
 interface ProviderRow { id: string; stripe_account_id: string | null; stripe_payouts_enabled: boolean | null }
 
 async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): Promise<Response> {
   const { data: booking, error: bookingError } = await admin.from('bookings')
-    .select('id, provider_id, user_id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, payment_intent_id, provider_name_snapshot, service_name_snapshot')
+    .select('id, provider_id, user_id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, cancelled_by, cancelled_at, cancel_notice_hours, late_reschedule_from, confirmed_at, payment_status, policy_snapshot, payment_intent_id, provider_name_snapshot, service_name_snapshot')
     .eq('id', bookingId).maybeSingle();
   if (bookingError) throw bookingError;
   if (!booking || booking.provider_id !== provider.id) return json({ error: 'Booking not found' }, 404);
@@ -110,22 +142,74 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   if (batchError) throw batchError;
   if (existingError) throw existingError;
 
+  // The booking must be one that checkout actually made. A provider can insert
+  // booking rows for their own business, so a row copying a real client's
+  // payment id would otherwise find that client's agreement and be chargeable
+  // once per copy. checkout_batch_items is written only by prepare_checkout.
+  let bookingInBatch = false;
+  if (batch) {
+    const { data: item, error: itemError } = await admin.from('checkout_batch_items')
+      .select('booking_id').eq('checkout_batch_id', batch.id).eq('booking_id', booking.id).maybeSingle();
+    if (itemError) throw itemError;
+    bookingInBatch = !!item;
+  }
+
+  // Late and no-show fees are once per visit: the other services this client
+  // booked back to back with this provider in the same checkout share one.
+  const visitIds = isVisitFee(kind) && batch && bookingInBatch ? await visitSiblingIds(batch.id, booking) : [];
+  const visitAlreadyCharged = visitIds.length > 0 && (await liveVisitFees(visitIds)).length > 0;
+
   // The client's recorded agreement for this checkout, and that it covers
   // this provider. The amount charged is the booking's frozen fee, which
   // accept_checkout_fees copied into the record from the same held rows.
-  const { data: consent, error: consentError } = batch
+  const { data: consent, error: consentError } = batch && bookingInBatch
     ? await admin.from('fee_consent_records').select('id, user_id, fees, terms_version').eq('checkout_batch_id', batch.id).maybeSingle()
     : { data: null, error: null };
   if (consentError) throw consentError;
   // The agreed amount for this provider and fee kind; a charge above it (or
   // with no agreement covering this provider) is refused.
-  type ConsentedFee = { provider_id?: string; late_fee_pence?: number | null; no_show_fee_pence?: number | null };
+  type ConsentedFee = {
+    provider_id?: string;
+    late_fee_pence?: number | null;
+    no_show_fee_pence?: number | null;
+    late_cancel_fee_pence?: number | null;
+  };
   const agreed = consent && consent.user_id === booking.user_id && Array.isArray(consent.fees)
     ? (consent.fees as ConsentedFee[]).find(fee => fee.provider_id === booking.provider_id)
     : undefined;
-  const agreedPence = agreed ? (kind === 'late' ? agreed.late_fee_pence : agreed.no_show_fee_pence) ?? 0 : 0;
-  const bookingPence = (kind === 'late' ? booking.late_fee_pence : booking.no_show_fee_pence) ?? 0;
-  const consentCoversProvider = !!agreed && agreedPence > 0 && bookingPence <= agreedPence;
+  const agreedPence = agreed
+    ? (kind === 'late' ? agreed.late_fee_pence : kind === 'no_show' ? agreed.no_show_fee_pence : agreed.late_cancel_fee_pence) ?? 0
+    : 0;
+  const bookingPence = (kind === 'late' ? booking.late_fee_pence
+    : kind === 'no_show' ? booking.no_show_fee_pence : booking.late_cancel_fee_pence) ?? 0;
+  // A late cancellation fee also needs wording that showed its own tick box
+  // (accept_checkout_fees refuses older wording for it, so this is a backstop).
+  let wordingCoversKind = true;
+  if (kind === 'late_cancel' && consent) {
+    const { data: terms, error: termsError } = await admin.from('fee_terms_versions')
+      .select('late_cancel_line').eq('version', consent.terms_version).maybeSingle();
+    if (termsError) throw termsError;
+    wordingCoversKind = !!terms?.late_cancel_line;
+  }
+  const consentCoversProvider = !!agreed && agreedPence > 0 && bookingPence <= agreedPence && wordingCoversKind;
+
+  // Only the client's own late cancel, after paying just a deposit, under the
+  // half-price policy frozen on the booking — the same test the refund used.
+  const noticeHours = Number(booking.cancel_notice_hours ?? 0);
+  const snapshot = (booking.policy_snapshot ?? null) as Record<string, unknown> | null;
+  const lateClientCancel = kind === 'late_cancel'
+    && booking.cancelled_by === 'client' && !!booking.cancelled_at
+    // Only a booking the provider had accepted: a withdrawn request is never
+    // charged (the client's cancel sheet warns only on accepted bookings).
+    && !!booking.confirmed_at
+    && booking.payment_status === 'deposit_paid'
+    && readCancelPenalty(snapshot?.['cancelPenalty']) === 'half'
+    && isLateClientCancel({
+      noticeHours,
+      appointmentMs: londonWallTimeToUtcMs(booking.booking_date, booking.booking_time),
+      cancelledMs: Date.parse(booking.cancelled_at),
+      movedLate: noticeHours > 0 && !!booking.late_reschedule_from,
+    });
 
   // The card saved at checkout, and the Customer it was saved to, are on the
   // original payment.
@@ -141,9 +225,12 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     endMs: londonWallTimeToUtcMs(booking.booking_date, booking.end_time ?? booking.booking_time),
     lateFeePence: booking.late_fee_pence,
     noShowFeePence: booking.no_show_fee_pence,
+    lateCancelFeePence: booking.late_cancel_fee_pence,
+    lateClientCancel,
     paidInApp: !!booking.payment_intent_id && !!customerId,
     clientConsented: consentCoversProvider,
     alreadyCharged: (existing?.length ?? 0) > 0,
+    visitAlreadyCharged,
     nowMs: Date.now(),
   });
   if (!eligibility.ok) return json({ error: eligibility.error }, 409);
@@ -161,6 +248,19 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
     if (insertError.code === '23505') return json({ error: 'A fee has already been charged for this booking.' }, 409);
     throw insertError;
   }
+  // The unique index is per booking, so two taps on two services of the same
+  // visit could both get here. Fail closed: with any other fee row in the
+  // visit now visible, this one steps aside before Stripe is called. Whichever
+  // commits second always sees the first, so at most one goes ahead (both may
+  // step aside; the provider taps again). Ordering by created_at isn't safe:
+  // it's the transaction's start, not when the row became visible.
+  if (visitIds.length > 0) {
+    if ((await liveVisitFees(visitIds)).length > 0) {
+      const { error: deleteError } = await admin.from('booking_fee_charges').delete().eq('id', row.id).eq('status', 'processing');
+      if (deleteError) throw deleteError;
+      return json({ error: VISIT_ALREADY_CHARGED }, 409);
+    }
+  }
 
   let intent: Stripe.PaymentIntent;
   try {
@@ -172,7 +272,7 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
       off_session: true,
       confirm: true,
       payment_method_types: ['card'],
-      description: `${kind === 'late' ? 'Late arrival' : 'No-show'} fee — ${booking.provider_name_snapshot ?? 'CERVICED provider'}`,
+      description: `${capitalise(feeKindLabel(kind))} — ${booking.provider_name_snapshot ?? 'CERVICED provider'}`,
       metadata: { fee_charge_id: row.id, booking_id: booking.id, kind, provider_id: provider.id },
       expand: ['latest_charge.balance_transaction'],
     }, { idempotencyKey: `booking_fee_${row.id}` });
@@ -209,8 +309,8 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   const { error: notifyError } = await admin.from('notifications').insert({
     user_id: booking.user_id,
     type: 'fee_charged',
-    title: `${amount} ${kind === 'late' ? 'late arrival' : 'no-show'} fee charged`,
-    message: `${providerName} charged the ${kind === 'late' ? 'late arrival' : 'no-show'} fee you agreed to when booking${booking.service_name_snapshot ? ` ${booking.service_name_snapshot}` : ''}. If you think it's wrong, you can dispute it within 7 days.`,
+    title: `${amount} ${feeKindLabel(kind)} charged`,
+    message: `${providerName} charged the ${feeKindLabel(kind)} you agreed to when booking${booking.service_name_snapshot ? ` ${booking.service_name_snapshot}` : ''}. If you think it's wrong, you can dispute it within 7 days.`,
     priority: 'high',
     is_actionable: true,
     booking_id: booking.id,
@@ -225,12 +325,19 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
 
 async function refund(provider: ProviderRow, chargeId: string): Promise<Response> {
   const { data: fee, error } = await admin.from('booking_fee_charges')
-    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, status, payment_intent_id, payout_status, stripe_transfer_id, disputed_at, dispute_resolved_at')
+    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, status, payment_intent_id, payout_status, payout_pence, deducted_pence, release_claimed_at, stripe_transfer_id, disputed_at, dispute_resolved_at')
     .eq('id', chargeId).maybeSingle();
   if (error) throw error;
   if (!fee || fee.provider_id !== provider.id) return json({ error: 'Fee not found' }, 404);
   if (fee.status === 'refunded') return json({ status: 'refunded' }, 200);
   if (fee.status !== 'succeeded' || !fee.payment_intent_id) return json({ error: 'Only a charged fee can be refunded.' }, 409);
+  // release-payouts is sending this fee right now. Cancelling it under the run
+  // would leave a transfer nothing takes back; a minute later it's
+  // 'transferred' and the refund reverses it instead.
+  const payoutInFlight = { error: 'This fee is being paid out to you right now. Try the refund again in a minute.' };
+  if ((fee.payout_status === 'held' || fee.payout_status === 'pending') && fee.release_claimed_at) {
+    return json(payoutInFlight, 409);
+  }
 
   const stripeRefund = await stripe.refunds.create(
     // fee_booking_id, not booking_id: reconcileRefund treats booking_id as a
@@ -242,11 +349,23 @@ async function refund(provider: ProviderRow, chargeId: string): Promise<Response
   // Take the provider's share back: cancel a held payout, or reverse a paid one.
   let payoutStatus = fee.payout_status;
   if (fee.payout_status === 'held' || fee.payout_status === 'pending') {
+    // Only while no release run has claimed it. If one claimed it since the
+    // check above, refuse: the Stripe refund is idempotent, so the retry
+    // reuses it and then takes the money back from the transfer.
+    const { data: cancelled, error: cancelErr } = await admin.from('booking_fee_charges')
+      .update({ payout_status: 'cancelled' })
+      .eq('id', fee.id).eq('payout_status', fee.payout_status).is('release_claimed_at', null)
+      .select('id');
+    if (cancelErr) throw cancelErr;
+    if (!cancelled?.length) return json(payoutInFlight, 409);
     payoutStatus = 'cancelled';
-  } else if (fee.payout_status === 'transferred' && fee.stripe_transfer_id) {
+  } else if (fee.payout_status === 'transferred' && (fee.stripe_transfer_id || fee.deducted_pence > 0)) {
     await takeBackFromProvider(admin, stripe, {
       providerId: fee.provider_id, bookingId: fee.booking_id, source: 'fee_refund',
       transferId: fee.stripe_transfer_id, key: `booking_fee_reversal_${fee.id}`,
+      // Part of this fee paid off an earlier debt instead of being sent, so
+      // the whole payout comes back, not just what the transfer carried.
+      wantPence: fee.deducted_pence > 0 ? fee.payout_pence : undefined,
       metadata: { fee_charge_id: fee.id },
     });
     payoutStatus = 'reversed';
@@ -265,7 +384,7 @@ async function refund(provider: ProviderRow, chargeId: string): Promise<Response
     user_id: fee.client_user_id,
     type: 'fee_dispute_resolved',
     title: `${amount} fee refunded`,
-    message: `${booking?.provider_name_snapshot?.trim() || 'Your provider'} refunded the ${fee.kind === 'late' ? 'late arrival' : 'no-show'} fee. Your bank may take a few days to show it.`,
+    message: `${booking?.provider_name_snapshot?.trim() || 'Your provider'} refunded the ${feeKindLabel(fee.kind as FeeKind)}. Your bank may take a few days to show it.`,
     priority: 'medium',
     is_actionable: false,
     booking_id: fee.booking_id,
@@ -352,6 +471,10 @@ async function clientPayment(userId: string, chargeId: string, action: 'pay' | '
     ephemeralKeySecret: ephemeralKey.secret,
     livemode: intent.livemode,
   }, 200);
+}
+
+function capitalise(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function json(payload: unknown, status: number): Response {

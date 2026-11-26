@@ -10,6 +10,7 @@ tags: [screen, provider]
 - [[ProviderConversationScreen\|ProviderConversation]]
 - [[NotificationsScreen\|Notifications]]
 - [[InfoRegScreen\|EditProfile]]
+- [[AdminCreateAccountScreen\|AccountHolderDetails]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map

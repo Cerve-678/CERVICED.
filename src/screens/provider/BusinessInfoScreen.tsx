@@ -26,7 +26,8 @@
  * it's a setting, not an address.
  */
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,7 +101,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [instagram, setInstagram]         = useState('');
   const [website, setWebsite]             = useState('');
   const [externalBookingUrl, setExternalBookingUrl] = useState('');
-  const [yearsExperience, setYearsExperience] = useState('');
   // Link-only only. A link-only pro has no About You or Payments screen, so
   // Business Info is where these two live for them. Same storage as those
   // screens: accessibility_notes is '|'-joined ACCESSIBILITY_OPTS values,
@@ -156,7 +156,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setInstagram(providerData.instagram ?? '');
           setWebsite(providerData.website ?? '');
           setExternalBookingUrl(providerData.external_booking_url ?? '');
-          setYearsExperience(providerData.years_experience != null ? String(providerData.years_experience) : '');
           setAccessibility(providerData.accessibility_notes?.split('|').filter(Boolean) ?? []);
           setPaymentMethods(providerData.preferred_payment_methods ?? []);
         } else {
@@ -175,7 +174,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
             setInstagram(signup.instagram ?? '');
             setWebsite(signup.website ?? '');
             setExternalBookingUrl(signup.external_booking_url ?? '');
-            setYearsExperience(signup.years_experience != null ? String(signup.years_experience) : '');
             setAccessibility(signup.accessibility_notes?.split('|').filter(Boolean) ?? []);
             setPaymentMethods(signup.preferred_payment_methods ?? []);
             setBusinessType((signup.business_type as BusinessType | null) ?? null);
@@ -330,13 +328,11 @@ export default function BusinessInfoScreen({ navigation }: any) {
           instagram: instagram.trim() || null,
           website: website.trim() || null,
           ...(isLinkOnly ? linkOnlyFields : {}),
-          years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
         }));
       } else if (userId) {
         // No profile yet: stage the answers where the first Edit Profile save
         // picks them up, rather than closing as if they'd been saved.
         ops.push(updateMyStagedProviderAnswers(userId, {
-          years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
           instagram: instagram.trim() || null,
           website: website.trim() || null,
           ...(isLinkOnly ? linkOnlyFields : {}),
@@ -376,7 +372,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
@@ -400,13 +396,14 @@ export default function BusinessInfoScreen({ navigation }: any) {
 
             {/* Identity — who the business is, not how to reach it. Kept in its
                 own card, split out from the contact fields below, so the name
-                and experience read as the headline facts rather than one more
-                row in a list of handles and emails. */}
-            <Card title="Name & Experience" sub="Your business name and experience, shown on your public profile.">
+                reads as the headline fact rather than one more row in a list of
+                handles and emails. */}
+            <Card title="Name" sub="Your business name, shown on your public profile.">
               {/* The one place a provider's public business name can be
                   changed. Locked for 14 days after each change — the note
                   says when it reopens rather than just refusing. */}
               <Field
+                noSuggestions
                 label="Business Name"
                 value={businessName}
                 onChange={setBusinessName}
@@ -416,14 +413,13 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   ? `Shown on your profile. You changed it recently — you can change it again on ${formatLongDate(nameUnlocksAt)}.`
                   : 'Shown on your profile. Once you change it, you can’t change it again for 14 days.'}
               />
-              <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
             </Card>
 
             {/* Contact & links — the handles and addresses clients and Cerviced
                 reach the business through. */}
             <Card title="Contact & Links" sub="Your links and email addresses — how clients and Cerviced reach you.">
-              <Field label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
-              <Field label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
+              <Field noSuggestions label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
+              <Field noSuggestions label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
               {/* Two emails, and the old labels had them backwards. `business_email`
                   on `users` is the account/business address — it is never rendered
                   on the public profile; it's what Cerviced writes to and what
@@ -564,6 +560,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             {isLinkOnly && (
               <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
                 <Field
+                  noSuggestions
                   label="Booking Link"
                   value={externalBookingUrl}
                   onChange={setExternalBookingUrl}
@@ -622,7 +619,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[s.cardTitle, { color: C.text }]}>Contact Preferences</Text>
-                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>How clients can best reach you — manage in Communications</Text>
+                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>Contact details for booked clients — set them in Communications</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </TouchableOpacity>

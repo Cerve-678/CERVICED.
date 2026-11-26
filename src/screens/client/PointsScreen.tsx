@@ -2,12 +2,12 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -22,38 +22,32 @@ import {
 } from '../../services/databaseService';
 import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { tr } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
-// `points` is the number shown in the "+{count} pts" chip; '' hides it.
-const EARN_WAYS: { icon: string; labelKey: TranslationKey; points: string; descKey: TranslationKey; live: boolean }[] = [
-  { icon: 'event-available', labelKey: 'clientAccount.points.earn.booking', points: '2', descKey: 'clientAccount.points.earn.bookingDesc', live: true },
-  { icon: 'star', labelKey: 'clientAccount.points.earn.review', points: '2', descKey: 'clientAccount.points.earn.reviewDesc', live: true },
-  { icon: 'auto-awesome', labelKey: 'clientAccount.points.earn.firstReview', points: '50', descKey: 'clientAccount.points.earn.firstReviewDesc', live: true },
-  { icon: 'emoji-events', labelKey: 'clientAccount.points.earn.firstBooking', points: '100', descKey: 'clientAccount.points.earn.firstBookingDesc', live: true },
-  { icon: 'cake', labelKey: 'clientAccount.points.earn.birthday', points: '50', descKey: 'clientAccount.points.earn.birthdayDesc', live: true },
-  { icon: 'person-add', labelKey: 'clientAccount.points.earn.refer', points: '', descKey: 'clientAccount.points.comingSoon', live: false },
+const EARN_WAYS = [
+  { icon: 'event-available', get label() { return tr('clientAccount.points.earn.booking'); }, points: '+2 pts', desc: 'Every completed appointment' },
+  { icon: 'star', get label() { return tr('clientAccount.points.earn.review'); }, points: '+2 pts', desc: 'After each booking' },
+  { icon: 'auto-awesome', get label() { return tr('clientAccount.points.earn.firstReview'); }, points: '+50 pts', desc: 'One-time bonus for your first review' },
+  { icon: 'emoji-events', get label() { return tr('clientAccount.points.earn.firstBooking'); }, points: '+100 pts', desc: 'One-time welcome bonus' },
+  { icon: 'cake', get label() { return tr('clientAccount.points.earn.birthday'); }, points: '+50 pts', desc: 'On your birthday' },
 ];
 
-const REDEEM_WAYS: { icon: string; labelKey: TranslationKey; points: string }[] = [
-  { icon: 'local-offer', labelKey: 'clientAccount.points.redeem.fiveOff', points: '500' },
-  { icon: 'card-giftcard', labelKey: 'clientAccount.points.redeem.gift', points: '300' },
-  { icon: 'loyalty', labelKey: 'clientAccount.points.redeem.trial', points: '1,000' },
-];
-
-const REASON_LABEL: Record<ClientPointsReason, TranslationKey> = {
-  booking_completed: 'clientAccount.points.reason.bookingCompleted',
-  review_left: 'clientAccount.points.reason.reviewLeft',
-  first_review: 'clientAccount.points.reason.firstReview',
-  first_booking: 'clientAccount.points.reason.firstBooking',
-  birthday_bonus: 'clientAccount.points.reason.birthday',
-  profile_completed: 'clientAccount.points.reason.profileCompleted',
-  returning_client: 'clientAccount.points.reason.returningClient',
+const REASON_LABEL: Record<ClientPointsReason, string> = {
+  booking_completed: 'Completed a booking',
+  review_left: 'Left a review',
+  first_review: 'First review bonus',
+  first_booking: 'First booking bonus',
+  birthday_bonus: 'Birthday bonus',
+  profile_completed: 'Completed your profile',
+  returning_client: 'Booked with them again',
 };
 
 export default function PointsScreen({ navigation }: any) {
+  // Re-render when the language changes (the text below uses tr()).
+  useTranslation();
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -89,7 +83,7 @@ export default function PointsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
@@ -102,9 +96,9 @@ export default function PointsScreen({ navigation }: any) {
           <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: P.text }]}>{t('clientAccount.points.title')}</Text>
+        <Text style={[styles.title, { color: P.text }]}>{tr('clientAccount.points.title')}</Text>
         <Text style={[styles.subtitle, { color: P.sub }]}>
-          {t('clientAccount.points.subtitle')}
+          {tr('clientAccount.points.subtitle')}
         </Text>
 
         {/* Balance card */}
@@ -112,72 +106,60 @@ export default function PointsScreen({ navigation }: any) {
           backgroundColor: P.accentDim,
           borderColor: P.border,
         }]}>
-          <Text style={[styles.balanceLabel, { color: P.accentText }]}>{t('clientAccount.points.balance').toUpperCase()}</Text>
+          <Text style={[styles.balanceLabel, { color: P.accentText }]}>YOUR BALANCE</Text>
           {loading ? (
             <ActivityIndicator color={P.accentText} style={{ marginVertical: 14 }} />
           ) : (
             <Text style={[styles.balanceNum, { color: P.text }]}>{balance.toLocaleString()}</Text>
           )}
-          {!loading && <Text style={[styles.balancePts, { color: P.accentText }]}>{t('clientAccount.points.pointsUnit')}</Text>}
+          {!loading && <Text style={[styles.balancePts, { color: P.accentText }]}>{tr('clientAccount.points.pointsUnit')}</Text>}
           <Text style={[styles.balanceHint, { color: P.sub }]}>
             {loadError
-              ? t('clientAccount.points.balanceError')
+              ? tr('clientAccount.points.balanceError')
               : !loading && balance === 0
-                ? t('clientAccount.points.startEarning')
+                ? 'Make your first booking to start earning'
                 : ' '}
           </Text>
         </View>
 
         {/* How to earn */}
-        <Text style={[styles.section, { color: P.accentText }]}>{t('clientAccount.points.howToEarn').toUpperCase()}</Text>
+        <Text style={[styles.section, { color: P.accentText }]}>HOW TO EARN</Text>
         {EARN_WAYS.map(way => (
           <View
-            key={way.labelKey}
-            style={[styles.row, { backgroundColor: P.card, borderColor: P.border, opacity: way.live ? 1 : 0.55 }]}
+            key={way.label}
+            style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}
           >
             <View style={[styles.iconWrap, { backgroundColor: P.iconBg }]}>
               <Icon name={way.icon} size={20} color={P.accentText} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: P.text }]}>{t(way.labelKey)}</Text>
-              <Text style={[styles.rowDesc, { color: P.sub }]}>{t(way.descKey)}</Text>
+              <Text style={[styles.rowLabel, { color: P.text }]}>{way.label}</Text>
+              <Text style={[styles.rowDesc, { color: P.sub }]}>{way.desc}</Text>
             </View>
-            {way.live && <Text style={[styles.pts, { color: P.accentText }]}>{way.points ? t('clientAccount.points.plusPts', { count: way.points }) : ''}</Text>}
+            <Text style={[styles.pts, { color: P.accentText }]}>{way.points}</Text>
           </View>
         ))}
 
         {/* Recent activity */}
-        <Text style={[styles.section, { color: P.accentText, marginTop: 24 }]}>{t('clientAccount.points.recentActivity').toUpperCase()}</Text>
+        <Text style={[styles.section, { color: P.accentText, marginTop: 24 }]}>RECENT ACTIVITY</Text>
         {history.length === 0 ? (
           <Text style={[styles.rowDesc, { color: P.sub, marginBottom: 8 }]}>
-            {loadError ? t('clientAccount.points.activityError') : t('clientAccount.points.noActivity')}
+            {loadError ? tr('clientAccount.points.activityError') : tr('clientAccount.points.noActivity')}
           </Text>
         ) : (
           history.map(entry => (
             <View key={entry.id} style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.rowLabel, { color: P.text }]}>{t(REASON_LABEL[entry.reason])}</Text>
+                <Text style={[styles.rowLabel, { color: P.text }]}>{REASON_LABEL[entry.reason]}</Text>
                 <Text style={[styles.rowDesc, { color: P.sub }]}>{timeAgo(entry.created_at)}</Text>
               </View>
-              <Text style={[styles.pts, { color: P.accentText }]}>{t('clientAccount.points.plusPts', { count: entry.delta })}</Text>
+              <Text style={[styles.pts, { color: P.accentText }]}>+{entry.delta} pts</Text>
             </View>
           ))
         )}
 
-        {/* How to redeem */}
-        <Text style={[styles.section, { color: P.accentText, marginTop: 24 }]}>{t('clientAccount.points.redeemSoon').toUpperCase()}</Text>
-        {REDEEM_WAYS.map(way => (
-          <View key={way.labelKey} style={[styles.row, { backgroundColor: P.card, borderColor: P.border, opacity: 0.55 }]}>
-            <View style={[styles.iconWrap, { backgroundColor: P.iconBg }]}>
-              <Icon name={way.icon} size={20} color={P.accentText} />
-            </View>
-            <Text style={[styles.rowLabel, { color: P.text, flex: 1 }]}>{t(way.labelKey)}</Text>
-            <Text style={[styles.pts, { color: P.sub }]}>{t('clientAccount.points.pts', { count: way.points })}</Text>
-          </View>
-        ))}
-
         <Text style={[styles.note, { color: P.sub }]}>
-          {t('clientAccount.points.terms')}
+          Points never expire while your account is active.
         </Text>
       </ScrollView>
     </ThemedBackground>

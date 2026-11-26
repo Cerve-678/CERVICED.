@@ -13,11 +13,14 @@ import {
   Modal,
   Alert,
 } from "react-native";
+import type { ViewInstance } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { HomeStackParamList } from "../../navigation/types";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
+import { useStackHidesTabBar } from "../../navigation/tabBarVisibility";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
@@ -38,6 +41,10 @@ import {
 } from "../../services/databaseService";
 import { formatShortDate, formatTime12 } from "../../utils/dateUtils";
 import { logger } from "../../utils/logger";
+import { toUserMessageAllowingDbGuard } from "../../utils/userFacingError";
+import { useAppDialog } from "../../components/AppDialog";
+import { useChatSafety } from "../../features/safety/useChatSafety";
+import { readableSheet } from '../../constants/readableWidth';
 import { useTranslation, tr } from "../../i18n";
 
 type Props = NativeStackScreenProps<HomeStackParamList, "ProviderChat">;
@@ -55,6 +62,9 @@ interface Message {
 export default function ProviderChatScreen({ navigation, route }: Props) {
   const { providerDbId, providerName, promptMode = "conversation" } = route.params;
   const { palette: OP } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Opened from the Profile tab there is no tab bar to clear, only the home indicator.
+  const tabBarHidden = useStackHidesTabBar();
   const { user } = useAuth();
   const { t } = useTranslation();
 
@@ -66,6 +76,13 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const { showConfirm, showAlert, DialogHost } = useAppDialog();
+  const { blockedByMe, openChatMenu, confirmReportMessage, unblock } = useChatSafety({
+    conversationId,
+    otherName: providerName,
+    activeMode: "client",
+    dialogs: { showConfirm, showAlert },
+  });
   const userId = user?.id ?? null;
   const flatListRef = useRef<FlatList>(null);
 
@@ -103,6 +120,26 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       hideSub.remove();
     };
   }, []);
+
+  // Keyboard events report where the keyboard starts in WINDOW coordinates,
+  // but KeyboardAvoidingView only knows its own frame relative to its parent —
+  // and here that parent starts below the stack header (opaque in most tabs,
+  // transparent in the Cart tab). Without this offset the composer was lifted
+  // by the keyboard's height MINUS the header's, which left the message box
+  // under the keyboard. Measure where the area really sits rather than
+  // assuming a header height, so it holds in every stack that opens this.
+  const keyboardAreaRef = useRef<ViewInstance>(null);
+  const [keyboardAreaTop, setKeyboardAreaTop] = useState(0);
+  const measureKeyboardArea = useCallback(() => {
+    keyboardAreaRef.current?.measureInWindow((_x, y) => {
+      if (Number.isFinite(y)) setKeyboardAreaTop(Math.max(0, Math.round(y)));
+    });
+  }, []);
+  // onLayout can fire mid push-animation; measure again once it has settled.
+  useEffect(
+    () => navigation.addListener("transitionEnd", measureKeyboardArea),
+    [navigation, measureKeyboardArea],
+  );
 
   useEffect(() => {
     if (!providerDbId) return;
@@ -193,8 +230,18 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       title: providerName,
       headerShown: true,
       headerBackTitle: t('common.back'),
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={openChatMenu}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={tr('clientAccount.chat.reportBlockA11y', { name: providerName })}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={OP.text} />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, providerName, t]);
+  }, [navigation, providerName, openChatMenu, OP.text]);
 
   const postMessage = useCallback(
     async (text: string) => {
@@ -239,7 +286,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       logger.error('[ProviderChat] send message failed:', err);
       // Message never reached the provider — put the text back so it isn't lost
       setInputText(text);
-      Alert.alert(t('clientAccount.chat.messageNotSent'), t('clientAccount.chat.checkConnection'));
+      Alert.alert(t('clientAccount.chat.messageNotSent'), toUserMessageAllowingDbGuard(err, "Check your connection and try again.", "ProviderChatScreen.sendMessage"));
     }
     setSending(false);
   }, [inputText, conversationId, userId, sending, postMessage]);
@@ -384,8 +431,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       insertProviderNotification({
         provider_id: providerDbId,
         type: "new_message",
-        title: "Address received",
-        message: `A client sent their address for their ${selectedBooking.service_name_snapshot} appointment.`,
+        title: tr('clientAccount.chat.addressReceived'),
+        message: tr('clientAccount.chat.addressReceivedBody', { service: selectedBooking.service_name_snapshot }),
         priority: "medium",
         is_actionable: false,
         booking_id: selectedBooking.id,
@@ -417,7 +464,11 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             </Text>
           )}
           <View style={[styles.row, isUser ? styles.rowRight : styles.rowLeft]}>
-            <View
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={isUser}
+              onLongPress={() => confirmReportMessage(item.id)}
+              accessibilityHint={isUser ? undefined : tr('clientAccount.chat.reportHint')}
               style={[
                 styles.bubble,
                 isUser
@@ -436,12 +487,12 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               >
                 {item.content}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
       );
     },
-    [messages, OP],
+    [messages, OP, confirmReportMessage],
   );
 
   if (loading) {
@@ -454,267 +505,310 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      {/* This view starts below the native stack header, so it already knows
-          its screen position. Adding the header height as an extra keyboard
-          offset would lift the composer by that amount a second time. */}
-      <KeyboardDismissView style={{ flex: 1 }}>
-        <FlatList
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          ref={flatListRef}
-          data={visibleMessages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={[
-            styles.listContent,
-            visibleMessages.length === 0 && { flex: 1 },
-          ]}
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: false })
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>
-                {providerName}
-              </Text>
-              <Text style={[styles.emptyBody, { color: OP.sub }]}>
-                {conversationError ?? t('clientAccount.chat.emptyHint')}
-              </Text>
-            </View>
-          }
-        />
-
-        {addressSettings?.business_type === "mobile" && (
-          <TouchableOpacity
-            style={[
-              styles.addressBtn,
-              { backgroundColor: OP.surface, borderColor: OP.border },
-            ]}
-            onPress={openAddressModal}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="location-outline" size={14} color={OP.accentText} />
-            <Text style={[styles.addressBtnText, { color: OP.accentText }]}>
-              {t('clientAccount.chat.sendMyAddress')}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <View
-          style={[
-            styles.quickPromptRow,
-            { borderTopColor: OP.border, backgroundColor: OP.bg },
-          ]}
-        >
-          <ScrollView
+      <View
+        ref={keyboardAreaRef}
+        style={{ flex: 1 }}
+        onLayout={measureKeyboardArea}
+      >
+        <KeyboardDismissView style={{ flex: 1 }} extraOffset={keyboardAreaTop}>
+          <FlatList
             keyboardShouldPersistTaps="handled"
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickPromptScrollContent}
-          >
-            {quickPrompts.map((prompt) => (
-              <TouchableOpacity
-                key={prompt.label}
-                style={[
-                  styles.quickPrompt,
-                  { backgroundColor: OP.surface, borderColor: OP.border },
-                ]}
-                onPress={() => setInputText(prompt.text)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.quickPromptText, { color: OP.accentText }]}>
-                  {prompt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Input bar */}
-        <View
-          style={[
-            styles.inputRow,
-            {
-              backgroundColor: OP.bg,
-              borderTopColor: OP.border,
-              paddingBottom: keyboardVisible
-                ? 12
-                : FLOATING_TAB_BAR_CLEARANCE,
-            },
-          ]}
-        >
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: OP.surface,
-                color: OP.text,
-                borderColor: OP.border,
-              },
+            keyboardDismissMode="on-drag"
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            ref={flatListRef}
+            data={visibleMessages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            contentContainerStyle={[
+              styles.listContent,
+              visibleMessages.length === 0 && { flex: 1 },
             ]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder={t('clientAccount.chat.messagePlaceholder')}
-            placeholderTextColor={OP.sub}
-            multiline
-            maxLength={1000}
-            returnKeyType="default"
+            onContentSizeChange={() =>
+              flatListRef.current?.scrollToEnd({ animated: false })
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyTitle, { color: OP.accentText }]}>
+                  {providerName}
+                </Text>
+                <Text style={[styles.emptyBody, { color: OP.sub }]}>
+                  {conversationError ?? "Send a message to start a conversation"}
+                </Text>
+              </View>
+            }
           />
-          <TouchableOpacity
+
+          {blockedByMe ? (
+            <View
+              style={[
+                styles.blockedRow,
+                {
+                  backgroundColor: OP.bg,
+                  borderTopColor: OP.border,
+                  paddingBottom: tabBarHidden ? Math.max(insets.bottom, 12) : FLOATING_TAB_BAR_CLEARANCE,
+                },
+              ]}
+            >
+              <Text style={[styles.blockedText, { color: OP.sub }]}>
+                {tr('clientAccount.chat.blocked', { name: providerName })}
+              </Text>
+              <TouchableOpacity
+                onPress={unblock}
+                activeOpacity={0.75}
+                style={[styles.blockedBtn, { borderColor: OP.border }]}
+              >
+                <Text style={[styles.blockedBtnText, { color: OP.accentText }]}>{tr('clientAccount.chat.unblock')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+          <>
+          {addressSettings?.business_type === "mobile" && (
+            <TouchableOpacity
+              style={[
+                styles.addressBtn,
+                { backgroundColor: OP.surface, borderColor: OP.border },
+              ]}
+              onPress={openAddressModal}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="location-outline" size={14} color={OP.accentText} />
+              <Text style={[styles.addressBtnText, { color: OP.accentText }]}>
+                {t('clientAccount.chat.sendMyAddress')}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <View
             style={[
-              styles.sendBtn,
+              styles.quickPromptRow,
+              { borderTopColor: OP.border, backgroundColor: OP.bg },
+            ]}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickPromptScrollContent}
+            >
+              {quickPrompts.map((prompt) => (
+                <TouchableOpacity
+                  key={prompt.label}
+                  style={[
+                    styles.quickPrompt,
+                    { backgroundColor: OP.surface, borderColor: OP.border },
+                  ]}
+                  onPress={() => setInputText(prompt.text)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.quickPromptText, { color: OP.accentText }]}>
+                    {prompt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Input bar */}
+          <View
+            style={[
+              styles.inputRow,
               {
-                backgroundColor: OP.accent,
-                opacity: !inputText.trim() || sending ? 0.4 : 1,
+                backgroundColor: OP.bg,
+                borderTopColor: OP.border,
+                paddingBottom: keyboardVisible
+                  ? 12
+                  : tabBarHidden
+                    ? Math.max(insets.bottom, 12)
+                    : FLOATING_TAB_BAR_CLEARANCE,
               },
             ]}
-            onPress={sendMessage}
-            disabled={!inputText.trim() || sending}
-            activeOpacity={0.75}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color={OP.onAccent} />
-            ) : (
-              <Text style={[styles.sendIcon, { color: OP.onAccent }]}>↑</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <Modal
-          visible={showAddressModal}
-          transparent statusBarTranslucent navigationBarTranslucent
-          animationType="fade"
-          onRequestClose={closeAddressModal}
-        >
-          <KeyboardDismissView style={styles.modalOverlay}>
-            <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
-              <Text style={[styles.modalTitle, { color: OP.text }]}>
-                {t('clientAccount.chat.sendYourAddress')}
-              </Text>
-
-              {loadingAddressBookings ? (
-                <ActivityIndicator
-                  color={OP.accent}
-                  style={{ marginVertical: 20 }}
-                />
-              ) : addressBookings.length === 0 ? (
-                <Text style={[styles.modalEmpty, { color: OP.sub }]}>
-                  {t('clientAccount.chat.noUpcoming', { name: providerName })}
-                </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: OP.surface,
+                  color: OP.text,
+                  borderColor: OP.border,
+                },
+              ]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={t('clientAccount.chat.messagePlaceholder')}
+              placeholderTextColor={OP.sub}
+              multiline
+              maxLength={1000}
+              returnKeyType="default"
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                {
+                  backgroundColor: OP.accent,
+                  opacity: !inputText.trim() || sending ? 0.4 : 1,
+                },
+              ]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || sending}
+              activeOpacity={0.75}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={OP.onAccent} />
               ) : (
-                <>
-                  {addressBookings.length > 1 && (
-                    <FlatList
-                      data={addressBookings}
-                      keyExtractor={(b) => b.id}
-                      style={styles.bookingList}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[
-                            styles.bookingOption,
-                            {
-                              borderColor:
-                                selectedBooking?.id === item.id
-                                  ? OP.accent
-                                  : OP.border,
-                            },
-                          ]}
-                          onPress={() => selectAddressBooking(item)}
-                          activeOpacity={0.75}
-                        >
-                          <Text
-                            style={[
-                              styles.bookingOptionService,
-                              { color: OP.text },
-                            ]}
-                          >
-                            {item.service_name_snapshot}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.bookingOptionDate,
-                              { color: OP.sub },
-                            ]}
-                          >
-                            {formatShortDate(item.booking_date)} •{" "}
-                            {formatTime12(item.booking_time)}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  )}
+                <Text style={[styles.sendIcon, { color: OP.onAccent }]}>↑</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          </>
+          )}
 
-                  <TextInput
-                    style={[
-                      styles.addressInput,
-                      {
-                        backgroundColor: OP.surface,
-                        color: OP.text,
-                        borderColor: OP.border,
-                      },
-                    ]}
-                    value={addressText}
-                    onChangeText={setAddressText}
-                    placeholder={t('clientAccount.chat.addressPlaceholder')}
-                    placeholderTextColor={OP.sub}
-                    multiline
-                    editable={!!selectedBooking}
+          <Modal
+            visible={showAddressModal}
+            transparent statusBarTranslucent navigationBarTranslucent
+            animationType="fade"
+            onRequestClose={closeAddressModal}
+          >
+            <KeyboardDismissView style={styles.modalOverlay}>
+              <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
+                <Text style={[styles.modalTitle, { color: OP.text }]}>
+                  {t('clientAccount.chat.sendYourAddress')}
+                </Text>
+
+                {loadingAddressBookings ? (
+                  <ActivityIndicator
+                    color={OP.accent}
+                    style={{ marginVertical: 20 }}
                   />
+                ) : addressBookings.length === 0 ? (
+                  <Text style={[styles.modalEmpty, { color: OP.sub }]}>
+                    {tr('clientAccount.chat.noUpcoming', { name: providerName })}
+                  </Text>
+                ) : (
+                  <>
+                    {addressBookings.length > 1 && (
+                      <FlatList
+                        data={addressBookings}
+                        keyExtractor={(b) => b.id}
+                        style={styles.bookingList}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity
+                            style={[
+                              styles.bookingOption,
+                              {
+                                borderColor:
+                                  selectedBooking?.id === item.id
+                                    ? OP.accent
+                                    : OP.border,
+                              },
+                            ]}
+                            onPress={() => selectAddressBooking(item)}
+                            activeOpacity={0.75}
+                          >
+                            <Text
+                              style={[
+                                styles.bookingOptionService,
+                                { color: OP.text },
+                              ]}
+                            >
+                              {item.service_name_snapshot}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.bookingOptionDate,
+                                { color: OP.sub },
+                              ]}
+                            >
+                              {formatShortDate(item.booking_date)} •{" "}
+                              {formatTime12(item.booking_time)}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    )}
 
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.modalBtn, { backgroundColor: OP.surface }]}
-                      onPress={closeAddressModal}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.modalBtnText, { color: OP.text }]}>
-                        {t('common.cancel')}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    <TextInput
                       style={[
-                        styles.modalBtn,
+                        styles.addressInput,
                         {
-                          backgroundColor: OP.accent,
-                          opacity:
-                            !addressText.trim() ||
-                            !selectedBooking ||
-                            sendingAddress
-                              ? 0.5
-                              : 1,
+                          backgroundColor: OP.surface,
+                          color: OP.text,
+                          borderColor: OP.border,
                         },
                       ]}
-                      onPress={handleSendAddress}
-                      disabled={
-                        !addressText.trim() ||
-                        !selectedBooking ||
-                        sendingAddress
-                      }
-                      activeOpacity={0.75}
-                    >
-                      {sendingAddress ? (
-                        <ActivityIndicator size="small" color={OP.onAccent} />
-                      ) : (
-                        <Text
-                          style={[styles.modalBtnText, { color: OP.onAccent }]}
-                        >
-                          {t('common.send')}
+                      value={addressText}
+                      onChangeText={setAddressText}
+                      placeholder={t('clientAccount.chat.addressPlaceholder')}
+                      placeholderTextColor={OP.sub}
+                      multiline
+                      editable={!!selectedBooking}
+                    />
+
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={[styles.modalBtn, { backgroundColor: OP.surface }]}
+                        onPress={closeAddressModal}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.modalBtnText, { color: OP.text }]}>
+                          {t('common.cancel')}
                         </Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </KeyboardDismissView>
-        </Modal>
-      </KeyboardDismissView>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.modalBtn,
+                          {
+                            backgroundColor: OP.accent,
+                            opacity:
+                              !addressText.trim() ||
+                              !selectedBooking ||
+                              sendingAddress
+                                ? 0.5
+                                : 1,
+                          },
+                        ]}
+                        onPress={handleSendAddress}
+                        disabled={
+                          !addressText.trim() ||
+                          !selectedBooking ||
+                          sendingAddress
+                        }
+                        activeOpacity={0.75}
+                      >
+                        {sendingAddress ? (
+                          <ActivityIndicator size="small" color={OP.onAccent} />
+                        ) : (
+                          <Text
+                            style={[styles.modalBtnText, { color: OP.onAccent }]}
+                          >
+                            {t('common.send')}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            </KeyboardDismissView>
+          </Modal>
+        </KeyboardDismissView>
+      </View>
+      <DialogHost />
     </ThemedBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  blockedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  blockedText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  blockedBtn: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  blockedBtnText: { fontSize: 13, fontWeight: "600" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   listContent: { padding: 16, paddingBottom: 8 },
   emptyState: {
@@ -832,7 +926,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.4)",
   },
-  modalCard: {
+  modalCard: { ...readableSheet,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,

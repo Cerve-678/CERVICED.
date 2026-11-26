@@ -9,14 +9,19 @@ tags: [screen, provider]
 ## → Navigates to
 - [[InfoRegScreen\|EditProfile]]
 - [[PaymentsScreen\|Payments]]
+- [[SchedulingScreen\|Scheduling]]
 - [[ProviderScheduleScreen\|ProviderSchedule]]
 - [[BrandingScreen\|Branding]]
+- [[ProviderProfileScreen\|MyPublicProfile]]
+- [[ProviderBookingDetailScreen\|BookingDetail]]
+- `ProviderHome` _(navigator / dynamic)_
+- [[ProviderBookingHistoryScreen\|BookingHistory]]
 - [[ProviderAnalyticsScreen\|Analytics]]
 - [[PoliciesScreen\|Policies]]
 - [[BusinessInfoScreen\|BusinessInfo]]
-- [[SchedulingScreen\|Scheduling]]
 - [[ProviderInfoPackScreen\|InfoPacks]]
 - [[ProviderClienteleScreen\|Clientele]]
+- [[AdminCreateAccountScreen\|AccountHolderDetails]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

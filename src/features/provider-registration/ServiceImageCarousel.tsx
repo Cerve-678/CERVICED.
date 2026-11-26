@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import type { ServiceImageDraft } from '../../services/providerRegistrationService';
@@ -15,10 +16,6 @@ interface ServiceImageCarouselProps {
   images: ServiceImageDraft[];
   onAddImage: () => void;
   onRemoveImage: (index: number) => void;
-  /** Flip one photo between filling its box (cropping) and showing it whole. */
-  onToggleFit: (index: number) => void;
-  /** A quick tap on a photo (not a hold): crop it again. */
-  onRecrop: (index: number) => void;
   /** Commit a drag: move the photo at `from` to sit at `to`. The first photo
    *  is the one that leads the service everywhere it's shown, so this is the
    *  only way to choose a cover shot without deleting and re-adding. */
@@ -44,14 +41,12 @@ export function ServiceImageCarousel({
   images,
   onAddImage,
   onRemoveImage,
-  onToggleFit,
-  onRecrop,
   onReorder,
   size = 80,
   styles,
 }: ServiceImageCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const pitch = size + GAP;
 
   // ── Drag-to-reorder ────────────────────────────────────────────────────
@@ -117,9 +112,8 @@ export function ServiceImageCarousel({
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          // The remove and Fill/Fit buttons sit deeper in the tree, so they
-          // claim the touch before this ever sees it — arming here can't
-          // swallow their taps.
+          // The remove button sits deeper in the tree, so it claims the touch
+          // before this ever sees it — arming here can't swallow its taps.
           beginHold(index);
         },
         // Handing the gesture to the ScrollView is what keeps the strip
@@ -148,14 +142,8 @@ export function ServiceImageCarousel({
             Haptics.selectionAsync().catch(() => {});
           }
         },
-        onPanResponderRelease: (_evt, gesture) => {
+        onPanResponderRelease: () => {
           clearHold();
-          // Lifted before the hold armed and without moving: a tap, which
-          // re-crops the photo rather than starting a drag.
-          if (!armedRef.current && Math.abs(gesture.dx) < 6 && Math.abs(gesture.dy) < 6) {
-            onRecrop(index);
-            return;
-          }
           const from = dragIndexRef.current;
           const to = targetIndexRef.current;
           if (armedRef.current && from != null && to != null && from !== to) {
@@ -171,7 +159,7 @@ export function ServiceImageCarousel({
           endDrag();
         },
       }),
-    [beginHold, clearHold, dragX, endDrag, onRecrop, onReorder, pitch],
+    [beginHold, clearHold, dragX, endDrag, onReorder, pitch],
   );
 
   // Built once per photo rather than inline in the map: a fresh PanResponder
@@ -245,9 +233,8 @@ export function ServiceImageCarousel({
               <Image
                 source={{ uri: image.uri }}
                 style={[styles.carouselImage, { width: size, height: size }]}
-                // The thumbnail previews the provider's own choice, so the
-                // toggle shows its effect here rather than only on the client
-                // side where they can't see it.
+                // New photos are cropped on pick and fill; older ones saved
+                // as "show whole" still preview the way clients see them.
                 contentFit={image.fit}
               />
               <TouchableOpacity
@@ -265,20 +252,6 @@ export function ServiceImageCarousel({
                 <View style={styles.coverBadge}>
                   <Text style={styles.coverBadgeText}>Cover</Text>
                 </View>
-              )}
-              {dragIndex == null && (
-                <TouchableOpacity
-                  style={styles.fitToggle}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    onToggleFit(index);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.fitToggleText}>
-                    {image.fit === 'cover' ? 'Show whole' : 'Fill frame'}
-                  </Text>
-                </TouchableOpacity>
               )}
             </Animated.View>
           );
@@ -299,9 +272,7 @@ export function ServiceImageCarousel({
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Tap a photo to crop it, or hold it to drag — the first one leads
-          your service. Use Show whole to keep every edge, or Fill frame for a
-          tighter crop.
+          Hold a photo to drag it — the first one leads your service.
         </Text>
       )}
       {images.length > 0 && (

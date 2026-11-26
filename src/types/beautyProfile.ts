@@ -14,30 +14,38 @@ export type Gender = 'female' | 'male' | 'non-binary' | 'prefer-not-to-say';
 
 export interface BeautyData {
   // Hair
-  hairType:           string;
-  scalpCondition:     string;
+  hairType:           string[];
+  scalpCondition:     string[];
   hairGoals:          string[];
   treatmentHistory:   string[];
   // Skin
-  skinType:           string;
+  skinType:           string[];
   skinTone:           string;
   skinConcerns:       string[];
   sensitiveAreas:     string[];
-  // Nails
-  nailLength:         string;
-  nailShape:          string;
+  // Nails (condition, service, style and colours added 2026-11-17)
+  nailCondition:      string[];
+  nailService:        string[];
+  nailLength:         string[];
+  nailShape:          string[];
+  nailStyle:          string[];
+  nailColours:        string[];
   // Lashes & Brows
-  lashStyle:          string;
+  lashStyle:          string[];
   lashStatus:         string;
-  browStyle:          string;
-  browCondition:      string;
+  browStyle:          string[];
+  browCondition:      string[];
   // Makeup
-  makeupCoverage:     string;
-  makeupFinish:       string;
-  makeupEyes:         string;
-  makeupLips:         string;
+  makeupCoverage:     string[];
+  makeupFinish:       string[];
+  makeupEyes:         string[];
+  makeupLips:         string[];
   // General
-  styleVibe:          string;
+  styleVibe:          string[];
+  /** Added 2026-11-17: aesthetics they love, what they get ready for, how much time they give it. */
+  styleAesthetics:    string[];
+  styleOccasions:     string[];
+  styleRoutine:       string;
   serviceInterests:   string[];
   // Personalisation
   gender:             Gender | null;
@@ -49,12 +57,12 @@ export interface BeautyData {
 }
 
 export const EMPTY_BEAUTY_DATA: BeautyData = {
-  hairType: '', scalpCondition: '', hairGoals: [], treatmentHistory: [],
-  skinType: '', skinTone: '', skinConcerns: [], sensitiveAreas: [],
-  nailLength: '', nailShape: '',
-  lashStyle: '', lashStatus: '', browStyle: '', browCondition: '',
-  makeupCoverage: '', makeupFinish: '', makeupEyes: '', makeupLips: '',
-  styleVibe: '', serviceInterests: [],
+  hairType: [], scalpCondition: [], hairGoals: [], treatmentHistory: [],
+  skinType: [], skinTone: '', skinConcerns: [], sensitiveAreas: [],
+  nailCondition: [], nailService: [], nailLength: [], nailShape: [], nailStyle: [], nailColours: [],
+  lashStyle: [], lashStatus: '', browStyle: [], browCondition: [],
+  makeupCoverage: [], makeupFinish: [], makeupEyes: [], makeupLips: [],
+  styleVibe: [], styleAesthetics: [], styleOccasions: [], styleRoutine: '', serviceInterests: [],
   gender: null, has_kids: false,
   allergies: [], medicalNotes: '', photographyConsent: true,
 };

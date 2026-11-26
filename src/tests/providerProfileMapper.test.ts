@@ -29,7 +29,7 @@ describe('mapProviderProfileData', () => {
 
     expect(cutServices[0]!.images).toEqual([{ uri: 'first.jpg' }, { uri: 'second.jpg' }]);
     expect(images.map(image => image.url)).toEqual(['second.jpg', 'first.jpg']);
-    expect(cutServices[0]!.addOns).toEqual([{ id: 'addon-1', name: 'Treatment', price: 10, description: '' }]);
+    expect(cutServices[0]!.addOns).toEqual([{ id: 'addon-1', name: 'Treatment', price: 10, description: '', extraMinutes: 0 }]);
   });
 
   it('carries the stated payment methods and accessibility tags through for the profile', () => {
@@ -46,5 +46,19 @@ describe('mapProviderProfileData', () => {
 
     const none = mapProviderProfileData({ slug: 's', display_name: 'S', service_category: 'Hair', services: [] } as any);
     expect(none.paymentMethods).toEqual([]);
+  });
+
+  it('carries the public How to get there through, trimmed, and empty when unset', () => {
+    const result = mapProviderProfileData({
+      slug: 'studio-c',
+      display_name: 'Studio C',
+      service_category: 'Hair',
+      services: [],
+      public_directions: '  2 minutes from Hackney Central.  ',
+    } as any);
+    expect(result.publicDirections).toBe('2 minutes from Hackney Central.');
+
+    const none = mapProviderProfileData({ slug: 's', display_name: 'S', service_category: 'Hair', services: [] } as any);
+    expect(none.publicDirections).toBe('');
   });
 });

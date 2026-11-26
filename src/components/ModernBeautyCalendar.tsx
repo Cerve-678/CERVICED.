@@ -4,7 +4,14 @@ import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
 import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
-import { formatLongDateNoYear } from '../utils/dateUtils';
+import { dateToYMD, formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../utils/dateUtils';
+import {
+  isMonthlyRelease,
+  lastBookableDate,
+  nextReleaseMoment,
+  whenDateOpens,
+  type BookingHorizonSettings,
+} from '../utils/bookingHorizon';
 import { RequestTimePanel } from './RequestTimePanel';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
@@ -70,8 +77,6 @@ type ModernBeautyCalendarProps = {
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
   serviceId?: string | undefined; // Real services.id UUID — resolves this service's own buffer override
   style?: ViewStyle;
-  /** Last date clients can book (today + bookingWindowDays). Undefined = no limit. */
-  maxDate?: Date;
   /** Selected day/time highlight colour — the caller derives this from its
    *  own backdrop (not the OS/app dark-mode setting, not a fixed brand
    *  colour) so the picker always complements whatever sheet it's in. */
@@ -174,7 +179,6 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   serviceDuration,
   serviceId,
   style = {},
-  maxDate,
   accentColor,
   textColor,
   subColor,
@@ -195,6 +199,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
+  // This provider's booking window (rolling, or what a monthly release has
+  // opened so far). It greys out the days past it, here and in the month
+  // view, and explains the gap ("Dates after … open on …"). The slot lookups
+  // and the booking trigger enforce it too; this is what stops the picker
+  // offering those days at all. Until it loads there is no ceiling.
+  const [horizon, setHorizon] = useState<BookingHorizonSettings | null>(null);
+  const maxDate = useMemo(() => (horizon ? lastBookableDate(horizon) ?? undefined : undefined), [horizon]);
   // A provider can go live with zero rows in provider_availability — nothing
   // upstream (search, go-live gating) currently prevents it. Without this,
   // that renders as every day showing 'closed', identical to a provider
@@ -252,6 +263,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       if (!id) return;
       AvailabilityService.getAvailabilitySummary(providerName).then(summary => {
         if (!cancelled && summary?.state === 'unpublished') setProviderUnpublished(true);
+      });
+      AvailabilityService.getBookingHorizon(providerName).then(next => {
+        if (!cancelled) setHorizon(next);
       });
       // The emergency-request opt-ins only ever change what this picker shows
       // when it's allowed to offer request slots at all. When it isn't (the
@@ -660,6 +674,33 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
   const weekDays = getWeekDays();
 
+  // A monthly-release provider's diary has a wall at the end of the month
+  // they've opened. When this week runs past it, say when the next month
+  // opens — otherwise the client just sees empty days and can't tell a
+  // provider who isn't working from one who hasn't released them yet.
+  const releaseNote = (() => {
+    if (!horizon || !isMonthlyRelease(horizon.schedule_release_day)) return null;
+    const last = lastBookableDate(horizon);
+    if (!last) return null;
+    // Compare 'YYYY-MM-DD' strings: day.date carries the time of day the
+    // week was built at, so a Date comparison would put the last open day
+    // itself past the wall.
+    const lastYmd = dateToYMD(last);
+    if (!weekDays.some(day => day.dateString > lastYmd)) return null;
+    const next = nextReleaseMoment(horizon.schedule_release_day, new Date(), horizon.schedule_release_time);
+    return `Dates after ${formatShortDayDate(last)} open on ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
+  })();
+
+  // What a day past the window says when it's picked: the date it opens, so
+  // the client knows when to come back rather than just that they can't.
+  const tooFarAheadNote = (() => {
+    const opens = horizon && selectedDate ? whenDateOpens(horizon, selectedDate) : null;
+    if (!opens) return `${providerLabel ?? 'This provider'} isn't taking bookings this far ahead yet. Check back soon.`;
+    return isMonthlyRelease(horizon?.schedule_release_day)
+      ? `Bookings for this day open on ${formatShortDayDate(opens)} at ${formatTime12(opens)}.`
+      : `Bookings for this day open on ${formatShortDayDate(opens)}.`;
+  })();
+
   const calendarDays = getCalendarDays();
   const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -793,7 +834,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     </Text>
                     {/* Availability dot */}
                     <View style={styles.calDotWrap}>
-                      {hasSlots && (
+                      {hasSlots && !isDisabled && (
                         <View style={[styles.calDot, { backgroundColor: accentColor }]} />
                       )}
                     </View>
@@ -928,6 +969,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       </View>
       )}
 
+      {providerFound === true && !providerUnpublished && releaseNote && (
+        <Text style={[styles.fullDayHint, { color: subColor }]}>{releaseNote}</Text>
+      )}
+
       {/* ── Time slots ───────────────────────────────────────────────── */}
       {providerFound !== false && !providerUnpublished && showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
@@ -1004,7 +1049,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     beyond-window requests never reaches this branch, because
                     it would have had request times of its own. */}
                 {currentSlots?.status === 'unavailable'
-                  ? `${who} isn't taking bookings this far ahead yet.`
+                  ? tooFarAheadNote
                   : canRequest
                     ? `${who} doesn't work this day — but you can request a time.`
                     : `${who} doesn't work this day.`}
