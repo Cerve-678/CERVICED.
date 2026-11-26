@@ -983,13 +983,17 @@ const shareLink: Capability = {
     "share my profile", "share my page", "share my link", "my profile link", "my page link",
     "link to my page", "link to my profile", "my link", "my qr", "qr code", "my website link",
   ],
-  // Full-service only for now: the QR button this points to is on My Profile,
-  // which a link-only pro's app doesn't have.
-  async run(): Promise<CapabilityResult> {
+  // Link-only pros too: the website page supports them (Book opens their own
+  // booking site), so the link and its QR work. Their app has no My Profile,
+  // so for them Becca's reply is the place to get it.
+  fitsLinkOnly: true,
+  async run({ linkOnly }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
     if (!profile?.slug) {
       return {
-        text: "I couldn't load your page link just now. It's on My Profile — tap the QR button at the top.",
+        text: linkOnly
+          ? "I couldn't load your page link just now. Try again in a moment."
+          : "I couldn't load your page link just now. It's on My Profile — tap the QR button at the top.",
       };
     }
     const link = providerWebPageUrl(profile.slug).replace(/^https:\/\/(www\.)?/, "");
@@ -999,7 +1003,7 @@ const shareLink: Capability = {
         (profile.has_gone_live
           ? "It opens in any phone's browser, with or without the app."
           : "It starts working once your profile is live.") +
-        " To copy it or show your QR code, tap the QR button at the top of My Profile.",
+        (linkOnly ? "" : " To copy it or show your QR code, tap the QR button at the top of My Profile."),
       suggestions: [askChip("branding", "Change how my page looks", "Change my branding")],
     };
   },

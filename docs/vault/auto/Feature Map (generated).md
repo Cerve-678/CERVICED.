@@ -337,10 +337,10 @@ Curated: [[Services]] · **96 files**
 - `src/services/becca/missLog.ts` _(17)_
 - `src/i18n/catalogs/en/clientAccount.ts` _(14)_
 - `src/services/databaseService.ts` _(14)_
+- `src/services/becca/capabilities/provider.ts` _(13)_
 - `src/i18n/catalogs/de/clientAccount.ts` _(12)_
 - `src/i18n/catalogs/es/clientAccount.ts` _(12)_
 - `src/i18n/catalogs/fr/clientAccount.ts` _(12)_
-- `src/services/becca/capabilities/provider.ts` _(12)_
 - `src/i18n/catalogs/en/settings.ts` _(11)_
 - `src/i18n/catalogs/fr/settings.ts` _(11)_
 - … +66 more

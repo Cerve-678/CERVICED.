@@ -80,9 +80,14 @@ describe("share link", () => {
     expect(result.text).toMatch(/once your profile is live/i);
   });
 
-  // The QR button it points to is on My Profile, which link-only pros don't
-  // have, so it stays full-service until that's decided.
-  it("is full-service only", () => {
-    expect(getCapability("pv.share_link", "provider")!.fitsLinkOnly).toBeUndefined();
+  // Their website page supports link-only pros, so the link works for them;
+  // their app has no My Profile, so the reply doesn't send them there.
+  it("gives a link-only pro their link without pointing at My Profile", async () => {
+    mockedProfile.mockResolvedValue({ slug: "lola-studio", has_gone_live: true });
+    const capability = getCapability("pv.share_link", "provider")!;
+    expect(capability.fitsLinkOnly).toBe(true);
+    const result = await capability.run(context("share my profile link", true));
+    expect(result.text).toContain("cerviced.co/@lola-studio");
+    expect(result.text).not.toMatch(/My Profile/);
   });
 });
