@@ -60,7 +60,7 @@ const appNavigation: Capability = {
   hat: "provider",
   describe: "Where do I set or change a business setting in the app",
   thinking: ["Finding the right setting…"],
-  phrases: ["where do i set", "where can i change", "how do i change", "how can i set", "take me to", "show me where"],
+  phrases: ["where do i set", "where can i change", "how do i change", "how can i set", "take me to", "show me where", "payouts", "payout", "get paid", "bank details"],
   fitsLinkOnly: true,
   async run({ rawMessage, linkOnly }): Promise<CapabilityResult> {
     const destination = providerDestination(rawMessage);
@@ -98,6 +98,8 @@ const todaySchedule: Capability = {
   phrases: [
     "today", "what's on", "whats on", "my day", "schedule", "agenda",
     "diary", "appointments", "bookings", "who's coming", "whos coming", "next client",
+    // A named day is read off the message: "anyone booked in tomorrow".
+    "first client", "last client", "booked in", "who's in", "whos in",
   ],
   async run({ now, entities }): Promise<CapabilityResult> {
     const ymd = entities.date?.value.ymd ?? dateToYMD(now);
@@ -180,6 +182,7 @@ const weekAhead: Capability = {
     "this week", "how busy", "week ahead", "rest of the week", "next few days",
     "how's my week", "hows my week", "busy week", "what's my week like",
     "whats my week like", "coming week", "next 7 days", "how many this week",
+    "my week", "week looking", "bookings this week", "booked this week",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -257,6 +260,7 @@ const scheduleGaps: Capability = {
     "where are my gaps", "where are the gaps", "my gaps", "quiet days",
     "quiet day", "empty days", "free days", "slow days", "days with space",
     "when am i quiet", "where can i fit someone in", "fill my diary",
+    "any gaps", "gaps this week", "free slots", "free slot", "spare slots", "any space", "openings",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -372,6 +376,7 @@ const clientele: Capability = {
     "my clients", "clientele", "how many clients", "regulars", "client list",
     "customers", "my customers", "client base", "who are my clients",
     "how many customers", "my regulars", "client count",
+    "best clients", "top clients", "most loyal",
   ],
   async run(): Promise<CapabilityResult> {
     const members = await getProviderClientele();
@@ -411,6 +416,7 @@ const inbox: Capability = {
     "messages", "inbox", "unread", "replies", "anyone messaged", "dm",
     "any messages", "unread messages", "has anyone messaged", "my inbox",
     "client messages", "anyone got in touch", "new messages",
+    "enquiries", "enquiry", "inquiries",
   ],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
@@ -582,6 +588,7 @@ const myServices: Capability = {
     "my services", "my prices", "my price list", "what do i charge",
     "my menu", "what do i offer", "my treatments", "how much do i charge",
     "list my services", "what are my prices",
+    "what services do i", "services do i offer",
   ],
   excludeWhen: /\b(edit|add|change|update|remove|delete|new)\b/i,
   async run(): Promise<CapabilityResult> {
@@ -694,6 +701,7 @@ const timeOff: Capability = {
   phrases: [
     "day off", "days off", "time off", "am i off", "blocked out",
     "holiday", "annual leave", "closed on", "not working",
+    "have i blocked", "days blocked", "blocked",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -798,6 +806,7 @@ const myHours: Capability = {
   phrases: [
     "my hours", "my working hours", "when am i open", "what time do i open",
     "what time do i close", "my opening hours", "my working days",
+    "what time do i start", "when do i start", "when do i open", "what time do i finish", "when do i finish", "when do i close",
   ],
   excludeWhen: /\b(set|change|update|edit|add)\b/i,
   fitsLinkOnly: true,
@@ -858,6 +867,7 @@ const myCapacity: Capability = {
   phrases: [
     "how many bookings a day", "my daily limit", "am i full", "my capacity",
     "max bookings", "booking limit", "how many can i take", "fully booked",
+    "bookings can i take", "how many bookings can i",
   ],
   async run({ now }): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -923,6 +933,7 @@ const myReach: Capability = {
     "how many services do i have", "my reach", "my audience",
     "who follows me", "my following", "how visible am i",
     "how many people see me", "my profile reach", "am i getting seen",
+    "saved me", "saved my profile", "bookmarked me",
   ],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
@@ -1107,12 +1118,17 @@ const analytics: Capability = {
   hat: "provider",
   describe: "How my business is doing — booking volume and patterns",
   thinking: ["Looking through your bookings…", "Spotting the patterns…"],
+  // "how many bookings can I take a day" is the daily cap (pv.capacity). Both
+  // capabilities' phrases hit the 0.6 length cap and tied on registration order.
+  excludeWhen: /\bcan i take\b/i,
   phrases: [
     "earnings", "revenue", "income", "analytics", "stats", "performance",
     "insights", "how am i doing", "how's business", "hows business",
     "how many bookings", "booking trends", "busiest day", "my numbers",
     "how was last month", "how many clients this month", "am i growing",
     "my busiest", "how many appointments",
+    // Money, the same question "earnings" above already routes here.
+    "how much did i make", "how much have i made", "made this month", "takings",
   ],
   async run({ now }): Promise<CapabilityResult> {
     // MONEY BOUNDARY: this answers booking VOLUME and patterns only, and
@@ -1316,6 +1332,7 @@ const infoPacks: Capability = {
     "my forms", "my form library", "intake forms", "consent forms",
     "message templates", "my templates", "canned replies", "quick replies",
     "saved replies", "what forms do i have",
+    "forms do i send", "what do i send",
   ],
   async run(): Promise<CapabilityResult> {
     // Both are self-scoped (own provider id resolved inside), and independent.
