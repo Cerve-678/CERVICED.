@@ -68,6 +68,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261126120000 | `checkout_only_through_payment` | **APPLIED 2026-11-26** on the user's "yes, apply it now", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row, before the branch was pushed (the repo is public and the hole was live). Lock taken on this branch; live max `20261126110000`, no unapplied migration on any open PR. md5 guard on the three live functions matched. Forced-rollback dry run first: all three gone, `prepare_checkout` and `expire_cart_holds` intact, live max unchanged. Verified live: version recorded (live max); 0 of `hold_cart_booking_slots` / `claim_cart_booking_slots` / `release_cart_booking_slots` left; `prepare_checkout(jsonb)` present and executable by authenticated; cron `expire-cart-holds` still scheduled. |
 
+### Applied 2026-11-26 (every client gets reminders 2 days before and the day before; providers no longer choose)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261126140000 | `client_reminders_fixed_timing` | **APPLIED 2026-11-26** on the user's "yep merge", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Renumbered from 130000, which collided with #819's unapplied `20261126130000_client_bookings_promo_discount` (cerviced-54 agreed; they renumber theirs to 150000). Live max before: `20261126120000`. md5 guard on live `process_client_appointment_reminders()` matched (`dec2cf9b…`). Forced-rollback dry run first, at both numbers. Verified live: version recorded (live max); md5 `c7324401…`, the dry run's; VALUES `(24h,1),(48h,2)`; `clientReminderTiming` no longer read; anon/authenticated can't execute; cron `user-24hr-reminders` `0 8 * * *` active. `send-booking-update-email` deployed straight after (v3: emails only the 24h reminder). PR #817. |
+
 ### Applied 2026-11-26 (home-based only, and the client is told to message the provider)
 
 | Recorded version | Name | Verified live |

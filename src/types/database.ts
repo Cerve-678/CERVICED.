@@ -479,7 +479,6 @@ export interface DbProvider {
   /** Mirror of the provider's Automations screen settings — readable by
    *  client screens and pg_cron jobs (auth user_metadata is not). */
   automation_settings: {
-    clientReminderTiming?: string[]; // e.g. ['24h','48h','2h']
     rebookingNudgeWeeks?: string; // 'never' | '2' | '4' | ...
     autoReviewRequest?: boolean;
     postApptCheckIn?: boolean;

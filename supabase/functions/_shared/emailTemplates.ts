@@ -1249,8 +1249,9 @@ export function appointmentReminderEmail(params: {
   service: string;
   date: string;
   time: string;
-  /** How far ahead this reminder is: the provider picks 1, 2 or 3 days. */
-  daysAhead: 1 | 2 | 3;
+  /** How far ahead this reminder is, in days. Only the day-before one is
+   *  emailed today (see reminderEmailTiming.ts). */
+  daysAhead: 1 | 2;
   /** Where to go once it's shared; a mobile provider comes to the client. */
   where:
     | { kind: 'venue'; address: string }
