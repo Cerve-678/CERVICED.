@@ -2,6 +2,7 @@ import type { IntakeFormQuestion } from '../../services/databaseService';
 import type { ServiceCategory } from '../../types/database';
 import type { TranslationKey } from '../../i18n/types';
 import { tr } from '../../i18n/translate';
+import { HAIR_TYPES } from '../../constants/hairTypes';
 
 // ── Form templates ───────────────────────────────────────────────────────────
 // Templates follow the provider's service type (HAIR, NAILS, …), not whatever
@@ -67,7 +68,7 @@ const TEMPLATES: FormTemplate[] = [
     id: 'hair', category: 'HAIR', kind: 'consultation', get label() { return tr('providerBookings.forms.template.hair.label'); }, get subtitle() { return tr('providerBookings.forms.template.hair.subtitle'); },
     keywords: ['hair', 'colour', 'color', 'cut', 'blowout', 'blow dry', 'highlight', 'balayage', 'keratin', 'relaxer', 'perm', 'toner', 'gloss', 'trim', 'extension', 'weave', 'loc', 'braids'],
     questions: [
-      { type: 'choice', label: 'What is your hair type?', required: true, options: ['Straight', 'Wavy', 'Curly', 'Coily', '4A', '4B', '4C'] },
+      { type: 'choice', label: 'What is your hair type?', required: true, options: HAIR_TYPES },
       { type: 'choice', label: 'Hair history', required: true, options: ['Virgin / untreated', 'Coloured', 'Bleached / lightened', 'Relaxed / permed', 'Extensions'] },
       { type: 'text',   label: 'What look are you going for today?', required: true },
       { type: 'yesno',  label: 'Any known allergies to hair products?', required: true },

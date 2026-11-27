@@ -11,12 +11,15 @@ import { toPickList } from "../../features/beauty-profile/pickList";
 export interface ClientBeautyProfile {
   // Hair
   hairType: string[];
+  hairPorosity: string | null;
+  hairThickness: string | null;
   scalpCondition: string[];
   hairGoals: string[];
   treatmentHistory: string[];
   // Skin — a list since multi-pick (see features/beauty-profile/pickList.ts)
   skinType: string[];
   skinTone: string | null;
+  skinUndertone: string | null;
   skinConcerns: string[];
   sensitiveAreas: string[];
   // Nails
@@ -27,11 +30,17 @@ export interface ClientBeautyProfile {
   nailStyle: string[];
   nailColours: string[];
   // Lashes & Brows
+  eyeShape: string[];
   lashStyle: string[];
   lashStatus: string | null;
+  lashCurl: string | null;
+  lashMap: number[];
   browStyle: string[];
   browCondition: string[];
   // Makeup
+  faceShape: string | null;
+  eyeColour: string | null;
+  blushStyle: string[];
   makeupCoverage: string[];
   makeupFinish: string[];
   makeupEyes: string[];
@@ -64,6 +73,16 @@ interface BeautyProfileFields {
   nail_colours: string[] | null;
   lash_style: string[] | string | null;
   lash_status: string | null;
+  /** Added 2026-11-27 (20261127110000). */
+  lash_curl: string | null;
+  eye_shape: string[] | null;
+  lash_map: number[] | null;
+  face_shape: string | null;
+  eye_colour: string | null;
+  blush_style: string[] | null;
+  hair_porosity: string | null;
+  hair_thickness: string | null;
+  skin_undertone: string | null;
   brow_style: string[] | string | null;
   brow_condition: string[] | string | null;
   makeup_coverage: string[] | string | null;
@@ -89,11 +108,14 @@ interface ClientBeautyProfileRow extends BeautyProfileFields {
 function toClientBeautyProfile(d: BeautyProfileFields): ClientBeautyProfile {
   return {
     hairType: toPickList(d.hair_type),
+    hairPorosity: d.hair_porosity ?? null,
+    hairThickness: d.hair_thickness ?? null,
     scalpCondition: toPickList(d.scalp_condition),
     hairGoals: d.hair_goals ?? [],
     treatmentHistory: d.treatment_history ?? [],
     skinType: toPickList(d.skin_type),
     skinTone: d.skin_tone ?? null,
+    skinUndertone: d.skin_undertone ?? null,
     skinConcerns: d.skin_concerns ?? [],
     sensitiveAreas: d.sensitive_areas ?? [],
     nailLength: toPickList(d.nail_length),
@@ -104,6 +126,12 @@ function toClientBeautyProfile(d: BeautyProfileFields): ClientBeautyProfile {
     nailColours: d.nail_colours ?? [],
     lashStyle: toPickList(d.lash_style),
     lashStatus: d.lash_status ?? null,
+    eyeShape: d.eye_shape ?? [],
+    lashCurl: d.lash_curl ?? null,
+    lashMap: d.lash_map ?? [],
+    faceShape: d.face_shape ?? null,
+    eyeColour: d.eye_colour ?? null,
+    blushStyle: d.blush_style ?? [],
     browStyle: toPickList(d.brow_style),
     browCondition: toPickList(d.brow_condition),
     makeupCoverage: toPickList(d.makeup_coverage),

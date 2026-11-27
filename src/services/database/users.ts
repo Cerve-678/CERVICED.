@@ -479,6 +479,15 @@ export async function updateUserBeautyProfile(
     style_routine?: string | null;
     lash_style?: string[] | null;
     lash_status?: string | null;
+    lash_curl?: string | null;
+    eye_shape?: string[];
+    lash_map?: number[] | null;
+    face_shape?: string | null;
+    eye_colour?: string | null;
+    blush_style?: string[];
+    hair_porosity?: string | null;
+    hair_thickness?: string | null;
+    skin_undertone?: string | null;
     brow_style?: string[] | null;
     brow_condition?: string[] | null;
     scalp_condition?: string[] | null;
@@ -520,6 +529,17 @@ export interface UserBeautyProfileRow {
   style_routine: string | null;
   lash_style: string[] | string | null;
   lash_status: string | null;
+  /** Added 2026-11-27 (20261127110000). */
+  lash_curl: string | null;
+  eye_shape: string[] | null;
+  /** smallint[]: mm per zone, inner corner to outer. */
+  lash_map: number[] | null;
+  face_shape: string | null;
+  eye_colour: string | null;
+  blush_style: string[] | null;
+  hair_porosity: string | null;
+  hair_thickness: string | null;
+  skin_undertone: string | null;
   brow_style: string[] | string | null;
   brow_condition: string[] | string | null;
   makeup_coverage: string[] | string | null;
@@ -543,7 +563,7 @@ export async function getUserBeautyProfile(
   const { data, error } = await supabase
     .from("users")
     .select(
-      "hair_type, scalp_condition, hair_goals, treatment_history, skin_type, skin_tone, skin_concerns, sensitive_areas, nail_length, nail_shape, nail_condition, nail_service, nail_style, nail_colours, lash_style, lash_status, brow_style, brow_condition, makeup_coverage, makeup_finish, makeup_eyes, makeup_lips, style_vibe, style_aesthetics, style_occasions, style_routine, service_interests, gender, has_kids, allergies, medical_notes, photography_consent",
+      "hair_type, scalp_condition, hair_goals, treatment_history, skin_type, skin_tone, skin_concerns, sensitive_areas, nail_length, nail_shape, nail_condition, nail_service, nail_style, nail_colours, lash_style, lash_status, lash_curl, eye_shape, lash_map, face_shape, eye_colour, blush_style, hair_porosity, hair_thickness, skin_undertone, brow_style, brow_condition, makeup_coverage, makeup_finish, makeup_eyes, makeup_lips, style_vibe, style_aesthetics, style_occasions, style_routine, service_interests, gender, has_kids, allergies, medical_notes, photography_consent",
     )
     .eq("id", userId)
     .maybeSingle();

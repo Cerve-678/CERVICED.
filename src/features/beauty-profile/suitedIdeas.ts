@@ -20,6 +20,7 @@
 
 import type { BeautyData, CategoryKey } from '../../types/beautyProfile';
 import { formatPickList } from './pickList';
+import { hasHairFamily } from '../../constants/hairTypes';
 
 /** The categories that have ideas. Skin has none on purpose (see above). */
 export type SuitedCategory = 'hair' | 'nails' | 'lashesBrows' | 'makeup';
@@ -38,7 +39,6 @@ export interface SuitedIdea {
 export const MAX_IDEAS_PER_CATEGORY = 6;
 
 /** Coils and kinks: 4A–4C and the general "Coily". */
-const COILY: ReadonlySet<string> = new Set(['Coily', '4A', '4B', '4C']);
 
 type Idea = [label: string, query: string | undefined];
 const idea = (label: string, query?: string): Idea => [label, query];
@@ -71,8 +71,8 @@ function hairIdeas(d: BeautyData): [Idea, string][] {
   // Hair type is multi-pick (4B and 4C, say). Any coily pick counts as
   // coily, so mixed coily/curly hair never gets the straight-hair ideas.
   const types = d.hairType;
-  const coily = types.some(t => COILY.has(t));
-  const curly = types.includes('Curly');
+  const coily = hasHairFamily(types, 'Coily');
+  const curly = hasHairFamily(types, 'Curly');
   const textured = coily || curly;
   const goals = new Set(d.hairGoals);
   const history = new Set(d.treatmentHistory);
@@ -130,7 +130,7 @@ function hairIdeas(d: BeautyData): [Idea, string][] {
     const because = `Hair type: ${formatPickList(types)}`;
     if (coily) add(because, SILK_PRESS, KNOTLESS, TWISTS, DEEP_CONDITION, TRIM);
     else if (curly) add(because, CURLY_CUT, WASH_AND_GO, DEEP_CONDITION, SILK_PRESS);
-    else if (types.includes('Wavy')) add(because, CURLY_CUT, BLOW_DRY);
+    else if (hasHairFamily(types, 'Wavy')) add(because, CURLY_CUT, BLOW_DRY);
     else add(because, CUT_AND_BLOW_DRY, BLOW_DRY);
   }
   return out;

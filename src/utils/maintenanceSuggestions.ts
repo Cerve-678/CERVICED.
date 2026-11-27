@@ -26,6 +26,7 @@ import {
 import { beautyOptionLabel } from '../features/beauty-profile/options';
 import { tr, trp, type PluralKey, type TranslationKey, type TranslationParams } from '../i18n';
 import type { BeautyData } from '../types/beautyProfile';
+import { hasHairFamily } from '../constants/hairTypes';
 import { formatPickList } from '../features/beauty-profile/pickList';
 import type {
   MaintenanceItem,
@@ -52,7 +53,6 @@ export interface MaintenanceSuggestion {
 }
 
 /** Hair types whose usual salon routine includes the textured-hair services. */
-const TEXTURED_HAIR_TYPES: ReadonlySet<string> = new Set(['Curly', 'Coily', '4A', '4B', '4C']);
 
 /** Setup answers before the client has given any: what "Picked for you"
  *  uses after setup, when only the Beauty Profile is in play. */
@@ -136,7 +136,7 @@ export function buildMaintenanceSuggestions(
   // ── Hair ──────────────────────────────────────────────────────────────────
   // Hair type is multi-pick (e.g. 4B and 4C); any textured pick counts.
   const hairAnswer = profile.hairType.length ? `Hair type: ${formatPickList(profile.hairType)}` : null;
-  const texturedHair = profile.hairType.some(t => TEXTURED_HAIR_TYPES.has(t));
+  const texturedHair = hasHairFamily(profile.hairType, 'Curly') || hasHairFamily(profile.hairType, 'Coily');
   if (texturedHair) {
     offer('wash_and_go', hairAnswer!);
     offer('silk_press', hairAnswer!);

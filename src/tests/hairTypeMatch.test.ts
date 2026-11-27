@@ -20,4 +20,19 @@ describe('matchesHairType', () => {
     // near-miss like '4c' is a data bug rather than something to coerce.
     expect(matchesHairType(['4C'], '4c')).toBe(false);
   });
+
+  // 2026-11-27: a curl code and its family word match both ways (and the same
+  // rule runs in SQL as public.hair_type_matches).
+  it('matches a curl code with its family word, both ways', () => {
+    expect(matchesHairType(['Curly'], '3B')).toBe(true);
+    expect(matchesHairType(['3B'], 'Curly')).toBe(true);
+    expect(matchesHairType(['4C'], 'Coily')).toBe(true);
+    expect(matchesHairType(['Wavy'], '2A')).toBe(true);
+  });
+
+  it('keeps different codes and different families apart', () => {
+    expect(matchesHairType(['3A'], '3B')).toBe(false);
+    expect(matchesHairType(['Curly'], '4C')).toBe(false);
+    expect(matchesHairType(['Coily'], 'Straight')).toBe(false);
+  });
 });
