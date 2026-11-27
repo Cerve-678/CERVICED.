@@ -68,7 +68,7 @@ import { logger } from "../../../utils/logger";
 import { AvailabilityService } from "../../AvailabilityService";
 import { hasUsefulHistory, type Capability, type CapabilityResult, type PendingActionDone, type ThinkingTurn } from "../types";
 import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/rebook";
-import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
+import { CATEGORY_LABELS, lookMenuWords, menuNeedles } from "../serviceCatalogue";
 import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
 import { formatPickList, toPickList } from "../../../features/beauty-profile/pickList";
 import { beautyDataFromRow } from "../../../features/beauty-profile/profileRow";
@@ -1221,10 +1221,9 @@ const findProviders: Capability = {
     // the reply says so rather than calling them volume-lash providers.
     let namesSpecific: boolean | undefined;
     if (service.specific && facets) {
-      const needles = [
-        service.specific,
-        ...(SERVICE_CATALOGUE[service.category]?.find((e) => e.specific === service.specific)?.keywords ?? []),
-      ];
+      // A look ("kim k lashes") is a one-word tag on a menu, so its
+      // menu-only words count too — see ServiceEntry.menuWords.
+      const needles = menuNeedles(service.category, service.specific);
       const offering = dbProviders.filter((p) =>
         matchesAnySpeciality([...(facets.specialityText.get(p.id) ?? [])], needles),
       );
@@ -1866,8 +1865,12 @@ const providerServices: Capability = {
     // Only offered when the user named a specific service, or the provider
     // has few enough that a chip per service is a menu rather than a wall.
     const wantedService = entities.service?.value.specific?.toLowerCase();
+    // A look counts by its own word too: "Wispy Hybrid Set" is wispy lashes.
+    const wantedWords = wantedService
+      ? [wantedService, ...lookMenuWords(entities.service!.value.category, entities.service!.value.specific!)]
+      : [];
     const named = wantedService
-      ? sorted.filter((s) => s.name?.toLowerCase().includes(wantedService))
+      ? sorted.filter((s) => wantedWords.some((w) => s.name?.toLowerCase().includes(w)))
       : [];
     const stageable = named.length > 0 ? named : sorted.length <= 3 ? sorted : [];
 
@@ -2710,12 +2713,19 @@ const inspiration: Capability = {
     // When the user named a style, keep only services whose name/description
     // actually mentions it. Without this "soft glam" would return the whole
     // category feed and quietly pretend it had matched.
-    const needle = term?.toLowerCase();
-    const matchedServices = needle
-      ? discoverServices.filter(
-          (svc) =>
-            svc.name?.toLowerCase().includes(needle) ||
-            svc.description?.toLowerCase().includes(needle),
+    //
+    // A look ("show me wispy lashes") is written on a service as its own word
+    // ("Wispy Hybrid Set"), not as the look's full name, so its menu words
+    // count too.
+    const needles = [
+      ...(term ? [term.toLowerCase()] : []),
+      ...(!styleQuery && category && specific ? lookMenuWords(category, specific) : []),
+    ];
+    const matchedServices = needles.length > 0
+      ? discoverServices.filter((svc) =>
+          needles.some(
+            (n) => svc.name?.toLowerCase().includes(n) || svc.description?.toLowerCase().includes(n),
+          ),
         )
       : discoverServices;
 
