@@ -5,7 +5,7 @@
 
 #generated
 
-**4463 functions** across **718 files**.
+**4478 functions** across **719 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -99,7 +99,7 @@
 
 ### `src/constants/` (14)
 - `customPageStyle.ts` — **customHeadingFont** · **customPageStyle** · **customTextFont** · **encodeCustomChoices** · isCustomLayout · **matchingFontSet** · **matchingLook** · **parseCustomChoices** · **partsOf** · pick · **sameCustomChoices** · sameParts · **withPart**
-- `hairTypes.ts` — **hairTypeLabel**
+- `hairTypes.ts` — **hairTypeFamily** · **hairTypeLabel** · **hasHairFamily**
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType** · **maintenanceTypeLabel**
 - `pageStyles.ts` — **chapterHeading** · **customHeadingPair** · **getPageStyle** · **headingPair** · **heroPhotoPickLimit** · **heroPhotoSlotAspect** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
@@ -137,14 +137,15 @@
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 - `useSignInAsAccount.ts` — **useSignInAsAccount**
 
-### `src/features/beauty-profile/` (12)
+### `src/features/beauty-profile/` (13)
 - `BeautyProfileLanding.tsx` — **BeautyProfileLanding** · card · dateStub · go · groups · headline · ideas
-- `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderCards · renderChips · renderTailored · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
+- `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderCards · renderChips · renderTailored · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleLashStyle · toggleMulti · withSaved
 - `ClientBeautyProfileDetails.tsx` — catLabel · chipRow · chips · **ClientBeautyProfileDetails** · pick · row
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · o · orderedAnswers · os
+- `LashMapBuilder.tsx` — curlAmount · easeOut · **LashMapBuilder** · **LashMapDrawing** · **lashStrandPaths** · lengthAt · nudge · presetOn · step · tap · useGrowingMap
 - `lookSummary.ts` — hairWord · listOf · **lookLine** · **lookTitle**
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
-- `options.ts` — **beautyOptionLabel** · **hairGoalsFor** · **hairTreatmentHistory**
+- `options.ts` — **beautyOptionLabel** · **formatLashMap** · **hairGoalsFor** · **hairTreatmentHistory**
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**
 - `profileRow.ts` — **beautyDataFromRow**
 - `suitedIdeas.ts` — add · **allSuitedIdeas** · from · goal · hairIdeas · **isSuitedCategory** · lashBrowIdeas · makeupIdeas · nailIdeas · **suitedIdeas**

@@ -40,9 +40,14 @@ export interface BeautyData {
   lashStyle:          string[];
   lashStatus:         string;
   lashCurl:           string;
+  /** Lengths in mm, inner corner to outer, LASH_MAP_ZONES long; [] when not set. */
+  lashMap:            number[];
   browStyle:          string[];
   browCondition:      string[];
-  // Makeup
+  // Makeup (face shape, eye colour and blush added 2026-11-27)
+  faceShape:          string;
+  eyeColour:          string;
+  blushStyle:         string[];
   makeupCoverage:     string[];
   makeupFinish:       string[];
   makeupEyes:         string[];
@@ -67,8 +72,8 @@ export const EMPTY_BEAUTY_DATA: BeautyData = {
   hairType: [], hairPorosity: '', hairThickness: '', scalpCondition: [], hairGoals: [], treatmentHistory: [],
   skinType: [], skinTone: '', skinUndertone: '', skinConcerns: [], sensitiveAreas: [],
   nailCondition: [], nailService: [], nailLength: [], nailShape: [], nailStyle: [], nailColours: [],
-  eyeShape: [], lashStyle: [], lashStatus: '', lashCurl: '', browStyle: [], browCondition: [],
-  makeupCoverage: [], makeupFinish: [], makeupEyes: [], makeupLips: [],
+  eyeShape: [], lashStyle: [], lashStatus: '', lashCurl: '', lashMap: [], browStyle: [], browCondition: [],
+  faceShape: '', eyeColour: '', blushStyle: [], makeupCoverage: [], makeupFinish: [], makeupEyes: [], makeupLips: [],
   styleVibe: [], styleAesthetics: [], styleOccasions: [], styleRoutine: '', serviceInterests: [],
   gender: null, has_kids: false,
   allergies: [], medicalNotes: '', photographyConsent: true,

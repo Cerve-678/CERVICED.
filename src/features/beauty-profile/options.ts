@@ -10,7 +10,7 @@
 
 import type { Gender } from '../../types/beautyProfile';
 import type { TranslationKey } from '../../i18n/types';
-import { hairTypeLabel } from '../../constants/hairTypes';
+import { hairTypeLabel, hasHairFamily } from '../../constants/hairTypes';
 import { skinToneLabel } from '../../constants/skinTones';
 
 // Scalp, treatment history and skin concerns were widened 2026-11-17 so the
@@ -59,12 +59,12 @@ const SMOOTH_GOALS_FIRST = [
  * is hidden: anyone can pick any goal, it's only the order that changes.
  */
 export function hairGoalsFor(hairTypes: readonly string[]): string[] {
-  const textured = hairTypes.some(t => ['Curly', 'Coily', '4A', '4B', '4C'].includes(t));
-  const smooth = !textured && hairTypes.some(t => t === 'Straight' || t === 'Wavy');
+  const textured = hasHairFamily(hairTypes, 'Curly') || hasHairFamily(hairTypes, 'Coily');
+  const smooth = !textured && (hasHairFamily(hairTypes, 'Straight') || hasHairFamily(hairTypes, 'Wavy'));
   const lead = textured ? TEXTURED_GOALS_FIRST : smooth ? SMOOTH_GOALS_FIRST : [];
   return [...lead, ...HAIR_GOALS.filter(g => !lead.includes(g))];
 }
-export const SKIN_UNDERTONES  = ['Cool', 'Warm', 'Neutral', 'Olive', 'Not sure'];
+export const SKIN_UNDERTONES  = ['Cool', 'Warm', 'Neutral', 'Olive', 'Yellow', 'Not sure'];
 // Sign-up shows SKIN_TYPES too. 'Dehydrated' and 'Mature' added 2026-11-18.
 export const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive', 'Dehydrated', 'Mature'];
 
@@ -74,7 +74,7 @@ export const SKIN_CONCERNS    = [
   'Psoriasis', 'Fine lines', 'Dark circles', 'Dry patches', 'Oiliness',
   'Redness', 'Enlarged pores', 'Dullness', 'Uneven texture',
   'Blackheads', 'Acne scarring', 'Melasma', 'Sun damage', 'Loss of firmness',
-  'Ingrown hairs', 'Milia', 'Puffiness', 'None',
+  'Ingrown hairs', 'Milia', 'Puffiness', 'Hormonal acne', 'None',
 ];
 export const SENSITIVE_AREAS  = [
   'Face', 'Upper lip', 'Brows', 'Underarms', 'Arms', 'Legs', 'Back', 'Chest', 'Stomach', 'Bikini / Brazilian', 'Scalp', 'None',
@@ -122,6 +122,27 @@ export const LASH_STYLES      = [
 export const EYE_SHAPES       = [
   'Almond', 'Round', 'Hooded', 'Monolid', 'Downturned', 'Upturned', 'Deep-set', 'Close-set', 'Wide-set',
 ];
+/**
+ * A lash map: one length in mm for each of five zones, inner corner to outer
+ * corner, the way a lash tech writes it (8 · 10 · 12 · 14 · 12). Each start
+ * shape is the usual map for that style, which the client can then change.
+ */
+export const LASH_MAP_ZONES = 5;
+export const LASH_MAP_MIN_MM = 6;
+export const LASH_MAP_MAX_MM = 16;
+export const LASH_MAP_PRESETS: readonly { name: string; map: readonly number[] }[] = [
+  { name: 'Natural', map: [8, 9, 10, 11, 10] },
+  { name: 'Doll eye', map: [9, 11, 13, 11, 9] },
+  { name: 'Open eye', map: [9, 11, 13, 12, 10] },
+  { name: 'Cat eye', map: [8, 9, 11, 13, 15] },
+  { name: 'Kitten', map: [8, 9, 10, 12, 13] },
+  { name: 'Squirrel', map: [8, 10, 12, 14, 12] },
+  { name: 'Fox eye', map: [7, 8, 10, 13, 15] },
+];
+/** "8 · 10 · 12 · 14 · 12mm", or '' when no map is set. */
+export function formatLashMap(map: readonly number[]): string {
+  return map.length ? `${map.join(' · ')}mm` : '';
+}
 export const LASH_CURLS       = [
   'J (subtle)', 'B (soft)', 'C (natural lift)', 'CC (curled)', 'D (dramatic)',
   'L / M (lifts hooded or straight lashes)', 'Let my tech decide',
@@ -138,6 +159,16 @@ export const BROW_CONDITIONS  = [
   'Full', 'Sparse', 'Uneven', 'Overplucked', 'Unruly', 'Light / barely there',
   'Thinning', 'Grey / white hairs', 'Old tattoo / fading PMU',
 ];
+// Face shape, eye colour and blush placement added 2026-11-27, from Pinterest:
+// "blush placement oval face", "haircut for round face", "brown eyes
+// eyeshadow". Face shape also helps brows and haircuts, so it's shared with
+// those providers too.
+export const FACE_SHAPES      = ['Oval', 'Round', 'Square', 'Heart', 'Diamond', 'Oblong / long', 'Triangle', 'Not sure'];
+export const EYE_COLOURS      = ['Dark brown', 'Brown', 'Hazel', 'Green', 'Blue', 'Grey'];
+export const BLUSH_STYLES     = [
+  'Classic (on the apples)', 'Lifted (up the cheekbones)', 'Sunkissed (across the nose)',
+  'Igari (under the eyes)', 'Draped (cheek to temple)',
+];
 export const MAKEUP_COVERAGE  = ['Bare skin', 'Sheer / natural', 'Skin tint', 'Medium coverage', 'Full coverage', 'Full glam', 'Airbrush'];
 export const MAKEUP_FINISH    = ['Matte', 'Soft matte', 'Satin', 'Dewy', 'Glowy', 'Skin-like', 'Velvet'];
 export const MAKEUP_EYES      = [
@@ -147,6 +178,8 @@ export const MAKEUP_EYES      = [
 export const MAKEUP_LIPS      = [
   'Nude', 'Gloss', 'Brown / 90s liner', 'Berry / wine', 'Coral / peach', 'Classic red', 'Bold colour',
   'Lip oil / balm', 'Blurred / ombré', 'Pinks', 'Dark / vampy',
+  // Added 2026-11-27 (Pinterest "lip combo").
+  'Cherry cola', 'Liner & gloss combo',
 ];
 // Sign-up shows STYLE_VIBES too. The last five were added 2026-11-18.
 export const STYLE_VIBES      = [
@@ -177,6 +210,8 @@ export const STYLE_AESTHETICS: readonly DescribedOption[] = [
   { name: 'Grunge', line: 'Smudged liner, dark nails, undone hair' },
   { name: 'Sporty', line: 'Sleek ponytail, fresh skin, short nails' },
   { name: 'Bridal', line: 'Soft, timeless and made to last all day' },
+  // Added 2026-11-27.
+  { name: 'Douyin', line: 'Igari blush, sparkly under-eyes, soft gradient lips' },
 ];
 export const STYLE_OCCASIONS  = [
   'Everyday', 'Work', 'Date nights', 'Nights out', 'Weddings', 'Holidays', 'Special events', 'Photoshoots',

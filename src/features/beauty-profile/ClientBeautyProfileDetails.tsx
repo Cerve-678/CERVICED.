@@ -7,7 +7,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ClientBeautyProfile } from '../../services/databaseService';
 import { formatPickList } from './pickList';
-import { hairTreatmentHistory } from './options';
+import { formatLashMap, hairTreatmentHistory } from './options';
+import { LashMapDrawing } from './LashMapBuilder';
 
 const ALERT = '#FF9500';
 const DANGER = '#FF3B30';
@@ -59,9 +60,9 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
     || p.scalpCondition.length > 0 || p.hairGoals.length > 0 || hairHistory.length > 0;
   const hasNails = p.nailLength.length > 0 || p.nailShape.length > 0 || p.nailCondition.length > 0
     || p.nailService.length > 0 || p.nailStyle.length > 0 || p.nailColours.length > 0;
-  const hasLashesBrows = p.eyeShape.length > 0 || p.lashStyle.length > 0 || !!p.lashStatus || !!p.lashCurl
+  const hasLashesBrows = p.eyeShape.length > 0 || p.lashStyle.length > 0 || !!p.lashStatus || !!p.lashCurl || p.lashMap.length > 0
     || p.browStyle.length > 0 || p.browCondition.length > 0;
-  const hasMakeup = p.makeupCoverage.length > 0 || p.makeupFinish.length > 0 || p.makeupEyes.length > 0 || p.makeupLips.length > 0;
+  const hasMakeup = !!p.faceShape || !!p.eyeColour || p.blushStyle.length > 0 || p.makeupCoverage.length > 0 || p.makeupFinish.length > 0 || p.makeupEyes.length > 0 || p.makeupLips.length > 0;
   const hasAlerts = p.allergies.length > 0 || !!p.medicalNotes;
 
   return (
@@ -118,6 +119,15 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
           {pick('Lash style', p.lashStyle)}
           {p.lashStatus ? row('Lash status', p.lashStatus) : null}
           {p.lashCurl ? row('Lash curl', p.lashCurl) : null}
+          {p.lashMap.length > 0 ? (
+            <View style={[st.lashMapBlock, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: divider }]}>
+              <View style={st.lashMapHead}>
+                <Text style={[st.rowLabel, { color: text + '8C' }]}>Lash map</Text>
+                <Text style={[st.rowValue, { color: text }]}>{`${formatLashMap(p.lashMap)}, inner to outer`}</Text>
+              </View>
+              <LashMapDrawing map={p.lashMap} curl={p.lashCurl} lashColor={text} lidColor={text} guideColor={divider} height={90} />
+            </View>
+          ) : null}
           {pick('Brow style', p.browStyle)}
           {pick('Brow condition', p.browCondition)}
         </>
@@ -126,9 +136,12 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
       {hasMakeup && (
         <>
           {catLabel('Makeup')}
+          {p.faceShape ? row('Face shape', p.faceShape) : null}
+          {p.eyeColour ? row('Eye colour', p.eyeColour) : null}
           {pick('Coverage', p.makeupCoverage)}
           {pick('Finish', p.makeupFinish)}
           {pick('Eye style', p.makeupEyes)}
+          {pick('Blush', p.blushStyle)}
           {pick('Lip preference', p.makeupLips)}
         </>
       )}
@@ -155,6 +168,8 @@ const st = StyleSheet.create({
   rowLabel: { fontSize: 14, flex: 1, marginRight: 12 },
   rowValue: { fontSize: 14, fontWeight: '600', textAlign: 'right', fontVariant: ['tabular-nums'] },
   chipRow:  { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, gap: 8 },
+  lashMapBlock: { paddingVertical: 10 },
+  lashMapHead:  { flexDirection: 'row', alignItems: 'center' },
   chips:    { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
   chip:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   chipText: { fontSize: 12, fontWeight: '600' },

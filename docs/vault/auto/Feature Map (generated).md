@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **171 files**
 - … +141 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **298 files**
+Curated: [[Availability & Slots]] · **299 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(189)_
 - `src/services/database/availability.ts` _(182)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **298 files**
 - `src/i18n/catalogs/en/cart.ts` _(29)_
 - `src/types/database.ts` _(28)_
 - `src/screens/client/BookingsScreen.tsx` _(27)_
-- … +268 more
+- … +269 more
 
 ## Payments
 Curated: [[Payments]] · **257 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **129 files**
 - … +99 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **307 files**
+Curated: [[Booking Flow]] · **308 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(368)_
 - `src/contexts/BookingContext.tsx` _(345)_
 - `src/screens/client/BookingDetailScreen.tsx` _(253)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **307 files**
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/components/IssueRefundSheet.tsx` _(54)_
-- … +277 more
+- … +278 more
 
 ## Auth
 Curated: [[Contexts]] · **281 files**

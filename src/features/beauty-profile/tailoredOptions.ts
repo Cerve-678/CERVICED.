@@ -14,6 +14,7 @@
 // style vibe → eye and lip looks.
 
 import type { BeautyData } from '../../types/beautyProfile';
+import { hasHairFamily } from '../../constants/hairTypes';
 import {
   BROW_STYLES, LASH_STYLES, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_LENGTHS, NAIL_SERVICES, NAIL_SHAPES,
   SCALP_CONDITIONS, SKIN_CONCERNS, TREATMENT_HISTORY, hairGoalsFor, HAIR_GOALS,
@@ -33,14 +34,13 @@ export interface TailoredOptions {
   because: string | null;
 }
 
-const COILY = new Set(['Coily', '4A', '4B', '4C']);
 
 type HairFamily = 'coily' | 'curly' | 'smooth';
 
 function hairFamily(types: readonly string[]): HairFamily | null {
-  if (types.some(t => COILY.has(t))) return 'coily';
-  if (types.includes('Curly')) return 'curly';
-  if (types.some(t => t === 'Straight' || t === 'Wavy')) return 'smooth';
+  if (hasHairFamily(types, 'Coily')) return 'coily';
+  if (hasHairFamily(types, 'Curly')) return 'curly';
+  if (hasHairFamily(types, 'Straight') || hasHairFamily(types, 'Wavy')) return 'smooth';
   return null;
 }
 
@@ -188,6 +188,21 @@ const LIPS_BY_VIBE: Record<string, string[]> = {
 };
 
 /** The suited options from every picked answer, in pick order, no repeats. */
+// Lash styles that usually suit each eye shape (added 2026-11-27): lift the
+// centre for hooded and deep-set eyes, lengthen the outer corner for round
+// and close-set ones, and avoid a long outer corner on downturned eyes.
+const LASHES_BY_EYE_SHAPE: Record<string, string[]> = {
+  Almond: ['Cat eye', 'Doll eye', 'Wispy', 'Kitten', 'Squirrel'],
+  Round: ['Cat eye', 'Fox eye', 'Kitten', 'Squirrel'],
+  Hooded: ['Open eye', 'Doll eye', 'Squirrel', 'Wispy'],
+  Monolid: ['Doll eye', 'Open eye', 'Wispy', 'Anime / spiky'],
+  Downturned: ['Squirrel', 'Open eye', 'Doll eye'],
+  Upturned: ['Doll eye', 'Open eye', 'Natural', 'Wispy'],
+  'Deep-set': ['Doll eye', 'Open eye', 'Wispy'],
+  'Close-set': ['Cat eye', 'Fox eye', 'Kitten'],
+  'Wide-set': ['Doll eye', 'Open eye', 'Natural'],
+};
+
 function fromPicks(picks: readonly string[], table: Record<string, string[]>): string[] {
   return [...new Set(picks.flatMap(p => table[p] ?? []))];
 }
@@ -228,6 +243,11 @@ export function tailoredOptions(question: TailoredQuestion, d: BeautyData): Tail
       return split(MAKEUP_FINISH, suited, suited.length ? `your ${joinLower(d.skinType, p => p in FINISH_BY_SKIN)} skin` : null);
     }
     case 'lashStyle': {
+      // Eye shape leads when it's set: it's what a lash map is built around.
+      const byEye = fromPicks(d.eyeShape, LASHES_BY_EYE_SHAPE);
+      if (byEye.length) {
+        return split(LASH_STYLES, byEye, `your ${joinLower(d.eyeShape, p => p in LASHES_BY_EYE_SHAPE)} eyes`);
+      }
       const rule = LASHES_BY_STATUS[d.lashStatus];
       return split(LASH_STYLES, rule?.suited ?? [], rule?.because ?? null);
     }

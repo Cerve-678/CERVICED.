@@ -13,7 +13,7 @@ import { SKIN_TONES } from '../../constants/skinTones';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import type { BeautyData, CategoryKey, Gender } from '../../types/beautyProfile';
 import {
-  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, EYE_SHAPES, GENDER_LABELS, HAIR_GOALS, HAIR_POROSITY, HAIR_THICKNESS,
+  ALLERGENS, BLUSH_STYLES, BROW_CONDITIONS, BROW_STYLES, EYE_COLOURS, EYE_SHAPES, FACE_SHAPES, LASH_MAP_PRESETS, GENDER_LABELS, HAIR_GOALS, HAIR_POROSITY, HAIR_THICKNESS,
   LASH_CURLS, LASH_STATUS, LASH_STYLES, SKIN_UNDERTONES,
   MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_CONDITIONS, NAIL_LENGTHS,
   NAIL_SERVICES, NAIL_SHAPES, NAIL_STYLES, STYLE_AESTHETICS, STYLE_OCCASIONS, STYLE_ROUTINES, AESTHETICS_BY_VIBE,
@@ -21,6 +21,7 @@ import {
   SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY, hairTreatmentHistory,
 } from './options';
 import { tailoredOptions, type TailoredQuestion } from './tailoredOptions';
+import { LashMapBuilder } from './LashMapBuilder';
 import { tr } from '../../i18n';
 import { useTranslation } from '../../i18n';
 
@@ -71,6 +72,20 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     });
   };
   const toggleAllergen = (item: string) => toggleExclusive('allergies', 'None known', item);
+
+  // Picking a lash style while no map is set builds that style's map, so the
+  // lash map below fills itself in (owner, 2026-11-27).
+  const toggleLashStyle = (style: string) => {
+    if (!editing) return;
+    Haptics.selectionAsync().catch(() => {});
+    setDraft(prev => {
+      const adding = !prev.lashStyle.includes(style);
+      const lashStyle = adding ? [...prev.lashStyle, style] : prev.lashStyle.filter(v => v !== style);
+      const preset = LASH_MAP_PRESETS.find(p => p.name === style);
+      const lashMap = adding && preset && prev.lashMap.length === 0 ? [...preset.map] : prev.lashMap;
+      return { ...prev, lashStyle, lashMap };
+    });
+  };
 
   const chipStyle = (on: boolean) => [
     styles.chip,
@@ -327,11 +342,21 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
 
           {sectionHead('LASH STYLE', { selected: draft.lashStyle.length, total: LASH_STYLES.length }, { optional: true })}
           {sub('Lash looks you like. Pick as many as you want.')}
-          {renderTailored('lashStyle', draft.lashStyle, o => draft.lashStyle.includes(o), o => toggleMulti('lashStyle', o))}
+          {renderTailored('lashStyle', draft.lashStyle, o => draft.lashStyle.includes(o), toggleLashStyle)}
 
           {sectionHead('LASH CURL', { selected: draft.lashCurl ? 1 : 0, total: 1 }, { optional: true })}
           {sub('How curled you like your extensions or lift.')}
           {renderChips(LASH_CURLS, o => draft.lashCurl === o, o => setSingle('lashCurl', o))}
+
+          {sectionHead('LASH MAP', { selected: draft.lashMap.length ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('The length of each zone in mm, inner corner to outer. Want 16 at the end? Tap + on Outer.')}
+          <LashMapBuilder
+            map={draft.lashMap}
+            curl={draft.lashCurl}
+            editing={editing}
+            onChange={lashMap => setDraft(prev => ({ ...prev, lashMap }))}
+            P={P}
+          />
 
           {sectionHead('BROW CONDITION', { selected: draft.browCondition.length, total: BROW_CONDITIONS.length }, { optional: true })}
           {sub('Your natural brows. Pick all that apply.')}
@@ -346,6 +371,14 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'makeup':
       return (
         <>
+          {sectionHead('FACE SHAPE', { selected: draft.faceShape ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('Helps with blush, contour, brow shape and haircuts.')}
+          {renderChips(FACE_SHAPES, o => draft.faceShape === o, o => setSingle('faceShape', o))}
+
+          {sectionHead('EYE COLOUR', { selected: draft.eyeColour ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('Helps your artist pick eyeshadow shades.')}
+          {renderChips(EYE_COLOURS, o => draft.eyeColour === o, o => setSingle('eyeColour', o))}
+
           {sectionHead('COVERAGE', { selected: draft.makeupCoverage.length, total: MAKEUP_COVERAGE.length }, { optional: true })}
           {sub('How much coverage you like. Pick all you wear.')}
           {renderChips(withSaved(MAKEUP_COVERAGE, draft.makeupCoverage), o => draft.makeupCoverage.includes(o), o => toggleMulti('makeupCoverage', o))}
@@ -357,6 +390,10 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {sectionHead('EYE STYLE', { selected: draft.makeupEyes.length, total: MAKEUP_EYES.length }, { optional: true })}
           {sub('Eye looks you go for. Pick as many as you want.')}
           {renderTailored('makeupEyes', draft.makeupEyes, o => draft.makeupEyes.includes(o), o => toggleMulti('makeupEyes', o))}
+
+          {sectionHead('BLUSH', { selected: draft.blushStyle.length, total: BLUSH_STYLES.length }, { optional: true })}
+          {sub('Where you like your blush. Pick all you wear.')}
+          {renderChips(withSaved(BLUSH_STYLES, draft.blushStyle), o => draft.blushStyle.includes(o), o => toggleMulti('blushStyle', o))}
 
           {sectionHead('LIP PREFERENCE', { selected: draft.makeupLips.length, total: MAKEUP_LIPS.length }, { optional: true })}
           {sub('Lip looks you go for. Pick as many as you want.')}

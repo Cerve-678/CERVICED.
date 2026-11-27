@@ -60,15 +60,16 @@ export interface BeautyProfileStats {
  * CONSENT could never read as anything but complete, and PERSONALISATION would
  * start at a misleading non-zero.
  */
-type FieldValue = string | string[];
+type FieldValue = string | readonly (string | number)[];
 
 function isSet(value: FieldValue): boolean {
-  return Array.isArray(value) ? value.length > 0 : value.trim().length > 0;
+  return typeof value === 'string' ? value.trim().length > 0 : value.length > 0;
 }
 
+/** A lash map counts as one answer, not one per zone. */
 function countSelections(value: FieldValue): number {
-  if (Array.isArray(value)) return value.length;
-  return value.trim().length > 0 ? 1 : 0;
+  if (typeof value === 'string') return value.trim().length > 0 ? 1 : 0;
+  return value.length > 0 && typeof value[0] === 'number' ? 1 : value.length;
 }
 
 /**
@@ -81,8 +82,8 @@ const CATEGORY_FIELDS: Record<CategoryKey, readonly (keyof BeautyData)[]> = {
   skin:            ['skinType', 'skinTone', 'skinUndertone', 'skinConcerns', 'sensitiveAreas'],
   hair:            ['hairType', 'hairPorosity', 'hairThickness', 'scalpCondition', 'treatmentHistory', 'hairGoals'],
   nails:           ['nailCondition', 'nailService', 'nailLength', 'nailShape', 'nailStyle', 'nailColours'],
-  lashesBrows:     ['eyeShape', 'lashStatus', 'lashStyle', 'lashCurl', 'browCondition', 'browStyle'],
-  makeup:          ['makeupCoverage', 'makeupFinish', 'makeupEyes', 'makeupLips'],
+  lashesBrows:     ['eyeShape', 'lashStatus', 'lashStyle', 'lashCurl', 'lashMap', 'browCondition', 'browStyle'],
+  makeup:          ['faceShape', 'eyeColour', 'makeupCoverage', 'makeupFinish', 'makeupEyes', 'blushStyle', 'makeupLips'],
   general:         ['styleVibe', 'styleAesthetics', 'styleOccasions', 'styleRoutine', 'serviceInterests'],
   personalisation: ['gender'],
   consent:         [],

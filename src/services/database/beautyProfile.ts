@@ -34,9 +34,13 @@ export interface ClientBeautyProfile {
   lashStyle: string[];
   lashStatus: string | null;
   lashCurl: string | null;
+  lashMap: number[];
   browStyle: string[];
   browCondition: string[];
   // Makeup
+  faceShape: string | null;
+  eyeColour: string | null;
+  blushStyle: string[];
   makeupCoverage: string[];
   makeupFinish: string[];
   makeupEyes: string[];
@@ -72,6 +76,10 @@ interface BeautyProfileFields {
   /** Added 2026-11-27 (20261127110000). */
   lash_curl: string | null;
   eye_shape: string[] | null;
+  lash_map: number[] | null;
+  face_shape: string | null;
+  eye_colour: string | null;
+  blush_style: string[] | null;
   hair_porosity: string | null;
   hair_thickness: string | null;
   skin_undertone: string | null;
@@ -120,6 +128,10 @@ function toClientBeautyProfile(d: BeautyProfileFields): ClientBeautyProfile {
     lashStatus: d.lash_status ?? null,
     eyeShape: d.eye_shape ?? [],
     lashCurl: d.lash_curl ?? null,
+    lashMap: d.lash_map ?? [],
+    faceShape: d.face_shape ?? null,
+    eyeColour: d.eye_colour ?? null,
+    blushStyle: d.blush_style ?? [],
     browStyle: toPickList(d.brow_style),
     browCondition: toPickList(d.brow_condition),
     makeupCoverage: toPickList(d.makeup_coverage),

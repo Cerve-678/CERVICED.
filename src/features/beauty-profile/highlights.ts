@@ -51,7 +51,7 @@ function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): st
     case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas, d.skinUndertone]);
     case 'nails':       return nonEmpty([d.nailShape, d.nailLength, d.nailService, d.nailStyle, d.nailColours]);
     case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.eyeShape, d.lashCurl, d.browCondition]);
-    case 'makeup':      return nonEmpty([d.makeupCoverage, d.makeupFinish, d.makeupEyes, d.makeupLips]);
+    case 'makeup':      return nonEmpty([d.makeupCoverage, d.makeupFinish, d.makeupEyes, d.makeupLips, d.blushStyle, d.faceShape]);
     case 'general':     return nonEmpty([d.styleVibe, d.serviceInterests]);
     case 'personalisation': return nonEmpty([d.gender ? GENDER_LABELS[d.gender] : '']);
     case 'health':      return nonEmpty([d.allergies, d.medicalNotes.trim() ? L.medicalNote : '']);
