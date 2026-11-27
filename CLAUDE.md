@@ -75,6 +75,30 @@ instead of re-deriving their knowledge from scratch:
   or a fix file that exists but isn't wired into `RUN_ALL_MIGRATIONS.sql`.
   Use before trusting any `supabase/*.sql` file as ground truth.
 
+## Marketing department
+
+Marketing, brand, and social work has its own small team. Start with the
+**`/head-of-marketing`** command: it writes the brief, sends the work to the
+specialists one at a time, and signs off on what comes back. The command and
+agents are local files under the git-ignored `.claude/`, like the agents
+above.
+
+- **`cerviced-trend-scout`** — researches Pinterest and TikTok in the shared
+  Playwright browser: what makes brands stand out, what people search and
+  comment, and what other industries do that beauty could borrow. Reports
+  with links to `docs/marketing/research/`.
+- **`cerviced-creative-director`** — the look: concepts, mood boards, shot
+  lists, and pin, carousel, and TikTok designs, in Canva when the connector is
+  available and as local HTML mockups otherwise.
+- **`cerviced-content-producer`** — TikTok scripts, search-ready pin copy,
+  captions, and the content calendar, in the brand voice.
+
+All of them read `.agents/product-marketing.md` (positioning, audiences,
+voice, claims) and `.agents/brand.md` (the A + C world, palette, type,
+imagery). The `marketing-skills` plugin (coreyhaines31/marketingskills) reads
+the same two files. The department drafts and plans only. It never posts,
+follows, comments, messages, or spends; the user publishes.
+
 ## Autonomous workforce
 
 Project-local Codex roles live in `.codex/agents/`. For sustained or
