@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-27 (Beauty Profile porosity, eye shape, lash map)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261127110000 | `beauty_profile_porosity_eye_shape` | **APPLIED 2026-11-27** on the user's "thats fine go on", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row. Live max before was `20261127100000` (#841 search look words); no open PR has an unapplied migration above it. md5 guards on `beauty_profile_fields_for_category`, both profile RPCs and `get_providers_availability` matched. Dry-run twice first, rolled back. Adds 9 nullable `users` columns (hair_porosity, hair_thickness, skin_undertone, eye_shape, lash_curl, lash_map + `users_lash_map_valid`, face_shape, eye_colour, blush_style), recreates both profile RPCs, adds `hair_type_family` / `hair_type_matches`, swaps the hair line in `get_providers_availability`. Verified live: version recorded (live max); 9 columns; 36 out columns on each RPC; anon can't execute them, authenticated can; availability patched (md5 `b493aa52…`); `hair_type_matches({Curly},'3B')` true, `({3A},'3B')` false. PR #842. |
+
 ### Applied 2026-11-26 (provider no show opens refund request)
 
 | Recorded version | Name | Verified live |
