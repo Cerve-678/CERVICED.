@@ -5,7 +5,7 @@
 
 #generated
 
-**4463 functions** across **718 files**.
+**4465 functions** across **718 files**.
 
 ### `src/components/` (70)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -548,7 +548,7 @@
 - `ukGeocode.ts` — **geocodeUkPlace** · **isInUk**
 - `userLearningService.ts` — vibeSeedTags
 
-### `src/services/becca/` (12)
+### `src/services/becca/` (13)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
 - `engine.ts` — answeredUnderstanding · answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · holdQuestion · interpretWithTimeout · isAskableKind · **isConfirmToken** · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · settled · soleUpcomingProvider · suggestionFitsLinkOnly · understandWithFallback · upcomingProviderNames · verifyComposition · withoutAwaiting
@@ -559,6 +559,7 @@
 - `nvidiaInterpreter.ts` — validComposition · validInterpretation
 - `providerNavigation.ts` — **isProviderNavigationAsk** · **providerDestination**
 - `registry.ts` — **capabilitiesFor** · **fitsSetup** · **getCapability** · **thinkingFor** · **toToolSchema**
+- `serviceCatalogue.ts` — **lookMenuWords** · **menuNeedles**
 - `smallTalk.ts` — asksBack · classify · plain · readings · **smallTalkReply**
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 

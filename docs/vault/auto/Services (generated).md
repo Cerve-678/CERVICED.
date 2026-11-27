@@ -68,7 +68,7 @@ _no named exports_
 `capabilitiesFor` · `fitsSetup` · `getCapability` · `thinkingFor` · `toToolSchema`
 
 ### `src/services/becca/serviceCatalogue.ts`
-`CATEGORY_LABELS` · `SERVICE_CATALOGUE`
+`CATEGORY_LABELS` · `lookMenuWords` · `menuNeedles` · `SERVICE_CATALOGUE`
 
 ### `src/services/becca/smallTalk.ts`
 `smallTalkReply`
