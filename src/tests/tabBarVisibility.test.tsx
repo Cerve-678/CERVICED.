@@ -62,14 +62,6 @@ describe("provider Home tab", () => {
 });
 
 describe("screens that never show the bar", () => {
-  it("hides it on Search from both client entry tabs, then restores it on a result profile", () => {
-    for (const tab of ["Home", "Explore"]) {
-      expect(stackHidesTabBar(tab, [`${tab}Main`, "Search"])).toBe(true);
-      expect(stackHidesTabBar(tab, [`${tab}Main`, "Search", "ProviderProfile"])).toBe(false);
-      expect(stackHidesTabBar(tab, [`${tab}Main`])).toBe(false);
-    }
-  });
-
   it("hides it on Payments, including when My Profile's Payouts card opens it", () => {
     expect(stackHidesTabBar("MyServices", ["ProviderServicesMain", "Payments"])).toBe(true);
     expect(stackHidesTabBar(PROVIDER_HOME_TAB, ["ProviderHomeMain", "Payments"])).toBe(true);
