@@ -23,6 +23,20 @@ export interface ServiceEntry {
   /** Omitted for the catch-all category entry. */
   specific?: string;
   keywords: string[];
+  /**
+   * Words used only to find this in a provider's menu: their service names,
+   * service tags and specialities. Never used to read the client's message.
+   *
+   * A look ("kim k lashes") is what people search on Pinterest and TikTok,
+   * but on a provider's menu it is a one-word tag (`kim-k`) or part of a
+   * service name ("Kim K Wispy Set"). The message keyword "kim k lashes"
+   * can't match either, so the look's own words go here instead.
+   *
+   * Keep these to the look's own words ("glazed", never "chrome" or "nail
+   * art"): the reply says "Checked whose menus include glazed nails", and a
+   * general word would let a provider who never mentions the look count.
+   */
+  menuWords?: string[];
 }
 
 export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
@@ -38,6 +52,17 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "nail infill", keywords: ["infills", "nail infill", "rebalance"] },
     { specific: "nail removal", keywords: ["nail removal", "soak off", "gel removal", "acrylic removal"] },
     { specific: "nail repair", keywords: ["broken nail", "nail repair"] },
+    // Looks people search on Pinterest and TikTok — the trend tags providers
+    // pick in features/providers/serviceTags.ts. Each one only alongside
+    // "nails": "Aura" is a business name, "glazed donut" is a skin look too,
+    // and "glazed" and "cat eye" are makeup and lash looks.
+    { specific: "glazed nails", keywords: ["glazed nails", "glazed donut nails", "glazed doughnut nails"], menuWords: ["glazed"] },
+    { specific: "aura nails", keywords: ["aura nails"], menuWords: ["aura"] },
+    { specific: "cat eye nails", keywords: ["cat eye nails", "velvet nails", "magnetic nails"], menuWords: ["cat eye", "velvet", "magnetic"] },
+    { specific: "milky nails", keywords: ["milky nails", "milky white nails", "milk bath nails"], menuWords: ["milky", "milk bath"] },
+    { specific: "christmas nails", keywords: ["christmas nails", "xmas nails", "festive nails"], menuWords: ["christmas", "xmas", "festive"] },
+    { specific: "new years nails", keywords: ["new years nails", "new year nails", "new year's nails", "nye nails"], menuWords: ["new year", "nye"] },
+    { specific: "winter nails", keywords: ["winter nails"], menuWords: ["winter"] },
     // Shapes are how people name what they want — "i want to do almond" is a
     // complete request to a nail tech. They carry NO `specific`, on purpose:
     // `specific` is matched against real service names elsewhere (see
@@ -97,6 +122,24 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "lash fill", keywords: ["lash fill", "lash refill", "infill", "lash infills"] },
     { specific: "lash removal", keywords: ["lash removal", "lash soak off"] },
     { specific: "cluster lashes", keywords: ["cluster lashes", "strip lashes"] },
+    // Looks, as for nails above. Each one only alongside "lashes" or "set":
+    // "wispy bangs", "wet look hair", "doll eye makeup" and "kim k glam" are
+    // hair and makeup asks, and "fox eye" and "butterfly" are a brow look
+    // and a haircut. "wispies" and "squirrel" are the bare words only lash
+    // techs use.
+    // "doll eyelashes" is how "doll eye lashes" reaches the resolver, since
+    // the ask normaliser joins "eye lashes".
+    { specific: "wispy lashes", keywords: ["wispy lashes", "wispy lash", "wispy set", "wispies"], menuWords: ["wispy", "wispies"] },
+    { specific: "kim k lashes", keywords: ["kim k lashes", "kim k lash", "kim k set", "kardashian lashes"], menuWords: ["kim k", "kardashian"] },
+    { specific: "doll eye lashes", keywords: ["doll eye lashes", "doll eyelashes", "doll eye lash", "doll eye set"], menuWords: ["doll eye"] },
+    { specific: "anime lashes", keywords: ["anime lashes", "anime lash", "manga lashes", "manga lash"], menuWords: ["anime", "manga"] },
+    { specific: "wet look lashes", keywords: ["wet look lashes", "wet look lash", "wet set lashes"], menuWords: ["wet look", "wet set"] },
+    { specific: "fox eye lashes", keywords: ["fox eye lashes", "fox eyelashes", "fox eye lash"], menuWords: ["fox eye"] },
+    { specific: "butterfly lashes", keywords: ["butterfly lashes"], menuWords: ["butterfly"] },
+    // "cat eye" is a lash map as well as a nail finish ("wispy cat eye" is a
+    // top Pinterest lash search), so the lash look needs "lashes" or "set".
+    { specific: "cat eye lashes", keywords: ["cat eye lashes", "cat eyelashes", "cat eye lash", "cat eye set", "wispy cat eye"], menuWords: ["cat eye"] },
+    { specific: "squirrel lashes", keywords: ["squirrel lashes", "squirrel eyelashes", "squirrel lash", "squirrel set", "squirrel"], menuWords: ["squirrel"] },
     {
       keywords: [
         "lash", "lashes", "eyelash", "eyelashes",
@@ -109,7 +152,8 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "brow shaping", keywords: ["brow shaping", "brow shape", "arch", "brow tidy"] },
     { specific: "brow tint", keywords: ["brow tint", "brow tinting"] },
     { specific: "microblading", keywords: ["microblading", "microblade", "semi permanent brows"] },
-    { specific: "brow lamination", keywords: ["brow lamination", "brow lam", "laminated brows"] },
+    { specific: "brow lamination", keywords: ["brow lamination", "brow lam", "laminated brows", "soap brows", "fluffy brows"] },
+    { specific: "powder brows", keywords: ["powder brows", "ombre brows", "ombré brows"], menuWords: ["powder", "ombre"] },
     { specific: "henna brows", keywords: ["henna brows", "henna brow"] },
     { specific: "threading", keywords: ["threading", "thread"] },
     { specific: "brow wax", keywords: ["brow wax", "brow waxing"] },
@@ -176,6 +220,20 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { keywords: ["piercing", "tattoo", "henna", "holistic", "reflexology", "acupuncture"] },
   ],
 };
+
+/**
+ * Everything that counts as a provider's menu naming this service: the
+ * service itself, its message keywords, and its menu-only words.
+ */
+export function menuNeedles(category: string, specific: string): string[] {
+  const entry = SERVICE_CATALOGUE[category]?.find((e) => e.specific === specific);
+  return [specific, ...(entry?.keywords ?? []), ...(entry?.menuWords ?? [])];
+}
+
+/** A look's menu-only words, or none for an ordinary service. */
+export function lookMenuWords(category: string, specific: string): string[] {
+  return SERVICE_CATALOGUE[category]?.find((e) => e.specific === specific)?.menuWords ?? [];
+}
 
 /** Display label for a category, for use in sentences. */
 export const CATEGORY_LABELS: Record<string, string> = {

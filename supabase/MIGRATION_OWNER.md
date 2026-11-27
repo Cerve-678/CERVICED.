@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-27 (service search knows look words)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261127100000 | `service_search_knows_look_words` | **APPLIED 2026-11-27** on the user's "do 1", via `supabase db query --linked -f`, in one transaction with its `schema_migrations` row: Search knows the names of looks people search on Pinterest and TikTok (`search_synonym_map`), and drops the year and filler adjectives from a search (`search_clean_query`). md5 guards on all 7 search_* bodies matched. Forced-rollback dry run first; live max unchanged after it. Verified live: version recorded (live max); "winter nails 2026 ideas" reads as winter + nails (was finger + 2026 + ideal); all 8 search_* functions still executable by anon and authenticated, none SECURITY DEFINER; `service_search_eval.sql` 116/142 on live (was 101/126). Stale `OWNER` lines on open branches #420, #415 and #16 (Sep–Nov 9, unapplied, numbered below the frontier, no search functions) were not treated as holding the lock. |
+
 ### Applied 2026-11-26 (provider no show opens refund request)
 
 | Recorded version | Name | Verified live |

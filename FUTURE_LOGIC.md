@@ -1712,3 +1712,41 @@ once.
 - Reuse `bookingsByDate`, `scheduleIssues` and the per-day availability
   shading that `WeekView` already gets, so the new layout can't disagree
   with the grid about what's on.
+
+---
+
+## Search Keeps Its Word List Ready Instead of Rebuilding It Every Search
+
+### What it means in plain English
+
+When a client types in Search, the database works out what they meant before
+it looks for services. It fixes typos ("acrilic" to "acrylic"), joins words
+("pony tail"), and recognises look names ("soap brows"). To do that, it needs
+a list of every real word on the menu.
+
+Today, `search_rewrite_query` builds that list from scratch on every search:
+it reads every live service's name, tags and description, then adds the
+category words and every `search_synonym_map` trigger. With 122 services
+(2026-11-27) the whole search takes about 30 ms, which nobody notices. But
+that work grows with the catalogue, so at several thousand services every
+search would re-read the whole menu.
+
+### What the fix looks like
+
+- A small table of known words and how often each one appears, kept current
+  by a trigger on `services` (insert, update, delete, and a provider going
+  live or offline), or by a materialised view refreshed on those changes.
+- `search_rewrite_query` reads that table instead of rebuilding the list, so
+  a search stays at a few milliseconds whatever the catalogue size.
+- The table holds only words from public, live menus, so the
+  `has_gone_live` / `is_active` rule still applies to it: a provider who
+  hasn't gone live must never add words to it.
+- Grade it with `scripts/search-eval.sh`. The results should be identical,
+  just faster.
+
+### When to build this
+
+Not now. It isn't on any loading path: only the client Search screen calls
+it, and only once someone types. Revisit it at around 1,000 to 2,000 live
+services, or sooner if a search ever takes more than about 100 ms in the
+database. Found by the scalability review of PR #841.

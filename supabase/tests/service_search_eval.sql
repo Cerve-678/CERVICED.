@@ -136,6 +136,23 @@ WITH cases(q, expect, k) AS (VALUES
   ('acne', 'Facial and peel combination', 5),
   ('graduation', 'Full Glam', 5),
   ('russian volume', 'Volume spikes', 1),
+  -- looks: names people search on Pinterest and TikTok (20261127100000)
+  ('soap brows', 'Wax & Tint', 1),
+  ('christmas nails', 'Nail art lvl 3', 3),
+  ('xmas nails', 'Nail art lvl 3', 3),
+  -- Pinterest's own phrasing: a year and an adjective ride along.
+  ('christmas nails 2026 classy', 'Nail art lvl 3', 3),
+  ('winter nails 2026 ideas', 'Nail art lvl 3', 3),
+  ('wispy cat eye lashes', 'Hybrids', 3),
+  ('nail maintenance', 'Acrylic - Infill - Normal Polish', 3),
+  ('cat eye nails', 'Tier 1', 1),
+  ('glazed donut nails', 'Tier 1', 1),
+  ('aura nails', 'Nail art lvl 3', 1),
+  ('wispy lashes', 'Pretty Wi$py', 3),
+  ('kim k lashes', 'Mega Volumes', 1),
+  ('wet look lashes', 'Volume spikes', 3),
+  ('doll eye lashes', 'Bottom Lash', 3),
+  ('fox eye lashes', 'Russian Volumes', 3),
   -- nobody live offers these: expect NOTHING (k = 0), not a near-miss
   -- "correction" into something else
   ('brows', NULL, 0),
