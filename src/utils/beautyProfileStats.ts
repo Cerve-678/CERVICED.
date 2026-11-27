@@ -78,10 +78,10 @@ function countSelections(value: FieldValue): number {
  */
 const CATEGORY_FIELDS: Record<CategoryKey, readonly (keyof BeautyData)[]> = {
   health:          ['allergies', 'medicalNotes'],
-  skin:            ['skinType', 'skinTone', 'skinConcerns', 'sensitiveAreas'],
-  hair:            ['hairType', 'scalpCondition', 'treatmentHistory', 'hairGoals'],
+  skin:            ['skinType', 'skinTone', 'skinUndertone', 'skinConcerns', 'sensitiveAreas'],
+  hair:            ['hairType', 'hairPorosity', 'hairThickness', 'scalpCondition', 'treatmentHistory', 'hairGoals'],
   nails:           ['nailCondition', 'nailService', 'nailLength', 'nailShape', 'nailStyle', 'nailColours'],
-  lashesBrows:     ['lashStyle', 'lashStatus', 'browStyle', 'browCondition'],
+  lashesBrows:     ['eyeShape', 'lashStatus', 'lashStyle', 'lashCurl', 'browCondition', 'browStyle'],
   makeup:          ['makeupCoverage', 'makeupFinish', 'makeupEyes', 'makeupLips'],
   general:         ['styleVibe', 'styleAesthetics', 'styleOccasions', 'styleRoutine', 'serviceInterests'],
   personalisation: ['gender'],
