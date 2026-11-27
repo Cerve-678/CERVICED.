@@ -21,6 +21,14 @@ export const SCALP_CONDITIONS = [
   // Added 2026-11-18 (owner: "add more to all the sections").
   'Dandruff', 'Shedding / hair loss', 'Tender / sore',
 ];
+// Porosity, thickness, undertone, eye shape and lash curl were added
+// 2026-11-27 (owner: "add things like lash map … low porosity, high porosity"),
+// from what people search on Pinterest about themselves: "low porosity hair",
+// "hair porosity test", "fine hair", "skin undertone", "lash map for hooded
+// eyes", "lash curl types". Single picks, except eye shape. 'Not sure' is a
+// real answer where a provider can check it at the appointment.
+export const HAIR_POROSITY    = ['Low porosity', 'Medium porosity', 'High porosity', 'Not sure'];
+export const HAIR_THICKNESS   = ['Fine', 'Medium', 'Thick / coarse'];
 // Hair goals. The first six are the originals; the rest were added
 // 2026-11-09 so the profile can tell, say, a 4C client who wants length
 // retention and protective styles from someone after volume and highlights
@@ -56,6 +64,7 @@ export function hairGoalsFor(hairTypes: readonly string[]): string[] {
   const lead = textured ? TEXTURED_GOALS_FIRST : smooth ? SMOOTH_GOALS_FIRST : [];
   return [...lead, ...HAIR_GOALS.filter(g => !lead.includes(g))];
 }
+export const SKIN_UNDERTONES  = ['Cool', 'Warm', 'Neutral', 'Olive', 'Not sure'];
 // Sign-up shows SKIN_TYPES too. 'Dehydrated' and 'Mature' added 2026-11-18.
 export const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive', 'Dehydrated', 'Mature'];
 
@@ -106,10 +115,20 @@ export const LASH_STYLES      = [
   'Natural', 'Classic', 'Wispy', 'Hybrid', 'Wet look', 'Cat eye', 'Doll eye',
   'Dramatic', 'Russian volume', 'Mega volume', 'Lifted natural lashes',
   'Anime / spiky', 'Fox eye', 'Open eye', 'Coloured lashes',
+  // Lash maps added 2026-11-27, the ones Pinterest's lash map searches name.
+  'Squirrel', 'Kitten',
+];
+/** What a lash map is built around. A client can pick two, like hooded and almond. */
+export const EYE_SHAPES       = [
+  'Almond', 'Round', 'Hooded', 'Monolid', 'Downturned', 'Upturned', 'Deep-set', 'Close-set', 'Wide-set',
+];
+export const LASH_CURLS       = [
+  'J (subtle)', 'B (soft)', 'C (natural lift)', 'CC (curled)', 'D (dramatic)',
+  'L / M (lifts hooded or straight lashes)', 'Let my tech decide',
 ];
 export const LASH_STATUS      = [
   'Currently have extensions', 'Growing out', 'Lash lift & tint', 'Lash tint only', 'Wear strip lashes',
-  'Extensions for events', 'No extensions',
+  'Wear cluster lashes', 'Extensions for events', 'No extensions',
 ];
 export const BROW_STYLES      = [
   'Natural', 'Soft arch', 'Defined', 'Bold', 'Laminated', 'Fluffy', 'Feathered', 'Ombré / powder', 'Microbladed',

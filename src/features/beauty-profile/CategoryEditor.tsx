@@ -13,7 +13,8 @@ import { SKIN_TONES } from '../../constants/skinTones';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import type { BeautyData, CategoryKey, Gender } from '../../types/beautyProfile';
 import {
-  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES,
+  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, EYE_SHAPES, GENDER_LABELS, HAIR_GOALS, HAIR_POROSITY, HAIR_THICKNESS,
+  LASH_CURLS, LASH_STATUS, LASH_STYLES, SKIN_UNDERTONES,
   MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_CONDITIONS, NAIL_LENGTHS,
   NAIL_SERVICES, NAIL_SHAPES, NAIL_STYLES, STYLE_AESTHETICS, STYLE_OCCASIONS, STYLE_ROUTINES, AESTHETICS_BY_VIBE,
   type DescribedOption,
@@ -238,6 +239,10 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {sub('Your complexion')}
           {renderChips(SKIN_TONES, o => draft.skinTone === o, o => setSingle('skinTone', o))}
 
+          {sectionHead('UNDERTONE', { selected: draft.skinUndertone ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('The shade under your skin tone. It helps with makeup shades and hair colour.')}
+          {renderChips(SKIN_UNDERTONES, o => draft.skinUndertone === o, o => setSingle('skinUndertone', o))}
+
           {sectionHead('SKIN CONCERNS', { selected: draft.skinConcerns.length, total: SKIN_CONCERNS.length })}
           {sub('Select all that apply')}
           {renderTailored('skinConcerns', draft.skinConcerns, o => draft.skinConcerns.includes(o), o => toggleExclusive('skinConcerns', 'None', o))}
@@ -254,6 +259,14 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {sectionHead('HAIR TYPE', { selected: draft.hairType.length, total: HAIR_TYPES.length })}
           {sub('Your hair texture. Pick more than one if it varies, like 4B and 4C.')}
           {renderChips(withSaved(HAIR_TYPES, draft.hairType), o => draft.hairType.includes(o), o => toggleMulti('hairType', o))}
+
+          {sectionHead('POROSITY', { selected: draft.hairPorosity ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('How your hair takes in moisture. Not sure? Your stylist can check.')}
+          {renderChips(HAIR_POROSITY, o => draft.hairPorosity === o, o => setSingle('hairPorosity', o))}
+
+          {sectionHead('HAIR THICKNESS', { selected: draft.hairThickness ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('How your hair feels, from fine to thick.')}
+          {renderChips(HAIR_THICKNESS, o => draft.hairThickness === o, o => setSingle('hairThickness', o))}
 
           {sectionHead('SCALP CONDITION', { selected: draft.scalpCondition.length, total: SCALP_CONDITIONS.length }, { optional: true })}
           {sub('Your scalp. Pick all that apply.')}
@@ -304,6 +317,10 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
       // What they have now comes first: it decides which styles suit them.
       return (
         <>
+          {sectionHead('EYE SHAPE', { selected: draft.eyeShape.length, total: EYE_SHAPES.length }, { optional: true })}
+          {sub('Your lash tech maps your set to this. Pick all that fit, like hooded and almond.')}
+          {renderChips(withSaved(EYE_SHAPES, draft.eyeShape), o => draft.eyeShape.includes(o), o => toggleMulti('eyeShape', o))}
+
           {sectionHead('LASH STATUS', { selected: draft.lashStatus ? 1 : 0, total: 1 }, { optional: true })}
           {sub('Current situation')}
           {renderChips(LASH_STATUS, o => draft.lashStatus === o, o => setSingle('lashStatus', o))}
@@ -311,6 +328,10 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {sectionHead('LASH STYLE', { selected: draft.lashStyle.length, total: LASH_STYLES.length }, { optional: true })}
           {sub('Lash looks you like. Pick as many as you want.')}
           {renderTailored('lashStyle', draft.lashStyle, o => draft.lashStyle.includes(o), o => toggleMulti('lashStyle', o))}
+
+          {sectionHead('LASH CURL', { selected: draft.lashCurl ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('How curled you like your extensions or lift.')}
+          {renderChips(LASH_CURLS, o => draft.lashCurl === o, o => setSingle('lashCurl', o))}
 
           {sectionHead('BROW CONDITION', { selected: draft.browCondition.length, total: BROW_CONDITIONS.length }, { optional: true })}
           {sub('Your natural brows. Pick all that apply.')}

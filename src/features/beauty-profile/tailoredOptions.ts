@@ -89,6 +89,7 @@ const LASHES_BY_STATUS: Record<string, { suited: string[]; because: string }> = 
   'Growing out': { suited: ['Lifted natural lashes', 'Natural', 'Classic'], because: 'growing out your extensions' },
   'Currently have extensions': { suited: ['Classic', 'Hybrid', 'Wispy', 'Russian volume', 'Wet look'], because: 'your extensions' },
   'Wear strip lashes': { suited: ['Wispy', 'Dramatic', 'Cat eye', 'Hybrid'], because: 'wearing strip lashes' },
+  'Wear cluster lashes': { suited: ['Wispy', 'Hybrid', 'Fox eye', 'Cat eye'], because: 'wearing cluster lashes' },
   'Lash tint only': { suited: ['Lifted natural lashes', 'Natural', 'Classic'], because: 'your tinted lashes' },
   'Extensions for events': { suited: ['Classic', 'Wispy', 'Hybrid', 'Dramatic', 'Fox eye'], because: 'extensions for events' },
 };

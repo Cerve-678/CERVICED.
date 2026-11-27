@@ -33,8 +33,12 @@ export interface CategoryHighlight {
   details: string[];
 }
 
+// "Not sure" and "Let my tech decide" are real answers, but not ones worth
+// leading a tile with.
+const NOT_HIGHLIGHTS = new Set(['Not sure', 'Let my tech decide']);
+
 const nonEmpty = (values: (string | string[] | null | undefined)[]): string[] =>
-  values.flatMap(v => (Array.isArray(v) ? v : v ? [v] : [])).map(v => v.trim()).filter(Boolean);
+  values.flatMap(v => (Array.isArray(v) ? v : v ? [v] : [])).map(v => v.trim()).filter(v => v && !NOT_HIGHLIGHTS.has(v));
 
 /** Answers for a category in priority order: the first becomes the lead. */
 function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): string[] {
@@ -43,10 +47,10 @@ function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): st
   const o = (v: string) => (v && L.option ? L.option(v) : v);
   const os = (vs: string[]) => vs.map(o);
   switch (key) {
-    case 'hair':        return nonEmpty([d.hairType, d.scalpCondition.map(c => L.scalp(c)), d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
-    case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);
+    case 'hair':        return nonEmpty([d.hairType, d.hairPorosity, d.scalpCondition.map(c => L.scalp(c)), d.hairGoals, hairTreatmentHistory(d.treatmentHistory), d.hairThickness]);
+    case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas, d.skinUndertone]);
     case 'nails':       return nonEmpty([d.nailShape, d.nailLength, d.nailService, d.nailStyle, d.nailColours]);
-    case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.browCondition]);
+    case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.eyeShape, d.lashCurl, d.browCondition]);
     case 'makeup':      return nonEmpty([d.makeupCoverage, d.makeupFinish, d.makeupEyes, d.makeupLips]);
     case 'general':     return nonEmpty([d.styleVibe, d.serviceInterests]);
     case 'personalisation': return nonEmpty([d.gender ? GENDER_LABELS[d.gender] : '']);

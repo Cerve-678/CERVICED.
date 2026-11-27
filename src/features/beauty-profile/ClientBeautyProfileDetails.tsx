@@ -54,11 +54,13 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
 
   const p = profile;
   const hairHistory = hairTreatmentHistory(p.treatmentHistory);
-  const hasSkin = p.skinType.length > 0 || !!p.skinTone || p.skinConcerns.length > 0 || p.sensitiveAreas.length > 0;
-  const hasHair = p.hairType.length > 0 || p.scalpCondition.length > 0 || p.hairGoals.length > 0 || hairHistory.length > 0;
+  const hasSkin = p.skinType.length > 0 || !!p.skinTone || !!p.skinUndertone || p.skinConcerns.length > 0 || p.sensitiveAreas.length > 0;
+  const hasHair = p.hairType.length > 0 || !!p.hairPorosity || !!p.hairThickness
+    || p.scalpCondition.length > 0 || p.hairGoals.length > 0 || hairHistory.length > 0;
   const hasNails = p.nailLength.length > 0 || p.nailShape.length > 0 || p.nailCondition.length > 0
     || p.nailService.length > 0 || p.nailStyle.length > 0 || p.nailColours.length > 0;
-  const hasLashesBrows = p.lashStyle.length > 0 || !!p.lashStatus || p.browStyle.length > 0 || p.browCondition.length > 0;
+  const hasLashesBrows = p.eyeShape.length > 0 || p.lashStyle.length > 0 || !!p.lashStatus || !!p.lashCurl
+    || p.browStyle.length > 0 || p.browCondition.length > 0;
   const hasMakeup = p.makeupCoverage.length > 0 || p.makeupFinish.length > 0 || p.makeupEyes.length > 0 || p.makeupLips.length > 0;
   const hasAlerts = p.allergies.length > 0 || !!p.medicalNotes;
 
@@ -79,6 +81,7 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
           {catLabel('Skin')}
           {pick('Skin type', p.skinType)}
           {p.skinTone ? row('Skin tone', p.skinTone) : null}
+          {p.skinUndertone ? row('Undertone', p.skinUndertone) : null}
           {p.skinConcerns.length > 0 && chipRow('Skin concerns', p.skinConcerns)}
           {p.sensitiveAreas.length > 0 && chipRow('Sensitive areas', p.sensitiveAreas)}
         </>
@@ -88,6 +91,8 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
         <>
           {catLabel('Hair')}
           {pick('Hair type', p.hairType)}
+          {p.hairPorosity ? row('Porosity', p.hairPorosity) : null}
+          {p.hairThickness ? row('Thickness', p.hairThickness) : null}
           {pick('Scalp condition', p.scalpCondition)}
           {hairHistory.length > 0 && chipRow('Treatment history', hairHistory)}
           {p.hairGoals.length > 0 && chipRow('Hair goals', p.hairGoals)}
@@ -109,8 +114,10 @@ export function ClientBeautyProfileDetails({ profile, text, sub, surface, divide
       {hasLashesBrows && (
         <>
           {catLabel('Lashes & Brows')}
+          {pick('Eye shape', p.eyeShape)}
           {pick('Lash style', p.lashStyle)}
           {p.lashStatus ? row('Lash status', p.lashStatus) : null}
+          {p.lashCurl ? row('Lash curl', p.lashCurl) : null}
           {pick('Brow style', p.browStyle)}
           {pick('Brow condition', p.browCondition)}
         </>
