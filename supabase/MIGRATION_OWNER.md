@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-51 on fix/search-look-words (2026-11-27) — 20261127100000_service_search_knows_look_words, applying now
 ```
 
 ### Applied 2026-11-26 (provider no show opens refund request)
