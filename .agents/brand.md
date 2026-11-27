@@ -72,6 +72,6 @@ Every graphic needs both a light and a dark version.
 
 ## Where the references live
 
-- Pinterest: a secret board "the world of cerviced" on the GloNae business
-  account. Not created yet; it needs the user's go-ahead first.
-- Brand book carousel: claude.ai design canvas `GFrYf34AprEcnwmHXZ45cW` (2026-11-15).
+- Pinterest: a secret board "the world of cerviced" on the user's Pinterest
+  business account. Not created yet; it needs the user's go-ahead first.
+- Brand book carousel: the 2026-11-15 design canvas (link in the auto-memory, not here, because this repo is public).
