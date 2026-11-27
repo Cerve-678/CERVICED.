@@ -141,6 +141,11 @@ WITH cases(q, expect, k) AS (VALUES
   ('christmas nails', 'Nail art lvl 3', 3),
   ('xmas nails', 'Nail art lvl 3', 3),
   ('velvet nails', 'Tier 1', 3),
+  -- Pinterest's own phrasing: a year and an adjective ride along.
+  ('christmas nails 2026 classy', 'Nail art lvl 3', 3),
+  ('winter nails 2026 ideas', 'Nail art lvl 3', 3),
+  ('wispy cat eye lashes', 'Hybrids', 3),
+  ('nail maintenance', 'Acrylic - Infill - Normal Polish', 3),
   ('cat eye nails', 'Tier 1', 1),
   ('glazed donut nails', 'Tier 1', 1),
   ('aura nails', 'Nail art lvl 3', 1),

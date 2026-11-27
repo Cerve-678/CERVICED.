@@ -6,8 +6,8 @@
 -- 20261102130000 and, like it, is a complete copy of every search_* function
 -- so scripts/search-eval.sh can grade this file on its own.
 --
--- Changes from 20261102130000 (search_synonym_map only; every other body is
--- byte-identical to live):
+-- Changes from 20261102130000 (search_synonym_map and search_clean_query;
+-- every other body is byte-identical to live):
 --  * Look words are known words. Providers can tag services with them
 --    (src/features/providers/serviceTags.ts), but a word only counted as known
 --    once a live service used it, so "soap brows" was "corrected" to "soak
@@ -16,6 +16,13 @@
 --  * Each look points at the words providers actually put on their menus, so
 --    "christmas nails" leads with nail art instead of toe extensions, and
 --    "kim k" / "wet look" lead with spike sets instead of "Strip look".
+--  * Pinterest searches carry a year and an adjective ("christmas nails 2026
+--    classy", "winter nails 2026 ideas"). Those words aren't treatments, so
+--    search_clean_query drops them. Left in, "classy" was "corrected" to
+--    "classic", "ideas" to "ideal", and every service fell short on coverage
+--    for "2026". Dropping "inspo" retires the old "nail inspo" trigger.
+--  * Clients say "maintenance" for infills (nails) and fills (lashes). Bare
+--    "maintenance" is left alone: hair colour is sold as "low-maintenance".
 --
 -- Unchanged: signatures, gating (has_gone_live AND is_active), SECURITY
 -- INVOKER, public columns only, bounded inputs. Graded by
@@ -233,6 +240,8 @@ AS $$
     ('cluster lashes',     ARRAY['clusters', 'lash clusters']),
     ('clusters',           ARRAY['cluster lashes', 'lash clusters']),
     ('lash map',           ARRAY['lash mapping']),
+    ('squirrel',           ARRAY['cat eye', 'wispy']),
+    ('lash maintenance',   ARRAY['lash fill', 'infill', 'infills', 'refill']),
     -- nails
     ('glazed donut',       ARRAY['glazed', 'chrome', 'pearl']),
     ('glazed nails',       ARRAY['glazed donut', 'chrome', 'pearl']),
@@ -251,7 +260,9 @@ AS $$
     ('xmas nails',         ARRAY['christmas', 'festive', 'nail art']),
     ('festive nails',      ARRAY['christmas', 'festive', 'nail art']),
     ('winter nails',       ARRAY['christmas', 'festive', 'nail art']),
-    ('nail inspo',         ARRAY['nail art']),
+    ('new years nails',    ARRAY['new year', 'nye', 'glitter', 'nail art']),
+    ('new year nails',     ARRAY['new year', 'nye', 'glitter', 'nail art']),
+    ('nail maintenance',   ARRAY['infill', 'infills', 'rebalance']),
     -- brows
     ('soap brows',         ARRAY['brow lamination', 'laminated brows']),
     ('fluffy brows',       ARRAY['brow lamination', 'laminated brows']),
@@ -281,7 +292,9 @@ AS $$
              ' ', 'g'),
            -- Words about the booking or the price rather than the treatment.
            -- "cheap" used to be corrected to "cheek" and searched for.
-           '\m(service|services|appointment|appointments|booking|bookings|book|a|an|cheap|cheaper|cheapest|affordable|inexpensive|budget|best|good|great|top|local|quick)\M',
+           -- And the year and adjectives Pinterest searches carry ("christmas
+           -- nails 2026 classy", "winter nails ideas"): not treatments.
+           '\m(service|services|appointment|appointments|booking|bookings|book|a|an|cheap|cheaper|cheapest|affordable|inexpensive|budget|best|good|great|top|local|quick|idea|ideas|inspo|inspiration|trend|trends|trendy|classy|simple|cute|20[2-3][0-9])\M',
            ' ', 'g');
 $$;
 

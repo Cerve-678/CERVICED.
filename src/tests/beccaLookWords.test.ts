@@ -1,5 +1,5 @@
 import { normalizeAsk } from "../services/becca/askNormaliser";
-import { resolveService } from "../services/becca/entityResolver";
+import { resolveMoney, resolveService } from "../services/becca/entityResolver";
 import { understand } from "../services/becca/matcher";
 import { menuNeedles } from "../services/becca/serviceCatalogue";
 import { matchesAnySpeciality } from "../utils/fuzzyMatch";
@@ -27,14 +27,28 @@ describe("Becca knows the names of looks people search on Pinterest and TikTok",
     ["soap brows", "BROWS", "brow lamination"],
     ["fluffy brows", "BROWS", "brow lamination"],
     ["powder brows", "BROWS", "powder brows"],
+    // Pinterest's own phrasing, years and adjectives included.
+    ["wispy cat eye lashes", "LASHES", "cat eye lashes"],
+    ["cat eye lash map", "LASHES", "cat eye lashes"],
+    ["who does squirrel lashes", "LASHES", "squirrel lashes"],
+    ["christmas nails 2026 classy", "NAILS", "christmas nails"],
+    ["new years nails 2027", "NAILS", "new years nails"],
+    ["winter nails 2026 ideas", "NAILS", "winter nails"],
   ])("reads %p as %s / %s", (message, category, specific) => {
     expect(service(message)).toMatchObject({ category, specific });
   });
 
-  it("sends a look to the provider search", () => {
-    const message = normalizeAsk("who does kim k lashes");
-    const entities = { service: resolveService(message)! };
-    expect(understand(message, entities, "client").capabilityId).toBe("discover.find");
+  it.each(["who does kim k lashes", "new years nails 2027", "christmas nails 2026 classy"])(
+    "sends %p to the provider search",
+    (ask) => {
+      const message = normalizeAsk(ask);
+      const entities = { service: resolveService(message)! };
+      expect(understand(message, entities, "client").capabilityId).toBe("discover.find");
+    },
+  );
+
+  it("does not read the year in a Pinterest search as a price", () => {
+    expect(resolveMoney(normalizeAsk("christmas nails 2026"))).toBeUndefined();
   });
 
   describe("a look word that means something else in another category stays there", () => {
@@ -56,6 +70,7 @@ describe("Becca knows the names of looks people search on Pinterest and TikTok",
       expect(matchesAnySpeciality(["kim-k"], menuNeedles("LASHES", "kim k lashes"))).toBe(true);
       expect(matchesAnySpeciality(["soap-brows"], menuNeedles("BROWS", "brow lamination"))).toBe(true);
       expect(matchesAnySpeciality(["cat-eye"], menuNeedles("NAILS", "cat eye nails"))).toBe(true);
+      expect(matchesAnySpeciality(["squirrel-lashes"], menuNeedles("LASHES", "squirrel lashes"))).toBe(true);
     });
 
     it("matches a service name that carries the look's own word", () => {

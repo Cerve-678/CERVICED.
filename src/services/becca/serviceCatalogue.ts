@@ -61,6 +61,8 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "cat eye nails", keywords: ["cat eye nails", "velvet nails", "magnetic nails"], menuWords: ["cat eye", "velvet", "magnetic"] },
     { specific: "milky nails", keywords: ["milky nails", "milky white nails", "milk bath nails"], menuWords: ["milky", "milk bath"] },
     { specific: "christmas nails", keywords: ["christmas nails", "xmas nails", "festive nails"], menuWords: ["christmas", "xmas", "festive"] },
+    { specific: "new years nails", keywords: ["new years nails", "new year nails", "new year's nails", "nye nails"], menuWords: ["new year", "nye"] },
+    { specific: "winter nails", keywords: ["winter nails"], menuWords: ["winter"] },
     // Shapes are how people name what they want — "i want to do almond" is a
     // complete request to a nail tech. They carry NO `specific`, on purpose:
     // `specific` is matched against real service names elsewhere (see
@@ -123,7 +125,8 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     // Looks, as for nails above. Each one only alongside "lashes" or "set":
     // "wispy bangs", "wet look hair", "doll eye makeup" and "kim k glam" are
     // hair and makeup asks, and "fox eye" and "butterfly" are a brow look
-    // and a haircut. "wispies" is the one bare word only lash techs use.
+    // and a haircut. "wispies" and "squirrel" are the bare words only lash
+    // techs use.
     // "doll eyelashes" is how "doll eye lashes" reaches the resolver, since
     // the ask normaliser joins "eye lashes".
     { specific: "wispy lashes", keywords: ["wispy lashes", "wispy lash", "wispy set", "wispies"], menuWords: ["wispy", "wispies"] },
@@ -133,6 +136,10 @@ export const SERVICE_CATALOGUE: Record<string, ServiceEntry[]> = {
     { specific: "wet look lashes", keywords: ["wet look lashes", "wet look lash", "wet set lashes"], menuWords: ["wet look", "wet set"] },
     { specific: "fox eye lashes", keywords: ["fox eye lashes", "fox eyelashes", "fox eye lash"], menuWords: ["fox eye"] },
     { specific: "butterfly lashes", keywords: ["butterfly lashes"], menuWords: ["butterfly"] },
+    // "cat eye" is a lash map as well as a nail finish ("wispy cat eye" is a
+    // top Pinterest lash search), so the lash look needs "lashes" or "set".
+    { specific: "cat eye lashes", keywords: ["cat eye lashes", "cat eyelashes", "cat eye lash", "cat eye set", "wispy cat eye"], menuWords: ["cat eye"] },
+    { specific: "squirrel lashes", keywords: ["squirrel lashes", "squirrel eyelashes", "squirrel lash", "squirrel set", "squirrel"], menuWords: ["squirrel"] },
     {
       keywords: [
         "lash", "lashes", "eyelash", "eyelashes",
